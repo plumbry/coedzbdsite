@@ -681,11 +681,11 @@ export default function YuniteDebugPage() {
               </Button>
             </div>
           </div>
-          {probeResults && (
+          {probeResults != null ? (
             <pre className="overflow-auto rounded bg-muted p-4 text-xs max-h-96">
               <code>{JSON.stringify(probeResults, null, 2)}</code>
             </pre>
-          )}
+          ) : null}
         </CardContent>
       </Card>
     </div>

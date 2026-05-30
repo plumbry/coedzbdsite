@@ -160,7 +160,7 @@ function HolisticScoreStatsContent() {
       // Always use batched rebuild to store RAW scores
       // TC/DCA is applied at display time, not during rebuild
       await clearHolisticCache({});
-      const { totalPlayers, batchCount } = await initializeBatch();
+      const { totalPlayers, batchCount } = await initializeBatch({});
 
       toast.success(`Starting rebuild: ${totalPlayers} players in ${batchCount} batches`);
 
