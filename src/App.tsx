@@ -2,7 +2,6 @@ import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { DefaultProviders } from "./components/providers/default.tsx";
 import AdminChatWidget from "./components/admin-chat-widget.tsx";
 import UsernameSetupDialog from "./components/username-setup-dialog.tsx";
-import AuthCallback from "./pages/auth/Callback.tsx";
 import Index from "./pages/Index.tsx";
 import PlayerProfile from "./pages/player-profile/page.tsx";
 
@@ -115,7 +114,6 @@ export default function App() {
           <Route path="/spin/:eventId" element={<ScrimEventPage />} />
           <Route path="/tier-restrictions" element={<TierRestrictionsPage />} />
 
-          <Route path="/auth/callback" element={<AuthCallback />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

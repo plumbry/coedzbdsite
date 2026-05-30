@@ -13,8 +13,13 @@ export default defineSchema({
       v.literal("event_mod"),
       v.literal("viewer")
     )),
+    /** Discord snowflake — pre-seeded before first Clerk Discord login (Phase 1 migration). */
+    discordUserId: v.optional(v.string()),
+    /** Display-only; not used for auth matching. */
+    discordUsername: v.optional(v.string()),
   }).index("by_token", ["tokenIdentifier"])
-    .index("by_username", ["username"]),
+    .index("by_username", ["username"])
+    .index("by_discord_user_id", ["discordUserId"]),
   
   players: defineTable({
     discordUsername: v.string(),

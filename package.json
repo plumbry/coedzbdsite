@@ -9,9 +9,12 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "prettier-fix": "prettier --write .",
-    "prettier-check": "prettier --check ."
+    "prettier-check": "prettier --check .",
+    "phase1:verify-env": "node scripts/verify-phase1-env.mjs",
+    "phase1:seed": "node scripts/phase1-dev-seed.mjs"
   },
   "dependencies": {
+    "@clerk/react": "^6.7.2",
     "@googleapis/sheets": "^12.0.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -43,7 +46,6 @@
     "@tailwindcss/vite": "^4.1.16",
     "@tanstack/react-query": "^5.90.5",
     "@types/papaparse": "^5.5.2",
-    "@usehercules/auth": "^1.0.45",
     "@vitejs/plugin-react-swc": "^4.1.0",
     "cheerio": "^1.1.2",
     "class-variance-authority": "^0.7.1",

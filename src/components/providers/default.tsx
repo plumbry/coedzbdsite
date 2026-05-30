@@ -1,3 +1,4 @@
+import { AuthSync } from "../auth-sync.tsx";
 import { Toaster } from "../ui/sonner.tsx";
 import { TooltipProvider } from "../ui/tooltip.tsx";
 import { AuthProvider } from "./auth.tsx";
@@ -17,6 +18,7 @@ export function DefaultProviders({ children }: { children: React.ReactNode }) {
               enableSystem
             >
               <Toaster />
+              <AuthSync />
               {children}
             </ThemeProvider>
           </TooltipProvider>

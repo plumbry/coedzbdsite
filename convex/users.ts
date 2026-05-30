@@ -1,8 +1,45 @@
 import { ConvexError, v } from "convex/values";
+import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import {
+  buildProfilePatch,
+  getDiscordUserIdFromIdentity,
+  isValidDiscordSnowflake,
+} from "./auth_discord";
 import { requireAdmin } from "./auth_helpers";
 import { getDisplayName } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
+import type { Doc, Id } from "./_generated/dataModel";
+
+async function findUsersByDiscordId(
+  ctx: MutationCtx,
+  discordUserId: string,
+): Promise<Doc<"users">[]> {
+  const match = await ctx.db
+    .query("users")
+    .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", discordUserId))
+    .collect();
+
+  return match;
+}
+
+async function assertDiscordUserIdAvailable(
+  ctx: MutationCtx,
+  discordUserId: string,
+  excludeUserId?: Id<"users">,
+): Promise<void> {
+  const existing = await ctx.db
+    .query("users")
+    .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", discordUserId))
+    .first();
+
+  if (existing && existing._id !== excludeUserId) {
+    throw new ConvexError({
+      message: "Discord user id is already linked to another account",
+      code: "CONFLICT",
+    });
+  }
+}
 
 export const getCurrentUser = query({
   args: {},
@@ -11,14 +48,14 @@ export const getCurrentUser = query({
     if (!identity) {
       return null;
     }
-    
+
     const user = await ctx.db
       .query("users")
       .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
-    
+
     return user;
   },
 });
@@ -36,9 +73,7 @@ export const getUserByToken = query({
 export const getAllUsers = query({
   args: {},
   handler: async (ctx) => {
-    // Only admins can view all users
     await requireAdmin(ctx);
-    
     return await ctx.db.query("users").collect();
   },
 });
@@ -54,30 +89,101 @@ export const updateCurrentUser = mutation({
       });
     }
 
+    const profilePatch = buildProfilePatch(identity);
+
     const existingUser = await ctx.db
       .query("users")
       .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
 
     if (existingUser) {
-      // Update existing user's profile info
-      await ctx.db.patch(existingUser._id, {
-        name: identity.name,
-        email: identity.email,
-      });
+      await ctx.db.patch(existingUser._id, profilePatch);
       return existingUser._id;
     }
 
-    // Create new user
-    const userId = await ctx.db.insert("users", {
+    const discordUserId = getDiscordUserIdFromIdentity(identity);
+    if (!discordUserId) {
+      throw new ConvexError({
+        message:
+          "Account not linked. Your Discord id was not found in the sign-in token. Contact an admin.",
+        code: "FORBIDDEN",
+      });
+    }
+
+    const discordMatches = await findUsersByDiscordId(ctx, discordUserId);
+    if (discordMatches.length === 0) {
+      throw new ConvexError({
+        message:
+          "Account not linked. Contact an admin to link your Discord account before signing in.",
+        code: "FORBIDDEN",
+      });
+    }
+
+    if (discordMatches.length > 1) {
+      throw new ConvexError({
+        message: "Account linking error: duplicate Discord id in database. Contact an admin.",
+        code: "INTERNAL",
+      });
+    }
+
+    const matchedUser = discordMatches[0];
+    await ctx.db.patch(matchedUser._id, {
       tokenIdentifier: identity.tokenIdentifier,
-      name: identity.name,
-      email: identity.email,
+      ...profilePatch,
     });
 
-    return userId;
+    return matchedUser._id;
+  },
+});
+
+/** Admin-only: pre-seed Discord snowflake before a staff member's first Clerk login. */
+export const setDiscordLink = mutation({
+  args: {
+    userId: v.id("users"),
+    discordUserId: v.string(),
+    discordUsername: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+
+    const snowflake = args.discordUserId.trim();
+    if (!isValidDiscordSnowflake(snowflake)) {
+      throw new ConvexError({
+        message: "Invalid Discord user id (expected 17–20 digit snowflake)",
+        code: "BAD_REQUEST",
+      });
+    }
+
+    const targetUser = await ctx.db.get(args.userId);
+    if (!targetUser) {
+      throw new ConvexError({
+        message: "User not found",
+        code: "NOT_FOUND",
+      });
+    }
+
+    await assertDiscordUserIdAvailable(ctx, snowflake, args.userId);
+
+    await ctx.db.patch(args.userId, {
+      discordUserId: snowflake,
+      ...(args.discordUsername
+        ? { discordUsername: args.discordUsername.trim() }
+        : {}),
+    });
+
+    await logAudit(ctx, {
+      userId: admin._id,
+      userName: getDisplayName(admin),
+      action: "discord_link_preseeded",
+      entityType: "user",
+      entityId: args.userId,
+      details: `Pre-seeded Discord link for ${targetUser.username || targetUser.email || args.userId}`,
+      newValue: snowflake,
+    });
+
+    return { success: true, userId: args.userId, discordUserId: snowflake };
   },
 });
 
@@ -94,7 +200,6 @@ export const setUsername = mutation({
 
     const trimmed = args.username.trim();
 
-    // Validate username format: 3-20 characters, alphanumeric and underscores only
     if (trimmed.length < 3 || trimmed.length > 20) {
       throw new ConvexError({
         message: "Username must be between 3 and 20 characters",
@@ -109,7 +214,6 @@ export const setUsername = mutation({
       });
     }
 
-    // Check uniqueness (case-insensitive)
     const existing = await ctx.db
       .query("users")
       .withIndex("by_username", (q) => q.eq("username", trimmed.toLowerCase()))
@@ -155,7 +259,6 @@ export const checkUsernameAvailable = query({
       .withIndex("by_username", (q) => q.eq("username", trimmed))
       .first();
 
-    // If checking for the current user, it's available
     const identity = await ctx.auth.getUserIdentity();
     if (identity && existing) {
       const currentUser = await ctx.db
@@ -183,25 +286,25 @@ export const becomeAdmin = mutation({
         code: "UNAUTHENTICATED",
       });
     }
-    
+
     const user = await ctx.db
       .query("users")
       .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
-    
+
     if (!user) {
       throw new ConvexError({
         message: "User not found",
         code: "NOT_FOUND",
       });
     }
-    
+
     await ctx.db.patch(user._id, {
       role: "admin",
     });
-    
+
     return user;
   },
 });
@@ -212,17 +315,15 @@ export const updateUserRole = mutation({
     role: v.union(v.literal("admin"), v.literal("event_mod"), v.literal("viewer")),
   },
   handler: async (ctx, args) => {
-    // Only admins can update user roles
     const currentUser = await requireAdmin(ctx);
-    
-    // Prevent admin from demoting themselves
+
     if (currentUser._id === args.userId && args.role !== "admin") {
       throw new ConvexError({
         message: "You cannot change your own role",
         code: "BAD_REQUEST",
       });
     }
-    
+
     const targetUser = await ctx.db.get(args.userId);
     if (!targetUser) {
       throw new ConvexError({
@@ -230,14 +331,13 @@ export const updateUserRole = mutation({
         code: "NOT_FOUND",
       });
     }
-    
+
     const previousRole = targetUser.role || "viewer";
-    
+
     await ctx.db.patch(args.userId, {
       role: args.role,
     });
-    
-    // Log audit
+
     await logAudit(ctx, {
       userId: currentUser._id,
       userName: getDisplayName(currentUser),
@@ -248,7 +348,7 @@ export const updateUserRole = mutation({
       previousValue: previousRole,
       newValue: args.role,
     });
-    
+
     return { success: true };
   },
 });
