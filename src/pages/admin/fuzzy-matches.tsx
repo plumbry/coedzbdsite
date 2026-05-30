@@ -1,0 +1,169 @@
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api.js";
+import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import { Button } from "@/components/ui/button.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
+import { toast } from "sonner";
+import { Sparkles, Link as LinkIcon, ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+export default function FuzzyMatches() {
+  const matches = useQuery(api.discord.findMatches.findPotentialMatches, {});
+  const manualMatch = useMutation(api.discord.manualMatchToPlayer);
+  const navigate = useNavigate();
+
+  const handleMatch = async (discordMemberId: Id<"players">, targetPlayerId: Id<"players">, discordName: string, playerName: string) => {
+    try {
+      await manualMatch({
+        discordMemberId,
+        targetPlayerId,
+      });
+      toast.success(`Matched ${discordName} to ${playerName}`);
+    } catch (error) {
+      toast.error("Failed to match players");
+      console.error(error);
+    }
+  };
+
+  return (
+    <div className="container mx-auto p-6 max-w-7xl">
+      <div className="mb-6">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/admin/discord-members")}
+          className="mb-4"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Discord Members
+        </Button>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <Sparkles className="h-8 w-8 text-primary" />
+          Fuzzy Match Suggestions
+        </h1>
+        <p className="text-muted-foreground mt-2">
+          Automatically detected potential matches between Discord members and existing players
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Potential Matches</CardTitle>
+          <CardDescription>
+            Review and approve suggested matches based on username similarity
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {matches === undefined ? (
+            <div className="space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : (
+            <>
+              {/* Summary */}
+              <div className="flex gap-6 mb-6 p-4 bg-muted/50 rounded-lg">
+                <div className="text-sm">
+                  <span className="font-semibold text-lg">{matches.totalMatches}</span>
+                  <div className="text-muted-foreground">potential matches found</div>
+                </div>
+                <div className="text-sm">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="secondary" className="bg-blue-500 text-white">USERNAME</Badge>
+                    <span className="font-semibold">{matches.matches.filter(m => m.matchType === "username").length}</span>
+                  </div>
+                  <div className="text-muted-foreground text-xs">Exact username matches</div>
+                </div>
+                <div className="text-sm">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="secondary" className="bg-orange-500 text-white">FUZZY</Badge>
+                    <span className="font-semibold">{matches.matches.filter(m => m.matchType === "fuzzy").length}</span>
+                  </div>
+                  <div className="text-muted-foreground text-xs">Similar username matches</div>
+                </div>
+              </div>
+
+              {/* Matches Table */}
+              {matches.totalMatches === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">No potential matches found</p>
+                  <p className="text-sm">All Discord members are either already matched or have no similar player profiles.</p>
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[250px]">Discord Member</TableHead>
+                        <TableHead className="w-[60px] text-center">⟶</TableHead>
+                        <TableHead className="w-[250px]">Existing Player</TableHead>
+                        <TableHead className="w-[180px]">Match Type</TableHead>
+                        <TableHead className="w-[120px]">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {matches.matches.map((match, index) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{match.discordMemberName}</div>
+                              <div className="text-xs text-muted-foreground mt-1">{match.discordMemberEpic}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center text-muted-foreground">
+                            <LinkIcon className="h-4 w-4 mx-auto" />
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{match.manualPlayerName}</div>
+                              {match.manualPlayerTier && (
+                                <Badge variant="outline" className="text-xs mt-1">Tier {match.manualPlayerTier}</Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              {match.matchType === "username" ? (
+                                <Badge variant="secondary" className="bg-blue-500 text-white text-xs">
+                                  USERNAME
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="bg-orange-500 text-white text-xs">
+                                  FUZZY
+                                </Badge>
+                              )}
+                              <div className="text-xs text-muted-foreground">{match.matchedOn}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => handleMatch(
+                                match.discordMemberId as Id<"players">,
+                                match.manualPlayerId as Id<"players">,
+                                match.discordMemberName,
+                                match.manualPlayerName
+                              )}
+                            >
+                              Link Players
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -1,0 +1,380 @@
+import { useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api.js";
+import { Button } from "@/components/ui/button.tsx";
+import { Input } from "@/components/ui/input.tsx";
+import { Label } from "@/components/ui/label.tsx";
+import { Textarea } from "@/components/ui/textarea.tsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import { Plus, Search, User } from "lucide-react";
+import { toast } from "sonner";
+import { useDebounce } from "@/hooks/use-debounce.ts";
+
+// Minor progression: 1st=Warning, 2nd+=1 Event Ban
+// Players can receive multiple minor warnings for different things
+const MINOR_PENALTIES: Record<number, { label: string; events: number; type: string }> = {
+  1: { label: "1st Minor - Warning", events: 0, type: "Minor Warning" },
+  2: { label: "2nd Minor - 1 Event Ban", events: 1, type: "Minor Event Ban" },
+};
+
+// Major progression: 1st=Warning (once), 2nd=Multi-Event Ban (moderator selects events)
+const MAJOR_PENALTIES: Record<number, { label: string; events: number; type: string }> = {
+  1: { label: "1st Major - Warning", events: 0, type: "Major Warning" },
+  2: { label: "2nd Major - Multi-Event Ban", events: 3, type: "Major Event Ban" },
+};
+
+export default function CreateBanDialog() {
+  const [open, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Player search state
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [debouncedSearch] = useDebounce(playerSearch, 300);
+  const [selectedPlayer, setSelectedPlayer] = useState<{
+    discordUsername: string;
+    epicUsername: string;
+    discordUserId: string;
+    nickname?: string;
+  } | null>(null);
+  const [showResults, setShowResults] = useState(false);
+
+  // Form state
+  const [discordId, setDiscordId] = useState("");
+  const [playerTag, setPlayerTag] = useState("");
+  const [banType, setBanType] = useState("Minor Warning");
+  const [originalEvents, setOriginalEvents] = useState("0");
+  const [reason, setReason] = useState("");
+  const [offenseTrack, setOffenseTrack] = useState<string>("minor");
+
+  // Queries
+  const searchResults = useQuery(
+    api.eventBans.queries.searchPlayersForBan,
+    debouncedSearch.length >= 2 ? { search: debouncedSearch } : "skip"
+  );
+
+  const offenseHistory = useQuery(
+    api.eventBans.queries.getPlayerOffenseHistory,
+    discordId ? { discordId } : "skip"
+  );
+
+  const createBan = useMutation(api.eventBans.mutations.createBan);
+
+  // Auto-detect offense number based on history
+  const nextOffenseNumber = offenseTrack === "minor"
+    ? (offenseHistory?.minorCount ?? 0) + 1
+    : (offenseHistory?.majorCount ?? 0) + 1;
+
+  // Suggest next penalty based on history (display only, does not auto-fill)
+  const suggestedPenalty = (() => {
+    if (!offenseHistory) return null;
+    const penalties = offenseTrack === "minor" ? MINOR_PENALTIES : MAJOR_PENALTIES;
+    const maxKey = Math.max(...Object.keys(penalties).map(Number));
+    const penaltyKey = Math.min(nextOffenseNumber, maxKey);
+    return penalties[penaltyKey] ?? null;
+  })();
+
+  const handleSelectPlayer = (player: {
+    discordUsername: string;
+    epicUsername: string;
+    discordUserId: string;
+    nickname?: string;
+  }) => {
+    setSelectedPlayer(player);
+    setDiscordId(player.discordUserId);
+    setPlayerTag(player.discordUsername || player.epicUsername);
+    setPlayerSearch(player.discordUsername || player.epicUsername);
+    setShowResults(false);
+  };
+
+  const resetForm = () => {
+    setPlayerSearch("");
+    setSelectedPlayer(null);
+    setDiscordId("");
+    setPlayerTag("");
+    setBanType("Minor Warning");
+    setOriginalEvents("0");
+    setReason("");
+    setOffenseTrack("minor");
+  };
+
+  const handleSubmit = async () => {
+    if (!discordId.trim()) {
+      toast.error("Please select a player or enter a Discord ID");
+      return;
+    }
+    if (!playerTag.trim()) {
+      toast.error("Player tag is required");
+      return;
+    }
+    if (!reason.trim()) {
+      toast.error("Reason is required");
+      return;
+    }
+
+    const events = parseInt(originalEvents, 10);
+    if (isNaN(events) || events < 0) {
+      toast.error("Events must be 0 or higher");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await createBan({
+        discordId: discordId.trim(),
+        playerTag: playerTag.trim(),
+        banType,
+        originalEvents: events,
+        reason: reason.trim(),
+        offenseTrack,
+        offenseNumber: nextOffenseNumber,
+      });
+      toast.success(`Ban applied to ${playerTag.trim()} (${offenseTrack} offense #${nextOffenseNumber})`);
+      resetForm();
+      setOpen(false);
+    } catch (error) {
+      toast.error("Failed to create ban");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="cursor-pointer">
+          <Plus className="mr-2 h-4 w-4" />
+          Create Ban
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Create Event Ban</DialogTitle>
+          <DialogDescription>
+            Search for a player to auto-fill their details and detect their offense history.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Player Search */}
+          <div className="space-y-2">
+            <Label>Search Player</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Type a name to search..."
+                value={playerSearch}
+                onChange={(e) => {
+                  setPlayerSearch(e.target.value);
+                  setShowResults(true);
+                  if (selectedPlayer) setSelectedPlayer(null);
+                }}
+                onFocus={() => setShowResults(true)}
+                className="pl-9"
+              />
+            </div>
+
+            {/* Search Results Dropdown */}
+            {showResults && searchResults && searchResults.length > 0 && !selectedPlayer && (
+              <div className="border rounded-md bg-popover shadow-md max-h-48 overflow-y-auto">
+                {searchResults.map((player) => (
+                  <button
+                    key={player._id}
+                    type="button"
+                    className="w-full text-left px-3 py-2 hover:bg-muted/50 flex items-center gap-2 cursor-pointer transition-colors"
+                    onClick={() => handleSelectPlayer(player)}
+                  >
+                    <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{player.discordUsername}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        Epic: {player.epicUsername} | ID: {player.discordUserId}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {showResults && debouncedSearch.length >= 2 && searchResults && searchResults.length === 0 && !selectedPlayer && (
+              <p className="text-xs text-muted-foreground">No players found. You can enter details manually below.</p>
+            )}
+          </div>
+
+          {/* Selected player indicator */}
+          {selectedPlayer && (
+            <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
+              <User className="h-4 w-4 text-primary" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{selectedPlayer.discordUsername}</p>
+                <p className="text-xs text-muted-foreground font-mono">{selectedPlayer.discordUserId}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="cursor-pointer h-7 text-xs"
+                onClick={() => {
+                  setSelectedPlayer(null);
+                  setPlayerSearch("");
+                  setDiscordId("");
+                  setPlayerTag("");
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+
+          {/* Manual Discord ID (only show if no player selected) */}
+          {!selectedPlayer && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="discordId">Discord ID</Label>
+                <Input
+                  id="discordId"
+                  placeholder="123456789012345678"
+                  value={discordId}
+                  onChange={(e) => setDiscordId(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="playerTag">Player Tag</Label>
+                <Input
+                  id="playerTag"
+                  placeholder="PlayerName"
+                  value={playerTag}
+                  onChange={(e) => setPlayerTag(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Offense Track */}
+          <div className="space-y-2">
+            <Label>Offense Track</Label>
+            <Select value={offenseTrack} onValueChange={setOffenseTrack}>
+              <SelectTrigger className="cursor-pointer">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="minor" className="cursor-pointer">Minor</SelectItem>
+                <SelectItem value="major" className="cursor-pointer">Major</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Auto-detected offense info */}
+          {offenseHistory && discordId && (
+            <div className="p-3 bg-muted/50 rounded-md space-y-1">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Auto-detected</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 border-yellow-200">
+                  Minor: {offenseHistory.minorCount} prior
+                </Badge>
+                <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-200">
+                  Major: {offenseHistory.majorCount} prior
+                </Badge>
+                <Badge className="bg-primary/10 text-primary border-primary/20">
+                  Next: {offenseTrack === "minor" ? "Minor" : "Major"} #{nextOffenseNumber}
+                </Badge>
+              </div>
+              {(() => {
+                const penalties = offenseTrack === "minor" ? MINOR_PENALTIES : MAJOR_PENALTIES;
+                const maxKey = Math.max(...Object.keys(penalties).map(Number));
+                const penaltyKey = Math.min(nextOffenseNumber, maxKey);
+                const penalty = penalties[penaltyKey];
+                return penalty ? (
+                  <p className="text-sm text-foreground mt-1">
+                    Suggested: <span className="font-medium">{penalty.label}</span> ({penalty.events} events)
+                  </p>
+                ) : null;
+              })()}
+            </div>
+          )}
+
+          {/* Ban Type & Events */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Ban Type</Label>
+              <Select value={banType} onValueChange={setBanType}>
+                <SelectTrigger className="cursor-pointer">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Minor Warning" className="cursor-pointer">Minor Warning</SelectItem>
+                  <SelectItem value="Major Warning" className="cursor-pointer">Major Warning</SelectItem>
+                  <SelectItem value="Minor Event Ban" className="cursor-pointer">Minor Event Ban</SelectItem>
+                  <SelectItem value="Major Event Ban" className="cursor-pointer">Major Event Ban</SelectItem>
+                  <SelectItem value="Event Ban" className="cursor-pointer">Event Ban</SelectItem>
+                  <SelectItem value="Probation" className="cursor-pointer">Probation (28-day server ban)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="events">Number of Events</Label>
+              <Input
+                id="events"
+                type="number"
+                min="0"
+                value={originalEvents}
+                onChange={(e) => setOriginalEvents(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Suggestion based on offense history */}
+          {suggestedPenalty && (
+            <p className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
+              Suggested: <span className="font-medium text-foreground">{suggestedPenalty.label}</span>
+              {" "}({suggestedPenalty.events === 0 ? "warning only" : `${suggestedPenalty.events} event${suggestedPenalty.events !== 1 ? "s" : ""}`})
+            </p>
+          )}
+
+          {/* Reason */}
+          <div className="space-y-2">
+            <Label htmlFor="reason">Reason</Label>
+            <Textarea
+              id="reason"
+              placeholder="Reason for the ban..."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="ghost"
+            onClick={() => setOpen(false)}
+            className="cursor-pointer"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="cursor-pointer"
+          >
+            {isSubmitting ? "Creating..." : "Apply Ban"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -1,0 +1,774 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useQuery, useAction, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api.js";
+import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { Button } from "@/components/ui/button.tsx";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import { Input } from "@/components/ui/input.tsx";
+import { Search, Ban, Clock, AlertTriangle, TrendingUp, Trash2, CalendarCheck, Undo2 } from "lucide-react";
+import { toast } from "sonner";
+import { useUserRole } from "@/hooks/use-user-role.ts";
+import CreateBanDialog from "./create-ban-dialog.tsx";
+import { formatDistanceToNow } from "date-fns";
+
+export default function EventBansManager() {
+  const { hasEventBanAccess } = useUserRole();
+  const [activeTab, setActiveTab] = useState<"active" | "history" | "offenses">("active");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const activeBans = useQuery(api.eventBans.queries.getActiveBans, {});
+  const endedBans = useQuery(api.eventBans.queries.getEndedBans, {});
+  const syncStatus = useQuery(api.eventBans.queries.getSyncStatus, {});
+  const offenseCounts = useQuery(api.eventBans.queries.getOffenseCounts, {});
+  const eventPassedMeta = useQuery(api.eventBans.queries.getEventPassedMetadata, {});
+  const eventPassedMutation = useMutation(api.eventBans.mutations.eventPassed);
+  const undoEventPassedMutation = useMutation(api.eventBans.mutations.undoEventPassed);
+  const [isEventPassing, setIsEventPassing] = useState(false);
+  const [eventPassedCountdown, setEventPassedCountdown] = useState<number | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [isUndoing, setIsUndoing] = useState(false);
+  const [eventPassedQty, setEventPassedQty] = useState(1);
+
+  const cancelEventPassed = useCallback(() => {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    setEventPassedCountdown(null);
+    toast.info("Event passed cancelled.");
+  }, []);
+
+  const handleEventPassed = () => {
+    if (eventPassedCountdown !== null) {
+      // Already counting down, treat click as cancel
+      cancelEventPassed();
+      return;
+    }
+
+    setEventPassedCountdown(30);
+    toast.info(`Event Passed (×${eventPassedQty}) will execute in 30 seconds. Click the button again to cancel.`);
+
+    countdownRef.current = setInterval(() => {
+      setEventPassedCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          if (countdownRef.current) {
+            clearInterval(countdownRef.current);
+            countdownRef.current = null;
+          }
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // Fire the mutation when countdown reaches null after being active
+  const prevCountdownRef = useRef<number | null>(null);
+  useEffect(() => {
+    const prev = prevCountdownRef.current;
+    prevCountdownRef.current = eventPassedCountdown;
+
+    // Countdown just finished (prev was a number, now it's null)
+    if (prev !== null && prev <= 1 && eventPassedCountdown === null) {
+      const executeMutation = async () => {
+        setIsEventPassing(true);
+        try {
+          const result = await eventPassedMutation({ count: eventPassedQty });
+          toast.success(`Event passed (×${eventPassedQty}): ${result.decremented} bans decremented, ${result.ended} bans ended`);
+        } catch (error) {
+          toast.error("Failed to process event passed.");
+        } finally {
+          setIsEventPassing(false);
+        }
+      };
+      executeMutation();
+    }
+  }, [eventPassedCountdown, eventPassedMutation, eventPassedQty]);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+      }
+    };
+  }, []);
+
+  const handleUndoEventPassed = async () => {
+    if (!window.confirm("Are you sure you want to undo the last event passed? This will increment remaining events and reactivate any bans ended today.")) {
+      return;
+    }
+    setIsUndoing(true);
+    try {
+      const result = await undoEventPassedMutation({});
+      toast.success(`Undo complete: ${result.incremented} bans incremented, ${result.reactivated} bans reactivated`);
+    } catch (error) {
+      toast.error("Failed to undo event passed.");
+    } finally {
+      setIsUndoing(false);
+    }
+  };
+
+
+  const filterBans = (bans: typeof activeBans) => {
+    if (!bans) return [];
+    if (!searchQuery.trim()) return bans;
+    const query = searchQuery.toLowerCase();
+    return bans.filter(
+      (ban) =>
+        ban.playerTag.toLowerCase().includes(query) ||
+        ban.discordId.includes(query) ||
+        ban.reason.toLowerCase().includes(query) ||
+        ban.moderatorTag.toLowerCase().includes(query) ||
+        (ban.epicUsername && ban.epicUsername.toLowerCase().includes(query))
+    );
+  };
+
+  const filterOffenses = (counts: typeof offenseCounts) => {
+    if (!counts) return [];
+    if (!searchQuery.trim()) return counts;
+    const query = searchQuery.toLowerCase();
+    return counts.filter(
+      (entry) =>
+        entry.playerTag.toLowerCase().includes(query) ||
+        entry.discordId.includes(query) ||
+        (entry.epicUsername && entry.epicUsername.toLowerCase().includes(query))
+    );
+  };
+
+  const filteredActive = filterBans(activeBans);
+  const filteredEnded = filterBans(endedBans);
+  const filteredOffenses = filterOffenses(offenseCounts);
+
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Event Bans</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Synced to the Mod Log Google Sheet
+          </p>
+        </div>
+        {hasEventBanAccess && (
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <CreateBanDialog />
+            <Button
+              onClick={handleEventPassed}
+              disabled={isEventPassing}
+              size="sm"
+              variant={eventPassedCountdown !== null ? "destructive" : "secondary"}
+              className="cursor-pointer h-8 text-xs sm:text-sm"
+            >
+              <CalendarCheck className={`mr-1 h-3.5 w-3.5 ${isEventPassing ? "animate-pulse" : ""}`} />
+              {isEventPassing
+                ? "Processing..."
+                : eventPassedCountdown !== null
+                  ? `Cancel (${eventPassedCountdown}s)`
+                  : `Event Passed${eventPassedQty > 1 ? ` (×${eventPassedQty})` : ""}`}
+            </Button>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] sm:text-xs text-muted-foreground">Qty:</span>
+              <Input
+                type="number"
+                min={1}
+                max={50}
+                value={eventPassedQty}
+                onChange={(e) => setEventPassedQty(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                className="w-12 h-7 sm:h-8 text-center text-xs sm:text-sm"
+                disabled={isEventPassing || eventPassedCountdown !== null}
+              />
+            </div>
+            <Button
+              onClick={handleUndoEventPassed}
+              disabled={isUndoing}
+              size="sm"
+              variant="ghost"
+              className="cursor-pointer h-8 text-xs sm:text-sm"
+            >
+              <Undo2 className={`mr-1 h-3.5 w-3.5 ${isUndoing ? "animate-pulse" : ""}`} />
+              {isUndoing ? "..." : "Undo"}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Last Event Passed indicator */}
+      {eventPassedMeta && (
+        <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+          <Clock className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            Last &quot;Event Passed&quot;:{" "}
+            {formatDistanceToNow(new Date(eventPassedMeta.lastEventPassedAt), { addSuffix: true })}
+            {eventPassedMeta.lastEventPassedBy && (
+              <span className="ml-1">by {eventPassedMeta.lastEventPassedBy}</span>
+            )}
+          </span>
+        </div>
+      )}
+
+      {/* Stats */}
+      {syncStatus && (
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-4">
+          <Card>
+            <CardContent className="p-2 sm:pt-6 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3">
+                <div className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg bg-destructive/10 flex items-center justify-center">
+                  <Ban className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-destructive" />
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-base sm:text-2xl font-bold">{syncStatus.activeBans}</p>
+                  <p className="text-[9px] sm:text-xs text-muted-foreground">Active</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-2 sm:pt-6 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3">
+                <div className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg bg-muted flex items-center justify-center">
+                  <Clock className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-muted-foreground" />
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-base sm:text-2xl font-bold">{syncStatus.endedBans}</p>
+                  <p className="text-[9px] sm:text-xs text-muted-foreground">Historical</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-2 sm:pt-6 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3">
+                <div className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <AlertTriangle className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-primary" />
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-base sm:text-2xl font-bold">{syncStatus.totalBans}</p>
+                  <p className="text-[9px] sm:text-xs text-muted-foreground">Total</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Tabs & Search */}
+      <div className="flex flex-col gap-2 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-0.5 sm:gap-2">
+          <Button
+            variant={activeTab === "active" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveTab("active")}
+            className="cursor-pointer text-xs sm:text-sm h-8 px-2 sm:px-3"
+          >
+            Active
+            {activeBans && (
+              <Badge variant="secondary" className="ml-1 sm:ml-2 text-[10px] sm:text-xs">
+                {filteredActive.length}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            variant={activeTab === "history" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveTab("history")}
+            className="cursor-pointer text-xs sm:text-sm h-8 px-2 sm:px-3"
+          >
+            History
+            {endedBans && (
+              <Badge variant="secondary" className="ml-1 sm:ml-2 text-[10px] sm:text-xs">
+                {filteredEnded.length}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            variant={activeTab === "offenses" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveTab("offenses")}
+            className="cursor-pointer text-xs sm:text-sm h-8 px-2 sm:px-3"
+          >
+            <TrendingUp className="mr-0.5 sm:mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" />
+            Offenses
+            {offenseCounts && (
+              <Badge variant="secondary" className="ml-1 sm:ml-2 text-[10px] sm:text-xs">
+                {filteredOffenses.length}
+              </Badge>
+            )}
+          </Button>
+        </div>
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search player, reason, mod..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 h-8 sm:h-9 text-sm"
+          />
+        </div>
+      </div>
+
+      {/* Content */}
+      {activeTab === "offenses" ? (
+        <OffenseCountsTable offenses={filteredOffenses} isLoading={offenseCounts === undefined} />
+      ) : (
+        <BansTable
+          bans={activeTab === "active" ? filteredActive : filteredEnded}
+          isLoading={activeBans === undefined || endedBans === undefined}
+          emptyMessage={
+            searchQuery
+              ? "No bans match your search"
+              : activeTab === "active"
+                ? "No active event bans"
+                : "No historical bans yet"
+          }
+          canDelete={hasEventBanAccess}
+        />
+      )}
+    </div>
+  );
+}
+
+function BansTable({
+  bans,
+  isLoading,
+  emptyMessage,
+  canDelete,
+}: {
+  bans: Array<{
+    _id: string;
+    playerTag: string;
+    discordId: string;
+    banType: string;
+    remainingEvents: number;
+    originalEvents: number;
+    startDate: string;
+    lastUpdated: string;
+    reason: string;
+    moderatorTag: string;
+    offenseTrack?: string;
+    offenseNumber?: number;
+  }>;
+  isLoading: boolean;
+  emptyMessage: string;
+  canDelete: boolean;
+}) {
+  const deleteBanAction = useAction(api.eventBans.sync.deleteBan);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (ban: { _id: string; playerTag: string }) => {
+    if (!confirm(`Are you sure you want to delete the ban for ${ban.playerTag}? This will also remove it from the Google Sheet.`)) {
+      return;
+    }
+    setDeletingId(ban._id);
+    try {
+      const result = await deleteBanAction({ banId: ban._id as Id<"eventBans"> });
+      if (result.removedFromSheet) {
+        toast.success(`Ban deleted from site and Google Sheet`);
+      } else {
+        toast.success(`Ban deleted from site (could not find matching row in sheet)`);
+      }
+    } catch (error) {
+      toast.error("Failed to delete ban");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (bans.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Ban className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+          <p className="text-muted-foreground">{emptyMessage}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      {/* Mobile card view */}
+      <div className="sm:hidden space-y-3">
+        {bans.map((ban) => (
+          <Card key={ban._id}>
+            <CardContent className="p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate">{ban.playerTag}</p>
+                  <p className="text-[10px] text-muted-foreground font-mono">{ban.discordId}</p>
+                </div>
+                {canDelete && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                    disabled={deletingId === ban._id}
+                    onClick={() => handleDelete(ban)}
+                  >
+                    <Trash2 className={`h-4 w-4 ${deletingId === ban._id ? "animate-pulse" : ""}`} />
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <BanTypeBadge type={ban.banType} />
+                <OffenseTrackBadge track={ban.offenseTrack} number={ban.offenseNumber} />
+                <Badge variant="secondary" className="font-mono text-[10px]">
+                  {ban.remainingEvents}/{ban.originalEvents} events
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground line-clamp-2">{ban.reason}</p>
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>Mod: {ban.moderatorTag}</span>
+                <span>{ban.startDate}</span>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Desktop table view */}
+      <Card className="hidden sm:block">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left p-3 font-medium">Player</th>
+                  <th className="text-left p-3 font-medium">Type</th>
+                  <th className="text-left p-3 font-medium">Track</th>
+                  <th className="text-left p-3 font-medium">Events</th>
+                  <th className="text-left p-3 font-medium">Start</th>
+                  <th className="text-left p-3 font-medium">Updated</th>
+                  <th className="text-left p-3 font-medium">Reason</th>
+                  <th className="text-left p-3 font-medium">Moderator</th>
+                  {canDelete && <th className="text-left p-3 font-medium w-10"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {bans.map((ban) => (
+                  <tr key={ban._id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="p-3">
+                      <div>
+                        <p className="font-medium">{ban.playerTag}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{ban.discordId}</p>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <BanTypeBadge type={ban.banType} />
+                    </td>
+                    <td className="p-3">
+                      <OffenseTrackBadge track={ban.offenseTrack} number={ban.offenseNumber} />
+                    </td>
+                    <td className="p-3">
+                      <span className="font-mono">
+                        {ban.remainingEvents}/{ban.originalEvents}
+                      </span>
+                    </td>
+                    <td className="p-3 whitespace-nowrap">{ban.startDate}</td>
+                    <td className="p-3 whitespace-nowrap">{ban.lastUpdated}</td>
+                    <td className="p-3 max-w-xs">
+                      <p className="truncate" title={ban.reason}>
+                        {ban.reason}
+                      </p>
+                    </td>
+                    <td className="p-3 whitespace-nowrap">{ban.moderatorTag}</td>
+                    {canDelete && (
+                      <td className="p-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                          disabled={deletingId === ban._id}
+                          onClick={() => handleDelete(ban)}
+                        >
+                          <Trash2 className={`h-4 w-4 ${deletingId === ban._id ? "animate-pulse" : ""}`} />
+                        </Button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+function OffenseCountsTable({
+  offenses,
+  isLoading,
+}: {
+  offenses: Array<{
+    discordId: string;
+    playerTag: string;
+    minorCount: number;
+    majorCount: number;
+    highestMinor: number;
+    highestMajor: number;
+  }>;
+  isLoading: boolean;
+}) {
+  const { hasEventBanAccess } = useUserRole();
+  const deleteOffenses = useAction(api.eventBans.sync.deletePlayerOffenses);
+
+  const handleDeleteOffenses = async (discordId: string, playerTag: string) => {
+    if (!window.confirm(`Delete ALL offense records for ${playerTag}? This removes all ban entries with offense tracking for this player from both the site and the Google Sheet.`)) {
+      return;
+    }
+    try {
+      const result = await deleteOffenses({ discordId });
+      toast.success(`Deleted ${result.deleted} offense record(s) for ${playerTag}${result.removedFromSheet > 0 ? ` (${result.removedFromSheet} removed from sheet)` : ""}`);
+    } catch (error) {
+      toast.error("Failed to delete offense records.");
+    }
+  };
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (offenses.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+          <p className="text-muted-foreground">No offense data tracked yet</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Offenses are parsed from bans with "[Minor offense #N]" or "[Major offense #N]" in the reason
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Sort by total offenses descending
+  const sorted = [...offenses].sort(
+    (a, b) => (b.minorCount + b.majorCount) - (a.minorCount + a.majorCount)
+  );
+
+  return (
+    <Card>
+      <CardHeader className="px-3 sm:px-6">
+        <CardTitle className="text-sm sm:text-base">Offense Progression per Player</CardTitle>
+        <p className="text-[10px] sm:text-xs text-muted-foreground">
+          Shows how far each player is along the minor and major discipline tracks
+        </p>
+      </CardHeader>
+      <CardContent className="p-0">
+        {/* Mobile card view */}
+        <div className="sm:hidden divide-y">
+          {sorted.map((entry) => (
+            <div key={entry.discordId} className="p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate">{entry.playerTag}</p>
+                  <p className="text-[10px] text-muted-foreground font-mono">{entry.discordId}</p>
+                </div>
+                {hasEventBanAccess && (
+                  <button
+                    onClick={() => handleDeleteOffenses(entry.discordId, entry.playerTag)}
+                    className="text-destructive hover:text-destructive/80 cursor-pointer shrink-0"
+                    title="Delete all offenses for this player"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="space-y-1">
+                  <p className="text-muted-foreground text-[10px]">Minor</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-amber-600 font-semibold">{entry.minorCount}</span>
+                    <MinorStageBadge count={entry.highestMinor || entry.minorCount} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-muted-foreground text-[10px]">Major</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-red-600 font-semibold">{entry.majorCount}</span>
+                    <MajorStageBadge count={entry.highestMajor || entry.majorCount} />
+                  </div>
+                </div>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Total: <span className="font-mono font-semibold text-foreground">{entry.minorCount + entry.majorCount}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table view */}
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="text-left p-3 font-medium">Player</th>
+                <th className="text-left p-3 font-medium">Minor Offenses</th>
+                <th className="text-left p-3 font-medium">Minor Stage</th>
+                <th className="text-left p-3 font-medium">Major Offenses</th>
+                <th className="text-left p-3 font-medium">Major Stage</th>
+                <th className="text-left p-3 font-medium">Total</th>
+                {hasEventBanAccess && <th className="p-3 w-10"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((entry) => (
+                <tr key={entry.discordId} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                  <td className="p-3">
+                    <div>
+                      <p className="font-medium">{entry.playerTag}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{entry.discordId}</p>
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    <span className="font-mono text-amber-600 font-semibold">
+                      {entry.minorCount}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <MinorStageBadge count={entry.highestMinor || entry.minorCount} />
+                  </td>
+                  <td className="p-3">
+                    <span className="font-mono text-red-600 font-semibold">
+                      {entry.majorCount}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <MajorStageBadge count={entry.highestMajor || entry.majorCount} />
+                  </td>
+                  <td className="p-3">
+                    <span className="font-mono font-semibold">
+                      {entry.minorCount + entry.majorCount}
+                    </span>
+                  </td>
+                  {hasEventBanAccess && (
+                    <td className="p-3">
+                      <button
+                        onClick={() => handleDeleteOffenses(entry.discordId, entry.playerTag)}
+                        className="text-destructive hover:text-destructive/80 cursor-pointer"
+                        title="Delete all offenses for this player"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BanTypeBadge({ type }: { type: string }) {
+  const lower = type.toLowerCase();
+  if (lower === "probation") {
+    return (
+      <Badge variant="secondary" className="bg-purple-500/10 text-purple-600 border-purple-200">
+        Probation (Server Ban)
+      </Badge>
+    );
+  }
+  if (lower === "minor warning") {
+    return (
+      <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 border-yellow-200">
+        Minor Warning
+      </Badge>
+    );
+  }
+  if (lower === "major warning") {
+    return (
+      <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-200">
+        Major Warning
+      </Badge>
+    );
+  }
+  if (lower.includes("minor")) {
+    return (
+      <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 border-yellow-200">
+        {type}
+      </Badge>
+    );
+  }
+  if (lower.includes("major")) {
+    return (
+      <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-200">
+        {type}
+      </Badge>
+    );
+  }
+  if (lower === "event ban") {
+    return (
+      <Badge variant="secondary" className="bg-orange-500/10 text-orange-600 border-orange-200">
+        Event Ban
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="destructive">
+      {type || "All Events"}
+    </Badge>
+  );
+}
+
+function OffenseTrackBadge({ track, number }: { track?: string; number?: number }) {
+  if (!track) {
+    return <span className="text-muted-foreground text-xs">—</span>;
+  }
+
+  if (track === "minor") {
+    return (
+      <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 border-yellow-200">
+        Minor #{number ?? "?"}
+      </Badge>
+    );
+  }
+  if (track === "major") {
+    return (
+      <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-200">
+        Major #{number ?? "?"}
+      </Badge>
+    );
+  }
+  return <span className="text-muted-foreground text-xs">—</span>;
+}
+
+// Minor progression: 1=Warning, 2=1 Event Ban, 3=Extended Ban, ∞=Probation
+function MinorStageBadge({ count }: { count: number }) {
+  if (count === 0) return <span className="text-muted-foreground text-xs">None</span>;
+  if (count === 1) return <Badge variant="secondary" className="bg-green-500/10 text-green-700 border-green-200">1st - Warning</Badge>;
+  if (count === 2) return <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 border-yellow-200">2nd - 1 Event Ban</Badge>;
+  if (count === 3) return <Badge variant="secondary" className="bg-orange-500/10 text-orange-700 border-orange-200">3rd - Extended Ban</Badge>;
+  return <Badge variant="destructive">Probation</Badge>;
+}
+
+// Major progression: 1=Warning, 2=Multi-Event Ban, 3=Probation, 4=Final Warning, 5+=Kick
+function MajorStageBadge({ count }: { count: number }) {
+  if (count === 0) return <span className="text-muted-foreground text-xs">None</span>;
+  if (count === 1) return <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 border-yellow-200">1st - Warning</Badge>;
+  if (count === 2) return <Badge variant="secondary" className="bg-orange-500/10 text-orange-700 border-orange-200">2nd - Multi-Event Ban</Badge>;
+  if (count === 3) return <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-200">3rd - Probation</Badge>;
+  if (count === 4) return <Badge variant="destructive">4th - Final Warning</Badge>;
+  return <Badge variant="destructive">5+ - Removal</Badge>;
+}

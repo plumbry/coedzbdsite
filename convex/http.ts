@@ -1,0 +1,582 @@
+import { httpRouter } from "convex/server";
+import { httpAction } from "./_generated/server";
+import { internal } from "./_generated/api";
+
+const http = httpRouter();
+
+// Public API endpoint to get member info by Discord ID
+http.route({
+  path: "/api/member",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const url = new URL(request.url);
+    const discordId = url.searchParams.get("discordId");
+    
+    if (!discordId) {
+      return new Response(
+        JSON.stringify({ error: "Missing required query parameter: discordId" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Look up member by Discord ID
+    const member = await ctx.runQuery(internal.memberManagement.getMemberByDiscordId, {
+      discordId,
+    });
+    
+    if (!member) {
+      return new Response(
+        JSON.stringify({ error: "Member not found" }),
+        { status: 404, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    
+    return new Response(
+      JSON.stringify({
+        tier: member.tier,
+        evaluation: {
+          Gender: member.evaluationGender,
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }),
+});
+
+// Webhook endpoint for Discord bot to sync member data
+http.route({
+  path: "/api/discord/sync-member",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    // Verify API key (try both possible env var names)
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+    
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    
+    try {
+      const body = await request.json();
+      
+      // Validate required fields
+      if (!body.id || !body.username) {
+        return new Response(
+          JSON.stringify({ error: "Missing required fields: id and username" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      
+      // Debug: log what date we're receiving
+      console.log(`Syncing ${body.username}: joined_at = ${body.joined_at}`);
+      
+      // Call internal mutation to upsert the Discord member
+      await ctx.runMutation(internal.discord.upsertDiscordMember, {
+        discordUserId: body.id,
+        discordUsername: body.username,
+        nickname: body.nickname || null,
+        joinedAt: body.joined_at || new Date().toISOString(),
+        roles: body.roles || null,
+      });
+      
+      return new Response(
+        JSON.stringify({ success: true, message: "Member synced successfully" }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (error) {
+      console.error("Error syncing Discord member:", error);
+      return new Response(
+        JSON.stringify({ 
+          error: "Internal server error", 
+          message: error instanceof Error ? error.message : "Unknown error" 
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
+// Webhook endpoint for Discord bot to archive players no longer in server
+http.route({
+  path: "/api/discord/archive-missing",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    // Verify API key
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+    
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    
+    try {
+      const body = await request.json();
+      
+      if (!body.currentDiscordUserIds || !Array.isArray(body.currentDiscordUserIds)) {
+        return new Response(
+          JSON.stringify({ error: "Missing required field: currentDiscordUserIds (array)" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      
+      console.log(`Archive check: ${body.currentDiscordUserIds.length} current Discord members`);
+      
+      const result = await ctx.runMutation(internal.discord.archiveMissingPlayersInternal, {
+        currentDiscordUserIds: body.currentDiscordUserIds,
+      });
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          archived: result.archived,
+          cleared: result.cleared,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (error) {
+      console.error("Error archiving missing players:", error);
+      return new Response(
+        JSON.stringify({ 
+          error: "Internal server error", 
+          message: error instanceof Error ? error.message : "Unknown error" 
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
+// POST endpoint for Discord bot to create scrim events
+http.route({
+  path: "/api/scrim-events",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    // Verify API key
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+      );
+    }
+
+    try {
+      const body = await request.json();
+
+      // Validate required fields
+      if (!body.eventName || !body.eventType || !body.teams || !Array.isArray(body.teams)) {
+        return new Response(
+          JSON.stringify({ error: "Missing required fields: eventName, eventType, teams" }),
+          { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+        );
+      }
+
+      if (body.teams.length < 2) {
+        return new Response(
+          JSON.stringify({ error: "At least 2 teams are required" }),
+          { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+        );
+      }
+
+      // Validate games count (1-10, default 5)
+      const games = Math.min(Math.max(body.games || 5, 1), 10);
+
+      // Generate a secure admin token (32 hex chars)
+      const tokenBytes = new Uint8Array(16);
+      crypto.getRandomValues(tokenBytes);
+      const adminToken = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+
+      // Create the event
+      const eventId = await ctx.runMutation(internal.scrims.mutations.createEvent, {
+        eventName: body.eventName,
+        eventType: body.eventType,
+        games,
+        teams: body.teams.map((t: { teamName: string; players: string[]; playerTiers?: string[] }) => ({
+          teamName: t.teamName || "Unknown Team",
+          players: Array.isArray(t.players) ? t.players : [],
+          playerTiers: Array.isArray(t.playerTiers) ? t.playerTiers : undefined,
+        })),
+        solos: Array.isArray(body.solos)
+          ? body.solos.map((s: { playerName: string }) => ({
+              playerName: s.playerName || "Unknown Player",
+            }))
+          : undefined,
+        leaderboardUrl: typeof body.leaderboardUrl === "string" ? body.leaderboardUrl : undefined,
+        discordGuildId: body.discordGuildId || "",
+        discordChannelId: body.discordChannelId || "",
+        createdByDiscordId: body.createdByDiscordId || "",
+        adminToken,
+      });
+
+      // Build admin URL (uses the Convex deployment's site URL as base)
+      const siteUrl = process.env.SITE_URL || request.url.split("/api/")[0];
+      const adminUrl = `${siteUrl}/scrims/events/${eventId}?token=${adminToken}`;
+
+      return new Response(
+        JSON.stringify({
+          eventId,
+          adminToken,
+          adminUrl,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+      );
+    } catch (error) {
+      console.error("Error creating scrim event:", error);
+      return new Response(
+        JSON.stringify({
+          error: "Internal server error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+      );
+    }
+  }),
+});
+
+// POST endpoint for Discord bot to link teams to an existing shell event via link code
+http.route({
+  path: "/api/scrim-events/link",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+      );
+    }
+
+    try {
+      const body = await request.json();
+
+      if (!body.linkCode || !body.teams || !Array.isArray(body.teams)) {
+        return new Response(
+          JSON.stringify({ error: "Missing required fields: linkCode, teams" }),
+          { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+        );
+      }
+
+      if (body.teams.length < 2) {
+        return new Response(
+          JSON.stringify({ error: "At least 2 teams are required" }),
+          { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+        );
+      }
+
+      const eventId = await ctx.runMutation(internal.scrims.mutations.linkTeamsToEvent, {
+        linkCode: body.linkCode.toUpperCase(),
+        teams: body.teams.map((t: { teamName: string; players: string[]; playerTiers?: string[] }) => ({
+          teamName: t.teamName || "Unknown Team",
+          players: Array.isArray(t.players) ? t.players : [],
+          playerTiers: Array.isArray(t.playerTiers) ? t.playerTiers : undefined,
+        })),
+        solos: Array.isArray(body.solos)
+          ? body.solos.map((s: { playerName: string }) => ({
+              playerName: s.playerName || "Unknown Player",
+            }))
+          : undefined,
+        discordGuildId: body.discordGuildId || undefined,
+        discordChannelId: body.discordChannelId || undefined,
+        createdByDiscordId: body.createdByDiscordId || undefined,
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, eventId }),
+        { status: 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      const status = message.includes("No event found") ? 404 : 500;
+      return new Response(
+        JSON.stringify({ error: message }),
+        { status, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+      );
+    }
+  }),
+});
+
+// CORS preflight for scrim events link endpoint
+http.route({
+  path: "/api/scrim-events/link",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }),
+});
+
+// CORS preflight for scrim events endpoint
+http.route({
+  path: "/api/scrim-events",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }),
+});
+
+// GET endpoint for Discord bot to poll for pending role syncs (event bans and probations only)
+http.route({
+  path: "/api/discord/pending-role-syncs",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    // Verify API key
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    try {
+      const pendingSyncs = await ctx.runQuery(
+        internal.eventBans.queries.getPendingRoleSyncs,
+        {}
+      );
+
+      return new Response(
+        JSON.stringify({ pending: pendingSyncs }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (error) {
+      console.error("Error fetching pending role syncs:", error);
+      return new Response(
+        JSON.stringify({
+          error: "Internal server error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
+// POST endpoint for Discord bot to acknowledge that role syncs have been processed
+http.route({
+  path: "/api/discord/acknowledge-role-syncs",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    // Verify API key
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    try {
+      const body = await request.json();
+
+      if (!body.banIds || !Array.isArray(body.banIds)) {
+        return new Response(
+          JSON.stringify({ error: "Missing required field: banIds (array of ban IDs)" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      const result = await ctx.runMutation(
+        internal.eventBans.mutations.acknowledgeRoleSyncs,
+        { banIds: body.banIds }
+      );
+
+      return new Response(
+        JSON.stringify({ success: true, acknowledged: result.acknowledged }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (error) {
+      console.error("Error acknowledging role syncs:", error);
+      return new Response(
+        JSON.stringify({
+          error: "Internal server error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
+// GET endpoint for Discord bot to poll for roles that should be removed
+// Returns bans where: event ban has ENDED, or probation is older than 28 days
+http.route({
+  path: "/api/discord/pending-role-removals",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    // Verify API key
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    try {
+      const pendingRemovals = await ctx.runQuery(
+        internal.eventBans.queries.getPendingRoleRemovals,
+        {}
+      );
+
+      return new Response(
+        JSON.stringify({ pending: pendingRemovals }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (error) {
+      console.error("Error fetching pending role removals:", error);
+      return new Response(
+        JSON.stringify({
+          error: "Internal server error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
+// POST endpoint for Discord bot to acknowledge that roles have been removed
+http.route({
+  path: "/api/discord/acknowledge-role-removals",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    // Verify API key
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    try {
+      const body = await request.json();
+
+      if (!body.banIds || !Array.isArray(body.banIds)) {
+        return new Response(
+          JSON.stringify({ error: "Missing required field: banIds (array of ban IDs)" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      const result = await ctx.runMutation(
+        internal.eventBans.mutations.acknowledgeRoleRemovals,
+        { banIds: body.banIds }
+      );
+
+      // Also acknowledge any queued pending role removals (from deleted bans)
+      let queueAcknowledged = 0;
+      if (body.pendingRoleRemovalIds && Array.isArray(body.pendingRoleRemovalIds) && body.pendingRoleRemovalIds.length > 0) {
+        const queueResult = await ctx.runMutation(
+          internal.eventBans.mutations.acknowledgePendingRoleRemovals,
+          { ids: body.pendingRoleRemovalIds }
+        );
+        queueAcknowledged = queueResult.acknowledged;
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, acknowledged: result.acknowledged + queueAcknowledged }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    } catch (error) {
+      console.error("Error acknowledging role removals:", error);
+      return new Response(
+        JSON.stringify({
+          error: "Internal server error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
+// REQUIRED: Export HttpRouter as default from convex/http.ts
+export default http;
