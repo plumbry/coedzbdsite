@@ -6,6 +6,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { isValidDiscordSnowflake } from "./auth_discord";
+import { summarizeIdentityForDebug } from "./auth_discord";
 import type { Id } from "./_generated/dataModel";
 
 function assertDevToolsEnabled(): void {
@@ -90,7 +91,7 @@ export const seedDevStaffUsers = mutation({
 
       if (existingByToken) {
         results.push({
-          username: snapshot.username,
+          username: "username" in snapshot ? snapshot.username : undefined,
           email: snapshot.email,
           action: "skipped",
           userId: existingByToken._id,
@@ -102,12 +103,12 @@ export const seedDevStaffUsers = mutation({
         tokenIdentifier: snapshot.tokenIdentifier,
         name: snapshot.name || undefined,
         email: snapshot.email,
-        username: snapshot.username,
+        username: "username" in snapshot ? snapshot.username : undefined,
         role: "role" in snapshot ? snapshot.role : undefined,
       });
 
       results.push({
-        username: snapshot.username,
+        username: "username" in snapshot ? snapshot.username : undefined,
         email: snapshot.email,
         action: "inserted",
         userId,
@@ -189,6 +190,28 @@ export const getMigrationLinkStatus = query({
       tokenIssuer: user.tokenIdentifier.split("|")[0],
       isClerkLinked: !user.tokenIdentifier.startsWith("https://hercules.app|"),
     }));
+  },
+});
+
+/** Dev-only: inspect JWT identity fields after Clerk login (troubleshooting). */
+export const debugAuthIdentity = query({
+  args: {},
+  handler: async (ctx) => {
+    assertDevToolsEnabled();
+
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { authenticated: false as const };
+    }
+
+    return {
+      authenticated: true as const,
+      tokenIdentifier: identity.tokenIdentifier,
+      issuer: identity.issuer,
+      subject: identity.subject,
+      discordIdDetected: summarizeIdentityForDebug(identity).discord_id ?? null,
+      identity: summarizeIdentityForDebug(identity),
+    };
   },
 });
 

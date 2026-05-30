@@ -10,6 +10,7 @@
 
 import type * as aggregateStats from "../aggregateStats.js";
 import type * as audit from "../audit.js";
+import type * as auth_discord from "../auth_discord.js";
 import type * as auth_helpers from "../auth_helpers.js";
 import type * as backfillMatchStats from "../backfillMatchStats.js";
 import type * as cacheStatus from "../cacheStatus.js";
@@ -58,6 +59,7 @@ import type * as memberManagement from "../memberManagement.js";
 import type * as migrateHasMatchData from "../migrateHasMatchData.js";
 import type * as migrateMembershipStatus from "../migrateMembershipStatus.js";
 import type * as migration from "../migration.js";
+import type * as migrationDevTools from "../migrationDevTools.js";
 import type * as playerComparison from "../playerComparison.js";
 import type * as playerEarnings from "../playerEarnings.js";
 import type * as playerStats from "../playerStats.js";
@@ -77,9 +79,9 @@ import type * as scrims_queries from "../scrims/queries.js";
 import type * as support from "../support.js";
 import type * as sync from "../sync.js";
 import type * as thirdParty from "../thirdParty.js";
-import type * as thirdParty_relinkResults from "../thirdParty/relinkResults.js";
 import type * as thirdPartyMutations from "../thirdPartyMutations.js";
 import type * as thirdPartyQueries from "../thirdPartyQueries.js";
+import type * as thirdParty_relinkResults from "../thirdParty/relinkResults.js";
 import type * as tierHistory from "../tierHistory.js";
 import type * as tierReEvaluation from "../tierReEvaluation.js";
 import type * as tierReEvaluationBatched from "../tierReEvaluationBatched.js";
@@ -91,6 +93,7 @@ import type * as wrapped from "../wrapped.js";
 import type * as wrappedStats from "../wrappedStats.js";
 import type * as wrappedStatsConfig from "../wrappedStatsConfig.js";
 import type * as yunite from "../yunite.js";
+import type * as yuniteQueries from "../yuniteQueries.js";
 import type * as yunite_backfillJobManager from "../yunite/backfillJobManager.js";
 import type * as yunite_backfillKillEvents from "../yunite/backfillKillEvents.js";
 import type * as yunite_checkSurvivalTimeData from "../yunite/checkSurvivalTimeData.js";
@@ -108,7 +111,6 @@ import type * as yunite_platforms from "../yunite/platforms.js";
 import type * as yunite_populateTeamMembers from "../yunite/populateTeamMembers.js";
 import type * as yunite_recalculateStats from "../yunite/recalculateStats.js";
 import type * as yunite_sync from "../yunite/sync.js";
-import type * as yuniteQueries from "../yuniteQueries.js";
 
 import type {
   ApiFromModules,
@@ -119,6 +121,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   aggregateStats: typeof aggregateStats;
   audit: typeof audit;
+  auth_discord: typeof auth_discord;
   auth_helpers: typeof auth_helpers;
   backfillMatchStats: typeof backfillMatchStats;
   cacheStatus: typeof cacheStatus;
@@ -167,6 +170,7 @@ declare const fullApi: ApiFromModules<{
   migrateHasMatchData: typeof migrateHasMatchData;
   migrateMembershipStatus: typeof migrateMembershipStatus;
   migration: typeof migration;
+  migrationDevTools: typeof migrationDevTools;
   playerComparison: typeof playerComparison;
   playerEarnings: typeof playerEarnings;
   playerStats: typeof playerStats;
@@ -186,9 +190,9 @@ declare const fullApi: ApiFromModules<{
   support: typeof support;
   sync: typeof sync;
   thirdParty: typeof thirdParty;
-  "thirdParty/relinkResults": typeof thirdParty_relinkResults;
   thirdPartyMutations: typeof thirdPartyMutations;
   thirdPartyQueries: typeof thirdPartyQueries;
+  "thirdParty/relinkResults": typeof thirdParty_relinkResults;
   tierHistory: typeof tierHistory;
   tierReEvaluation: typeof tierReEvaluation;
   tierReEvaluationBatched: typeof tierReEvaluationBatched;
@@ -200,6 +204,7 @@ declare const fullApi: ApiFromModules<{
   wrappedStats: typeof wrappedStats;
   wrappedStatsConfig: typeof wrappedStatsConfig;
   yunite: typeof yunite;
+  yuniteQueries: typeof yuniteQueries;
   "yunite/backfillJobManager": typeof yunite_backfillJobManager;
   "yunite/backfillKillEvents": typeof yunite_backfillKillEvents;
   "yunite/checkSurvivalTimeData": typeof yunite_checkSurvivalTimeData;
@@ -217,7 +222,6 @@ declare const fullApi: ApiFromModules<{
   "yunite/populateTeamMembers": typeof yunite_populateTeamMembers;
   "yunite/recalculateStats": typeof yunite_recalculateStats;
   "yunite/sync": typeof yunite_sync;
-  yuniteQueries: typeof yuniteQueries;
 }>;
 
 /**

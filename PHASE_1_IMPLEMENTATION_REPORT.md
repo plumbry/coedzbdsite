@@ -270,17 +270,22 @@ on the Convex deployment. Never enable on production.
 - Email-based fallback removed from `updateCurrentUser`; Discord snowflake is required.
 - Pre-existing TypeScript errors in `holistic-score-stats.tsx` and `yunite-debug.tsx` may still fail `npm run build`; `npm run dev` is sufficient for auth testing.
 - Clerk Discord-only UI is enforced in Dashboard, not in application code.
+- **Discord ID in JWT:** use `public_metadata.discord_id` + template claim `{{user.public_metadata.discord_id}}` — see `IMPLEMENTATION_NOTES.md`. The `external_accounts.discord` shortcode did not work in dev.
+
+### Post-Phase-1 dev verification (May 2026)
+
+- **plumbry** linked successfully on dev (`dev/bryony-lee`).
+- Other five staff accounts deferred until production setup.
+- Troubleshooting fixes committed after initial Phase 1 commit.
 
 ---
 
 ## 7. Approval gate
 
-**Phase 1 code is complete. Do not proceed to Phase 2 until:**
+**Phase 1 dev path proven. Phase 2 (production infra) can proceed when ready:**
 
-- [ ] Clerk dev instance created and configured (§4)
-- [ ] Local fail-closed test passes (§3 step 6)
-- [ ] All six staff rows seeded and linked on **dev** (§3 steps 7–8)
-- [ ] Mapping table signed off by account owners
+- [x] Clerk dev instance created and configured
+- [x] Local fail-closed test passes
+- [x] **plumbry** linked on dev (other staff deferred)
+- [ ] Clerk Restricted mode re-enabled after dev testing
 - [ ] Explicit approval to begin production Clerk + Convex deploy
-
-**Stopped — awaiting approval before Phase 2.**
