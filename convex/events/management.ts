@@ -111,28 +111,30 @@ export const getPublicEvents = query({
   handler: async (ctx) => {
     const events = await ctx.db.query("events").order("desc").collect();
 
-    return await Promise.all(
-      events.map(async (event) => {
-        let imageUrl: string | null = null;
-        if (event.image) {
-          imageUrl = await ctx.storage.getUrl(event.image);
-        }
+    return events.map((event) => ({
+      _id: event._id,
+      name: event.name,
+      type: event.type,
+      mode: event.mode,
+      startDate: event.startDate,
+      endDate: event.endDate,
+      description: event.description,
+      season: event.season,
+      status: computeEventStatus(event.startDate, event.endDate),
+      hasImage: !!event.image,
+      standardCount: event.standardLeaderboards?.length || 0,
+    }));
+  },
+});
 
-        return {
-          _id: event._id,
-          name: event.name,
-          type: event.type,
-          mode: event.mode,
-          startDate: event.startDate,
-          endDate: event.endDate,
-          description: event.description,
-          season: event.season,
-          status: computeEventStatus(event.startDate, event.endDate),
-          imageUrl,
-          standardCount: event.standardLeaderboards?.length || 0,
-        };
-      }),
-    );
+export const getEventImageUrl = query({
+  args: { eventId: v.id("events") },
+  handler: async (ctx, args) => {
+    const event = await ctx.db.get(args.eventId);
+    if (!event?.image) {
+      return null;
+    }
+    return await ctx.storage.getUrl(event.image);
   },
 });
 

@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { touchPlayerEventParticipationOnInsert } from "./helpers/playerEventStats";
 
 export const getPlayerEvents = query({
   args: { playerId: v.id("players") },
@@ -93,6 +94,13 @@ export const createEvent = mutation({
       });
     }
     
+    await touchPlayerEventParticipationOnInsert(
+      ctx,
+      args.playerId,
+      args.eventName,
+      args.eventDate,
+    );
+
     const resultId = await ctx.db.insert("eventResults", {
       playerId: args.playerId,
       eventName: args.eventName,

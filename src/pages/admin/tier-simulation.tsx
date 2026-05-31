@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
+import { useTierEvaluationCache } from "@/hooks/use-tier-evaluation-cache.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import {
@@ -30,9 +31,8 @@ function TierSimulationContent() {
   const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
 
   // Fetch cached re-evaluation data for current medians
-  const cachedData = useQuery(
-    api.tierReEvaluation.getCachedTierReEvaluationData,
-    canView && !isLoadingUser ? {} : "skip"
+  const cachedData = useTierEvaluationCache(
+    canView && !isLoadingUser ? {} : "skip",
   );
 
   // Fetch all players for search (lightweight query - no enrichment)

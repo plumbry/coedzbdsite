@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
+import { useTierEvaluationCache } from "@/hooks/use-tier-evaluation-cache.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import {
@@ -100,10 +101,7 @@ function HolisticScoreStatsContent() {
   const { isAdmin, isModeratorOrAdmin } = useUserRole();
   const canView = isModeratorOrAdmin;
 
-  const cachedData = useQuery(
-    api.tierReEvaluation.getCachedTierReEvaluationData,
-    canView ? {} : "skip"
-  );
+  const cachedData = useTierEvaluationCache(canView ? {} : "skip");
 
   const rebuildCache = useMutation(api.tierReEvaluation.rebuildTierReEvaluationCache);
   const initializeBatch = useMutation(api.tierReEvaluationBatched.initializeBatchRebuild);

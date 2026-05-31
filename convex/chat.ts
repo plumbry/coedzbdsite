@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { requireAdmin } from "./auth_helpers";
 
@@ -28,6 +29,35 @@ export const getMessages = query({
       .take(50);
 
     return messages.reverse();
+  },
+});
+
+export const getMessagesPaginated = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+    if (!user || user.role !== "admin") {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
+
+    const page = await ctx.db
+      .query("chatMessages")
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    return {
+      ...page,
+      page: [...page.page].reverse(),
+    };
   },
 });
 

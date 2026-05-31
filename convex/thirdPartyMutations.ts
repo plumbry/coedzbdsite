@@ -1,6 +1,7 @@
 import { internalMutation, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
+import { touchPlayerEventParticipationOnInsert } from "./helpers/playerEventStats";
 import type { Id, Doc } from "./_generated/dataModel.d.ts";
 
 // Helper to extract Yunite tournament ID from various URL formats
@@ -150,6 +151,15 @@ export const saveImport = internalMutation({
       }
       
       // Save the result
+      if (matchedPlayer?._id) {
+        await touchPlayerEventParticipationOnInsert(
+          ctx,
+          matchedPlayer._id,
+          args.eventName,
+          undefined,
+        );
+      }
+
       await ctx.db.insert("thirdPartyResults", {
         importId,
         playerId: matchedPlayer?._id,
@@ -301,6 +311,15 @@ export const importFromCSV = mutation({
       }
       
       // Save the result
+      if (matchedPlayer?._id) {
+        await touchPlayerEventParticipationOnInsert(
+          ctx,
+          matchedPlayer._id,
+          args.eventName,
+          args.eventDate,
+        );
+      }
+
       await ctx.db.insert("thirdPartyResults", {
         importId,
         playerId: matchedPlayer?._id,
@@ -748,6 +767,15 @@ export const saveYuniteAPIImport = internalMutation({
       }
       
       // Save the result
+      if (matchedPlayer?._id) {
+        await touchPlayerEventParticipationOnInsert(
+          ctx,
+          matchedPlayer._id,
+          args.eventName,
+          args.eventDate,
+        );
+      }
+
       await ctx.db.insert("thirdPartyResults", {
         importId,
         playerId: matchedPlayer?._id,
@@ -931,6 +959,14 @@ export const manuallyLinkPlayer = mutation({
       matched: true,
       manuallyLinked: true,
     });
+
+    const importRecord = await ctx.db.get(result.importId);
+    await touchPlayerEventParticipationOnInsert(
+      ctx,
+      args.playerId,
+      result.eventName,
+      importRecord?.eventDate,
+    );
     
     // Update import counts if this was previously unmatched
     if (!wasMatched) {
@@ -1133,6 +1169,15 @@ export const replaceCSVData = mutation({
       }
       
       // Insert new result
+      if (matchedPlayer?._id) {
+        await touchPlayerEventParticipationOnInsert(
+          ctx,
+          matchedPlayer._id,
+          importRecord.eventName,
+          importRecord.eventDate,
+        );
+      }
+
       await ctx.db.insert("thirdPartyResults", {
         importId: args.importId,
         playerId: matchedPlayer?._id,
@@ -1275,7 +1320,17 @@ export const createResult = mutation({
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
-    
+
+    const importRecord = await ctx.db.get(args.importId);
+    if (args.playerId) {
+      await touchPlayerEventParticipationOnInsert(
+        ctx,
+        args.playerId,
+        args.eventName,
+        importRecord?.eventDate,
+      );
+    }
+
     return await ctx.db.insert("thirdPartyResults", {
       importId: args.importId,
       playerId: args.playerId,

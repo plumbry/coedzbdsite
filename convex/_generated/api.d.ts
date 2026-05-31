@@ -50,6 +50,7 @@ import type * as fixMatchPlayerIds from "../fixMatchPlayerIds.js";
 import type * as fortnitetracker from "../fortnitetracker.js";
 import type * as googleSheets from "../googleSheets.js";
 import type * as helpers_audit from "../helpers/audit.js";
+import type * as helpers_playerEventStats from "../helpers/playerEventStats.js";
 import type * as http from "../http.js";
 import type * as inGameEarnings_actions from "../inGameEarnings/actions.js";
 import type * as inGameEarnings_mutations from "../inGameEarnings/mutations.js";
@@ -162,6 +163,7 @@ declare const fullApi: ApiFromModules<{
   fortnitetracker: typeof fortnitetracker;
   googleSheets: typeof googleSheets;
   "helpers/audit": typeof helpers_audit;
+  "helpers/playerEventStats": typeof helpers_playerEventStats;
   http: typeof http;
   "inGameEarnings/actions": typeof inGameEarnings_actions;
   "inGameEarnings/mutations": typeof inGameEarnings_mutations;

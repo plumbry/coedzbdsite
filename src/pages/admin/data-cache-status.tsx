@@ -48,11 +48,12 @@ function DataCacheStatusContent() {
   const rebuildAggregateStatsCache = useMutation(api.cacheStatus.rebuildAggregateStatsCache);
   const rebuildHolisticScoresCache = useMutation(api.cacheStatus.rebuildHolisticScoresCache);
   const backfillKillEventsMetadata = useMutation(api.cacheStatus.backfillKillEventsMetadata);
+  const backfillPlayerEventStats = useMutation(api.cacheStatus.backfillPlayerEventParticipationStats);
   const rebuildUpsetKillEventsCache = useMutation(api.cacheStatus.rebuildUpsetKillEventsCache);
 
   const [rebuildingCache, setRebuildingCache] = useState<string | null>(null);
 
-  const handleRebuildCache = async (cacheType: "players" | "events" | "imports" | "matchStats" | "aggregateStats" | "holisticScores" | "killEventsMetadata" | "upsetKillStats") => {
+  const handleRebuildCache = async (cacheType: "players" | "events" | "imports" | "matchStats" | "aggregateStats" | "holisticScores" | "killEventsMetadata" | "upsetKillStats" | "playerEventStats") => {
     setRebuildingCache(cacheType);
     try {
       let result;
@@ -80,6 +81,9 @@ function DataCacheStatusContent() {
           break;
         case "upsetKillStats":
           result = await rebuildUpsetKillEventsCache();
+          break;
+        case "playerEventStats":
+          result = await backfillPlayerEventStats();
           break;
       }
       toast.success(result.message);
@@ -149,6 +153,19 @@ function DataCacheStatusContent() {
                       <Spinner className="h-3 w-3" />
                     ) : (
                       <RefreshCw className="h-3 w-3" />
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title="Backfill events played counts"
+                    onClick={() => handleRebuildCache("playerEventStats")}
+                    disabled={rebuildingCache === "playerEventStats"}
+                  >
+                    {rebuildingCache === "playerEventStats" ? (
+                      <Spinner className="h-3 w-3" />
+                    ) : (
+                      <Database className="h-3 w-3" />
                     )}
                   </Button>
                 </div>

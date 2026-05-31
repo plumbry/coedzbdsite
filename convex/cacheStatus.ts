@@ -620,6 +620,38 @@ export const backfillKillEventsMetadata = mutation({
   },
 });
 
+export const backfillPlayerEventParticipationStats = mutation({
+  args: {},
+  handler: async (ctx): Promise<{ success: boolean; message: string }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({
+        message: "User not logged in",
+        code: "UNAUTHENTICATED",
+      });
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+
+    if (!user || user.role !== "admin") {
+      throw new ConvexError({
+        message: "Only admins can backfill player event stats",
+        code: "FORBIDDEN",
+      });
+    }
+
+    const result = await ctx.runMutation(api.players.backfillPlayerEventParticipationStats, {});
+
+    return {
+      success: true,
+      message: `Player event participation stats backfilled for ${result.updated} players`,
+    };
+  },
+});
+
 export const rebuildUpsetKillEventsCache = mutation({
   args: {},
   handler: async (ctx): Promise<{ success: boolean; message: string }> => {

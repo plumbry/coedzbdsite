@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
+import { useTierEvaluationCache } from "@/hooks/use-tier-evaluation-cache.ts";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
@@ -145,9 +146,8 @@ function TierReEvaluationContent() {
   const [applyTCDCA, setApplyTCDCA] = useState(false); // Display-time TC/DCA toggle
   
   // Only use cached data (no live fallback to prevent timeouts)
-  const cachedData = useQuery(
-    api.tierReEvaluation.getCachedTierReEvaluationData,
-    canView && !isLoadingUser ? {} : "skip"
+  const cachedData = useTierEvaluationCache(
+    canView && !isLoadingUser ? {} : "skip",
   );
   
   // Fetch player data for TC/DCA when toggle is on

@@ -225,8 +225,9 @@ function EventResultsGrouped({ events }: { events: EventResult[] }) {
 }
 
 export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerformanceTabProps) {
-  const allEvents = useQuery(api.playerStats.getPlayerAllEvents, { playerId });
-  const stats = useQuery(api.playerStats.getPlayerComprehensiveStats, { playerId });
+  const bundle = useQuery(api.playerStats.getPlayerZBDPerformanceBundle, { playerId });
+  const allEvents = bundle?.events;
+  const stats = bundle?.stats;
   const duoPerf = useQuery(api.playerStats.getPlayerDuoPerformance, { playerId });
   const cs = useQuery(api.calculateContributionScore.getPlayerCS, { playerId });
   const matchStats = useQuery(api.playerStats.getPlayerMatchStats, { playerId });
@@ -236,7 +237,7 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
   const [expandedDialogOpen, setExpandedDialogOpen] = useState(false);
   const [expandedChartType, setExpandedChartType] = useState<"placement" | "kills">("placement");
   
-  if (allEvents === undefined || stats === undefined) {
+  if (bundle === undefined || allEvents === undefined || stats === undefined) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-64 w-full" />

@@ -257,25 +257,8 @@ export const getAllPlayersAdmin = query({
           .query("manualScores")
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .first();
-        
-        // Count event results for this player from both manual and third-party sources
-        const eventResults = await ctx.db
-          .query("eventResults")
-          .withIndex("by_player", (q) => q.eq("playerId", player._id))
-          .collect();
-        
-        const thirdPartyResults = await ctx.db
-          .query("thirdPartyResults")
-          .withIndex("by_player", (q) => q.eq("playerId", player._id))
-          .collect();
-        
-        // Count unique event names (same logic as ZBD Performance tab)
-        const uniqueEventNames = new Set([
-          ...eventResults.map(e => e.eventName),
-          ...thirdPartyResults.map(e => e.eventName),
-        ]);
-        
-        const eventsPlayed = uniqueEventNames.size;
+
+        const eventsPlayed = player.eventsPlayedCount ?? 0;
         
         const epicLower = player.epicUsername.toLowerCase();
         const discordLower = player.discordUsername.toLowerCase();
@@ -299,6 +282,58 @@ export const getAllPlayersAdmin = query({
     );
     
     return enrichedPlayers;
+  },
+});
+
+export const backfillPlayerEventParticipationStats = mutation({
+  args: {
+    playerId: v.optional(v.id("players")),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const players = args.playerId
+      ? [await ctx.db.get(args.playerId)].filter((player) => player !== null)
+      : await ctx.db.query("players").collect();
+
+    let updated = 0;
+    for (const player of players) {
+      const eventResults = await ctx.db
+        .query("eventResults")
+        .withIndex("by_player", (q) => q.eq("playerId", player._id))
+        .collect();
+      const thirdPartyResults = await ctx.db
+        .query("thirdPartyResults")
+        .withIndex("by_player", (q) => q.eq("playerId", player._id))
+        .collect();
+
+      const uniqueEventNames = new Set([
+        ...eventResults.map((e) => e.eventName),
+        ...thirdPartyResults.map((e) => e.eventName),
+      ]);
+
+      let lastEventDate: string | undefined;
+      for (const result of eventResults) {
+        if (result.eventDate && (!lastEventDate || result.eventDate > lastEventDate)) {
+          lastEventDate = result.eventDate;
+        }
+      }
+      for (const result of thirdPartyResults) {
+        const importRecord = await ctx.db.get(result.importId);
+        const eventDate = importRecord?.eventDate;
+        if (eventDate && (!lastEventDate || eventDate > lastEventDate)) {
+          lastEventDate = eventDate;
+        }
+      }
+
+      await ctx.db.patch(player._id, {
+        eventsPlayedCount: uniqueEventNames.size,
+        lastEventDate,
+      });
+      updated++;
+    }
+
+    return { updated };
   },
 });
 

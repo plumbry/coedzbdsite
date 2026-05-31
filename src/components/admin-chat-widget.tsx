@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { usePaginatedQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { useLocation } from "react-router-dom";
@@ -16,9 +16,19 @@ export default function AdminChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const messages = useQuery(
-    api.chat.getMessages,
+  const {
+    results: messageResults,
+    status: messagesStatus,
+    loadMore: loadOlderMessages,
+  } = usePaginatedQuery(
+    api.chat.getMessagesPaginated,
     isAdmin && isOpen ? {} : "skip",
+    { initialNumItems: 30 },
+  );
+  const messages = useMemo(
+    () =>
+      [...messageResults].sort((a, b) => a._creationTime - b._creationTime),
+    [messageResults],
   );
   const sendMessage = useMutation(api.chat.sendMessage);
 
@@ -83,12 +93,29 @@ export default function AdminChatWidget() {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
-            {(!messages || messages.length === 0) && (
+            {messagesStatus === "CanLoadMore" && (
+              <div className="flex justify-center pb-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs cursor-pointer"
+                  onClick={() => loadOlderMessages(30)}
+                >
+                  Load older messages
+                </Button>
+              </div>
+            )}
+            {messagesStatus === "LoadingFirstPage" && (
+              <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                Loading messages...
+              </div>
+            )}
+            {messagesStatus !== "LoadingFirstPage" && messages.length === 0 && (
               <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
                 No messages yet. Start the conversation!
               </div>
             )}
-            {messages?.map((msg) => (
+            {messages.map((msg) => (
               <div key={msg._id} className="flex flex-col gap-0.5">
                 <span className="text-xs font-medium text-muted-foreground">
                   {msg.userName}

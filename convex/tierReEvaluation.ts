@@ -969,8 +969,11 @@ export const getTierReEvaluationDataInternal = internalQuery({
 
 // Get cached tier re-evaluation data
 export const getCachedTierReEvaluationData = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    tier: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     // Check if user is admin or moderator
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
@@ -993,11 +996,14 @@ export const getCachedTierReEvaluationData = query({
       return null; // No cache available
     }
     
-    // Get cached evaluations - use reasonable limit for performance
-    // 500 should cover all active players while keeping query fast
-    const cachedEvaluations = await ctx.db
-      .query("tierReEvaluationCache")
-      .take(500); // Increased limit to show all players with match data
+    const maxResults = Math.min(args.limit ?? 500, 500);
+
+    const cachedEvaluations = args.tier
+      ? await ctx.db
+          .query("tierReEvaluationCache")
+          .withIndex("by_tier", (q) => q.eq("tier", args.tier!))
+          .take(maxResults)
+      : await ctx.db.query("tierReEvaluationCache").take(maxResults);
     
     if (cachedEvaluations.length === 0) {
       return null; // No cache available

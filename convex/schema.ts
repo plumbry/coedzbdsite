@@ -91,6 +91,10 @@ export default defineSchema({
     hasLeftServer: v.optional(v.boolean()),
     /** Cached: played in an event linked to a recent import (refreshed by cron). */
     isRecentlyActive: v.optional(v.boolean()),
+    /** Denormalized unique event count across eventResults + thirdPartyResults. */
+    eventsPlayedCount: v.optional(v.number()),
+    /** Denormalized most recent event date (ISO string). */
+    lastEventDate: v.optional(v.string()),
     // Discord sync match quality (when bot syncs Discord members)
     matchConfidence: v.optional(v.union(
       v.literal("exact"), // Exact Discord ID match
@@ -739,7 +743,9 @@ export default defineSchema({
     recentPromotionDiff: v.optional(v.number()),
     recentDemotionDiff: v.optional(v.number()),
     lastUpdated: v.number(),
-  }).index("by_player", ["playerId"]),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_tier", ["tier"]),
   
   // Tier medians for re-evaluation
   tierMediansCache: defineTable({

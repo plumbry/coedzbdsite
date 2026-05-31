@@ -14,6 +14,22 @@ import PageShell from "@/components/page-shell.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import PageToolbar from "@/components/page-toolbar.tsx";
 import { Label } from "@/components/ui/label.tsx";
+import type { Id } from "@/convex/_generated/dataModel.d.ts";
+
+function EventCardImage({ eventId, name }: { eventId: Id<"events">; name: string }) {
+  const imageUrl = useQuery(api.events.management.getEventImageUrl, { eventId });
+  if (!imageUrl) {
+    return null;
+  }
+  return (
+    <img
+      src={imageUrl}
+      alt={name}
+      className="h-32 w-32 object-contain"
+      loading="lazy"
+    />
+  );
+}
 
 export default function EventsPage() {
   const [typeFilter, setTypeFilter] = useState<"all" | "scrim" | "minicup" | "season" | "mini-season" | "random" | "solos-meets-duos" | "scrim-series" | "showdown">("all");
@@ -106,12 +122,8 @@ export default function EventsPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {event.imageUrl && (
-            <img 
-              src={event.imageUrl} 
-              alt={event.name}
-              className="h-32 w-32 object-contain"
-            />
+          {event.hasImage && (
+            <EventCardImage eventId={event._id} name={event.name} />
           )}
           
           <div className="flex flex-wrap gap-2">

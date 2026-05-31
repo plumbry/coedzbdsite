@@ -1,5 +1,4 @@
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { useTierEvaluationCache } from "@/hooks/use-tier-evaluation-cache.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Download, Users, Zap, Wrench, ArrowRight } from "lucide-react";
@@ -14,7 +13,7 @@ import GoogleSheetsManager from "../_components/google-sheets-manager.tsx";
 import TierSnapshotTool from "../_components/tier-snapshot-tool.tsx";
 
 function FeaturesContent() {
-  const evaluations = useQuery(api.tierReEvaluation.getCachedTierReEvaluationData);
+  const evaluations = useTierEvaluationCache();
 
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
