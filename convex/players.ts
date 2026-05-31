@@ -302,6 +302,69 @@ export const getAllPlayersAdmin = query({
   },
 });
 
+// Slim player search for link dialogs — avoids full admin enrichment
+export const searchPlayersForLinking = query({
+  args: {
+    search: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({
+        message: "Staff access required",
+        code: "UNAUTHENTICATED",
+      });
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+
+    if (!user || (user.role !== "admin" && user.role !== "event_mod")) {
+      throw new ConvexError({
+        message: "Admin or moderator access required",
+        code: "FORBIDDEN",
+      });
+    }
+
+    const needle = args.search.trim().toLowerCase();
+    const maxResults = Math.min(args.limit ?? 50, 50);
+    if (needle.length < 2) {
+      return [];
+    }
+
+    const players = await ctx.db
+      .query("players")
+      .withIndex("by_membership_status", (q) =>
+        q.eq("currentMembershipStatus", "accepted"),
+      )
+      .order("desc")
+      .collect();
+
+    return players
+      .filter((player) => {
+        const epic = player.epicUsername.toLowerCase();
+        const discord = player.discordUsername.toLowerCase();
+        const discordId = player.discordUserId?.toLowerCase() ?? "";
+        return (
+          epic.includes(needle) ||
+          discord.includes(needle) ||
+          discordId.includes(needle)
+        );
+      })
+      .slice(0, maxResults)
+      .map((player) => ({
+        _id: player._id,
+        epicUsername: player.epicUsername,
+        discordUsername: player.discordUsername,
+      }));
+  },
+});
+
 // Lightweight query for the Discord Members admin page - no per-player enrichment
 export const getDiscordMembersAdmin = query({
   args: {},

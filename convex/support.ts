@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { mutation, query } from "./_generated/server";
 import { ConvexError } from "convex/values";
 
@@ -88,6 +89,32 @@ export const getArchivedTickets = query({
       .collect();
     
     return tickets;
+  },
+});
+
+// Paginated archived tickets (newest first)
+export const getArchivedTicketsPaginated = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+
+    if (!user || (user.role !== "admin" && user.role !== "event_mod")) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
+
+    return await ctx.db
+      .query("supportTickets")
+      .withIndex("by_status", (q) => q.eq("status", "archived"))
+      .order("desc")
+      .paginate(args.paginationOpts);
   },
 });
 

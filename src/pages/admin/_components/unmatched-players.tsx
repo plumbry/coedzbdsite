@@ -25,16 +25,21 @@ function UnmatchedPlayersContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [linkingResultId, setLinkingResultId] = useState<Id<"thirdPartyResults"> | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<Id<"players"> | null>(null);
+  const [playerSearch, setPlayerSearch] = useState("");
   const [isLinking, setIsLinking] = useState(false);
-  
+
   const importDetails = useQuery(api.thirdPartyQueries.getImportDetails, { importId });
   const unmatchedPlayers = useQuery(api.thirdPartyQueries.getUnmatchedPlayers, { importId });
-  const allPlayers = useQuery(api.players.getAllPlayersAdmin);
+  const linkCandidates = useQuery(
+    api.players.searchPlayersForLinking,
+    linkingResultId && playerSearch.length >= 2 ? { search: playerSearch } : "skip",
+  );
   const manuallyLinkPlayer = useMutation(api.thirdPartyMutations.manuallyLinkPlayer);
   
   const openLinkDialog = (resultId: Id<"thirdPartyResults">) => {
     setLinkingResultId(resultId);
     setSelectedPlayerId(null);
+    setPlayerSearch("");
   };
   
   const handleLink = async () => {
@@ -57,7 +62,7 @@ function UnmatchedPlayersContent() {
     }
   };
   
-  if (!importDetails || !unmatchedPlayers || !allPlayers) {
+  if (!importDetails || !unmatchedPlayers) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-9 w-64" />
@@ -233,16 +238,26 @@ function UnmatchedPlayersContent() {
               </div>
               
               <div className="space-y-2">
+                <Label htmlFor="player-search">Search Player</Label>
+                <Input
+                  id="player-search"
+                  placeholder="Type Epic or Discord name (min 2 chars)..."
+                  value={playerSearch}
+                  onChange={(e) => setPlayerSearch(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="player-select">Select Player from Database</Label>
                 <Select
                   value={selectedPlayerId || ""}
                   onValueChange={(value) => setSelectedPlayerId(value as Id<"players">)}
+                  disabled={playerSearch.length < 2}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a player..." />
+                    <SelectValue placeholder={playerSearch.length < 2 ? "Search above first..." : "Select a player..."} />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">
-                    {allPlayers.map((player) => (
+                    {(linkCandidates ?? []).map((player) => (
                       <SelectItem key={player._id} value={player._id}>
                         {player.epicUsername} ({player.discordUsername})
                       </SelectItem>

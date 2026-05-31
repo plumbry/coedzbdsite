@@ -21,7 +21,7 @@ export default function EventsPage() {
   const [statusFilter, setStatusFilter] = useState<"upcoming" | "ongoing" | "completed">("ongoing");
   const [sortBy, setSortBy] = useState<"date-asc" | "date-desc" | "name">("date-desc");
   
-  const allEvents = useQuery(api.events.management.getAllEvents);
+  const allEvents = useQuery(api.events.management.getPublicEvents);
   
   if (allEvents === undefined) {
     return (

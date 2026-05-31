@@ -1,9 +1,9 @@
 import { Button } from "@/components/ui/button.tsx";
 import { SignInButton } from "@/components/ui/signin.tsx";
-import { Menu, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { useAuth } from "@/hooks/use-auth.ts";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import EditUsernameDialog from "@/components/edit-username-dialog.tsx";
 
 const navLinkClass =
@@ -12,31 +12,11 @@ const navLinkClass =
 export default function SiteHeader() {
   const { isModeratorOrAdmin, isLoading } = useUserRole();
   const { signout } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const isOnAdminPage = location.pathname.startsWith("/admin");
 
   return (
     <header className="border-b bg-background">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 md:px-6 py-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          {isModeratorOrAdmin && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                if (isOnAdminPage) {
-                  window.dispatchEvent(new CustomEvent("toggleAdminSidebar"));
-                } else {
-                  navigate("/admin");
-                }
-              }}
-              className="p-2 -ml-1 shrink-0"
-              aria-label={isOnAdminPage ? "Toggle admin sidebar" : "Open admin"}
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-          )}
           <nav className="flex items-center gap-3 sm:gap-4 overflow-x-auto">
             <Link to="/" className={navLinkClass}>
               Members
@@ -59,6 +39,11 @@ export default function SiteHeader() {
             <Link to="/support" className={navLinkClass}>
               Support
             </Link>
+            {isModeratorOrAdmin && (
+              <Link to="/admin" className={navLinkClass}>
+                Admin Home
+              </Link>
+            )}
           </nav>
         </div>
 

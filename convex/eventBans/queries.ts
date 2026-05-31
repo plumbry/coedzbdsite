@@ -1,5 +1,6 @@
 import { query, internalQuery } from "../_generated/server";
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 
 export const getActiveBans = query({
   args: {},
@@ -52,6 +53,29 @@ export const getEndedBans = query({
       })
     );
     return enriched;
+  },
+});
+
+export const getEndedBansPaginated = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("eventBans")
+      .withIndex("by_status", (q) => q.eq("status", "ENDED"))
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    const enriched = await Promise.all(
+      page.page.map(async (ban) => {
+        const player = await ctx.db
+          .query("players")
+          .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", ban.discordId))
+          .first();
+        return { ...ban, epicUsername: player?.epicUsername ?? null };
+      }),
+    );
+
+    return { ...page, page: enriched };
   },
 });
 

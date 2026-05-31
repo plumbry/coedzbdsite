@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "convex/react";
+import { usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
@@ -9,6 +9,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible.tsx";
 import { ScrollText, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button.tsx";
 
 type LogEntry = {
   _id: string;
@@ -157,7 +158,15 @@ const groupLogs = (logsList: LogEntry[]): GroupedLog[] => {
 };
 
 export default function AuditLogView() {
-  const logs = useQuery(api.audit.getAuditLogs, { limit: 100 });
+  const {
+    results: logs,
+    status,
+    loadMore,
+  } = usePaginatedQuery(
+    api.audit.getAuditLogsPaginated,
+    {},
+    { initialNumItems: 50 },
+  );
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
@@ -182,7 +191,7 @@ export default function AuditLogView() {
     });
   };
 
-  if (logs === undefined) {
+  if (status === "LoadingFirstPage") {
     return <Skeleton className="h-96 w-full" />;
   }
 
@@ -332,6 +341,13 @@ export default function AuditLogView() {
                 })}
               </TableBody>
             </Table>
+          </div>
+        )}
+        {status === "CanLoadMore" && (
+          <div className="flex justify-center pt-2">
+            <Button variant="outline" size="sm" onClick={() => loadMore(50)}>
+              Load more
+            </Button>
           </div>
         )}
       </CardContent>

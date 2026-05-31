@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { query, internalQuery } from "../_generated/server";
 import type { Id } from "../_generated/dataModel.d.ts";
 
@@ -28,6 +29,71 @@ export const getAllInGameEarnings = query({
     });
 
     return results;
+  },
+});
+
+export const getInGameEarningsSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    const earnings = await ctx.db.query("inGameEarnings").collect();
+    let totalDollars = 0;
+    let playersWithEarnings = 0;
+    for (const row of earnings) {
+      totalDollars += row.totalEarnings;
+      if (row.totalEarnings > 0) playersWithEarnings++;
+    }
+    return {
+      totalDollars,
+      playersTracked: earnings.length,
+      playersWithEarnings,
+    };
+  },
+});
+
+export const getAllInGameEarningsPaginated = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("inGameEarnings")
+      .withIndex("by_total_earnings")
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    const enriched = await Promise.all(
+      page.page.map(async (e) => {
+        const player = await ctx.db.get(e.playerId);
+        return {
+          ...e,
+          playerName: player?.discordUsername ?? player?.name ?? "Unknown",
+          tier: player?.tier,
+          status: player?.status,
+        };
+      }),
+    );
+
+    return { ...page, page: enriched };
+  },
+});
+
+export const getFlaggedInGameEarnings = query({
+  args: {},
+  handler: async (ctx) => {
+    const flagged = await ctx.db
+      .query("inGameEarnings")
+      .withIndex("by_has_new", (q) => q.eq("hasNewEarnings", true))
+      .collect();
+
+    return await Promise.all(
+      flagged.map(async (e) => {
+        const player = await ctx.db.get(e.playerId);
+        return {
+          ...e,
+          playerName: player?.discordUsername ?? player?.name ?? "Unknown",
+          tier: player?.tier,
+          status: player?.status,
+        };
+      }),
+    );
   },
 });
 

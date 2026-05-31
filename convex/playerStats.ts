@@ -329,26 +329,26 @@ export const getPlayerDuoPerformance = query({
       return null;
     }
 
+    // Pre-build set of (import, session, team) keys where duo partner played on same team
+    const duoMatchKeys = new Set<string>();
+    if (duoPlayer) {
+      const duoMatches = await ctx.db
+        .query("matchPlayerStats")
+        .withIndex("by_player", (q) => q.eq("playerId", duoPlayer._id))
+        .collect();
+      for (const dm of duoMatches) {
+        duoMatchKeys.add(`${dm.importId}|${dm.sessionId}|${dm.teamId ?? ""}`);
+      }
+    }
+
     // Split matches into "with duo" and "without duo"
     const withDuoMatches: typeof playerMatches = [];
     const withoutDuoMatches: typeof playerMatches = [];
 
     for (const match of playerMatches) {
-      // Check if consistent duo was on the team in this match
-      const duoInMatch = await ctx.db
-        .query("matchPlayerStats")
-        .withIndex("by_match", (q) =>
-          q.eq("importId", match.importId).eq("sessionId", match.sessionId)
-        )
-        .filter((q) => 
-          q.and(
-            q.eq(q.field("playerId"), duoPlayer?._id),
-            q.eq(q.field("teamId"), match.teamId)
-          )
-        )
-        .first();
-
-      if (duoInMatch) {
+      const teamKey = match.teamId ?? "";
+      const duoInMatchKey = `${match.importId}|${match.sessionId}|${teamKey}`;
+      if (duoMatchKeys.has(duoInMatchKey)) {
         withDuoMatches.push(match);
       } else {
         withoutDuoMatches.push(match);

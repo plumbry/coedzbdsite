@@ -1,6 +1,8 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { requireAdmin } from "./auth_helpers";
+
+const MAX_CHAT_MESSAGES = 500;
 
 export const getMessages = query({
   args: {},
@@ -46,5 +48,20 @@ export const sendMessage = mutation({
     });
 
     return messageId;
+  },
+});
+
+export const pruneOldChatMessages = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const messages = await ctx.db.query("chatMessages").order("desc").collect();
+    if (messages.length <= MAX_CHAT_MESSAGES) {
+      return { deleted: 0 };
+    }
+    const toDelete = messages.slice(MAX_CHAT_MESSAGES);
+    for (const msg of toDelete) {
+      await ctx.db.delete(msg._id);
+    }
+    return { deleted: toDelete.length };
   },
 });

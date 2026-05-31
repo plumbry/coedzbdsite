@@ -1,4 +1,4 @@
-import { useQuery, useAction, useMutation } from "convex/react";
+import { useQuery, useAction, useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -78,7 +78,17 @@ function InGameEarningsContent() {
   const [isFetchingSingle, setIsFetchingSingle] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
-  const allEarnings = useQuery(api.inGameEarnings.queries.getAllInGameEarnings);
+  const {
+    results: earningsPage,
+    status: earningsStatus,
+    loadMore: loadMoreEarnings,
+  } = usePaginatedQuery(
+    api.inGameEarnings.queries.getAllInGameEarningsPaginated,
+    {},
+    { initialNumItems: 50 },
+  );
+  const earningsSummary = useQuery(api.inGameEarnings.queries.getInGameEarningsSummary);
+  const flaggedEarnings = useQuery(api.inGameEarnings.queries.getFlaggedInGameEarnings);
   const newEarningsCount = useQuery(api.inGameEarnings.queries.getNewEarningsCount);
   const recentPlayers = useQuery(api.inGameEarnings.queries.getRecentlyActivePlayers);
   const latestJob = useQuery(api.inGameEarnings.queries.getLatestFetchJob);
@@ -141,7 +151,7 @@ function InGameEarningsContent() {
     }
   };
 
-  if (!allEarnings) {
+  if (earningsStatus === "LoadingFirstPage" || !earningsSummary) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-32 w-full" />
@@ -150,8 +160,8 @@ function InGameEarningsContent() {
     );
   }
 
-  const totalDollars = allEarnings.reduce((sum, e) => sum + e.totalEarnings, 0);
-  const playersWithEarnings = allEarnings.filter((e) => e.totalEarnings > 0).length;
+  const totalDollars = earningsSummary.totalDollars;
+  const playersWithEarnings = earningsSummary.playersWithEarnings;
 
   return (
     <div className="space-y-6">
@@ -177,7 +187,7 @@ function InGameEarningsContent() {
             <Trophy className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{allEarnings.length}</div>
+            <div className="text-2xl font-bold">{earningsSummary.playersTracked}</div>
             <p className="text-xs text-muted-foreground">Players with data</p>
           </CardContent>
         </Card>
@@ -232,7 +242,7 @@ function InGameEarningsContent() {
       </div>
 
       {/* Earnings Table */}
-      {allEarnings.length === 0 ? (
+      {earningsSummary.playersTracked === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon"><DollarSign /></EmptyMedia>
@@ -263,7 +273,7 @@ function InGameEarningsContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {allEarnings.map((earning) => (
+                {earningsPage.map((earning) => (
                   <TableRow
                     key={earning._id}
                     className={earning.hasNewEarnings ? "bg-yellow-50 dark:bg-yellow-950/20" : ""}
@@ -331,19 +341,26 @@ function InGameEarningsContent() {
                 ))}
               </TableBody>
             </Table>
+            {earningsStatus === "CanLoadMore" && (
+              <div className="flex justify-center pt-4">
+                <Button variant="outline" size="sm" onClick={() => loadMoreEarnings(50)}>
+                  Load more
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
       {/* Tournament Details for flagged players */}
-      {allEarnings.filter((e) => e.hasNewEarnings && e.tournaments.length > 0).length > 0 && (
+      {flaggedEarnings && flaggedEarnings.filter((e) => e.tournaments.length > 0).length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>New Earnings Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {allEarnings
-              .filter((e) => e.hasNewEarnings && e.tournaments.length > 0)
+            {flaggedEarnings
+              .filter((e) => e.tournaments.length > 0)
               .map((earning) => (
                 <div key={earning._id} className="border rounded-lg p-4 space-y-2">
                   <div className="flex items-center justify-between">

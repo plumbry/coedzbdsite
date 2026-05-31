@@ -124,6 +124,39 @@ function SidebarNavLink({
   );
 }
 
+function CollapsedSectionToggle({
+  label,
+  open,
+  onToggle,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-9 shrink-0 text-muted-foreground"
+          onClick={onToggle}
+          aria-label={label}
+          aria-expanded={open}
+        >
+          {open ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function IconAction({
   label,
   icon: Icon,
@@ -165,15 +198,16 @@ function IconAction({
   );
 }
 
-function CollapsedSectionToggle({
-  label,
-  open,
+function SidebarCollapseToggle({
+  collapsed,
   onToggle,
 }: {
-  label: string;
-  open: boolean;
+  collapsed: boolean;
   onToggle: () => void;
 }) {
+  const label = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -181,16 +215,11 @@ function CollapsedSectionToggle({
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-9 shrink-0 text-muted-foreground"
+          className="h-9 w-9 shrink-0"
           onClick={onToggle}
           aria-label={label}
-          aria-expanded={open}
         >
-          {open ? (
-            <ChevronDown className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5" />
-          )}
+          <Icon className="h-4 w-4" />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="right">{label}</TooltipContent>
@@ -229,12 +258,6 @@ export default function AdminSidebar() {
       JSON.stringify([...openSections]),
     );
   }, [openSections]);
-
-  useEffect(() => {
-    const handleToggle = () => setCollapsed((prev) => !prev);
-    window.addEventListener("toggleAdminSidebar", handleToggle);
-    return () => window.removeEventListener("toggleAdminSidebar", handleToggle);
-  }, []);
 
   const isActive = (path: string) =>
     path === "/admin"
@@ -393,6 +416,18 @@ export default function AdminSidebar() {
           collapsed ? "w-14 p-2" : "w-56 p-4",
         )}
       >
+        <div
+          className={cn(
+            "mb-2 flex shrink-0 border-b pb-2",
+            collapsed ? "justify-center" : "justify-end",
+          )}
+        >
+          <SidebarCollapseToggle
+            collapsed={collapsed}
+            onToggle={() => setCollapsed((prev) => !prev)}
+          />
+        </div>
+
         {/* User profile */}
         {!isLoading && (
           <div className={cn("shrink-0 border-b pb-3", collapsed ? "mb-2" : "mb-4 pb-4")}>
@@ -550,16 +585,6 @@ export default function AdminSidebar() {
             </nav>
           </ScrollArea>
         )}
-
-        {/* Collapse toggle */}
-        <div className={cn("shrink-0 border-t pt-2", collapsed && "flex justify-center")}>
-          <IconAction
-            label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            icon={collapsed ? PanelLeftOpen : PanelLeftClose}
-            onClick={() => setCollapsed((prev) => !prev)}
-            collapsed={collapsed}
-          />
-        </div>
       </aside>
     </TooltipProvider>
   );

@@ -1,16 +1,17 @@
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ArrowUpDown, ArrowUp, ArrowDown, Settings } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Settings, RefreshCw } from "lucide-react";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import {
   Table,
@@ -26,6 +27,9 @@ type SortDirection = "asc" | "desc";
 
 function LeaderboardStatsContent() {
   const stats = useQuery(api.leaderboardStats.getLeaderboardStats);
+  const cacheMeta = useQuery(api.leaderboardStats.getLeaderboardStatsCacheMeta);
+  const rebuildCache = useMutation(api.leaderboardStats.rebuildLeaderboardStatsCache);
+  const [isRebuilding, setIsRebuilding] = useState(false);
   const [sortField, setSortField] = useState<SortField>("eventDate");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [hideNoMoney, setHideNoMoney] = useState(false);
@@ -213,7 +217,32 @@ function LeaderboardStatsContent() {
             </Label>
           </div>
         </div>
-        <Popover>
+        <div className="flex items-center gap-2">
+          {cacheMeta?.lastUpdated && (
+            <span className="text-xs text-muted-foreground hidden sm:inline">
+              Cached {new Date(cacheMeta.lastUpdated).toLocaleString()}
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isRebuilding}
+            onClick={async () => {
+              setIsRebuilding(true);
+              try {
+                await rebuildCache({});
+                toast.success("Leaderboard stats cache rebuild started");
+              } catch {
+                toast.error("Failed to start cache rebuild");
+              } finally {
+                setIsRebuilding(false);
+              }
+            }}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRebuilding ? "animate-spin" : ""}`} />
+            Rebuild cache
+          </Button>
+          <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm">
               <Settings className="mr-2 h-4 w-4" />
@@ -361,6 +390,7 @@ function LeaderboardStatsContent() {
             </div>
           </PopoverContent>
         </Popover>
+        </div>
       </div>
       
       <div className="border rounded-lg">

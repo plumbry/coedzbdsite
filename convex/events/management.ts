@@ -105,6 +105,37 @@ export const getAllEvents = query({
   },
 });
 
+// Public events calendar — slim fields, no admin-only data
+export const getPublicEvents = query({
+  args: {},
+  handler: async (ctx) => {
+    const events = await ctx.db.query("events").order("desc").collect();
+
+    return await Promise.all(
+      events.map(async (event) => {
+        let imageUrl: string | null = null;
+        if (event.image) {
+          imageUrl = await ctx.storage.getUrl(event.image);
+        }
+
+        return {
+          _id: event._id,
+          name: event.name,
+          type: event.type,
+          mode: event.mode,
+          startDate: event.startDate,
+          endDate: event.endDate,
+          description: event.description,
+          season: event.season,
+          status: computeEventStatus(event.startDate, event.endDate),
+          imageUrl,
+          standardCount: event.standardLeaderboards?.length || 0,
+        };
+      }),
+    );
+  },
+});
+
 // Get events by status
 export const getEventsByStatus = query({
   args: {

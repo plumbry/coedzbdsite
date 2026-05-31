@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useQuery, useAction, useMutation } from "convex/react";
+import { useQuery, useAction, useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -20,7 +20,15 @@ export default function EventBansManager() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const activeBans = useQuery(api.eventBans.queries.getActiveBans, {});
-  const endedBans = useQuery(api.eventBans.queries.getEndedBans, {});
+  const {
+    results: endedBans,
+    status: endedBansStatus,
+    loadMore: loadMoreEndedBans,
+  } = usePaginatedQuery(
+    api.eventBans.queries.getEndedBansPaginated,
+    activeTab === "history" ? {} : "skip",
+    { initialNumItems: 25 },
+  );
   const syncStatus = useQuery(api.eventBans.queries.getSyncStatus, {});
   const offenseCounts = useQuery(api.eventBans.queries.getOffenseCounts, {});
   const eventPassedMeta = useQuery(api.eventBans.queries.getEventPassedMetadata, {});
@@ -276,9 +284,9 @@ export default function EventBansManager() {
             className="cursor-pointer text-xs sm:text-sm h-8 px-2 sm:px-3"
           >
             History
-            {endedBans && (
+            {syncStatus && (
               <Badge variant="secondary" className="ml-1 sm:ml-2 text-[10px] sm:text-xs">
-                {filteredEnded.length}
+                {activeTab === "history" ? filteredEnded.length : syncStatus.endedBans}
               </Badge>
             )}
           </Button>
@@ -314,7 +322,11 @@ export default function EventBansManager() {
       ) : (
         <BansTable
           bans={activeTab === "active" ? filteredActive : filteredEnded}
-          isLoading={activeBans === undefined || endedBans === undefined}
+          isLoading={
+            activeTab === "active"
+              ? activeBans === undefined
+              : endedBansStatus === "LoadingFirstPage"
+          }
           emptyMessage={
             searchQuery
               ? "No bans match your search"
@@ -324,6 +336,13 @@ export default function EventBansManager() {
           }
           canDelete={hasEventBanAccess}
         />
+      )}
+      {activeTab === "history" && endedBansStatus === "CanLoadMore" && (
+        <div className="flex justify-center">
+          <Button variant="outline" size="sm" onClick={() => loadMoreEndedBans(25)}>
+            Load more
+          </Button>
+        </div>
       )}
     </div>
   );

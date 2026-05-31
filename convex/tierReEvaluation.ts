@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
-import { api } from "./_generated/api";
+import { query, mutation, internalQuery } from "./_generated/server";
+import { internal, api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel.d.ts";
 
 // Define types for evaluation data
@@ -85,8 +85,8 @@ type TierEvaluationResult = {
   tierKillsMedians: Record<string, number>;
 };
 
-// Tier re-evaluation system - provides suggestions only, never modifies tiers
-export const getTierReEvaluationData = query({
+// Tier re-evaluation system — internal only (UI uses getCachedTierReEvaluationData)
+export const getTierReEvaluationDataInternal = internalQuery({
   args: {
     applyDuoAdjustment: v.optional(v.boolean()),
     applyTCPenalty: v.optional(v.boolean()),
@@ -1059,11 +1059,14 @@ export const startTierReEvaluationCacheRebuild = mutation({
     }
 
     // Get fresh evaluation data (runs with admin auth context)
-    const evaluationData: TierEvaluationResult = await ctx.runQuery(api.tierReEvaluation.getTierReEvaluationData, {
-      applyDuoAdjustment: args.applyDuoAdjustment || false,
-      applyTCPenalty: args.applyTCPenalty !== false,
-      applyTCDCAToHolistic: args.applyTCDCAToHolistic || false,
-    });
+    const evaluationData: TierEvaluationResult = await ctx.runQuery(
+      internal.tierReEvaluation.getTierReEvaluationDataInternal,
+      {
+        applyDuoAdjustment: args.applyDuoAdjustment || false,
+        applyTCPenalty: args.applyTCPenalty !== false,
+        applyTCDCAToHolistic: args.applyTCDCAToHolistic || false,
+      },
+    );
 
     const now = Date.now();
     

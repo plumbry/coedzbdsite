@@ -1,148 +1,197 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel.d.ts";
+import { query, mutation, internalMutation } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel.d.ts";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { requireAdmin } from "./auth_helpers";
+import { internal } from "./_generated/api";
+
+export type LeaderboardStatRow = {
+  importId: Id<"thirdPartyImports">;
+  eventName: string;
+  eventDate?: string;
+  eventType: string | null;
+  mode: string | null;
+  isNoMoneyEvent: boolean;
+  totalTeams: number;
+  top3Players: number;
+  top4Players: number;
+  top5Players: number;
+  totalPlayers: number;
+  top3Percentage: number;
+  top4Percentage: number;
+  top5Percentage: number;
+  tierSPlayers: number;
+  tierAPlayers: number;
+  tierBPlayers: number;
+  tierCPlayers: number;
+};
+
+async function computeLeaderboardStats(
+  ctx: QueryCtx | MutationCtx,
+): Promise<LeaderboardStatRow[]> {
+  const allPlayers = await ctx.db.query("players").collect();
+  const playerDiscordMap = new Map<string, string>();
+  const playerTierMap = new Map<string, string>();
+
+  for (const p of allPlayers) {
+    if (p.discordUserId) playerDiscordMap.set(p._id, p.discordUserId);
+    if (p.tier) playerTierMap.set(p._id, p.tier);
+  }
+
+  const imports = await ctx.db.query("thirdPartyImports").collect();
+  const events = await ctx.db.query("events").collect();
+  const eventMap = new Map<string, Doc<"events">>();
+  for (const e of events) {
+    eventMap.set(e._id, e);
+  }
+
+  const stats: LeaderboardStatRow[] = [];
+
+  for (const imp of imports) {
+    const event = imp.eventId ? eventMap.get(imp.eventId) : null;
+
+    const results = await ctx.db
+      .query("thirdPartyResults")
+      .withIndex("by_import", (q) => q.eq("importId", imp._id))
+      .collect();
+
+    const allDiscordIds = new Set<string>();
+    const top3DiscordIds = new Set<string>();
+    const top4DiscordIds = new Set<string>();
+    const top5DiscordIds = new Set<string>();
+    const tierSDiscordIds = new Set<string>();
+    const tierADiscordIds = new Set<string>();
+    const tierBDiscordIds = new Set<string>();
+    const tierCDiscordIds = new Set<string>();
+
+    for (const result of results) {
+      if (result.playerId) {
+        const discordId = playerDiscordMap.get(result.playerId);
+        const tier = playerTierMap.get(result.playerId);
+
+        if (discordId) {
+          allDiscordIds.add(discordId);
+          if (tier === "S") tierSDiscordIds.add(discordId);
+          else if (tier === "A") tierADiscordIds.add(discordId);
+          else if (tier === "B") tierBDiscordIds.add(discordId);
+          else if (tier === "C") tierCDiscordIds.add(discordId);
+
+          if (result.placement <= 3) top3DiscordIds.add(discordId);
+          if (result.placement <= 4) top4DiscordIds.add(discordId);
+          if (result.placement <= 5) top5DiscordIds.add(discordId);
+        }
+      }
+    }
+
+    const totalPlayers = allDiscordIds.size;
+    const top3Players = top3DiscordIds.size;
+    const top4Players = top4DiscordIds.size;
+    const top5Players = top5DiscordIds.size;
+
+    const teamIds = new Set<string>();
+    for (const result of results) {
+      if (result.teamId) {
+        teamIds.add(result.teamId);
+      } else {
+        teamIds.add(`${result.placement}_${result.points}`);
+      }
+    }
+
+    const top5Percentage =
+      totalPlayers > 0 ? Math.round((top5Players / totalPlayers) * 100 * 10) / 10 : 0;
+    const top4Percentage =
+      totalPlayers > 0 ? Math.round((top4Players / totalPlayers) * 100 * 10) / 10 : 0;
+    const top3Percentage =
+      totalPlayers > 0 ? Math.round((top3Players / totalPlayers) * 100 * 10) / 10 : 0;
+
+    stats.push({
+      importId: imp._id,
+      eventName: imp.eventName,
+      eventDate: imp.eventDate,
+      eventType: event?.type ?? null,
+      mode: event?.mode ?? null,
+      isNoMoneyEvent: event?.isNoMoneyEvent ?? false,
+      totalTeams: teamIds.size,
+      top3Players,
+      top4Players,
+      top5Players,
+      totalPlayers,
+      top3Percentage,
+      top4Percentage,
+      top5Percentage,
+      tierSPlayers: tierSDiscordIds.size,
+      tierAPlayers: tierADiscordIds.size,
+      tierBPlayers: tierBDiscordIds.size,
+      tierCPlayers: tierCDiscordIds.size,
+    });
+  }
+
+  return stats.sort((a, b) => {
+    if (a.eventDate && b.eventDate) {
+      return new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime();
+    }
+    return 0;
+  });
+}
 
 export const getLeaderboardStats = query({
   args: {},
   handler: async (ctx) => {
-    // Check if user is admin
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       return [];
     }
-    
+
     const user = await ctx.db
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    
+
     if (!user || user.role !== "admin") {
       return [];
     }
-    
-    // 1. Bulk load all players into memory maps to avoid N+1 queries
-    const allPlayers = await ctx.db.query("players").collect();
-    const playerDiscordMap = new Map<string, string>(); // playerId -> discordUserId
-    const playerTierMap = new Map<string, string>();    // playerId -> tier
-    
-    for (const p of allPlayers) {
-      if (p.discordUserId) playerDiscordMap.set(p._id, p.discordUserId);
-      if (p.tier) playerTierMap.set(p._id, p.tier);
+
+    const cache = await ctx.db.query("leaderboardStatsCache").first();
+    if (cache) {
+      return cache.stats;
     }
-    
-    // 2. Load all imports and events
-    const imports = await ctx.db.query("thirdPartyImports").collect();
-    const events = await ctx.db.query("events").collect();
-    const eventMap = new Map<string, Doc<"events">>();
-    for (const e of events) {
-      eventMap.set(e._id, e);
+
+    return await computeLeaderboardStats(ctx);
+  },
+});
+
+export const getLeaderboardStatsCacheMeta = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const cache = await ctx.db.query("leaderboardStatsCache").first();
+    return cache ? { lastUpdated: cache.lastUpdated, rowCount: cache.stats.length } : null;
+  },
+});
+
+export const rebuildLeaderboardStatsCache = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    await ctx.scheduler.runAfter(0, internal.leaderboardStats.storeLeaderboardStatsCache, {});
+  },
+});
+
+export const storeLeaderboardStatsCache = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const stats = await computeLeaderboardStats(ctx);
+    const existing = await ctx.db.query("leaderboardStatsCache").first();
+    const payload = { stats, lastUpdated: Date.now() };
+    if (existing) {
+      await ctx.db.patch(existing._id, payload);
+    } else {
+      await ctx.db.insert("leaderboardStatsCache", payload);
     }
-    
-    // 3. Process each import using in-memory lookups (no per-result DB calls)
-    const stats = [];
-    
-    for (const imp of imports) {
-      const event = imp.eventId ? eventMap.get(imp.eventId) : null;
-      
-      // Load results for this import using index
-      const results = await ctx.db
-        .query("thirdPartyResults")
-        .withIndex("by_import", (q) => q.eq("importId", imp._id))
-        .collect();
-      
-      // Count unique Discord IDs from results using in-memory player maps
-      const allDiscordIds = new Set<string>();
-      const top3DiscordIds = new Set<string>();
-      const top4DiscordIds = new Set<string>();
-      const top5DiscordIds = new Set<string>();
-      const tierSDiscordIds = new Set<string>();
-      const tierADiscordIds = new Set<string>();
-      const tierBDiscordIds = new Set<string>();
-      const tierCDiscordIds = new Set<string>();
-      
-      for (const result of results) {
-        if (result.playerId) {
-          const discordId = playerDiscordMap.get(result.playerId);
-          const tier = playerTierMap.get(result.playerId);
-          
-          if (discordId) {
-            allDiscordIds.add(discordId);
-            if (tier === "S") tierSDiscordIds.add(discordId);
-            else if (tier === "A") tierADiscordIds.add(discordId);
-            else if (tier === "B") tierBDiscordIds.add(discordId);
-            else if (tier === "C") tierCDiscordIds.add(discordId);
-            
-            if (result.placement <= 3) top3DiscordIds.add(discordId);
-            if (result.placement <= 4) top4DiscordIds.add(discordId);
-            if (result.placement <= 5) top5DiscordIds.add(discordId);
-          }
-        }
-      }
-      
-      const totalPlayers = allDiscordIds.size;
-      const top3Players = top3DiscordIds.size;
-      const top4Players = top4DiscordIds.size;
-      const top5Players = top5DiscordIds.size;
-      const tierSPlayers = tierSDiscordIds.size;
-      const tierAPlayers = tierADiscordIds.size;
-      const tierBPlayers = tierBDiscordIds.size;
-      const tierCPlayers = tierCDiscordIds.size;
-      
-      // Count unique teams
-      const teamIds = new Set<string>();
-      for (const result of results) {
-        if (result.teamId) {
-          teamIds.add(result.teamId);
-        } else {
-          teamIds.add(`${result.placement}_${result.points}`);
-        }
-      }
-      
-      // Calculate percentages
-      const top5Percentage = totalPlayers > 0 
-        ? Math.round((top5Players / totalPlayers) * 100 * 10) / 10
-        : 0;
-      const top4Percentage = totalPlayers > 0 
-        ? Math.round((top4Players / totalPlayers) * 100 * 10) / 10
-        : 0;
-      const top3Percentage = totalPlayers > 0 
-        ? Math.round((top3Players / totalPlayers) * 100 * 10) / 10
-        : 0;
-      
-      stats.push({
-        importId: imp._id,
-        eventName: imp.eventName,
-        eventDate: imp.eventDate,
-        eventType: event?.type || null,
-        mode: event?.mode || null,
-        isNoMoneyEvent: event?.isNoMoneyEvent || false,
-        totalTeams: teamIds.size,
-        top3Players,
-        top4Players,
-        top5Players,
-        totalPlayers,
-        top3Percentage,
-        top4Percentage,
-        top5Percentage,
-        tierSPlayers,
-        tierAPlayers,
-        tierBPlayers,
-        tierCPlayers,
-      });
-    }
-    
-    // Sort by event date (most recent first)
-    return stats.sort((a, b) => {
-      if (a.eventDate && b.eventDate) {
-        return new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime();
-      }
-      return 0;
-    });
   },
 });
 
 // Tier Impact Analytics query
-// Computes per-tier performance metrics across events efficiently using in-memory joins
 export const getTierImpactStats = query({
   args: {
     hideNoMoney: v.optional(v.boolean()),
@@ -187,7 +236,6 @@ export const getTierImpactStats = query({
       return null;
     }
 
-    // 1. Bulk load all players into a playerId → tier map (active + undefined status)
     const activePlayers = await ctx.db
       .query("players")
       .withIndex("by_status", (q) => q.eq("status", "active"))
@@ -204,7 +252,6 @@ export const getTierImpactStats = query({
       if (p.tier) playerTierMap.set(p._id, p.tier);
     }
 
-    // 2. Count total player population by tier (for relativity / representation index)
     const tierPopulation: Record<string, number> = { S: 0, A: 0, B: 0, C: 0, Unknown: 0 };
     let totalPopulation = 0;
     for (const [, tier] of playerTierMap) {
@@ -216,8 +263,9 @@ export const getTierImpactStats = query({
       totalPopulation++;
     }
 
-    // 3. Load all imports and filter to event-linked ones
     const allImports = await ctx.db.query("thirdPartyImports").collect();
+    const allEvents = await ctx.db.query("events").collect();
+    const eventMap = new Map(allEvents.map((e) => [e._id, e]));
 
     const TIERS = ["S", "A", "B", "C"] as const;
 
@@ -231,14 +279,12 @@ export const getTierImpactStats = query({
       tierStats: Record<string, TierBucket>;
     }> = [];
 
-    // 4. Process each import linked to an event
     for (const imp of allImports) {
       if (!imp.eventId) continue;
 
-      const event = await ctx.db.get(imp.eventId);
+      const event = eventMap.get(imp.eventId);
       if (!event) continue;
 
-      // Apply filters
       if (args.hideNoMoney && event.isNoMoneyEvent) continue;
       if (args.hideReload && event.mode === "Reload") continue;
 
@@ -249,7 +295,6 @@ export const getTierImpactStats = query({
         if (!eventDateStr || new Date(eventDateStr) < ninetyDaysAgo) continue;
       }
 
-      // Use the matched index for efficiency
       const results = await ctx.db
         .query("thirdPartyResults")
         .withIndex("by_matched", (q) => q.eq("importId", imp._id).eq("matched", true))
@@ -257,18 +302,18 @@ export const getTierImpactStats = query({
 
       if (results.length === 0) continue;
 
-      // Initialize tier buckets
       const tierStats: Record<string, TierBucket> = {};
       for (const t of TIERS) {
         tierStats[t] = { count: 0, top3: 0, top5: 0, totalPlacement: 0, totalElims: 0 };
       }
       tierStats["Unknown"] = { count: 0, top3: 0, top5: 0, totalPlacement: 0, totalElims: 0 };
 
-      // Bucket each result by the player's tier (in-memory join, no extra DB calls)
       for (const result of results) {
         if (!result.playerId) continue;
         const tier = playerTierMap.get(result.playerId) || "Unknown";
-        const bucket = tierStats[tier] || (tierStats[tier] = { count: 0, top3: 0, top5: 0, totalPlacement: 0, totalElims: 0 });
+        const bucket =
+          tierStats[tier] ||
+          (tierStats[tier] = { count: 0, top3: 0, top5: 0, totalPlacement: 0, totalElims: 0 });
 
         bucket.count++;
         bucket.totalPlacement += result.placement;
@@ -286,12 +331,10 @@ export const getTierImpactStats = query({
       });
     }
 
-    // Sort chronologically
-    perEventData.sort((a, b) =>
-      new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()
+    perEventData.sort(
+      (a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime(),
     );
 
-    // 5. Aggregate across all events
     const overallStats: Record<string, {
       totalAppearances: number;
       totalTop3: number;
@@ -308,7 +351,14 @@ export const getTierImpactStats = query({
     for (const evt of perEventData) {
       for (const [tier, stats] of Object.entries(evt.tierStats)) {
         if (!overallStats[tier]) {
-          overallStats[tier] = { totalAppearances: 0, totalTop3: 0, totalTop5: 0, totalPlacement: 0, totalElims: 0, eventCount: 0 };
+          overallStats[tier] = {
+            totalAppearances: 0,
+            totalTop3: 0,
+            totalTop5: 0,
+            totalPlacement: 0,
+            totalElims: 0,
+            eventCount: 0,
+          };
         }
         const agg = overallStats[tier];
         agg.totalAppearances += stats.count;
@@ -324,9 +374,6 @@ export const getTierImpactStats = query({
       }
     }
 
-    // 6. Compute impact index per tier
-    // Impact Index = (share of top placements) / (share of lobby)
-    // > 1.0 means over-represented in top finishes, < 1.0 means under-represented
     const impactMetrics: Record<string, {
       lobbyShare: number;
       top3Share: number;

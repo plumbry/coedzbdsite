@@ -645,7 +645,34 @@ export default defineSchema({
     }),
     lastUpdated: v.number(),
   }),
-  
+
+  // Cached per-import leaderboard analytics (leaderboard-stats admin page)
+  leaderboardStatsCache: defineTable({
+    stats: v.array(
+      v.object({
+        importId: v.id("thirdPartyImports"),
+        eventName: v.string(),
+        eventDate: v.optional(v.string()),
+        eventType: v.union(v.string(), v.null()),
+        mode: v.union(v.string(), v.null()),
+        isNoMoneyEvent: v.boolean(),
+        totalTeams: v.number(),
+        top3Players: v.number(),
+        top4Players: v.number(),
+        top5Players: v.number(),
+        totalPlayers: v.number(),
+        top3Percentage: v.number(),
+        top4Percentage: v.number(),
+        top5Percentage: v.number(),
+        tierSPlayers: v.number(),
+        tierAPlayers: v.number(),
+        tierBPlayers: v.number(),
+        tierCPlayers: v.number(),
+      }),
+    ),
+    lastUpdated: v.number(),
+  }),
+
   // Cached tier re-evaluation data
   tierReEvaluationCache: defineTable({
     playerId: v.id("players"),
@@ -818,7 +845,8 @@ export default defineSchema({
     previousTotalEarnings: v.optional(v.number()), // Total before last refresh (for diff)
   })
     .index("by_player", ["playerId"])
-    .index("by_has_new", ["hasNewEarnings"]),
+    .index("by_has_new", ["hasNewEarnings"])
+    .index("by_total_earnings", ["totalEarnings"]),
 
   // Cached USD-payout tournament leaderboards for Osirion earnings scans
   tournamentScanCache: defineTable({

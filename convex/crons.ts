@@ -10,6 +10,13 @@ crons.daily(
   internal.memberManagement.refreshRecentlyActiveFlags,
 );
 
+// Prune old admin chat messages (keep latest 500)
+crons.weekly(
+  "prune old chat messages",
+  { dayOfWeek: "sunday", hourUTC: 2, minuteUTC: 0 },
+  internal.chat.pruneOldChatMessages,
+);
+
 // Sync Discord scheduled events to website every 24 hours
 crons.daily(
   "sync discord events",

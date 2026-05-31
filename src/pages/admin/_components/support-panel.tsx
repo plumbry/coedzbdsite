@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -28,10 +28,18 @@ export default function SupportPanel() {
   const [ticketToDelete, setTicketToDelete] = useState<Id<"supportTickets"> | null>(null);
   
   const activeTickets = useQuery(api.support.getActiveTickets);
-  const archivedTickets = useQuery(api.support.getArchivedTickets);
+  const {
+    results: archivedTickets,
+    status: archivedStatus,
+    loadMore: loadMoreArchived,
+  } = usePaginatedQuery(
+    api.support.getArchivedTicketsPaginated,
+    view === "archived" ? {} : "skip",
+    { initialNumItems: 25 },
+  );
   const archiveTicket = useMutation(api.support.archiveTicket);
   const deleteTicket = useMutation(api.support.deleteTicket);
-  
+
   const tickets = view === "active" ? activeTickets : archivedTickets;
   
   const handleArchive = async (ticketId: Id<"supportTickets">) => {
@@ -87,21 +95,21 @@ export default function SupportPanel() {
               onClick={() => setView("archived")}
             >
               Archived
-              {archivedTickets && archivedTickets.length > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {archivedTickets.length}
-                </Badge>
-              )}
             </Button>
           </div>
           
           {/* Tickets List */}
-          {tickets === undefined ? (
+          {view === "active" && tickets === undefined ? (
             <div className="space-y-3">
               <Skeleton className="h-32 w-full" />
               <Skeleton className="h-32 w-full" />
             </div>
-          ) : tickets.length === 0 ? (
+          ) : view === "archived" && archivedStatus === "LoadingFirstPage" ? (
+            <div className="space-y-3">
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+          ) : !tickets || tickets.length === 0 ? (
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -164,6 +172,13 @@ export default function SupportPanel() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          )}
+          {view === "archived" && archivedStatus === "CanLoadMore" && (
+            <div className="flex justify-center pt-2">
+              <Button variant="outline" size="sm" onClick={() => loadMoreArchived(25)}>
+                Load more
+              </Button>
             </div>
           )}
         </CardContent>
