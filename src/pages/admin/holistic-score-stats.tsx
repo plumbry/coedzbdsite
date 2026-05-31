@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
@@ -31,10 +30,10 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import SiteHeader from "@/components/site-header.tsx";
-import AdminSidebar from "./_components/admin-sidebar.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import RoleGate from "@/components/role-gate.tsx";
+import PageHeader from "@/components/page-header.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
 import {
   Tooltip,
   TooltipContent,
@@ -188,31 +187,11 @@ function HolisticScoreStatsContent() {
 
   // Show loading while checking permissions
   if (isModeratorOrAdmin === undefined) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
+    return <Skeleton className="h-96 w-full" />;
   }
 
-  // Redirect users without permission
   if (!canView) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p className="text-muted-foreground mb-6">
-            This page is only accessible to administrators and moderators.
-          </p>
-          <Link to="/">
-            <Button>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Home
-            </Button>
-          </Link>
-        </div>
-      </div>
-    );
+    return <RoleGate allowed={false} />;
   }
 
   const handleSort = (field: SortField) => {
@@ -238,15 +217,13 @@ function HolisticScoreStatsContent() {
 
   if (!cachedData) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-bold">Holistic Score Statistics</h1>
-          </div>
-          <p className="text-muted-foreground">
-            Comprehensive holistic scores and component breakdowns for all players
-          </p>
-        </div>
+      <div className="space-y-4">
+        <PageHeader
+          title="Holistic Score Statistics"
+          description="Comprehensive holistic scores and component breakdowns for all players"
+          back={{ label: "Tier Re-Evaluation", href: "/admin/tier-re-evaluation" }}
+          variant="compact"
+        />
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">No Cached Data Available</CardTitle>
@@ -277,14 +254,6 @@ function HolisticScoreStatsContent() {
                 Please ask an administrator to build the cache.
               </p>
             )}
-            <div className="pt-4">
-              <Link to="/admin/tier-re-evaluation">
-                <Button variant="outline">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back to Tier Re-Evaluation
-                </Button>
-              </Link>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -294,15 +263,13 @@ function HolisticScoreStatsContent() {
   // Check if evaluations exist
   if (!cachedData.evaluations || cachedData.evaluations.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-bold">Holistic Score Statistics</h1>
-          </div>
-          <p className="text-muted-foreground">
-            Comprehensive holistic scores and component breakdowns for all players
-          </p>
-        </div>
+      <div className="space-y-4">
+        <PageHeader
+          title="Holistic Score Statistics"
+          description="Comprehensive holistic scores and component breakdowns for all players"
+          back={{ label: "Tier Re-Evaluation", href: "/admin/tier-re-evaluation" }}
+          variant="compact"
+        />
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">No Player Data Available</CardTitle>
@@ -328,14 +295,6 @@ function HolisticScoreStatsContent() {
                 )}
               </Button>
             )}
-            <div className="pt-4">
-              <Link to="/admin/tier-re-evaluation">
-                <Button variant="outline">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back to Tier Re-Evaluation
-                </Button>
-              </Link>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -473,12 +432,15 @@ function HolisticScoreStatsContent() {
   });
 
   return (
-    <div className="container mx-auto px-4 py-4 max-w-[1600px] space-y-3">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-3xl font-bold">Holistic Score Statistics</h1>
-            {cachedData && 'lastUpdated' in cachedData && (
+    <div className="space-y-4">
+      <PageHeader
+        title="Holistic Score Statistics"
+        description="Comprehensive holistic scores and component breakdowns for all players"
+        back={{ label: "Tier Re-Evaluation", href: "/admin/tier-re-evaluation" }}
+        variant="compact"
+        actions={
+          <>
+            {cachedData && "lastUpdated" in cachedData && (
               <Badge variant="outline" className="text-xs">
                 Cached: {new Date(cachedData.lastUpdated).toLocaleString()}
               </Badge>
@@ -488,39 +450,28 @@ function HolisticScoreStatsContent() {
                 TC/DCA Applied
               </Badge>
             )}
-          </div>
-          <p className="text-muted-foreground text-sm">
-            Comprehensive holistic scores and component breakdowns for all players
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && cachedData && (
-            <Button
-              onClick={handleRebuildCache}
-              disabled={isRebuilding}
-              variant="outline"
-              size="sm"
-            >
-              {isRebuilding ? (
-                <>
-                  <Spinner className="mr-2 h-3 w-3" />
-                  {batchProgress 
-                    ? `Batch ${batchProgress.current}/${batchProgress.total}`
-                    : "Rebuilding..."}
-                </>
-              ) : (
-                "Rebuild Cache"
-              )}
-            </Button>
-          )}
-          <Link to="/admin/tier-re-evaluation">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          </Link>
-        </div>
-      </div>
+            {isAdmin && cachedData && (
+              <Button
+                onClick={handleRebuildCache}
+                disabled={isRebuilding}
+                variant="outline"
+                size="sm"
+              >
+                {isRebuilding ? (
+                  <>
+                    <Spinner className="mr-2 h-3 w-3" />
+                    {batchProgress
+                      ? `Batch ${batchProgress.current}/${batchProgress.total}`
+                      : "Rebuilding..."}
+                  </>
+                ) : (
+                  "Rebuild Cache"
+                )}
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* Explanation Cards */}
       <Collapsible open={isExplanationOpen} onOpenChange={setIsExplanationOpen}>
@@ -1331,32 +1282,12 @@ function HolisticScoreStatsContent() {
 
 export default function HolisticScoreStats() {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      <Authenticated>
-        <div className="flex min-h-screen pt-14 lg:pt-0 bg-background">
-          <AdminSidebar />
-          <div className="flex-1">
-            <HolisticScoreStatsContent />
-          </div>
-        </div>
-      </Authenticated>
-      <Unauthenticated>
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-4">Authentication Required</h1>
-            <p className="text-muted-foreground mb-6">
-              Please sign in to access this page.
-            </p>
-            <SignInButton />
-          </div>
-        </div>
-      </Unauthenticated>
-      <AuthLoading>
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
-          <Skeleton className="h-96 w-full" />
-        </div>
-      </AuthLoading>
-    </div>
+    <AdminPageLayout
+      maxWidth="wide"
+      skipHeader
+      authTitle="Sign in to access holistic score statistics"
+    >
+      <HolisticScoreStatsContent />
+    </AdminPageLayout>
   );
 }

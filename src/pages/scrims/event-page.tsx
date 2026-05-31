@@ -4,7 +4,8 @@ import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import SiteHeader from "@/components/site-header.tsx";
+import PageShell from "@/components/page-shell.tsx";
+import PageHeader from "@/components/page-header.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import {
@@ -196,45 +197,47 @@ export default function ScrimEventPage() {
   // Invalid - no param provided
   if (!eventId) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold">Event Not Found</h1>
-          <p className="text-muted-foreground">
-            This event does not exist or the link is invalid.
-          </p>
+      <PageShell className="max-w-5xl">
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <div className="text-center space-y-2">
+            <h1 className="text-2xl font-bold">Event Not Found</h1>
+            <p className="text-muted-foreground">
+              This event does not exist or the link is invalid.
+            </p>
+          </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   // Loading state
   if (event === undefined) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="mx-auto max-w-5xl space-y-6">
-          <Skeleton className="h-12 w-64" />
-          <Skeleton className="h-6 w-48" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
-            ))}
-          </div>
+      <PageShell className="max-w-5xl">
+        <Skeleton className="h-12 w-64" />
+        <Skeleton className="h-6 w-48" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   // Not found
   if (event === null) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold">Event Not Found</h1>
-          <p className="text-muted-foreground">
-            This event does not exist or the link is invalid.
-          </p>
+      <PageShell className="max-w-5xl">
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <div className="text-center space-y-2">
+            <h1 className="text-2xl font-bold">Event Not Found</h1>
+            <p className="text-muted-foreground">
+              This event does not exist or the link is invalid.
+            </p>
+          </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -409,197 +412,108 @@ export default function ScrimEventPage() {
     : `${event.teams.length} duos`;
 
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      {/* Header */}
-      <div className="border-b bg-card">
-        <div className="mx-auto max-w-5xl px-6 py-8">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <Trophy className="h-8 w-8 text-primary" />
-                <h1 className="text-3xl font-bold tracking-tight">{event.eventName}</h1>
-                {/* Lock/Unlock toggle */}
+    <PageShell className="max-w-5xl">
+      <PageHeader
+        title={event.eventName}
+        icon={Trophy}
+        variant="compact"
+        actions={
+          <>
+            <Button
+              size="sm"
+              variant={isUnlocked ? "secondary" : "ghost"}
+              className="cursor-pointer"
+              onClick={() => {
+                if (isUnlocked) {
+                  setIsUnlocked(false);
+                  toast.success("Controls locked");
+                } else {
+                  setShowUnlockDialog(true);
+                }
+              }}
+            >
+              {isUnlocked ? (
+                <><Unlock className="h-4 w-4 mr-1.5" /> Unlocked</>
+              ) : (
+                <><Lock className="h-4 w-4 mr-1.5" /> Locked</>
+              )}
+            </Button>
+            {isUnlocked && (
+              <>
                 <Button
                   size="sm"
-                  variant={isUnlocked ? "secondary" : "ghost"}
-                  className="cursor-pointer ml-2"
+                  variant="ghost"
+                  className="cursor-pointer"
                   onClick={() => {
-                    if (isUnlocked) {
-                      setIsUnlocked(false);
-                      toast.success("Controls locked");
-                    } else {
-                      setShowUnlockDialog(true);
-                    }
+                    setEditName(event.eventName);
+                    setEditType(event.eventType);
+                    setEditGames(String(event.games));
+                    setShowEditDialog(true);
                   }}
                 >
-                  {isUnlocked ? (
-                    <><Unlock className="h-4 w-4 mr-1.5" /> Unlocked</>
-                  ) : (
-                    <><Lock className="h-4 w-4 mr-1.5" /> Locked</>
-                  )}
+                  <Pencil className="h-4 w-4 mr-1.5" />
+                  Edit
                 </Button>
-                {/* Edit & Delete - visible when unlocked */}
-                {isUnlocked && (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="cursor-pointer"
-                      onClick={() => {
-                        setEditName(event.eventName);
-                        setEditType(event.eventType);
-                        setEditGames(String(event.games));
-                        setShowEditDialog(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4 mr-1.5" />
-                      Edit
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button size="sm" variant="ghost" className="cursor-pointer text-destructive hover:text-destructive">
+                      <Trash2 className="h-4 w-4 mr-1.5" />
+                      Delete
                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button size="sm" variant="ghost" className="cursor-pointer text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4 mr-1.5" />
-                          Delete
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete this event?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will permanently delete "{event.eventName}" and all its data. This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="cursor-pointer bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={async () => {
-                              try {
-                                await deleteEvent({
-                                  eventId: event._id,
-                                  token: token || undefined,
-                                });
-                                toast.success("Event deleted");
-                                navigate("/spin");
-                              } catch (err) {
-                                toast.error("Failed to delete event");
-                                console.error(err);
-                              }
-                            }}
-                          >
-                            Delete Event
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </>
-                )}
-              </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="rounded-full bg-primary/10 px-3 py-1 text-primary font-medium capitalize">
-                  {event.eventType.replace(/_/g, " ")}
-                </span>
-                <span>{event.games} games</span>
-                <span>{entryLabel}</span>
-                {gamesGenerated > 0 && (
-                  <span className="font-medium text-foreground">
-                    {gamesGenerated}/{event.games} generated
-                  </span>
-                )}
-              </div>
-              {/* Leaderboard URL */}
-              <div className="flex items-center gap-2 mt-1">
-                {leaderboardUrl && !editingLeaderboardUrl ? (
-                  <div className="flex items-center gap-2">
-                    <Link2 className="h-4 w-4 text-primary shrink-0" />
-                    <a
-                      href={leaderboardUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-primary hover:underline flex items-center gap-1 cursor-pointer truncate max-w-xs"
-                    >
-                      Yunite Leaderboard
-                      <ExternalLink className="h-3 w-3 shrink-0" />
-                    </a>
-                    {isUnlocked && (
-                      <button
-                        onClick={() => {
-                          setLeaderboardUrlInput(leaderboardUrl);
-                          setEditingLeaderboardUrl(true);
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete this event?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete "{event.eventName}" and all its data. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="cursor-pointer bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={async () => {
+                          try {
+                            await deleteEvent({
+                              eventId: event._id,
+                              token: token || undefined,
+                            });
+                            toast.success("Event deleted");
+                            navigate("/spin");
+                          } catch (err) {
+                            toast.error("Failed to delete event");
+                            console.error(err);
+                          }
                         }}
-                        className="text-muted-foreground hover:text-foreground cursor-pointer"
                       >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ) : editingLeaderboardUrl && isUnlocked ? (
-                  <div className="flex items-center gap-2 w-full max-w-md">
-                    <Input
-                      value={leaderboardUrlInput}
-                      onChange={(e) => setLeaderboardUrlInput(e.target.value)}
-                      placeholder="https://yunite.xyz/leaderboard/..."
-                      className="h-8 text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSaveLeaderboardUrl();
-                        if (e.key === "Escape") setEditingLeaderboardUrl(false);
-                      }}
-                      autoFocus
-                    />
-                    <Button
-                      size="sm"
-                      className="h-8 cursor-pointer"
-                      onClick={handleSaveLeaderboardUrl}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 cursor-pointer"
-                      onClick={() => setEditingLeaderboardUrl(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                ) : !leaderboardUrl && isUnlocked ? (
-                  <button
-                    onClick={() => {
-                      setLeaderboardUrlInput("");
-                      setEditingLeaderboardUrl(true);
-                    }}
-                    className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Link2 className="h-3.5 w-3.5" />
-                    Add Yunite leaderboard link
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
-            {/* Streamer Mode toggle - prominent, far right */}
+                        Delete Event
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
             {isUnlocked && (
               <Button
-                size="lg"
+                size="sm"
                 variant={streamerMode ? "default" : "secondary"}
-                className="cursor-pointer shrink-0 gap-2 text-base font-semibold"
+                className="cursor-pointer shrink-0 gap-1.5"
                 onClick={() => {
                   setStreamerMode(!streamerMode);
                   toast.success(streamerMode ? "Streamer mode off" : "Streamer mode on — sensitive info hidden");
                 }}
               >
                 {streamerMode ? (
-                  <><EyeOff className="h-5 w-5" /> Streamer Mode</>
+                  <><EyeOff className="h-4 w-4" /> Streamer</>
                 ) : (
-                  <><Eye className="h-5 w-5" /> Streamer Mode</>
+                  <><Eye className="h-4 w-4" /> Streamer</>
                 )}
               </Button>
             )}
-
             {currentPairings.length > 0 && isUnlocked && !isNumberOnly && (
-              <div className="flex items-center gap-2 flex-wrap">
+              <>
                 <Button
+                  size="sm"
                   onClick={handleCopyDiscord}
                   variant="secondary"
                   className="cursor-pointer"
@@ -612,6 +526,7 @@ export default function ScrimEventPage() {
                   {copied ? "Copied!" : "Copy for Discord"}
                 </Button>
                 <Button
+                  size="sm"
                   onClick={handleExportCSV}
                   variant="secondary"
                   className="cursor-pointer"
@@ -620,6 +535,7 @@ export default function ScrimEventPage() {
                   Export CSV
                 </Button>
                 <Button
+                  size="sm"
                   onClick={handleReset}
                   variant="destructive"
                   className="cursor-pointer"
@@ -627,27 +543,105 @@ export default function ScrimEventPage() {
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Reset All
                 </Button>
-              </div>
+              </>
             )}
-
             {isNumberOnly && hasNumberAssignments && isUnlocked && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  onClick={handleReset}
-                  variant="destructive"
-                  className="cursor-pointer"
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Reset
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                onClick={handleReset}
+                variant="destructive"
+                className="cursor-pointer"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reset
+              </Button>
             )}
-          </div>
-        </div>
+          </>
+        }
+      />
+
+      <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+        <span className="rounded-full bg-primary/10 px-3 py-1 text-primary font-medium capitalize">
+          {event.eventType.replace(/_/g, " ")}
+        </span>
+        <span>{event.games} games</span>
+        <span>{entryLabel}</span>
+        {gamesGenerated > 0 && (
+          <span className="font-medium text-foreground">
+            {gamesGenerated}/{event.games} generated
+          </span>
+        )}
       </div>
 
-      {/* Content */}
-      <div className="mx-auto max-w-5xl px-6 py-8 space-y-8">
+      <div className="flex items-center gap-2">
+        {leaderboardUrl && !editingLeaderboardUrl ? (
+          <div className="flex items-center gap-2">
+            <Link2 className="h-4 w-4 text-primary shrink-0" />
+            <a
+              href={leaderboardUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-primary hover:underline flex items-center gap-1 cursor-pointer truncate max-w-xs"
+            >
+              Yunite Leaderboard
+              <ExternalLink className="h-3 w-3 shrink-0" />
+            </a>
+            {isUnlocked && (
+              <button
+                onClick={() => {
+                  setLeaderboardUrlInput(leaderboardUrl);
+                  setEditingLeaderboardUrl(true);
+                }}
+                className="text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        ) : editingLeaderboardUrl && isUnlocked ? (
+          <div className="flex items-center gap-2 w-full max-w-md">
+            <Input
+              value={leaderboardUrlInput}
+              onChange={(e) => setLeaderboardUrlInput(e.target.value)}
+              placeholder="https://yunite.xyz/leaderboard/..."
+              className="h-8 text-sm"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveLeaderboardUrl();
+                if (e.key === "Escape") setEditingLeaderboardUrl(false);
+              }}
+              autoFocus
+            />
+            <Button
+              size="sm"
+              className="h-8 cursor-pointer"
+              onClick={handleSaveLeaderboardUrl}
+            >
+              Save
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 cursor-pointer"
+              onClick={() => setEditingLeaderboardUrl(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        ) : !leaderboardUrl && isUnlocked ? (
+          <button
+            onClick={() => {
+              setLeaderboardUrlInput("");
+              setEditingLeaderboardUrl(true);
+            }}
+            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 cursor-pointer"
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            Add Yunite leaderboard link
+          </button>
+        ) : null}
+      </div>
+
+      <div className="space-y-4">
         {/* Awaiting teams banner */}
         {awaitingTeams && linkCode && isUnlocked && !streamerMode && (
           <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 p-8 text-center space-y-4">
@@ -899,7 +893,7 @@ export default function ScrimEventPage() {
 
       {/* Unlock Dialog - uses password field so code is not visible on screen share */}
       <Dialog open={showUnlockDialog} onOpenChange={setShowUnlockDialog}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Enter Admin Code</DialogTitle>
             <DialogDescription>
@@ -937,7 +931,7 @@ export default function ScrimEventPage() {
 
       {/* Edit Event Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Edit Event</DialogTitle>
             <DialogDescription>
@@ -1015,7 +1009,7 @@ export default function ScrimEventPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }
 

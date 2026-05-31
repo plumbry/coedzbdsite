@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuery, useConvex } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import {
@@ -12,10 +10,10 @@ import {
   CardTitle,
 } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { ArrowLeft, Download, Database, HardDrive, CheckCircle2 } from "lucide-react";
+import { Download, Database, HardDrive, CheckCircle2 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import SiteHeader from "@/components/site-header.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import RoleGate from "@/components/role-gate.tsx";
 import { toast } from "sonner";
 
 function DataBackupContent() {
@@ -28,29 +26,15 @@ function DataBackupContent() {
   const [isCreatingBackup, setIsCreatingBackup] = useState(false);
 
   if (isAdmin === undefined) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
+    return <Skeleton className="h-96 w-full" />;
   }
 
   if (!isAdmin) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p className="text-muted-foreground mb-6">
-            This page is only accessible to administrators.
-          </p>
-          <Link to="/">
-            <Button>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Home
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <RoleGate
+        allowed={false}
+        description="This page is only accessible to administrators."
+      />
     );
   }
 
@@ -108,17 +92,7 @@ function DataBackupContent() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <HardDrive className="h-8 w-8" />
-          <h1 className="text-3xl font-bold">Data Backup</h1>
-        </div>
-        <p className="text-muted-foreground">
-          Export your cached data to JSON files for safekeeping
-        </p>
-      </div>
-
+    <div className="space-y-4">
       {smallTables === undefined || resultsCount === undefined || matchStatsCount === undefined || eventResultsCount === undefined ? (
         <Skeleton className="h-96 w-full" />
       ) : (
@@ -365,25 +339,12 @@ function DataBackupContent() {
 
 export default function DataBackup() {
   return (
-    <>
-      <SiteHeader />
-      <AuthLoading>
-        <div className="container mx-auto px-4 py-8">
-          <Skeleton className="h-96 w-full" />
-        </div>
-      </AuthLoading>
-      <Unauthenticated>
-        <div className="container mx-auto px-4 py-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">Sign In Required</h2>
-          <p className="text-muted-foreground mb-6">
-            Please sign in to access data backups.
-          </p>
-          <SignInButton />
-        </div>
-      </Unauthenticated>
-      <Authenticated>
-        <DataBackupContent />
-      </Authenticated>
-    </>
+    <AdminPageLayout
+      title="Data Backup"
+      description="Export your cached data to JSON files for safekeeping"
+      authTitle="Sign in to access data backups"
+    >
+      <DataBackupContent />
+    </AdminPageLayout>
   );
 }

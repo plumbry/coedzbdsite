@@ -217,7 +217,7 @@ export default function TeamList({
 
       {/* Swap Dialog: pick the team to replace */}
       <Dialog open={swapDialogOpen} onOpenChange={setSwapDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Swap Fill Team In</DialogTitle>
             <DialogDescription>

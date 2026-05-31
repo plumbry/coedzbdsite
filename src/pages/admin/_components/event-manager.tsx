@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card.tsx";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
@@ -488,12 +488,9 @@ export default function EventManager() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-sm font-medium">Event Manager</CardTitle>
-              <CardDescription>Create and manage events</CardDescription>
-            </div>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-4">
+            <CardDescription>Create and manage events</CardDescription>
             <div className="flex gap-2">
               <Button size="sm" variant="secondary" onClick={handleSyncDiscordEvents} disabled={isSyncingDiscord}>
                 {isSyncingDiscord ? (
@@ -612,14 +609,15 @@ export default function EventManager() {
           resetForm();
         }
       }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>{editingEvent ? "Edit Event" : "Create Event"}</DialogTitle>
             <DialogDescription>
               {editingEvent ? "Update event details" : "Create a new event with leaderboard links"}
             </DialogDescription>
           </DialogHeader>
-          
+
+          <DialogBody>
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -1327,7 +1325,8 @@ export default function EventManager() {
               </>
             )}
           </div>
-          
+          </DialogBody>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setIsCreateOpen(false);

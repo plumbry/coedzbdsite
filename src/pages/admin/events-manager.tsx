@@ -1,14 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
-import { SignInButton } from "@/components/ui/signin.tsx";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import SiteHeader from "@/components/site-header.tsx";
-import AdminSidebar from "./_components/admin-sidebar.tsx";
+import { Label } from "@/components/ui/label.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import EventManager from "./_components/event-manager.tsx";
 import DuoSelector from "./_components/duo-selector.tsx";
 import DuoPairManager from "./_components/duo-pair-manager.tsx";
@@ -26,16 +23,16 @@ function DuoSelectionSection() {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm">Duo Selection Manager</CardTitle>
+        <CardTitle>Duo Selection Manager</CardTitle>
         <CardDescription className="text-xs">
           Select which players are duos for random-team events
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Select Event</label>
+        <div className="space-y-1.5">
+          <Label>Select Event</Label>
           <Select value={selectedEventId || undefined} onValueChange={(v) => setSelectedEventId(v as Id<"events">)}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Choose an event with duo detection enabled" />
             </SelectTrigger>
             <SelectContent>
@@ -71,16 +68,16 @@ function SolosMeetsDuosSection() {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm">Solos Meets Duos/Trios - Group Manager</CardTitle>
+        <CardTitle>Solos Meets Duos/Trios - Group Manager</CardTitle>
         <CardDescription className="text-xs">
           Pre-assign groups for Solos Meets Duos/Trios events. Each player plays solo but their points are combined.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Select Event</label>
+        <div className="space-y-1.5">
+          <Label>Select Event</Label>
           <Select value={selectedEventId || undefined} onValueChange={(v) => setSelectedEventId(v as Id<"events">)}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Choose a Solos Meets Duos/Trios event" />
             </SelectTrigger>
             <SelectContent>
@@ -103,38 +100,14 @@ function SolosMeetsDuosSection() {
 
 export default function EventsManagerPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      
-      <Unauthenticated>
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="text-center space-y-6">
-            <h1 className="text-4xl text-balance font-bold tracking-tight">
-              Sign in to access staff panel
-            </h1>
-            <SignInButton />
-          </div>
-        </div>
-      </Unauthenticated>
-
-      <AuthLoading>
-        <div className="flex min-h-screen items-center justify-center">
-          <Skeleton className="h-96 w-full max-w-6xl" />
-        </div>
-      </AuthLoading>
-
-      <Authenticated>
-        <div className="flex pt-14 lg:pt-0">
-          <AdminSidebar />
-          <main className="flex-1 p-6 overflow-x-auto">
-            <div className="max-w-7xl mx-auto space-y-4">
-              <EventManager />
-              <SolosMeetsDuosSection />
-              <DuoSelectionSection />
-            </div>
-          </main>
-        </div>
-      </Authenticated>
-    </div>
+    <AdminPageLayout
+      title="Events Manager"
+      description="Create and manage events, duo groups, and solos-meets-duos pairings."
+      authTitle="Sign in to manage events"
+    >
+      <EventManager />
+      <SolosMeetsDuosSection />
+      <DuoSelectionSection />
+    </AdminPageLayout>
   );
 }

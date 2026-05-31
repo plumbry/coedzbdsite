@@ -1,18 +1,16 @@
 import { useQuery, useMutation } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { RefreshCw, Trophy, DollarSign, Users } from "lucide-react";
+import { RefreshCw, Trophy, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
-import SiteHeader from "@/components/site-header.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 
 function PlayerEarningsContent() {
   const navigate = useNavigate();
@@ -56,27 +54,21 @@ function PlayerEarningsContent() {
 
   if (!playersWithEarnings) {
     return (
-      <div className="container mx-auto p-6 space-y-4">
-        <Skeleton className="h-32 w-full" />
+      <>
+        <Skeleton className="h-10 w-full" />
         <Skeleton className="h-64 w-full" />
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="space-y-4">
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Player Earnings
-              </CardTitle>
-              <CardDescription>
-                Track which players have earned money in scrim events
-              </CardDescription>
-            </div>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <CardDescription>
+              Track which players have earned money in scrim events
+            </CardDescription>
             <Button
               size="sm"
               variant="outline"
@@ -211,29 +203,12 @@ function PlayerEarningsContent() {
 
 export default function PlayerEarnings() {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      
-      <Unauthenticated>
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="text-center space-y-6">
-            <h1 className="text-4xl text-balance font-bold tracking-tight">
-              Sign in to access player earnings
-            </h1>
-            <SignInButton />
-          </div>
-        </div>
-      </Unauthenticated>
-
-      <AuthLoading>
-        <div className="flex min-h-screen items-center justify-center">
-          <Skeleton className="h-96 w-full max-w-6xl" />
-        </div>
-      </AuthLoading>
-
-      <Authenticated>
-        <PlayerEarningsContent />
-      </Authenticated>
-    </div>
+    <AdminPageLayout
+      title="Player Earnings"
+      description="Track which players have earned money in scrim events"
+      authTitle="Sign in to access player earnings"
+    >
+      <PlayerEarningsContent />
+    </AdminPageLayout>
   );
 }

@@ -8,11 +8,9 @@ import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
 import { Search, AlertTriangle, AlertCircle, ShieldAlert, ArrowUpDown, ExternalLink, ClipboardEdit, FileWarning } from "lucide-react";
 import { Link } from "react-router-dom";
-import AdminSidebar from "./_components/admin-sidebar.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import ScorePlayerDialog from "../_components/score-player-dialog.tsx";
 
 type MismatchStatus = "missing_role" | "wrong_role" | "multiple_roles";
@@ -355,10 +353,8 @@ function TierMismatchesInner() {
 
       {/* Filters and table */}
       <Card>
-        <CardHeader>
-          <CardTitle>Tier / Role Mismatches</CardTitle>
+        <CardHeader className="pb-3">
           <CardDescription>
-            Players whose website tier doesn't match their Discord tier role.
             Based on cached Discord role data from the last sync.
           </CardDescription>
         </CardHeader>
@@ -546,31 +542,12 @@ function TierMismatchesInner() {
 
 export default function TierMismatchesPage() {
   return (
-    <div className="flex min-h-screen pt-14 lg:pt-0">
-      <AdminSidebar />
-      <div className="flex-1 p-8 w-full">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Tier Mismatches</h1>
-          <p className="text-muted-foreground">
-            Players whose website tier doesn't match their Discord tier role
-          </p>
-        </div>
-
-        <AuthLoading>
-          <Skeleton className="h-96 w-full" />
-        </AuthLoading>
-        <Unauthenticated>
-          <Card>
-            <CardContent className="py-12 text-center space-y-4">
-              <p className="text-muted-foreground">Sign in to view tier mismatches</p>
-              <SignInButton />
-            </CardContent>
-          </Card>
-        </Unauthenticated>
-        <Authenticated>
-          <TierMismatchesInner />
-        </Authenticated>
-      </div>
-    </div>
+    <AdminPageLayout
+      title="Tier Mismatches"
+      description="Players whose website tier doesn't match their Discord tier role"
+      authTitle="Sign in to view tier mismatches"
+    >
+      <TierMismatchesInner />
+    </AdminPageLayout>
   );
 }

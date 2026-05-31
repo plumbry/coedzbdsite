@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -9,16 +9,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Label } from "@/components/ui/label.tsx";
-import { ArrowLeft, Link2, Loader2, Search } from "lucide-react";
+import { Link2, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import SiteHeader from "@/components/site-header.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import PageHeader from "@/components/page-header.tsx";
+import SearchInput from "@/components/search-input.tsx";
 
-export default function UnmatchedPlayers() {
+function UnmatchedPlayersContent() {
   const params = useParams();
-  const navigate = useNavigate();
   const importId = params.importId as Id<"thirdPartyImports">;
   
   const [searchQuery, setSearchQuery] = useState("");
@@ -58,17 +59,9 @@ export default function UnmatchedPlayers() {
   
   if (!importDetails || !unmatchedPlayers || !allPlayers) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <Skeleton className="h-12 w-64 mb-6" />
-        <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="space-y-4">
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
@@ -90,30 +83,33 @@ export default function UnmatchedPlayers() {
     : null;
   
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="space-y-4">
+      <PageHeader
+        title="Unmatched Players"
+        description={`${importDetails.eventName} · ${unmatchedPlayers.length} unmatched${importDetails.eventDate ? ` · ${importDetails.eventDate}` : ""}`}
+        back={{ label: "Back to Uploads", href: "/admin/uploads" }}
+        breadcrumbs={[
+          { label: "Admin", href: "/admin" },
+          { label: "Uploads", href: "/admin/uploads" },
+          { label: importDetails.eventName },
+        ]}
+        variant="compact"
+      />
+
       <Card>
-        <CardHeader>
-          <CardTitle>Unmatched Players</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">Search & Link</CardTitle>
           <CardDescription>
-            {importDetails.eventName} • {unmatchedPlayers.length} unmatched
-            {importDetails.eventDate && ` • ${importDetails.eventDate}`}
+            Manually link leaderboard entries to players in your database
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by Epic username, Discord ID, team..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-          </div>
+          <SearchInput
+            containerClassName="w-full sm:w-full"
+            placeholder="Search by Epic username, Discord ID, team..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
           
           {filteredUnmatched.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
@@ -191,14 +187,15 @@ export default function UnmatchedPlayers() {
       
       {/* Link Player Dialog */}
       <Dialog open={!!linkingResultId} onOpenChange={(open) => !open && setLinkingResultId(null)}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>Link Player</DialogTitle>
             <DialogDescription>
               Manually link this leaderboard entry to an existing player in your database
             </DialogDescription>
           </DialogHeader>
-          
+
+          <DialogBody>
           {currentResult && (
             <div className="space-y-4">
               <div className="rounded-lg border p-4 bg-muted/50">
@@ -255,6 +252,7 @@ export default function UnmatchedPlayers() {
               </div>
             </div>
           )}
+          </DialogBody>
           
           <DialogFooter>
             <Button 
@@ -280,7 +278,14 @@ export default function UnmatchedPlayers() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      </div>
     </div>
+  );
+}
+
+export default function UnmatchedPlayers() {
+  return (
+    <AdminPageLayout skipHeader authTitle="Sign in to manage unmatched players">
+      <UnmatchedPlayersContent />
+    </AdminPageLayout>
   );
 }

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -21,11 +20,10 @@ import {
   TableRow,
 } from "@/components/ui/table.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { ArrowLeft, GitCompare, X } from "lucide-react";
+import { GitCompare, X } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import SiteHeader from "@/components/site-header.tsx";
-import AdminSidebar from "./_components/admin-sidebar.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import RoleGate from "@/components/role-gate.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { toast } from "sonner";
@@ -60,31 +58,11 @@ function PlayerComparisonContent() {
 
   // Show loading while checking permissions
   if (isModeratorOrAdmin === undefined) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
+    return <Skeleton className="h-96 w-full" />;
   }
 
-  // Redirect users without permission
   if (!canView) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p className="text-muted-foreground mb-6">
-            This page is only accessible to administrators and moderators.
-          </p>
-          <Link to="/">
-            <Button>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Home
-            </Button>
-          </Link>
-        </div>
-      </div>
-    );
+    return <RoleGate allowed={false} />;
   }
 
   const handleAddPlayer = (playerId: Id<"players">) => {
@@ -134,13 +112,7 @@ function PlayerComparisonContent() {
   ) || [];
 
   return (
-    <div className="container mx-auto px-4 py-4 max-w-7xl space-y-4">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Player Comparison</h1>
-        <p className="text-muted-foreground">
-          Compare up to 4 players side-by-side with ZBD performance stats and percentage differences
-        </p>
-      </div>
+    <div className="space-y-4">
 
       {/* Adjustment Controls */}
       <Card>
@@ -750,32 +722,12 @@ function PlayerComparisonContent() {
 
 export default function PlayerComparison() {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      <Authenticated>
-        <div className="flex min-h-screen pt-14 lg:pt-0 bg-background">
-          <AdminSidebar />
-          <div className="flex-1">
-            <PlayerComparisonContent />
-          </div>
-        </div>
-      </Authenticated>
-      <Unauthenticated>
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-4">Authentication Required</h1>
-            <p className="text-muted-foreground mb-6">
-              Please sign in to access this page.
-            </p>
-            <SignInButton />
-          </div>
-        </div>
-      </Unauthenticated>
-      <AuthLoading>
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
-          <Skeleton className="h-96 w-full" />
-        </div>
-      </AuthLoading>
-    </div>
+    <AdminPageLayout
+      title="Player Comparison"
+      description="Compare up to 4 players side-by-side with ZBD performance stats and percentage differences"
+      authTitle="Sign in to access player comparison"
+    >
+      <PlayerComparisonContent />
+    </AdminPageLayout>
   );
 }

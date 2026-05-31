@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
@@ -252,7 +252,7 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+      <DialogContent size="lg" className="max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Evaluate Player</DialogTitle>
           <DialogDescription>
@@ -260,7 +260,8 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
           </DialogDescription>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-6 overflow-y-auto flex-1 pr-2">
+        <DialogBody className="flex-1 min-h-0">
+        <form onSubmit={handleSubmit} className="space-y-6 pr-2">
           {/* Tier preset auto-fill buttons */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground mr-1">Auto-fill:</span>
@@ -423,6 +424,7 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
             </div>
           </div>
         </form>
+        </DialogBody>
         
         <div className="flex justify-end gap-3 border-t pt-4 mt-4">
           <Button

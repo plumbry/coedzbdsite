@@ -18,13 +18,11 @@ import { format } from "date-fns";
 import { Link } from "react-router-dom";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import ScorePlayerDialog from "../_components/score-player-dialog.tsx";
-import AdminSidebar from "./_components/admin-sidebar.tsx";
 import EditPlayerDialog from "./_components/edit-player-dialog.tsx";
 import EditMemberStatusDialog from "../_components/edit-member-status-dialog.tsx";
 import NewApplicationDialog from "./_components/new-application-dialog.tsx";
 import EditApplicationDialog from "./_components/edit-application-dialog.tsx";
-import SiteHeader from "@/components/site-header.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 
 export default function MemberManagement() {
   const { user, isAdmin, isModeratorOrAdmin, isLoading: isRoleLoading } = useUserRole();
@@ -259,49 +257,23 @@ export default function MemberManagement() {
   
   if (isRoleLoading) {
     return (
-      <>
-        <SiteHeader />
-        <div className="flex min-h-screen pt-14 lg:pt-0">
-          <div className="flex-1 px-2 py-4 sm:p-4 md:p-8 w-full min-w-0">
-            <div className="mb-6">
-              <Skeleton className="h-9 w-64 mb-2" />
-              <Skeleton className="h-5 w-80" />
-            </div>
-            <Skeleton className="h-10 w-full mb-4" />
-            <Skeleton className="h-96 w-full" />
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <>
-        <SiteHeader />
-        <div className="flex min-h-screen pt-14 items-center justify-center">
-          <div className="text-center space-y-4">
-            <h1 className="text-2xl font-bold">Sign in required</h1>
-            <p className="text-muted-foreground">You need to be logged in to access this page.</p>
-            <SignInButton />
-          </div>
-        </div>
-      </>
+      <AdminPageLayout skipHeader authTitle="Sign in to access member management">
+        <Skeleton className="h-9 w-64 mb-2" />
+        <Skeleton className="h-5 w-80 mb-4" />
+        <Skeleton className="h-10 w-full mb-4" />
+        <Skeleton className="h-96 w-full" />
+      </AdminPageLayout>
     );
   }
 
   return (
-    <>
-      {!isModeratorOrAdmin && <SiteHeader />}
-      <div className="flex min-h-screen pt-14 lg:pt-0">
-        {isModeratorOrAdmin && <AdminSidebar />}
-        <div className="flex-1 px-2 py-4 sm:p-4 md:p-8 w-full min-w-0">
-        <div className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold">Member Management</h1>
-          <p className="text-muted-foreground text-sm md:text-base">Manage member applications and status</p>
-        </div>
-        
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+    <AdminPageLayout
+      title="Member Management"
+      description="Manage member applications and status"
+      authTitle="Sign in to access member management"
+      showSidebar={!!isModeratorOrAdmin}
+    >
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
             <TabsList className={`inline-flex w-auto min-w-full md:grid md:w-full h-10 ${isAdmin ? "md:grid-cols-5" : "md:grid-cols-2"}`}>
               {isAdmin && <TabsTrigger value="applications" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Applications</TabsTrigger>}
@@ -1146,7 +1118,7 @@ export default function MemberManagement() {
         
         {/* Reject Dialog */}
         <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-          <DialogContent>
+          <DialogContent size="sm">
             <DialogHeader>
               <DialogTitle>Reject Application</DialogTitle>
               <DialogDescription>
@@ -1213,7 +1185,7 @@ export default function MemberManagement() {
         
         {/* Delete Confirmation Dialog */}
         <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-          <DialogContent>
+          <DialogContent size="sm">
             <DialogHeader>
               <DialogTitle>Delete Application</DialogTitle>
               <DialogDescription>
@@ -1233,7 +1205,7 @@ export default function MemberManagement() {
         
         {/* Player Delete Confirmation Dialog */}
         <Dialog open={playerDeleteConfirmOpen} onOpenChange={setPlayerDeleteConfirmOpen}>
-          <DialogContent>
+          <DialogContent size="md">
             <DialogHeader>
               <DialogTitle>Delete Player</DialogTitle>
               <DialogDescription className="space-y-2">
@@ -1274,8 +1246,6 @@ export default function MemberManagement() {
           open={newAppDialogOpen}
           onOpenChange={setNewAppDialogOpen}
         />
-      </div>
-    </div>
-    </>
+    </AdminPageLayout>
   );
 }

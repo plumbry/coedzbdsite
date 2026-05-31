@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button.tsx";
-import SiteHeader from "@/components/site-header.tsx";
+import PageShell from "@/components/page-shell.tsx";
 
 export default function NotFound() {
   const location = useLocation();
@@ -14,25 +14,19 @@ export default function NotFound() {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-6">
-          <div className="space-y-2">
-            <h1 className="text-6xl font-bold text-muted-foreground">404</h1>
-            <h2 className="text-2xl font-semibold">Page Not Found</h2>
-          </div>
-          <p className="text-lg text-muted-foreground max-w-md mx-auto">
-            This page does not exist.
-          </p>
-          <div className="pt-4">
-            <Button asChild>
-              <Link to="/">Return to Home</Link>
-            </Button>
-          </div>
+    <PageShell>
+      <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+        <div className="space-y-1">
+          <h1 className="text-4xl font-bold text-muted-foreground">404</h1>
+          <h2 className="text-xl font-semibold">Page Not Found</h2>
         </div>
+        <p className="text-sm text-muted-foreground max-w-md">
+          This page does not exist.
+        </p>
+        <Button asChild size="sm">
+          <Link to="/">Return to Home</Link>
+        </Button>
       </div>
-    </div>
+    </PageShell>
   );
 }

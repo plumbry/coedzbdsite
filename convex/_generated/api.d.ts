@@ -53,6 +53,7 @@ import type * as helpers_audit from "../helpers/audit.js";
 import type * as http from "../http.js";
 import type * as inGameEarnings_actions from "../inGameEarnings/actions.js";
 import type * as inGameEarnings_mutations from "../inGameEarnings/mutations.js";
+import type * as inGameEarnings_osirionApi from "../inGameEarnings/osirionApi.js";
 import type * as inGameEarnings_queries from "../inGameEarnings/queries.js";
 import type * as leaderboardStats from "../leaderboardStats.js";
 import type * as memberManagement from "../memberManagement.js";
@@ -164,6 +165,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "inGameEarnings/actions": typeof inGameEarnings_actions;
   "inGameEarnings/mutations": typeof inGameEarnings_mutations;
+  "inGameEarnings/osirionApi": typeof inGameEarnings_osirionApi;
   "inGameEarnings/queries": typeof inGameEarnings_queries;
   leaderboardStats: typeof leaderboardStats;
   memberManagement: typeof memberManagement;

@@ -7,13 +7,12 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { toast } from "sonner";
-import { Sparkles, Link as LinkIcon, ArrowLeft } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Sparkles, Link as LinkIcon } from "lucide-react";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 
 export default function FuzzyMatches() {
   const matches = useQuery(api.discord.findMatches.findPotentialMatches, {});
   const manualMatch = useMutation(api.discord.manualMatchToPlayer);
-  const navigate = useNavigate();
 
   const handleMatch = async (discordMemberId: Id<"players">, targetPlayerId: Id<"players">, discordName: string, playerName: string) => {
     try {
@@ -29,26 +28,14 @@ export default function FuzzyMatches() {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
-      <div className="mb-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/admin/discord-members")}
-          className="mb-4"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Discord Members
-        </Button>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Sparkles className="h-8 w-8 text-primary" />
-          Fuzzy Match Suggestions
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Automatically detected potential matches between Discord members and existing players
-        </p>
-      </div>
-
+    <AdminPageLayout
+      title="Fuzzy Match Suggestions"
+      description="Automatically detected potential matches between Discord members and existing players"
+      header={{
+        back: { label: "Back to Discord Members", href: "/admin/discord-members" },
+        icon: Sparkles,
+      }}
+    >
       <Card>
         <CardHeader>
           <CardTitle>Potential Matches</CardTitle>
@@ -65,7 +52,6 @@ export default function FuzzyMatches() {
             </div>
           ) : (
             <>
-              {/* Summary */}
               <div className="flex gap-6 mb-6 p-4 bg-muted/50 rounded-lg">
                 <div className="text-sm">
                   <span className="font-semibold text-lg">{matches.totalMatches}</span>
@@ -87,7 +73,6 @@ export default function FuzzyMatches() {
                 </div>
               </div>
 
-              {/* Matches Table */}
               {matches.totalMatches === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -164,6 +149,6 @@ export default function FuzzyMatches() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </AdminPageLayout>
   );
 }

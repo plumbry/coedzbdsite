@@ -5,17 +5,12 @@ import { SignInButton } from "@/components/ui/signin.tsx";
 import { 
   Shield, Users, ArrowLeft, Calendar, ListChecks, Upload, Trophy, 
   TrendingUp, UserCog, MessageSquare, ScrollText, 
-  Database, X, ChevronDown, ChevronRight, Zap, HardDrive, LogOut, User, Sparkles, Menu, ShieldAlert, Ban, Dices, KeyRound
+  Database, X, ChevronDown, ChevronRight, Zap, HardDrive, LogOut, User, Sparkles, ShieldAlert, Ban, Dices, KeyRound
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { useAuth } from "@/hooks/use-auth.ts";
 
-interface AdminSidebarProps {
-  activeTab?: string;
-  onTabChange?: (tab: string) => void;
-}
-
-export default function AdminSidebar({ activeTab, onTabChange }: AdminSidebarProps) {
+export default function AdminSidebar() {
   const { isAdmin, isModeratorOrAdmin, isEventMod, hasEventBanAccess, user, isLoading } = useUserRole();
   const { signout } = useAuth();
   const location = useLocation();
@@ -34,6 +29,8 @@ export default function AdminSidebar({ activeTab, onTabChange }: AdminSidebarPro
     return () => window.removeEventListener('toggleAdminSidebar', handleToggle);
   }, []);
 
+  const isActive = (path: string) => location.pathname === path;
+
   const toggleSection = (section: string) => {
     setOpenSections((prev) => {
       const newSet = new Set(prev);
@@ -46,29 +43,8 @@ export default function AdminSidebar({ activeTab, onTabChange }: AdminSidebarPro
     });
   };
 
-  const handleTabClick = (tab: string) => {
-    if (onTabChange) {
-      onTabChange(tab);
-    }
-    setIsOpen(false);
-  };
-
-  const isActive = (path: string) => location.pathname === path;
-
   return (
     <>
-      {/* Mobile hamburger header - always rendered, visible only below lg */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 border-b bg-background px-4 py-3">
-        <Button 
-          variant="ghost" 
-          size="sm"
-          onClick={() => setIsOpen((prev) => !prev)}
-          className="p-2 -ml-2"
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
-      </div>
-
       {/* Backdrop overlay on mobile when sidebar is open */}
       {isOpen && (
         <div
@@ -139,7 +115,7 @@ export default function AdminSidebar({ activeTab, onTabChange }: AdminSidebarPro
           <Link to="/">
             <Button variant="ghost" size="sm" className="w-full justify-start mb-4">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Players
+              Back to Members
             </Button>
           </Link>
         </div>
@@ -257,93 +233,53 @@ export default function AdminSidebar({ activeTab, onTabChange }: AdminSidebarPro
                 </button>
                 {openSections.has("events") && (
                   <div className="space-y-1">
-                    {activeTab !== undefined && onTabChange ? (
-                      <>
-                        {isModeratorOrAdmin && (
-                          <Button
-                            variant={activeTab === "events" ? "secondary" : "ghost"}
-                            size="sm"
-                            onClick={() => handleTabClick("events")}
-                            className="w-full justify-start"
-                          >
-                            <Calendar className="mr-2 h-4 w-4" />
-                            Events Manager
-                          </Button>
-                        )}
-                        {isModeratorOrAdmin && (
-                          <Button
-                            variant={activeTab === "results" ? "secondary" : "ghost"}
-                            size="sm"
-                            onClick={() => handleTabClick("results")}
-                            className="w-full justify-start"
-                          >
-                            <ListChecks className="mr-2 h-4 w-4" />
-                            Event Results
-                          </Button>
-                        )}
-                        {isAdmin && (
-                          <Button
-                            variant={activeTab === "uploads" ? "secondary" : "ghost"}
-                            size="sm"
-                            onClick={() => handleTabClick("uploads")}
-                            className="w-full justify-start"
-                          >
-                            <Upload className="mr-2 h-4 w-4" />
-                            Uploads
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        {isModeratorOrAdmin && (
-                          <Link to="/admin/events-manager" className="block">
-                            <Button
-                              variant={isActive("/admin/events-manager") ? "secondary" : "ghost"}
-                              size="sm"
-                              className="w-full justify-start"
-                            >
-                              <Calendar className="mr-2 h-4 w-4" />
-                              Events Manager
-                            </Button>
-                          </Link>
-                        )}
-                        {isModeratorOrAdmin && (
-                          <Link to="/admin/event-results" className="block">
-                            <Button
-                              variant={isActive("/admin/event-results") ? "secondary" : "ghost"}
-                              size="sm"
-                              className="w-full justify-start"
-                            >
-                              <ListChecks className="mr-2 h-4 w-4" />
-                              Event Results
-                            </Button>
-                          </Link>
-                        )}
-                        {isAdmin && (
-                          <Link to="/admin/uploads" className="block">
-                            <Button
-                              variant={isActive("/admin/uploads") ? "secondary" : "ghost"}
-                              size="sm"
-                              className="w-full justify-start"
-                            >
-                              <Upload className="mr-2 h-4 w-4" />
-                              Uploads
-                            </Button>
-                          </Link>
-                        )}
-                        {isModeratorOrAdmin && (
-                          <Link to="/admin/scrim-series" className="block">
-                            <Button
-                              variant={isActive("/admin/scrim-series") ? "secondary" : "ghost"}
-                              size="sm"
-                              className="w-full justify-start"
-                            >
-                              <Trophy className="mr-2 h-4 w-4" />
-                              Scrim Series
-                            </Button>
-                          </Link>
-                        )}
-                      </>
+                    {isModeratorOrAdmin && (
+                      <Link to="/admin/events-manager" className="block">
+                        <Button
+                          variant={isActive("/admin/events-manager") ? "secondary" : "ghost"}
+                          size="sm"
+                          className="w-full justify-start"
+                        >
+                          <Calendar className="mr-2 h-4 w-4" />
+                          Events Manager
+                        </Button>
+                      </Link>
+                    )}
+                    {isModeratorOrAdmin && (
+                      <Link to="/admin/event-results" className="block">
+                        <Button
+                          variant={isActive("/admin/event-results") ? "secondary" : "ghost"}
+                          size="sm"
+                          className="w-full justify-start"
+                        >
+                          <ListChecks className="mr-2 h-4 w-4" />
+                          Event Results
+                        </Button>
+                      </Link>
+                    )}
+                    {isAdmin && (
+                      <Link to="/admin/uploads" className="block">
+                        <Button
+                          variant={isActive("/admin/uploads") ? "secondary" : "ghost"}
+                          size="sm"
+                          className="w-full justify-start"
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          Uploads
+                        </Button>
+                      </Link>
+                    )}
+                    {isModeratorOrAdmin && (
+                      <Link to="/admin/scrim-series" className="block">
+                        <Button
+                          variant={isActive("/admin/scrim-series") ? "secondary" : "ghost"}
+                          size="sm"
+                          className="w-full justify-start"
+                        >
+                          <Trophy className="mr-2 h-4 w-4" />
+                          Scrim Series
+                        </Button>
+                      </Link>
                     )}
                   </div>
                 )}
@@ -428,79 +364,39 @@ export default function AdminSidebar({ activeTab, onTabChange }: AdminSidebarPro
                 {openSections.has("admin") && (
                   <div className="space-y-1">
                     {isAdmin && (
-                      <>
-                        {activeTab !== undefined ? (
-                          <Button
-                            variant={activeTab === "features" ? "secondary" : "ghost"}
-                            size="sm"
-                            onClick={() => handleTabClick("features")}
-                            className="w-full justify-start"
-                          >
-                            <Zap className="mr-2 h-4 w-4" />
-                            Features
-                          </Button>
-                        ) : (
-                          <Link to="/admin/features" className="block">
-                            <Button
-                              variant={isActive("/admin/features") ? "secondary" : "ghost"}
-                              size="sm"
-                              className="w-full justify-start"
-                            >
-                              <Zap className="mr-2 h-4 w-4" />
-                              Features
-                            </Button>
-                          </Link>
-                        )}
-                      </>
+                      <Link to="/admin/features" className="block">
+                        <Button
+                          variant={isActive("/admin/features") ? "secondary" : "ghost"}
+                          size="sm"
+                          className="w-full justify-start"
+                        >
+                          <Zap className="mr-2 h-4 w-4" />
+                          Features
+                        </Button>
+                      </Link>
                     )}
                     {isModeratorOrAdmin && (
-                      <>
-                        {activeTab !== undefined ? (
-                          <Button
-                            variant={activeTab === "support" ? "secondary" : "ghost"}
-                            size="sm"
-                            onClick={() => handleTabClick("support")}
-                            className="w-full justify-start"
-                          >
-                            <MessageSquare className="mr-2 h-4 w-4" />
-                            Support
-                          </Button>
-                        ) : (
-                          <Link to="/admin/support" className="block">
-                            <Button
-                              variant={isActive("/admin/support") ? "secondary" : "ghost"}
-                              size="sm"
-                              className="w-full justify-start"
-                            >
-                              <MessageSquare className="mr-2 h-4 w-4" />
-                              Support
-                            </Button>
-                          </Link>
-                        )}
-                      </>
+                      <Link to="/admin/support" className="block">
+                        <Button
+                          variant={isActive("/admin/support") ? "secondary" : "ghost"}
+                          size="sm"
+                          className="w-full justify-start"
+                        >
+                          <MessageSquare className="mr-2 h-4 w-4" />
+                          Support
+                        </Button>
+                      </Link>
                     )}
-                    {activeTab !== undefined ? (
+                    <Link to="/admin/audit" className="block">
                       <Button
-                        variant={activeTab === "audit" ? "secondary" : "ghost"}
+                        variant={isActive("/admin/audit") ? "secondary" : "ghost"}
                         size="sm"
-                        onClick={() => handleTabClick("audit")}
                         className="w-full justify-start"
                       >
                         <ScrollText className="mr-2 h-4 w-4" />
                         Audit Log
                       </Button>
-                    ) : (
-                      <Link to="/admin/audit" className="block">
-                        <Button
-                          variant={isActive("/admin/audit") ? "secondary" : "ghost"}
-                          size="sm"
-                          className="w-full justify-start"
-                        >
-                          <ScrollText className="mr-2 h-4 w-4" />
-                          Audit Log
-                        </Button>
-                      </Link>
-                    )}
+                    </Link>
                     {isAdmin && (
                       <Link to="/admin/user-management" className="block">
                         <Button

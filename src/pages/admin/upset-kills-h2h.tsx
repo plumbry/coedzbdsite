@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useConvex } from "convex/react";
-import { Link } from "react-router-dom";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -18,7 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table.tsx";
 import {
-  ArrowLeftIcon,
   SwordsIcon,
   SearchIcon,
   UserIcon,
@@ -28,6 +26,8 @@ import {
   Loader2Icon,
 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import PageHeader from "@/components/page-header.tsx";
 
 type SelectedPlayer = {
   _id: Id<"players">;
@@ -122,7 +122,7 @@ function PlayerSearchInput({
             {selected.tier}
           </Badge>
         )}
-        <Button variant="ghost" size="icon" className="ml-auto h-6 w-6" onClick={onClear}>
+        <Button variant="ghost" size="icon" className="ml-auto min-h-9 min-w-9 h-9 w-9" onClick={onClear}>
           <XIcon className="h-3 w-3" />
         </Button>
       </div>
@@ -206,7 +206,7 @@ type H2HResult = {
   bKilledAEvents: H2HEvent[];
 } | null;
 
-export default function UpsetKillsH2H() {
+function UpsetKillsH2HContent() {
   const convex = useConvex();
   const [playerA, setPlayerA] = useState<SelectedPlayer | null>(null);
   const [playerB, setPlayerB] = useState<SelectedPlayer | null>(null);
@@ -238,27 +238,20 @@ export default function UpsetKillsH2H() {
   const total = (h2h?.aKilledBCount ?? 0) + (h2h?.bKilledACount ?? 0);
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/admin/upset-kills">
-            <ArrowLeftIcon className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <SwordsIcon className="h-6 w-6 text-amber-500" />
-            Head-to-Head Kills
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            See how often two players have eliminated each other
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Based on Yunite match replay data. Knocker always gets credit. Counts may differ from leaderboard totals.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="Head-to-Head Kills"
+        icon={SwordsIcon}
+        description="See how often two players have eliminated each other. Based on Yunite match replay data — knocker always gets credit."
+        back={{ label: "Upset Kills", href: "/admin/upset-kills" }}
+        breadcrumbs={[
+          { label: "Admin", href: "/admin" },
+          { label: "Stats", href: "/admin/stats" },
+          { label: "Upset Kills", href: "/admin/upset-kills" },
+          { label: "Head-to-Head" },
+        ]}
+        variant="compact"
+      />
 
       {/* Player Pickers */}
       <Card>
@@ -484,5 +477,17 @@ export default function UpsetKillsH2H() {
         </>
       )}
     </div>
+  );
+}
+
+export default function UpsetKillsH2H() {
+  return (
+    <AdminPageLayout
+      skipHeader
+      authTitle="Sign in to view upset kills"
+      header={{ back: { label: "Back to Upset Kills", href: "/admin/upset-kills" } }}
+    >
+      <UpsetKillsH2HContent />
+    </AdminPageLayout>
   );
 }

@@ -92,7 +92,7 @@ export default function ICSImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent size="sm">
         <DialogHeader>
           <DialogTitle>Import Events from ICS File</DialogTitle>
           <DialogDescription>

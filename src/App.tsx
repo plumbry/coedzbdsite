@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { DefaultProviders } from "./components/providers/default.tsx";
+import AdminLayout from "./components/admin-layout.tsx";
 import AdminChatWidget from "./components/admin-chat-widget.tsx";
 import UsernameSetupDialog from "./components/username-setup-dialog.tsx";
 import Index from "./pages/Index.tsx";
@@ -64,46 +65,49 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/player/:username" element={<PlayerProfile />} />
-          <Route path="/admin" element={<Navigate to="/admin/member-management" replace />} />
 
-          <Route path="/admin/tier-re-evaluation" element={<TierReEvaluation />} />
-          <Route path="/admin/tier-simulation" element={<TierSimulation />} />
-          <Route path="/admin/average-stats" element={<AverageStats />} />
-          <Route path="/admin/holistic-score-stats" element={<HolisticScoreStats />} />
-          <Route path="/admin/player-comparison" element={<PlayerComparison />} />
-          <Route path="/admin/top-five-details" element={<TopFiveDetails />} />
-          <Route path="/admin/leaderboard-stats" element={<LeaderboardStats />} />
-          <Route path="/admin/data-cache-status" element={<DataCacheStatus />} />
-          <Route path="/admin/data-backup" element={<DataBackup />} />
-          <Route path="/admin/user-management" element={<UserManagementPage />} />
-          <Route path="/admin/discord-members" element={<DiscordMembersPage />} />
-          <Route path="/admin/fuzzy-matches" element={<FuzzyMatchesPage />} />
-          <Route path="/admin/unmatched/:importId" element={<UnmatchedPlayers />} />
-          <Route path="/admin/yunite/:importId" element={<YuniteTournamentDetails />} />
-          <Route path="/admin/yunite-debug" element={<YuniteDebugPage />} />
-          <Route path="/admin/events-manager" element={<EventsManagerPage />} />
-          <Route path="/admin/event-results" element={<EventResultsPage />} />
-          <Route path="/admin/uploads" element={<UploadsPage />} />
-          <Route path="/admin/support" element={<SupportAdminPage />} />
-          <Route path="/admin/audit" element={<AuditPage />} />
-          <Route path="/admin/features" element={<FeaturesPage />} />
-          <Route path="/admin/player-earnings" element={<PlayerEarningsPage />} />
-          <Route path="/admin/member-management" element={<MemberManagement />} />
-          <Route path="/admin/2025-wrapped-editor" element={<WrappedEditorPage />} />
-          <Route path="/admin/2025-wrapped-preview" element={<WrappedPreviewPage />} />
-          <Route path="/admin/upset-kills" element={<UpsetKillsPage />} />
-          <Route path="/admin/upset-kills/search" element={<UpsetKillsSearchPage />} />
-          <Route path="/admin/upset-kills/h2h" element={<UpsetKillsH2HPage />} />
-          <Route path="/admin/upset-kills/top" element={<UpsetKillsTopPage />} />
-          <Route path="/admin/upset-kills/eliminations" element={<EliminationsPage />} />
-          <Route path="/admin/tier-impact" element={<TierImpactPage />} />
-          <Route path="/admin/stats" element={<StatsPage />} />
-          <Route path="/admin/tier-mismatches" element={<TierMismatchesPage />} />
-          <Route path="/admin/in-game-earnings" element={<InGameEarningsPage />} />
-          <Route path="/admin/event-bans" element={<EventBansPage />} />
-          <Route path="/admin/punishment-matrix" element={<PunishmentMatrixPage />} />
-          <Route path="/admin/scrim-series" element={<ScrimSeriesAdminPage />} />
-          <Route path="/admin/spin-moderation" element={<SpinModerationPage />} />
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Navigate to="member-management" replace />} />
+            <Route path="tier-re-evaluation" element={<TierReEvaluation />} />
+            <Route path="tier-simulation" element={<TierSimulation />} />
+            <Route path="average-stats" element={<AverageStats />} />
+            <Route path="holistic-score-stats" element={<HolisticScoreStats />} />
+            <Route path="player-comparison" element={<PlayerComparison />} />
+            <Route path="top-five-details" element={<TopFiveDetails />} />
+            <Route path="leaderboard-stats" element={<LeaderboardStats />} />
+            <Route path="data-cache-status" element={<DataCacheStatus />} />
+            <Route path="data-backup" element={<DataBackup />} />
+            <Route path="user-management" element={<UserManagementPage />} />
+            <Route path="discord-members" element={<DiscordMembersPage />} />
+            <Route path="fuzzy-matches" element={<FuzzyMatchesPage />} />
+            <Route path="unmatched/:importId" element={<UnmatchedPlayers />} />
+            <Route path="yunite/:importId" element={<YuniteTournamentDetails />} />
+            <Route path="yunite-debug" element={<YuniteDebugPage />} />
+            <Route path="events-manager" element={<EventsManagerPage />} />
+            <Route path="event-results" element={<EventResultsPage />} />
+            <Route path="uploads" element={<UploadsPage />} />
+            <Route path="support" element={<SupportAdminPage />} />
+            <Route path="audit" element={<AuditPage />} />
+            <Route path="features" element={<FeaturesPage />} />
+            <Route path="player-earnings" element={<PlayerEarningsPage />} />
+            <Route path="member-management" element={<MemberManagement />} />
+            <Route path="2025-wrapped-editor" element={<WrappedEditorPage />} />
+            <Route path="2025-wrapped-preview" element={<WrappedPreviewPage />} />
+            <Route path="upset-kills" element={<UpsetKillsPage />} />
+            <Route path="upset-kills/search" element={<UpsetKillsSearchPage />} />
+            <Route path="upset-kills/h2h" element={<UpsetKillsH2HPage />} />
+            <Route path="upset-kills/top" element={<UpsetKillsTopPage />} />
+            <Route path="upset-kills/eliminations" element={<EliminationsPage />} />
+            <Route path="tier-impact" element={<TierImpactPage />} />
+            <Route path="stats" element={<StatsPage />} />
+            <Route path="tier-mismatches" element={<TierMismatchesPage />} />
+            <Route path="in-game-earnings" element={<InGameEarningsPage />} />
+            <Route path="event-bans" element={<EventBansPage />} />
+            <Route path="punishment-matrix" element={<PunishmentMatrixPage />} />
+            <Route path="scrim-series" element={<ScrimSeriesAdminPage />} />
+            <Route path="spin-moderation" element={<SpinModerationPage />} />
+          </Route>
+
           <Route path="/2025-wrapped" element={<Wrapped2025Page />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/events/:eventId" element={<EventDetail />} />

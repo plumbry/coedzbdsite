@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
-import { SignInButton } from "@/components/ui/signin.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
@@ -13,9 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.t
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { toast } from "sonner";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import { Plus, Trash2, Settings, Users, Trophy, AlertTriangle, X, Upload, History, Loader2, ExternalLink, Copy } from "lucide-react";
-import SiteHeader from "@/components/site-header.tsx";
-import AdminSidebar from "./_components/admin-sidebar.tsx";
 
 // ─── Series Selector ─────────────────────────────────────────────────────────
 
@@ -55,7 +52,7 @@ function SeriesSelector({
             <Plus className="mr-1 h-4 w-4" /> New Series
           </Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>Create New Series</DialogTitle>
           </DialogHeader>
@@ -777,7 +774,7 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleRemove(p._id)}
-                        className="h-6 w-6 p-0 cursor-pointer text-destructive hover:text-destructive"
+                        className="min-h-9 min-w-9 h-9 w-9 p-0 cursor-pointer text-destructive hover:text-destructive"
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -943,10 +940,6 @@ function ScrimSeriesAdminContent() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Scrim Series Manager</h1>
-      </div>
-
       <SeriesSelector selectedId={selectedSeriesId} onSelect={setSelectedSeriesId} />
 
       {selectedSeriesId && (
@@ -993,36 +986,8 @@ function ScrimSeriesAdminContent() {
 
 export default function ScrimSeriesAdminPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-
-      <Unauthenticated>
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="text-center space-y-6">
-            <h1 className="text-4xl text-balance font-bold tracking-tight">
-              Sign in to access staff panel
-            </h1>
-            <SignInButton />
-          </div>
-        </div>
-      </Unauthenticated>
-
-      <AuthLoading>
-        <div className="flex min-h-screen items-center justify-center">
-          <Skeleton className="h-96 w-full max-w-6xl" />
-        </div>
-      </AuthLoading>
-
-      <Authenticated>
-        <div className="flex pt-14 lg:pt-0">
-          <AdminSidebar />
-          <main className="flex-1 p-6 overflow-x-auto">
-            <div className="max-w-7xl mx-auto">
-              <ScrimSeriesAdminContent />
-            </div>
-          </main>
-        </div>
-      </Authenticated>
-    </div>
+    <AdminPageLayout title="Scrim Series Manager">
+      <ScrimSeriesAdminContent />
+    </AdminPageLayout>
   );
 }

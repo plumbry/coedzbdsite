@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -149,11 +149,7 @@ export default function EventResultsManager() {
   if (!allResults || !players) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Event Results Manager</CardTitle>
-          <CardDescription>Manage individual player event results</CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <div className="space-y-2">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-16 w-full" />
@@ -167,17 +163,11 @@ export default function EventResultsManager() {
   if (allResults.length === 0) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Event Results Manager</CardTitle>
-          <CardDescription>Manage individual player event results</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-sm text-muted-foreground">
-              No event results found. Results are created when importing from third-party sources.
-            </p>
-          </div>
+        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+          <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
+          <p className="text-sm text-muted-foreground">
+            No event results found. Results are created when importing from third-party sources.
+          </p>
         </CardContent>
       </Card>
     );
@@ -201,14 +191,11 @@ export default function EventResultsManager() {
   
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-sm font-medium">Event Results Manager</CardTitle>
-            <CardDescription>
-              Manage individual player event results ({allResults.length} total across {eventGroups.size} events)
-            </CardDescription>
-          </div>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-4">
+          <CardDescription>
+            {allResults.length} total results across {eventGroups.size} events
+          </CardDescription>
           <Button
             variant="outline"
             size="sm"
@@ -356,7 +343,7 @@ export default function EventResultsManager() {
       
       {/* Edit Event Dialog */}
       <Dialog open={!!editingEvent} onOpenChange={(open) => !open && setEditingEvent(null)}>
-        <DialogContent>
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>Edit Event Details</DialogTitle>
             <DialogDescription>

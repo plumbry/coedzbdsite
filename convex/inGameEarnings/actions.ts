@@ -4,178 +4,243 @@ import { action, internalAction } from "../_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel.d.ts";
+import {
+  fetchTournamentLeaderboardDescriptors,
+  lookupAccountId,
+  scanLeaderboardsForPlayer,
+  type TournamentEarning,
+} from "./osirionApi";
 
-const BATCH_SIZE = 8; // Stay under 10 calls/min rate limit
+const LEADERBOARDS_PER_BATCH = 15;
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-interface CitoTournament {
-  name: string;
-  placement: number;
-  earnings: number;
-  date: string;
-}
-
-interface CitoPlayerResponse {
-  data?: {
-    id?: string;
-    name?: string;
-    country?: string;
-    totalEarnings?: number;
-    tournaments?: CitoTournament[];
-  };
+type FetchResult = {
+  success: boolean;
   error?: string;
-}
-
-type FetchResult = { success: boolean; error?: string; totalEarnings?: number; tournamentCount?: number };
+  totalEarnings?: number;
+  tournamentCount?: number;
+  jobStarted?: boolean;
+};
 
 type SaveFn = (data: {
   playerId: Id<"players">;
   epicUsername: string;
   totalEarnings: number;
-  tournaments: Array<{ name: string; placement: number; earnings: number; date: string }>;
+  tournaments: TournamentEarning[];
 }) => Promise<void>;
 
-// Shared fetch logic
-async function fetchFromCitoAPI(
-  saveFn: SaveFn,
-  epicUsername: string,
-  playerId: Id<"players">
-): Promise<FetchResult> {
-  const apiKey = process.env.CITO_API_KEY;
-  if (!apiKey) {
-    return { success: false, error: "CITO_API_KEY secret is not set" };
+async function ensureTournamentCache(ctx: { runQuery: Function; runMutation: Function }) {
+  const cache = await ctx.runQuery(internal.inGameEarnings.queries.getTournamentScanCache, {});
+  const isFresh = cache && Date.now() - cache.updatedAt < CACHE_MAX_AGE_MS;
+
+  if (isFresh && cache.leaderboards.length > 0) {
+    return cache.leaderboards;
   }
 
-  try {
-    const encodedName = encodeURIComponent(epicUsername);
-    const url = `https://api.citoapi.com/api/v1/fortnite/players/${encodedName}`;
-
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Accept": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Cito API ${response.status}:`, errorText);
-
-      if (response.status === 404) {
-        return { success: false, error: "Player not found on Cito API" };
-      }
-      if (response.status === 401 || response.status === 403) {
-        return { success: false, error: "Cito API authentication failed. Check your API key." };
-      }
-      if (response.status === 429) {
-        return { success: false, error: "Rate limit reached. Try again later." };
-      }
-      return { success: false, error: `Cito API error (${response.status})` };
-    }
-
-    const result: CitoPlayerResponse = await response.json();
-    const data = result.data ?? result;
-
-    const totalEarnings = (data as Record<string, unknown>).totalEarnings as number | undefined ?? 0;
-    const rawTournaments = (data as Record<string, unknown>).tournaments as CitoTournament[] | undefined ?? [];
-
-    const tournaments = rawTournaments.map((t: CitoTournament) => ({
-      name: t.name || "Unknown Event",
-      placement: t.placement || 0,
-      earnings: t.earnings || 0,
-      date: t.date || "",
-    }));
-
-    await saveFn({ playerId, epicUsername, totalEarnings, tournaments });
-
-    return { success: true, totalEarnings, tournamentCount: tournaments.length };
-  } catch (error) {
-    console.error("Cito API error:", error);
-    if (error instanceof Error) {
-      return { success: false, error: error.message };
-    }
-    return { success: false, error: "Failed to fetch earnings" };
-  }
+  const leaderboards = await fetchTournamentLeaderboardDescriptors();
+  await ctx.runMutation(internal.inGameEarnings.mutations.upsertTournamentScanCache, {
+    leaderboards,
+  });
+  return leaderboards;
 }
 
-// Fetch earnings for a single player from Cito API (public - for individual refresh)
+function finalizePlayerTournaments(partial: TournamentEarning[]): {
+  tournaments: TournamentEarning[];
+  totalEarnings: number;
+} {
+  const tournaments = [...partial].sort((a, b) => {
+    const dateCompare = b.date.localeCompare(a.date);
+    if (dateCompare !== 0) return dateCompare;
+    return b.earnings - a.earnings;
+  });
+  const totalEarnings = tournaments.reduce((sum, t) => sum + t.earnings, 0);
+  return { tournaments, totalEarnings };
+}
+
+// Fetch earnings for a single player via background job (Osirion API)
 export const fetchPlayerEarnings = action({
   args: { epicUsername: v.string(), playerId: v.id("players") },
   handler: async (ctx, args): Promise<FetchResult> => {
-    const saveFn: SaveFn = async (data) => {
-      await ctx.runMutation(api.inGameEarnings.mutations.upsertEarnings, data);
+    await ctx.runMutation(api.inGameEarnings.mutations.startBulkFetch, {
+      playerIds: [args.playerId],
+      epicUsernames: [args.epicUsername],
+    });
+    return {
+      success: true,
+      jobStarted: true,
     };
-    return await fetchFromCitoAPI(saveFn, args.epicUsername, args.playerId);
   },
 });
 
-// Process a batch of players (internal - called by scheduler)
+// Process a batch of leaderboard scans (internal - called by scheduler)
 export const processBatch = internalAction({
   args: { jobId: v.id("earningsFetchJob") },
   handler: async (ctx, args): Promise<void> => {
-    // Read current job state
     const job = await ctx.runQuery(internal.inGameEarnings.queries.getJobById, { jobId: args.jobId });
     if (!job || job.status !== "running") {
       console.log("Job cancelled or not found, stopping");
       return;
     }
 
-    const playerIds = job.remainingPlayerIds;
-    const epicUsernames = job.remainingEpicUsernames;
-
-    if (playerIds.length === 0) {
-      await ctx.runMutation(internal.inGameEarnings.mutations.updateJobProgress, {
-        jobId: args.jobId,
-        batchSucceeded: 0,
-        batchFailed: 0,
-        remainingPlayerIds: [],
-        remainingEpicUsernames: [],
-      });
-      return;
-    }
-
-    // Take the next batch
-    const batchPlayerIds = playerIds.slice(0, BATCH_SIZE);
-    const batchEpicUsernames = epicUsernames.slice(0, BATCH_SIZE);
-    const remainingPlayerIds = playerIds.slice(BATCH_SIZE);
-    const remainingEpicUsernames = epicUsernames.slice(BATCH_SIZE);
-
-    let batchSucceeded = 0;
-    let batchFailed = 0;
-    let lastError: string | undefined;
-
     const saveFn: SaveFn = async (data) => {
       await ctx.runMutation(api.inGameEarnings.mutations.upsertEarnings, data);
     };
 
-    for (let i = 0; i < batchPlayerIds.length; i++) {
-      const playerId = batchPlayerIds[i] as Id<"players">;
-      const epicUsername = batchEpicUsernames[i];
-
-      try {
-        const result = await fetchFromCitoAPI(saveFn, epicUsername, playerId);
-        if (result.success) {
-          batchSucceeded++;
-          console.log(`[${batchSucceeded + batchFailed}/${batchPlayerIds.length}] ${epicUsername}: $${result.totalEarnings}`);
-        } else {
-          batchFailed++;
-          lastError = `${epicUsername}: ${result.error}`;
-          console.log(`[${batchSucceeded + batchFailed}/${batchPlayerIds.length}] ${epicUsername}: FAILED - ${result.error}`);
-        }
-      } catch (err) {
-        batchFailed++;
-        lastError = `${epicUsername}: ${err instanceof Error ? err.message : "Unknown error"}`;
-        console.error(`Error fetching ${epicUsername}:`, err);
-      }
+    let leaderboards;
+    try {
+      leaderboards = await ensureTournamentCache(ctx);
+    } catch (error) {
+      console.error("Failed to refresh tournament cache:", error);
+      await ctx.runMutation(internal.inGameEarnings.mutations.failFetchJob, {
+        jobId: args.jobId,
+        lastError: error instanceof Error ? error.message : "Failed to load tournament data",
+      });
+      return;
     }
 
-    // Update job progress and schedule next batch
-    await ctx.runMutation(internal.inGameEarnings.mutations.updateJobProgress, {
-      jobId: args.jobId,
-      batchSucceeded,
-      batchFailed,
-      remainingPlayerIds,
-      remainingEpicUsernames,
-      lastError,
+    let remainingPlayerIds = [...job.remainingPlayerIds];
+    let remainingEpicUsernames = [...job.remainingEpicUsernames];
+    let currentPlayerId = job.currentPlayerId;
+    let currentEpicUsername = job.currentEpicUsername;
+    let scanAccountId = job.scanAccountId;
+    let scanLeaderboardIndex = job.scanLeaderboardIndex ?? 0;
+    let partialTournaments = job.partialTournaments ?? [];
+
+    if (!currentPlayerId) {
+      if (remainingPlayerIds.length === 0) {
+        await ctx.runMutation(internal.inGameEarnings.mutations.updateJobProgress, {
+          jobId: args.jobId,
+          batchSucceeded: 0,
+          batchFailed: 0,
+          remainingPlayerIds: [],
+          remainingEpicUsernames: [],
+          clearCurrentPlayer: true,
+        });
+        return;
+      }
+
+      currentPlayerId = remainingPlayerIds.shift()!;
+      currentEpicUsername = remainingEpicUsernames.shift()!;
+      scanLeaderboardIndex = 0;
+      partialTournaments = [];
+      scanAccountId = undefined;
+    }
+
+    if (!scanAccountId && currentEpicUsername) {
+      const lookup = await lookupAccountId(currentEpicUsername);
+      if ("error" in lookup) {
+        console.log(`Account lookup failed for ${currentEpicUsername}: ${lookup.error}`);
+        await ctx.runMutation(internal.inGameEarnings.mutations.updateJobProgress, {
+          jobId: args.jobId,
+          batchSucceeded: 0,
+          batchFailed: 1,
+          remainingPlayerIds,
+          remainingEpicUsernames,
+          lastError: `${currentEpicUsername}: ${lookup.error}`,
+          clearCurrentPlayer: true,
+        });
+        return;
+      }
+      scanAccountId = lookup.accountId;
+    }
+
+    if (!scanAccountId || !currentPlayerId || !currentEpicUsername) {
+      return;
+    }
+
+    if (scanLeaderboardIndex >= leaderboards.length) {
+      const { tournaments, totalEarnings } = finalizePlayerTournaments(partialTournaments);
+      await saveFn({
+        playerId: currentPlayerId as Id<"players">,
+        epicUsername: currentEpicUsername,
+        totalEarnings,
+        tournaments,
+      });
+      console.log(`Completed ${currentEpicUsername}: $${totalEarnings} from ${tournaments.length} events`);
+
+      const isDone = remainingPlayerIds.length === 0;
+      await ctx.runMutation(internal.inGameEarnings.mutations.updateJobProgress, {
+        jobId: args.jobId,
+        batchSucceeded: 1,
+        batchFailed: 0,
+        remainingPlayerIds,
+        remainingEpicUsernames,
+        clearCurrentPlayer: true,
+        lastError: isDone ? undefined : job.lastError,
+      });
+      return;
+    }
+
+    try {
+      const scanResult = await scanLeaderboardsForPlayer(
+        scanAccountId,
+        leaderboards,
+        scanLeaderboardIndex,
+        LEADERBOARDS_PER_BATCH
+      );
+
+      partialTournaments = [...partialTournaments, ...scanResult.tournaments];
+      scanLeaderboardIndex = scanResult.nextIndex;
+
+      const playerComplete = scanLeaderboardIndex >= leaderboards.length;
+      if (playerComplete) {
+        const { tournaments, totalEarnings } = finalizePlayerTournaments(partialTournaments);
+        await saveFn({
+          playerId: currentPlayerId as Id<"players">,
+          epicUsername: currentEpicUsername,
+          totalEarnings,
+          tournaments,
+        });
+        console.log(`Completed ${currentEpicUsername}: $${totalEarnings} from ${tournaments.length} events`);
+
+        const isDone = remainingPlayerIds.length === 0;
+        await ctx.runMutation(internal.inGameEarnings.mutations.updateJobProgress, {
+          jobId: args.jobId,
+          batchSucceeded: 1,
+          batchFailed: 0,
+          remainingPlayerIds,
+          remainingEpicUsernames,
+          clearCurrentPlayer: true,
+          lastError: isDone ? undefined : job.lastError,
+        });
+        return;
+      }
+
+      await ctx.runMutation(internal.inGameEarnings.mutations.updateJobProgress, {
+        jobId: args.jobId,
+        batchSucceeded: 0,
+        batchFailed: 0,
+        remainingPlayerIds,
+        remainingEpicUsernames,
+        currentPlayerId,
+        currentEpicUsername,
+        scanAccountId,
+        scanLeaderboardIndex,
+        partialTournaments,
+      });
+    } catch (error) {
+      console.error(`Scan failed for ${currentEpicUsername}:`, error);
+      await ctx.runMutation(internal.inGameEarnings.mutations.updateJobProgress, {
+        jobId: args.jobId,
+        batchSucceeded: 0,
+        batchFailed: 1,
+        remainingPlayerIds,
+        remainingEpicUsernames,
+        lastError: `${currentEpicUsername}: ${error instanceof Error ? error.message : "Unknown error"}`,
+        clearCurrentPlayer: true,
+      });
+    }
+  },
+});
+
+// Refresh tournament scan cache (can be called from cron)
+export const refreshTournamentCache = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ leaderboardCount: number }> => {
+    const leaderboards = await fetchTournamentLeaderboardDescriptors();
+    await ctx.runMutation(internal.inGameEarnings.mutations.upsertTournamentScanCache, {
+      leaderboards,
     });
+    return { leaderboardCount: leaderboards.length };
   },
 });

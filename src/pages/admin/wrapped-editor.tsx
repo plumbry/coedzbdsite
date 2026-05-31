@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import SiteHeader from "@/components/site-header.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import PageHeader from "@/components/page-header.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -176,12 +175,9 @@ function WrappedEditorInner() {
 
   if (wrappedContent === undefined) {
     return (
-      <div className="min-h-screen">
-        <SiteHeader />
-        <div className="mx-auto max-w-5xl p-6">
-          <Skeleton className="mb-8 h-12 w-full" />
-          <Skeleton className="h-96 w-full" />
-        </div>
+      <div className="space-y-4">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-96 w-full" />
       </div>
     );
   }
@@ -189,37 +185,34 @@ function WrappedEditorInner() {
   const isPublished = wrappedContent?.isPublished ?? false;
 
   return (
-    <div className="min-h-screen">
-      <SiteHeader />
-      <div className="mx-auto max-w-5xl space-y-6 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-balance text-4xl font-bold">2025 Wrapped Editor</h1>
-            <p className="mt-2 text-muted-foreground">
-              Organize stats into sections and customize the ZBD 2025 Wrapped page
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate("/admin/2025-wrapped-preview")}>
+    <div className="space-y-4">
+      <PageHeader
+        title="2025 Wrapped Editor"
+        description="Organize stats into sections and customize the ZBD 2025 Wrapped page"
+        variant="compact"
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={() => navigate("/admin/2025-wrapped-preview")}>
               <Eye className="mr-2 h-4 w-4" />
               Preview
             </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
+            <Button size="sm" onClick={handleSave} disabled={isSaving}>
               <Save className="mr-2 h-4 w-4" />
               Save
             </Button>
             {isPublished ? (
-              <Button variant="destructive" onClick={handleUnpublish} disabled={isPublishing}>
+              <Button variant="destructive" size="sm" onClick={handleUnpublish} disabled={isPublishing}>
                 Unpublish
               </Button>
             ) : (
-              <Button onClick={handlePublish} disabled={isPublishing}>
+              <Button size="sm" onClick={handlePublish} disabled={isPublishing}>
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 Publish
               </Button>
             )}
-          </div>
-        </div>
+          </>
+        }
+      />
 
         {isPublished && (
           <Card className="border-green-500 bg-green-50 dark:bg-green-950">
@@ -438,35 +431,14 @@ function WrappedEditorInner() {
             </Button>
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }
 
 export default function WrappedEditorPage() {
   return (
-    <>
-      <Unauthenticated>
-        <div className="flex min-h-screen items-center justify-center">
-          <Card>
-            <CardHeader>
-              <CardTitle>Sign in required</CardTitle>
-              <CardDescription>Please sign in to edit the wrapped page</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <SignInButton />
-            </CardContent>
-          </Card>
-        </div>
-      </Unauthenticated>
-      <AuthLoading>
-        <div className="flex min-h-screen items-center justify-center">
-          <Skeleton className="h-96 w-full max-w-2xl" />
-        </div>
-      </AuthLoading>
-      <Authenticated>
-        <WrappedEditorInner />
-      </Authenticated>
-    </>
+    <AdminPageLayout authTitle="Sign in to edit the wrapped page" skipHeader>
+      <WrappedEditorInner />
+    </AdminPageLayout>
   );
 }

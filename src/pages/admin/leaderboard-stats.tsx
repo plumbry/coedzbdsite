@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -12,9 +10,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Settings } from "lucide-react";
-import SiteHeader from "@/components/site-header";
-import { SignInButton } from "@/components/ui/signin";
+import { ArrowUpDown, ArrowUp, ArrowDown, Settings } from "lucide-react";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import {
   Table,
   TableBody,
@@ -54,7 +51,7 @@ function LeaderboardStatsContent() {
 
   if (stats === undefined) {
     return (
-      <div className="container mx-auto py-8 space-y-4">
+      <div className="space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-96 w-full" />
       </div>
@@ -181,12 +178,9 @@ function LeaderboardStatsContent() {
   });
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Leaderboard Statistics</h1>
-      </div>
+    <div className="space-y-4">
 
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-6">
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -653,26 +647,11 @@ function LeaderboardStatsContent() {
 
 export default function LeaderboardStats() {
   return (
-    <>
-      <SiteHeader />
-      <Unauthenticated>
-        <div className="container mx-auto py-16 text-center">
-          <h2 className="text-2xl font-bold mb-4">Sign in required</h2>
-          <p className="text-muted-foreground mb-6">
-            Please sign in to view leaderboard statistics
-          </p>
-          <SignInButton />
-        </div>
-      </Unauthenticated>
-      <AuthLoading>
-        <div className="container mx-auto py-8 space-y-4">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-96 w-full" />
-        </div>
-      </AuthLoading>
-      <Authenticated>
-        <LeaderboardStatsContent />
-      </Authenticated>
-    </>
+    <AdminPageLayout
+      title="Leaderboard Statistics"
+      authTitle="Sign in to view leaderboard statistics"
+    >
+      <LeaderboardStatsContent />
+    </AdminPageLayout>
   );
 }

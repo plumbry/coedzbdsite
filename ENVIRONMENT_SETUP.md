@@ -47,7 +47,6 @@ in different places and must not be confused:
 | `DISCORD_BOT_TOKEN` | `convex/discord/roles.ts`, `convex/discord/eventSync.ts`, `convex/discord/sync.ts`, `convex/discord/archiveNoTierRole.ts` | Discord bot token for Convex actions that call the Discord API (role sync, member sync, event sync). | **Required** for those Discord features. |
 | `DISCORD_GUILD_ID` | same Discord files as above | Discord guild (server) ID. | **Required** for those Discord features. |
 | `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS` | `convex/googleSheets.ts`, `convex/eventBans/sync.ts` | Google service-account JSON credentials for Sheets access (event bans sync, sheet reads). | **Required** for Google Sheets features. |
-| `CITO_API_KEY` | `convex/inGameEarnings/actions.ts` | API key for the in-game earnings ("Cito") integration. | **Required** for in-game earnings. |
 | `FN_API` | `convex/fortnitetracker.ts` | API key for Fortnite Tracker. | **Required** for Fortnite Tracker lookups. |
 | `TIER_CLEAR_API_SECRET` | `convex/discord/removeAllTierRoles.ts` | Secret guarding the bulk "remove all tier roles" action. | **Required** for that admin action. |
 
@@ -123,9 +122,6 @@ VITE_HERCULES_WEBSITE_ID="your-website-id"
 
 # Google Sheets (REQUIRED for event-bans sync / sheet reads).
 # GOOGLE_SERVICE_ACCOUNT_CREDENTIALS='{"type":"service_account", ...}'
-
-# In-game earnings integration.
-# CITO_API_KEY="your-cito-api-key"
 
 # Fortnite Tracker lookups.
 # FN_API="your-fortnite-tracker-api-key"

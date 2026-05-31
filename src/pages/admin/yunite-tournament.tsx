@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -10,14 +10,14 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible.tsx";
 import { Input } from "@/components/ui/input.tsx";
-import { ArrowLeft, RefreshCw, ChevronDown, Info, Edit2, X, Check } from "lucide-react";
-import SiteHeader from "@/components/site-header.tsx";
+import { RefreshCw, ChevronDown, Info, Edit2, X, Check } from "lucide-react";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import PageHeader from "@/components/page-header.tsx";
 import { toast } from "sonner";
 import { useState } from "react";
 
-export default function YuniteTournamentDetails() {
+function YuniteTournamentContent() {
   const { importId } = useParams();
-  const navigate = useNavigate();
   const [isSyncing, setIsSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState("matched");
   const [matchBreakdown, setMatchBreakdown] = useState<{
@@ -178,50 +178,38 @@ export default function YuniteTournamentDetails() {
 
   if (!tournamentDetails) {
     return (
-      <div className="min-h-screen bg-background">
-        <SiteHeader />
-        <main className="container mx-auto px-4 py-8">
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-64 w-full" />
-          </div>
-        </main>
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      <main className="container mx-auto px-4 py-8">
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate("/admin")}
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <div>
-                <h1 className="text-3xl font-bold">{tournamentDetails.import.eventName}</h1>
-                <p className="text-muted-foreground">
-                  Detailed statistics for this tournament including all player performance data
-                </p>
-              </div>
-            </div>
-            <Button
-              onClick={handleSyncMatchData}
-              disabled={isSyncing}
-              variant="outline"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
-              {isSyncing ? "Syncing..." : "Sync Match Data"}
-            </Button>
-          </div>
+    <div className="space-y-4">
+      <PageHeader
+        title={tournamentDetails.import.eventName}
+        description="Detailed statistics for this tournament including all player performance data"
+        back={{ label: "Back to Uploads", href: "/admin/uploads" }}
+        breadcrumbs={[
+          { label: "Admin", href: "/admin" },
+          { label: "Uploads", href: "/admin/uploads" },
+          { label: tournamentDetails.import.eventName },
+        ]}
+        variant="compact"
+        actions={
+          <Button
+            onClick={handleSyncMatchData}
+            disabled={isSyncing}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing ? "Syncing..." : "Sync Match Data"}
+          </Button>
+        }
+      />
 
           {/* Tournament Summary */}
           <div className="grid gap-4 md:grid-cols-3">
@@ -593,7 +581,7 @@ export default function YuniteTournamentDetails() {
                                                     <Button
                                                       size="icon"
                                                       variant="ghost"
-                                                      className="h-6 w-6"
+                                                      className="min-h-9 min-w-9 h-9 w-9"
                                                       onClick={() => handleSaveEliminations(match.sessionId, player.discordId, team)}
                                                     >
                                                       <Check className="h-3 w-3" />
@@ -601,7 +589,7 @@ export default function YuniteTournamentDetails() {
                                                     <Button
                                                       size="icon"
                                                       variant="ghost"
-                                                      className="h-6 w-6"
+                                                      className="min-h-9 min-w-9 h-9 w-9"
                                                       onClick={handleCancelEdit}
                                                     >
                                                       <X className="h-3 w-3" />
@@ -611,7 +599,7 @@ export default function YuniteTournamentDetails() {
                                                   <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-6 w-6"
+                                                    className="min-h-9 min-w-9 h-9 w-9"
                                                     onClick={() => handleEditEliminations(match.sessionId, player.discordId, player.eliminations)}
                                                   >
                                                     <Edit2 className="h-3 w-3" />
@@ -643,8 +631,14 @@ export default function YuniteTournamentDetails() {
               )}
             </TabsContent>
           </Tabs>
-        </div>
-      </main>
     </div>
+  );
+}
+
+export default function YuniteTournamentDetails() {
+  return (
+    <AdminPageLayout skipHeader authTitle="Sign in to view tournament details">
+      <YuniteTournamentContent />
+    </AdminPageLayout>
   );
 }

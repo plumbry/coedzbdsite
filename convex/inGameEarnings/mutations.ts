@@ -2,7 +2,25 @@ import { v } from "convex/values";
 import { mutation, internalMutation } from "../_generated/server";
 import { requireAdmin } from "../auth_helpers";
 import { internal } from "../_generated/api";
-import type { Id } from "../_generated/dataModel.d.ts";
+
+const tournamentRecordValidator = v.object({
+  name: v.string(),
+  placement: v.number(),
+  earnings: v.number(),
+  date: v.string(),
+});
+
+const leaderboardDescriptorValidator = v.object({
+  leaderboardEventId: v.string(),
+  leaderboardEventWindowId: v.string(),
+  tournamentName: v.string(),
+  eventDate: v.string(),
+  maxPages: v.number(),
+  payouts: v.array(v.object({
+    rank: v.number(),
+    usd: v.number(),
+  })),
+});
 
 // Upsert earnings for a player (called from action)
 export const upsertEarnings = mutation({
@@ -10,12 +28,7 @@ export const upsertEarnings = mutation({
     playerId: v.id("players"),
     epicUsername: v.string(),
     totalEarnings: v.number(),
-    tournaments: v.array(v.object({
-      name: v.string(),
-      placement: v.number(),
-      earnings: v.number(),
-      date: v.string(),
-    })),
+    tournaments: v.array(tournamentRecordValidator),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -89,7 +102,6 @@ export const startBulkFetch = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
 
-    // Cancel any existing running job
     const existingJobs = await ctx.db.query("earningsFetchJob").collect();
     for (const job of existingJobs) {
       if (job.status === "running") {
@@ -105,10 +117,11 @@ export const startBulkFetch = mutation({
       failed: 0,
       remainingPlayerIds: args.playerIds,
       remainingEpicUsernames: args.epicUsernames,
+      scanLeaderboardIndex: 0,
+      partialTournaments: [],
       startedAt: Date.now(),
     });
 
-    // Schedule the first batch immediately
     await ctx.scheduler.runAfter(0, internal.inGameEarnings.actions.processBatch, { jobId });
 
     return jobId;
@@ -124,13 +137,19 @@ export const updateJobProgress = internalMutation({
     remainingPlayerIds: v.array(v.string()),
     remainingEpicUsernames: v.array(v.string()),
     lastError: v.optional(v.string()),
+    currentPlayerId: v.optional(v.string()),
+    currentEpicUsername: v.optional(v.string()),
+    scanAccountId: v.optional(v.string()),
+    scanLeaderboardIndex: v.optional(v.number()),
+    partialTournaments: v.optional(v.array(tournamentRecordValidator)),
+    clearCurrentPlayer: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const job = await ctx.db.get(args.jobId);
     if (!job || job.status !== "running") return;
 
     const newProcessed = job.processed + args.batchSucceeded + args.batchFailed;
-    const isDone = args.remainingPlayerIds.length === 0;
+    const isDone = args.remainingPlayerIds.length === 0 && args.clearCurrentPlayer === true;
 
     await ctx.db.patch(args.jobId, {
       processed: newProcessed,
@@ -141,12 +160,63 @@ export const updateJobProgress = internalMutation({
       status: isDone ? "completed" : "running",
       completedAt: isDone ? Date.now() : undefined,
       lastError: args.lastError,
+      currentPlayerId: args.clearCurrentPlayer ? undefined : args.currentPlayerId,
+      currentEpicUsername: args.clearCurrentPlayer ? undefined : args.currentEpicUsername,
+      scanAccountId: args.clearCurrentPlayer ? undefined : args.scanAccountId,
+      scanLeaderboardIndex: args.clearCurrentPlayer ? undefined : args.scanLeaderboardIndex,
+      partialTournaments: args.clearCurrentPlayer ? undefined : args.partialTournaments,
     });
 
-    // Schedule next batch if not done (65s delay for rate limit safety)
     if (!isDone) {
-      await ctx.scheduler.runAfter(65000, internal.inGameEarnings.actions.processBatch, { jobId: args.jobId });
+      const delayMs = args.batchFailed > 0 ? 60000 : 45000;
+      await ctx.scheduler.runAfter(delayMs, internal.inGameEarnings.actions.processBatch, { jobId: args.jobId });
     }
+  },
+});
+
+// Save tournament scan cache (internal only)
+export const upsertTournamentScanCache = internalMutation({
+  args: {
+    leaderboards: v.array(leaderboardDescriptorValidator),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.query("tournamentScanCache").first();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        leaderboards: args.leaderboards,
+        updatedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("tournamentScanCache", {
+        leaderboards: args.leaderboards,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
+
+// Mark a fetch job as failed (internal only)
+export const failFetchJob = internalMutation({
+  args: {
+    jobId: v.id("earningsFetchJob"),
+    lastError: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.status !== "running") return;
+
+    await ctx.db.patch(args.jobId, {
+      status: "failed",
+      completedAt: Date.now(),
+      lastError: args.lastError,
+      remainingPlayerIds: [],
+      remainingEpicUsernames: [],
+      currentPlayerId: undefined,
+      currentEpicUsername: undefined,
+      scanAccountId: undefined,
+      scanLeaderboardIndex: undefined,
+      partialTournaments: undefined,
+    });
   },
 });
 
@@ -163,6 +233,11 @@ export const cancelBulkFetch = mutation({
       completedAt: Date.now(),
       remainingPlayerIds: [],
       remainingEpicUsernames: [],
+      currentPlayerId: undefined,
+      currentEpicUsername: undefined,
+      scanAccountId: undefined,
+      scanLeaderboardIndex: undefined,
+      partialTournaments: undefined,
     });
   },
 });

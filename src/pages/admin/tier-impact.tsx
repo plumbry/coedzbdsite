@@ -1,13 +1,11 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { SignInButton } from "@/components/ui/signin";
-import AdminSidebar from "./_components/admin-sidebar.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import {
   BarChart,
   Bar,
@@ -72,14 +70,7 @@ function TierImpactContent() {
   const { impactMetrics, perEventData, totalEvents, tierPopulation, totalPopulation } = data;
 
   return (
-    <div className="flex-1 p-6 space-y-8 overflow-y-auto">
-      <div>
-        <h1 className="text-3xl font-bold">Tier Impact Analytics</h1>
-        <p className="text-muted-foreground mt-1">
-          How much does each tier actually dominate your leaderboards?
-        </p>
-      </div>
-
+    <div className="space-y-4 overflow-y-auto">
       {/* Filters */}
       <div className="flex items-center gap-6 flex-wrap">
         <div className="flex items-center space-x-2">
@@ -600,35 +591,12 @@ function TierPresenceOverTimeChart({ perEventData }: { perEventData: PerEventDat
 
 export default function TierImpactPage() {
   return (
-    <>
-      <Unauthenticated>
-        <div className="container mx-auto py-16 text-center">
-          <h2 className="text-2xl font-bold mb-4">Sign in required</h2>
-          <p className="text-muted-foreground mb-6">
-            Please sign in to view tier impact analytics
-          </p>
-          <SignInButton />
-        </div>
-      </Unauthenticated>
-      <AuthLoading>
-        <div className="flex min-h-screen">
-          <AdminSidebar />
-          <div className="flex-1 p-6 space-y-4">
-            <Skeleton className="h-10 w-72" />
-            <div className="grid grid-cols-4 gap-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-32" />
-              ))}
-            </div>
-          </div>
-        </div>
-      </AuthLoading>
-      <Authenticated>
-        <div className="flex min-h-screen">
-          <AdminSidebar />
-          <TierImpactContent />
-        </div>
-      </Authenticated>
-    </>
+    <AdminPageLayout
+      title="Tier Impact Analytics"
+      description="How much does each tier actually dominate your leaderboards?"
+      authTitle="Sign in to view tier impact analytics"
+    >
+      <TierImpactContent />
+    </AdminPageLayout>
   );
 }

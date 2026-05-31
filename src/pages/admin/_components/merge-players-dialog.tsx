@@ -4,6 +4,7 @@ import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -99,17 +100,19 @@ export default function MergePlayersDialog({
   if (duplicateGroups === undefined) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent size="xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
               Finding Duplicate Players...
             </DialogTitle>
           </DialogHeader>
+          <DialogBody>
           <div className="space-y-4">
             <Skeleton className="h-32 w-full" />
             <Skeleton className="h-32 w-full" />
           </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
     );
@@ -117,7 +120,7 @@ export default function MergePlayersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
@@ -128,6 +131,7 @@ export default function MergePlayersDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         <div className="space-y-4">
           {duplicateGroups.length === 0 ? (
             <Empty>
@@ -266,6 +270,7 @@ export default function MergePlayersDialog({
             </>
           )}
         </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

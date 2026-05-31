@@ -67,7 +67,7 @@ export default function AddEventDialog({ open, onOpenChange, playerId }: AddEven
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle>Add Event Result</DialogTitle>
           <DialogDescription>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Label } from "@/components/ui/label.tsx";
@@ -302,7 +302,7 @@ export default function ImportPlayersDialog({ open, onOpenChange }: ImportPlayer
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle>Import Players from CSV</DialogTitle>
           <DialogDescription>
@@ -310,6 +310,7 @@ export default function ImportPlayersDialog({ open, onOpenChange }: ImportPlayer
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         <div className="space-y-6">
           {/* Instructions */}
           <div className="bg-muted p-4 rounded-lg space-y-2 text-sm">
@@ -525,6 +526,7 @@ export default function ImportPlayersDialog({ open, onOpenChange }: ImportPlayer
             </Button>
           </div>
         </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

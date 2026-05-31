@@ -16,17 +16,7 @@ export default function UserManagement() {
   const updateUserRole = useMutation(api.users.updateUserRole);
 
   if (users === undefined || currentUser === undefined) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>User Management</CardTitle>
-          <CardDescription>Manage admin access for users</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-48 w-full" />
-        </CardContent>
-      </Card>
-    );
+    return <Skeleton className="h-48 w-full" />;
   }
 
   const handleRoleChange = async (userId: Id<"users">, role: "admin" | "event_mod" | "viewer") => {
@@ -48,13 +38,9 @@ export default function UserManagement() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          User Management
-        </CardTitle>
+      <CardHeader className="pb-3">
         <CardDescription>
-          Manage user roles. {adminUsers.length} admin{adminUsers.length !== 1 ? "s" : ""}, {eventModUsers.length} mod{eventModUsers.length !== 1 ? "s" : ""}, {viewerUsers.length} viewer{viewerUsers.length !== 1 ? "s" : ""}
+          {adminUsers.length} admin{adminUsers.length !== 1 ? "s" : ""}, {eventModUsers.length} mod{eventModUsers.length !== 1 ? "s" : ""}, {viewerUsers.length} viewer{viewerUsers.length !== 1 ? "s" : ""}
         </CardDescription>
       </CardHeader>
       <CardContent>

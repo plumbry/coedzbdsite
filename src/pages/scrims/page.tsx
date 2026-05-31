@@ -36,7 +36,8 @@ import { toast } from "sonner";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
-import SiteHeader from "@/components/site-header.tsx";
+import PageShell from "@/components/page-shell.tsx";
+import PageHeader from "@/components/page-header.tsx";
 
 function ScrimsLandingPageInner() {
   const events = useQuery(api.scrims.queries.listEvents, {});
@@ -96,52 +97,34 @@ function ScrimsLandingPageInner() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Hero Header */}
-      <div className="border-b bg-card">
-        <div className="mx-auto max-w-5xl px-6 py-12">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-4">
-              <div className="rounded-xl bg-primary/10 p-3">
-                <Dices className="h-8 w-8 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight">Spin Events</h1>
-                <p className="text-muted-foreground mt-1">
-                  Random squad pairings generated via Discord
-                </p>
-              </div>
-            </div>
-            <Button
-              className="cursor-pointer"
-              onClick={() => setDialogOpen(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Event
-            </Button>
-          </div>
+    <>
+      <PageHeader
+        title="Spin Events"
+        icon={Dices}
+        description="Random squad pairings generated via Discord"
+        actions={
+          <Button className="cursor-pointer" onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Event
+          </Button>
+        }
+      />
+
+      {events === undefined && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-36 w-full rounded-lg" />
+          ))}
         </div>
-      </div>
+      )}
 
-      {/* Content */}
-      <div className="mx-auto max-w-5xl px-6 py-8">
-        {/* Loading */}
-        {events === undefined && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-40 w-full rounded-xl" />
-            ))}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {events !== undefined && events.length === 0 && (
+      {events !== undefined && events.length === 0 && (
           <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <Trophy />
               </EmptyMedia>
-              <EmptyTitle>No scrim events yet</EmptyTitle>
+              <EmptyTitle>No spin events yet</EmptyTitle>
               <EmptyDescription>
                 Create an event and use its link code in your Discord command.
               </EmptyDescription>
@@ -239,11 +222,10 @@ function ScrimsLandingPageInner() {
             })}
           </div>
         )}
-      </div>
 
       {/* Create Event Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) handleCloseDialog(); else setDialogOpen(true); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent size="sm">
           {createdLinkCode ? (
             <>
               <DialogHeader>
@@ -282,7 +264,7 @@ function ScrimsLandingPageInner() {
           ) : (
             <>
               <DialogHeader>
-                <DialogTitle>Create Scrim Event</DialogTitle>
+                <DialogTitle>Create Spin Event</DialogTitle>
                 <DialogDescription>
                   Create an event and get a link code to use in your Discord command.
                 </DialogDescription>
@@ -294,7 +276,7 @@ function ScrimsLandingPageInner() {
                     id="eventName"
                     value={eventName}
                     onChange={(e) => setEventName(e.target.value)}
-                    placeholder="Friday Night Scrims"
+                    placeholder="Friday Night Spin"
                     onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
                   />
                 </div>
@@ -339,7 +321,7 @@ function ScrimsLandingPageInner() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
 
@@ -347,35 +329,40 @@ export default function ScrimsLandingPage() {
   const { isModeratorOrAdmin, hasEventBanAccess, isLoading } = useUserRole();
 
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
+    <>
       <AuthLoading>
-        <div className="flex items-center justify-center pt-32">
-          <Skeleton className="h-40 w-80" />
-        </div>
+        <PageShell>
+          <Skeleton className="h-40 w-full max-w-md mx-auto" />
+        </PageShell>
       </AuthLoading>
       <Unauthenticated>
-        <div className="flex flex-col items-center justify-center gap-4 pt-32">
-          <ShieldAlert className="h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">You need to sign in to access this page.</p>
-          <SignInButton />
-        </div>
+        <PageShell>
+          <div className="flex flex-col items-center justify-center gap-4 py-16">
+            <ShieldAlert className="h-10 w-10 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">You need to sign in to access this page.</p>
+            <SignInButton />
+          </div>
+        </PageShell>
       </Unauthenticated>
       <Authenticated>
         {isLoading ? (
-          <div className="flex items-center justify-center pt-32">
-            <Skeleton className="h-40 w-80" />
-          </div>
+          <PageShell>
+            <Skeleton className="h-40 w-full max-w-md mx-auto" />
+          </PageShell>
         ) : (isModeratorOrAdmin || hasEventBanAccess) ? (
-          <ScrimsLandingPageInner />
+          <PageShell>
+            <ScrimsLandingPageInner />
+          </PageShell>
         ) : (
-          <div className="flex flex-col items-center justify-center gap-4 pt-32">
-            <ShieldAlert className="h-12 w-12 text-destructive" />
-            <p className="text-lg font-medium">Access Denied</p>
-            <p className="text-muted-foreground">You don't have permission to view this page.</p>
-          </div>
+          <PageShell>
+            <div className="flex flex-col items-center justify-center gap-4 py-16">
+              <ShieldAlert className="h-10 w-10 text-destructive" />
+              <p className="text-lg font-medium">Access Denied</p>
+              <p className="text-sm text-muted-foreground">You do not have permission to access Spin Events.</p>
+            </div>
+          </PageShell>
         )}
       </Authenticated>
-    </div>
+    </>
   );
 }

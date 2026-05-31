@@ -80,7 +80,7 @@ export default function EditUsernameDialog() {
           <span className="hidden sm:inline">{currentUser.username ? "Edit Username" : "Set Username"}</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent size="sm">
         <DialogHeader>
           <DialogTitle>Edit username</DialogTitle>
           <DialogDescription>

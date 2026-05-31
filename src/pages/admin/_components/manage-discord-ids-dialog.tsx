@@ -4,6 +4,7 @@ import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -95,7 +96,7 @@ export default function ManageDiscordIdsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link className="h-5 w-5" />
@@ -106,7 +107,7 @@ export default function ManageDiscordIdsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <DialogBody className="space-y-4">
           {/* Primary Discord ID */}
           <div>
             <Label className="text-sm font-semibold mb-2 block">Primary Discord ID</Label>
@@ -193,7 +194,7 @@ export default function ManageDiscordIdsDialog({
               </p>
             </div>
           )}
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

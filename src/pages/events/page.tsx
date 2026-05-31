@@ -10,7 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.t
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
 import { Calendar, Trophy, MapPin, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
-import SiteHeader from "@/components/site-header.tsx";
+import PageShell from "@/components/page-shell.tsx";
+import PageHeader from "@/components/page-header.tsx";
+import PageToolbar from "@/components/page-toolbar.tsx";
+import { Label } from "@/components/ui/label.tsx";
 
 export default function EventsPage() {
   const [typeFilter, setTypeFilter] = useState<"all" | "scrim" | "minicup" | "season" | "mini-season" | "random" | "solos-meets-duos" | "scrim-series" | "showdown">("all");
@@ -22,9 +25,9 @@ export default function EventsPage() {
   
   if (allEvents === undefined) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <PageShell>
         <Skeleton className="h-96 w-full" />
-      </div>
+      </PageShell>
     );
   }
   
@@ -165,54 +168,42 @@ export default function EventsPage() {
   );
   
   return (
-    <>
-      <SiteHeader />
-      
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <Calendar className="h-8 w-8 text-primary" />
-            <div>
-              <h1 className="text-3xl font-bold">Co-Ed ZBD Hub - Events</h1>
-              <p className="text-muted-foreground">Browse scrims, mini cups, and seasonal tournaments</p>
-              <p className="text-xs text-muted-foreground/70 italic">(ignore leaderboards, Plum is lazy!)</p>
-            </div>
-          </div>
-        
-        {/* Filters */}
-        <div className="flex flex-wrap gap-3">
-          <div className="flex-1 min-w-[200px]">
-            <p className="text-sm font-medium mb-2">Filter by Game Mode</p>
-            <Select value={modeFilter} onValueChange={(v) => setModeFilter(v as typeof modeFilter)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Game Mode" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Modes</SelectItem>
-                <SelectItem value="ZB Main Map">ZB Main Map</SelectItem>
-                <SelectItem value="Reload">Reload</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="flex-1 min-w-[200px]">
-            <p className="text-sm font-medium mb-2">Sort by</p>
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="date-desc">Newest First</SelectItem>
-                <SelectItem value="date-asc">Oldest First</SelectItem>
-                <SelectItem value="name">Name (A-Z)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+    <PageShell>
+      <PageHeader
+        title="Co-Ed ZBD Hub - Events"
+        icon={Calendar}
+        description="Browse scrims, mini cups, and seasonal tournaments"
+      />
+
+      <PageToolbar>
+        <div className="space-y-1.5 min-w-[160px]">
+          <Label className="text-xs text-muted-foreground">Game Mode</Label>
+          <Select value={modeFilter} onValueChange={(v) => setModeFilter(v as typeof modeFilter)}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Game Mode" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Modes</SelectItem>
+              <SelectItem value="ZB Main Map">ZB Main Map</SelectItem>
+              <SelectItem value="Reload">Reload</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      </div>
+        <div className="space-y-1.5 min-w-[160px]">
+          <Label className="text-xs text-muted-foreground">Sort by</Label>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date-desc">Newest First</SelectItem>
+              <SelectItem value="date-asc">Oldest First</SelectItem>
+              <SelectItem value="name">Name (A-Z)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </PageToolbar>
       
-      {/* Status Tabs */}
       <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)} className="space-y-4">
         <TabsList>
           <TabsTrigger value="upcoming">Upcoming ({upcomingEvents.length})</TabsTrigger>
@@ -457,7 +448,6 @@ export default function EventsPage() {
           </Tabs>
         </TabsContent>
       </Tabs>
-      </div>
-    </>
+    </PageShell>
   );
 }

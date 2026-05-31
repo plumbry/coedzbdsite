@@ -120,3 +120,11 @@ export const getJobById = internalQuery({
     return await ctx.db.get(args.jobId);
   },
 });
+
+// Internal: get cached tournament leaderboard descriptors
+export const getTournamentScanCache = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("tournamentScanCache").first();
+  },
+});

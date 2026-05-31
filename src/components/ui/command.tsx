@@ -46,6 +46,7 @@ function CommandDialog({
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
       <DialogContent
+        size="md"
         className={cn("overflow-hidden p-0", className)}
         showCloseButton={showCloseButton}
       >

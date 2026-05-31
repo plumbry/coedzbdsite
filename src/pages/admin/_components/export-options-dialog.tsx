@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Download } from "lucide-react";
@@ -52,7 +52,7 @@ export default function ExportOptionsDialog({ open, onOpenChange, onExport }: Ex
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Export Player Evaluations</DialogTitle>
           <DialogDescription>
@@ -60,7 +60,7 @@ export default function ExportOptionsDialog({ open, onOpenChange, onExport }: Ex
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <DialogBody className="space-y-6">
           {/* Tier Selection */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -148,9 +148,9 @@ export default function ExportOptionsDialog({ open, onOpenChange, onExport }: Ex
               </div>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <div className="flex justify-end gap-2">
+        <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -161,7 +161,7 @@ export default function ExportOptionsDialog({ open, onOpenChange, onExport }: Ex
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

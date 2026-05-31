@@ -1,16 +1,14 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { KeyRound, Eye, EyeOff, Copy, Check, Pencil, Save } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import SiteHeader from "@/components/site-header.tsx";
-import AdminSidebar from "./_components/admin-sidebar.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import RoleGate from "@/components/role-gate.tsx";
 import { toast } from "sonner";
 
 function SpinModerationContent() {
@@ -19,47 +17,21 @@ function SpinModerationContent() {
   const setAdminCodeMutation = useMutation(api.scrims.mutations.setAdminCode);
 
   if (isLoading) {
-    return (
-      <div className="flex pt-14 lg:pt-0">
-        <AdminSidebar />
-        <main className="flex-1 p-2 sm:p-6 overflow-x-hidden">
-          <div className="max-w-7xl mx-auto">
-            <Skeleton className="h-96 w-full" />
-          </div>
-        </main>
-      </div>
-    );
+    return <Skeleton className="h-96 w-full" />;
   }
 
   if (!hasEventBanAccess) {
     return (
-      <div className="flex pt-14 lg:pt-0">
-        <AdminSidebar />
-        <main className="flex-1 p-2 sm:p-6 overflow-x-hidden">
-          <div className="max-w-7xl mx-auto text-center py-8">
-            <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-            <p className="text-muted-foreground mb-6">
-              This page is only accessible to Mods and above.
-            </p>
-          </div>
-        </main>
-      </div>
+      <RoleGate
+        allowed={false}
+        description="This page is only accessible to Mods and above."
+        showBackButton={false}
+      />
     );
   }
 
   return (
-    <div className="flex pt-14 lg:pt-0">
-      <AdminSidebar />
-      <main className="flex-1 p-2 sm:p-6 overflow-x-hidden">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold mb-2">Spin Moderation</h1>
-            <p className="text-muted-foreground">
-              Manage scrim event unlock codes for non-mod helpers.
-            </p>
-          </div>
-
-          <div className="space-y-4">
+    <div className="space-y-4">
             {/* Scrim Event Codes */}
             {scrimEvents === undefined ? (
               <Skeleton className="h-40 w-full" />
@@ -95,39 +67,18 @@ function SpinModerationContent() {
                 </CardContent>
               </Card>
             )}
-          </div>
-        </div>
-      </main>
     </div>
   );
 }
 
 export default function SpinModerationPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-
-      <Unauthenticated>
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="text-center space-y-6">
-            <h1 className="text-4xl text-balance font-bold tracking-tight">
-              Sign in to access staff panel
-            </h1>
-            <SignInButton />
-          </div>
-        </div>
-      </Unauthenticated>
-
-      <AuthLoading>
-        <div className="flex min-h-screen items-center justify-center">
-          <Skeleton className="h-96 w-full max-w-6xl" />
-        </div>
-      </AuthLoading>
-
-      <Authenticated>
-        <SpinModerationContent />
-      </Authenticated>
-    </div>
+    <AdminPageLayout
+      title="Spin Moderation"
+      description="Manage scrim event unlock codes for non-mod helpers."
+    >
+      <SpinModerationContent />
+    </AdminPageLayout>
   );
 }
 

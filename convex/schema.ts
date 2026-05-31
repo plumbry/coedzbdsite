@@ -800,7 +800,7 @@ export default defineSchema({
     .index("by_event", ["eventId"])
     .index("by_player_and_event", ["playerId", "eventId"]),
 
-  // Official in-game tournament earnings (from Cito API)
+  // Official in-game tournament earnings (from Osirion Fortnite API)
   inGameEarnings: defineTable({
     playerId: v.id("players"),
     epicUsername: v.string(),
@@ -818,6 +818,22 @@ export default defineSchema({
     .index("by_player", ["playerId"])
     .index("by_has_new", ["hasNewEarnings"]),
 
+  // Cached USD-payout tournament leaderboards for Osirion earnings scans
+  tournamentScanCache: defineTable({
+    leaderboards: v.array(v.object({
+      leaderboardEventId: v.string(),
+      leaderboardEventWindowId: v.string(),
+      tournamentName: v.string(),
+      eventDate: v.string(),
+      maxPages: v.number(),
+      payouts: v.array(v.object({
+        rank: v.number(),
+        usd: v.number(),
+      })),
+    })),
+    updatedAt: v.number(),
+  }),
+
   // Background job tracker for in-game earnings bulk fetch
   earningsFetchJob: defineTable({
     status: v.union(
@@ -830,9 +846,19 @@ export default defineSchema({
     processed: v.number(),
     succeeded: v.number(),
     failed: v.number(),
-    // Remaining player IDs to process (serialized as JSON string to avoid field limits)
     remainingPlayerIds: v.array(v.string()),
     remainingEpicUsernames: v.array(v.string()),
+    // Osirion scan state for the player currently being processed
+    currentPlayerId: v.optional(v.string()),
+    currentEpicUsername: v.optional(v.string()),
+    scanAccountId: v.optional(v.string()),
+    scanLeaderboardIndex: v.optional(v.number()),
+    partialTournaments: v.optional(v.array(v.object({
+      name: v.string(),
+      placement: v.number(),
+      earnings: v.number(),
+      date: v.string(),
+    }))),
     startedAt: v.number(),
     completedAt: v.optional(v.number()),
     lastError: v.optional(v.string()),

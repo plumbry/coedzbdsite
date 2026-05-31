@@ -4,6 +4,7 @@ import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -84,7 +85,7 @@ export default function MatchToPlayerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link className="h-5 w-5" />
@@ -101,6 +102,7 @@ export default function MatchToPlayerDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody className="space-y-3">
         {discordMember && (
           <div className="rounded-md border p-3 bg-muted/50">
             <div className="text-sm space-y-1">
@@ -181,6 +183,7 @@ export default function MatchToPlayerDialog({
             </ScrollArea>
           )}
         </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

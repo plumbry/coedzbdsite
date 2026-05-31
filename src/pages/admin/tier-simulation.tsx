@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
@@ -15,10 +14,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { ArrowLeft, Users, ArrowRight } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import SiteHeader from "@/components/site-header.tsx";
-import AdminSidebar from "./_components/admin-sidebar.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import RoleGate from "@/components/role-gate.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
 import { toast } from "sonner";
 
 function TierSimulationContent() {
@@ -147,62 +145,24 @@ function TierSimulationContent() {
   // Show loading while checking permissions
   if (isLoadingUser) {
     return (
-      <div className="flex h-screen pt-14 lg:pt-0">
-        <AdminSidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <SiteHeader />
-          <div className="flex-1 overflow-y-auto p-8">
-            <Skeleton className="h-8 w-64 mb-4" />
-            <Skeleton className="h-64 w-full" />
-          </div>
-        </div>
-      </div>
+      <>
+        <Skeleton className="h-8 w-64 mb-4" />
+        <Skeleton className="h-64 w-full" />
+      </>
     );
   }
 
   if (!canView) {
     return (
-      <div className="flex h-screen pt-14 lg:pt-0">
-        <AdminSidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <SiteHeader />
-          <div className="flex-1 overflow-y-auto p-8">
-            <Card>
-              <CardHeader>
-                <CardTitle>Access Denied</CardTitle>
-                <CardDescription>
-                  You need admin or moderator access to view this page.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </div>
-        </div>
-      </div>
+      <RoleGate
+        allowed={false}
+        description="You need admin or moderator access to view this page."
+      />
     );
   }
 
   return (
-    <div className="flex h-screen pt-14 lg:pt-0">
-      <AdminSidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <SiteHeader />
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-8 max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="mb-6">
-              <Link to="/admin/tier-re-evaluation">
-                <Button variant="ghost" size="sm" className="mb-4">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back to Re-Evaluations
-                </Button>
-              </Link>
-              <h1 className="text-3xl font-bold">Tier Simulation Tool</h1>
-              <p className="text-muted-foreground mt-2">
-                Preview how tier median changes would look if you changed specific players' tiers
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Left Column: Add Players */}
               <Card>
                 <CardHeader>
@@ -468,38 +428,21 @@ function TierSimulationContent() {
                   )}
                 </CardContent>
               </Card>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
 
 export default function TierSimulation() {
   return (
-    <>
-      <Authenticated>
-        <TierSimulationContent />
-      </Authenticated>
-      <Unauthenticated>
-        <div className="flex h-screen items-center justify-center">
-          <Card>
-            <CardHeader>
-              <CardTitle>Sign In Required</CardTitle>
-              <CardDescription>Please sign in to access this page.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <SignInButton />
-            </CardContent>
-          </Card>
-        </div>
-      </Unauthenticated>
-      <AuthLoading>
-        <div className="flex h-screen items-center justify-center">
-          <Spinner />
-        </div>
-      </AuthLoading>
-    </>
+    <AdminPageLayout
+      title="Tier Simulation Tool"
+      description="Preview how tier median changes would look if you changed specific players' tiers"
+      authTitle="Sign in to access tier simulation"
+      header={{
+        back: { label: "Back to Re-Evaluations", href: "/admin/tier-re-evaluation" },
+      }}
+    >
+      <TierSimulationContent />
+    </AdminPageLayout>
   );
 }

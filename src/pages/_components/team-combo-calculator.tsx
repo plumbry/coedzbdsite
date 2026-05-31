@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Input } from "@/components/ui/input.tsx";
@@ -68,7 +68,7 @@ export default function TeamComboCalculator({ open, onOpenChange, players }: Tea
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh]">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calculator className="h-5 w-5" />
@@ -78,7 +78,8 @@ export default function TeamComboCalculator({ open, onOpenChange, players }: Tea
             Select three players to check if their tier combination is allowed
           </DialogDescription>
         </DialogHeader>
-        
+
+        <DialogBody>
         <div className="space-y-6">
           {/* Selected Players */}
           <div className="space-y-2">
@@ -189,6 +190,7 @@ export default function TeamComboCalculator({ open, onOpenChange, players }: Tea
             </div>
           </div>
         </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

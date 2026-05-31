@@ -86,11 +86,7 @@ export default function DiscordMembers() {
   if (players === undefined) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Discord Member List</CardTitle>
-          <CardDescription>View synced Discord members and their roles</CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <Skeleton className="h-48 w-full" />
         </CardContent>
       </Card>
@@ -276,21 +272,16 @@ export default function DiscordMembers() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Discord Member List
-                <Badge variant="outline" className="text-xs">
-                  Bot Synced Only
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                {activePlayers.length} active (with Tier role), {inactivePlayers.length} inactive (no Tier role)
-              </CardDescription>
-            </div>
-            <div className="flex gap-2">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-4">
+            <CardDescription className="flex flex-wrap items-center gap-2">
+              <Users className="h-4 w-4 shrink-0" />
+              {activePlayers.length} active (with Tier role), {inactivePlayers.length} inactive (no Tier role)
+              <Badge variant="outline" className="text-xs">
+                Bot Synced Only
+              </Badge>
+            </CardDescription>
+            <div className="flex shrink-0 gap-2">
               <Button
                 variant="secondary"
                 size="sm"
@@ -659,7 +650,7 @@ export default function DiscordMembers() {
 
       {/* Convert to Player Confirmation Dialog */}
       <Dialog open={convertingPlayer !== null} onOpenChange={(open) => !open && setConvertingPlayer(null)}>
-        <DialogContent>
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Convert to Active Player</DialogTitle>
             <DialogDescription>

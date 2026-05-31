@@ -11,6 +11,7 @@ import { Search, Ban, Clock, AlertTriangle, TrendingUp, Trash2, CalendarCheck, U
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import CreateBanDialog from "./create-ban-dialog.tsx";
+import PageHeader from "@/components/page-header.tsx";
 import { formatDistanceToNow } from "date-fns";
 
 export default function EventBansManager() {
@@ -144,56 +145,54 @@ export default function EventBansManager() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Event Bans</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            Synced to the Mod Log Google Sheet
-          </p>
-        </div>
-        {hasEventBanAccess && (
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <CreateBanDialog />
-            <Button
-              onClick={handleEventPassed}
-              disabled={isEventPassing}
-              size="sm"
-              variant={eventPassedCountdown !== null ? "destructive" : "secondary"}
-              className="cursor-pointer h-8 text-xs sm:text-sm"
-            >
-              <CalendarCheck className={`mr-1 h-3.5 w-3.5 ${isEventPassing ? "animate-pulse" : ""}`} />
-              {isEventPassing
-                ? "Processing..."
-                : eventPassedCountdown !== null
-                  ? `Cancel (${eventPassedCountdown}s)`
-                  : `Event Passed${eventPassedQty > 1 ? ` (×${eventPassedQty})` : ""}`}
-            </Button>
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] sm:text-xs text-muted-foreground">Qty:</span>
-              <Input
-                type="number"
-                min={1}
-                max={50}
-                value={eventPassedQty}
-                onChange={(e) => setEventPassedQty(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                className="w-12 h-7 sm:h-8 text-center text-xs sm:text-sm"
-                disabled={isEventPassing || eventPassedCountdown !== null}
-              />
-            </div>
-            <Button
-              onClick={handleUndoEventPassed}
-              disabled={isUndoing}
-              size="sm"
-              variant="ghost"
-              className="cursor-pointer h-8 text-xs sm:text-sm"
-            >
-              <Undo2 className={`mr-1 h-3.5 w-3.5 ${isUndoing ? "animate-pulse" : ""}`} />
-              {isUndoing ? "..." : "Undo"}
-            </Button>
-          </div>
-        )}
-      </div>
+      <PageHeader
+        title="Event Bans"
+        description="Synced to the Mod Log Google Sheet"
+        icon={Ban}
+        actions={
+          hasEventBanAccess ? (
+            <>
+              <CreateBanDialog />
+              <Button
+                onClick={handleEventPassed}
+                disabled={isEventPassing}
+                size="sm"
+                variant={eventPassedCountdown !== null ? "destructive" : "secondary"}
+                className="cursor-pointer h-8 text-xs sm:text-sm"
+              >
+                <CalendarCheck className={`mr-1 h-3.5 w-3.5 ${isEventPassing ? "animate-pulse" : ""}`} />
+                {isEventPassing
+                  ? "Processing..."
+                  : eventPassedCountdown !== null
+                    ? `Cancel (${eventPassedCountdown}s)`
+                    : `Event Passed${eventPassedQty > 1 ? ` (×${eventPassedQty})` : ""}`}
+              </Button>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] sm:text-xs text-muted-foreground">Qty:</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={eventPassedQty}
+                  onChange={(e) => setEventPassedQty(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                  className="w-12 h-7 sm:h-8 text-center text-xs sm:text-sm"
+                  disabled={isEventPassing || eventPassedCountdown !== null}
+                />
+              </div>
+              <Button
+                onClick={handleUndoEventPassed}
+                disabled={isUndoing}
+                size="sm"
+                variant="ghost"
+                className="cursor-pointer h-8 text-xs sm:text-sm"
+              >
+                <Undo2 className={`mr-1 h-3.5 w-3.5 ${isUndoing ? "animate-pulse" : ""}`} />
+                {isUndoing ? "..." : "Undo"}
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
 
       {/* Last Event Passed indicator */}
       {eventPassedMeta && (

@@ -9,9 +9,22 @@ import { Label } from "@/components/ui/label.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Loader2Icon, SearchIcon } from "lucide-react";
 import { toast } from "sonner";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 
 export default function YuniteDebugPage() {
+  return (
+    <AdminPageLayout
+      title="Yunite API Debug Tool"
+      description="Fetch and inspect raw data from the Yunite API"
+      authTitle="Sign in to access Yunite debug tools"
+    >
+      <YuniteDebugContent />
+    </AdminPageLayout>
+  );
+}
+
+function YuniteDebugContent() {
   const navigate = useNavigate();
   const [tournamentId, setTournamentId] = useState("");
   const [sessionId, setSessionId] = useState("");
@@ -112,18 +125,7 @@ export default function YuniteDebugPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-7xl space-y-8 p-8">
-      <div>
-        <h1 className="text-4xl font-bold">Yunite API Debug Tool</h1>
-        <p className="mt-2 text-muted-foreground">
-          Fetch and inspect raw data from the Yunite API
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          <Badge variant="outline" className="mr-2">Admin Only</Badge>
-          Imports created through this tool are only visible to administrators
-        </p>
-      </div>
-
+    <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle>Tournament ID</CardTitle>

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -162,7 +163,7 @@ export default function CreateBanDialog() {
           Create Ban
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Create Event Ban</DialogTitle>
           <DialogDescription>
@@ -170,7 +171,7 @@ export default function CreateBanDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <DialogBody className="space-y-4">
           {/* Player Search */}
           <div className="space-y-2">
             <Label>Search Player</Label>
@@ -356,7 +357,7 @@ export default function CreateBanDialog() {
               rows={3}
             />
           </div>
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button

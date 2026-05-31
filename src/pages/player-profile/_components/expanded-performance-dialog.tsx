@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { Badge } from "@/components/ui/badge.tsx";
 
@@ -26,7 +26,7 @@ export default function ExpandedPerformanceDialog({
 }: ExpandedPerformanceDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent size="full">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <span>
@@ -39,7 +39,8 @@ export default function ExpandedPerformanceDialog({
             </Badge>
           </DialogTitle>
         </DialogHeader>
-        
+
+        <DialogBody>
         <div className="py-4">
           {chartType === "placement" ? (
             <ResponsiveContainer width="100%" height={400}>
@@ -171,6 +172,7 @@ export default function ExpandedPerformanceDialog({
         <div className="text-xs text-muted-foreground text-center pb-2">
           Click and drag to zoom • Scroll to pan
         </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

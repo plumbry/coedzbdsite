@@ -11,7 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.t
 import { ArrowLeft, Calendar, MapPin, Trophy, ExternalLink, Lock, Info } from "lucide-react";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import SiteHeader from "@/components/site-header.tsx";
+import PageShell from "@/components/page-shell.tsx";
+import PageHeader from "@/components/page-header.tsx";
+import PlayerProfileLink from "@/components/player-profile-link.tsx";
 
 export default function EventDetail() {
   const { eventId } = useParams<{ eventId: string }>();
@@ -29,23 +31,23 @@ export default function EventDetail() {
   
   if (!eventId) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <PageShell>
         <p>Invalid event ID</p>
-      </div>
+      </PageShell>
     );
   }
   
   if (event === undefined) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <PageShell>
         <Skeleton className="h-96 w-full" />
-      </div>
+      </PageShell>
     );
   }
   
   if (event === null) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <PageShell>
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Event Not Found</h1>
           <Link to="/events">
@@ -55,42 +57,25 @@ export default function EventDetail() {
             </Button>
           </Link>
         </div>
-      </div>
+      </PageShell>
     );
   }
   
 
   
   return (
-    <>
-      <SiteHeader />
-      
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header */}
-        <div className="mb-6">
-        <Link to="/events">
-          <Button variant="ghost" size="sm" className="mb-4">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Events
-          </Button>
-        </Link>
-        
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            {event.imageUrl && (
-              <img 
-                src={event.imageUrl} 
-                alt={event.name}
-                className="h-32 w-32 object-contain mb-4"
-              />
-            )}
-            <h1 className="text-3xl font-bold mb-2">{event.name}</h1>
-            {event.season && (
-              <p className="text-lg text-muted-foreground">
-                {event.season.toLowerCase().startsWith('season') ? event.season : `Season ${event.season}`}
-              </p>
-            )}
-          </div>
+    <PageShell>
+      <PageHeader
+        title={event.name}
+        description={
+          event.season
+            ? event.season.toLowerCase().startsWith("season")
+              ? event.season
+              : `Season ${event.season}`
+            : undefined
+        }
+        back={{ label: "Back to Events", href: "/events" }}
+        actions={
           <div className="flex gap-2">
             <Badge 
               variant={
@@ -109,8 +94,18 @@ export default function EventDetail() {
               </Link>
             )}
           </div>
-        </div>
-      </div>
+        }
+      />
+
+      {event.imageUrl && (
+        <img 
+          src={event.imageUrl} 
+          alt={event.name}
+          className="h-24 w-24 object-contain"
+        />
+      )}
+
+      <div className="space-y-4">
       
       {/* Event Info */}
       <div className="grid gap-6 md:grid-cols-3 mb-8">
@@ -326,16 +321,12 @@ export default function EventDetail() {
                               <TableRow key={player.playerId || player.epicUsername}>
                                 <TableCell className="font-medium">#{player.rank}</TableCell>
                                 <TableCell>
-                                  {player.discordUsername ? (
-                                    <Link
-                                      to={`/player/${player.discordUsername}`}
-                                      className="text-sm text-primary hover:underline font-medium"
-                                    >
-                                      {player.playerName}
-                                    </Link>
-                                  ) : (
-                                    <span className="text-sm font-medium">{player.playerName}</span>
-                                  )}
+                                <PlayerProfileLink
+                                  discordUsername={player.discordUsername}
+                                  className="text-sm font-medium"
+                                >
+                                  {player.playerName}
+                                </PlayerProfileLink>
                                 </TableCell>
                                 <TableCell className="font-bold">{player.totalPoints}</TableCell>
                                 <TableCell>{player.bestPlacement}</TableCell>
@@ -378,12 +369,12 @@ export default function EventDetail() {
                               <TableCell className="font-medium">#{player.rank}</TableCell>
                               <TableCell>
                                 {player.discordUsername ? (
-                                  <Link
-                                    to={`/player/${player.discordUsername}`}
-                                    className="text-sm text-primary hover:underline font-medium"
+                                  <PlayerProfileLink
+                                    discordUsername={player.discordUsername}
+                                    className="text-sm font-medium"
                                   >
                                     {player.playerName}
-                                  </Link>
+                                  </PlayerProfileLink>
                                 ) : (
                                   <span className="text-sm font-medium">{player.playerName}</span>
                                 )}
@@ -443,16 +434,12 @@ export default function EventDetail() {
                                 <div className="flex flex-wrap gap-1">
                                   {result.members.map((member, idx) => (
                                     <span key={member.epicUsername}>
-                                      {member.discordUsername ? (
-                                        <Link
-                                          to={`/player/${member.discordUsername}`}
-                                          className="text-sm text-primary hover:underline font-medium"
-                                        >
-                                          {member.playerName}
-                                        </Link>
-                                      ) : (
-                                        <span className="text-sm font-medium">{member.playerName}</span>
-                                      )}
+                                      <PlayerProfileLink
+                                        discordUsername={member.discordUsername}
+                                        className="text-sm font-medium"
+                                      >
+                                        {member.playerName}
+                                      </PlayerProfileLink>
                                       {idx < result.members.length - 1 && <span className="text-sm text-muted-foreground">, </span>}
                                     </span>
                                   ))}
@@ -521,12 +508,12 @@ export default function EventDetail() {
                               <TableCell className="font-medium">#{player.rank}</TableCell>
                               <TableCell>
                                 {player.discordUsername ? (
-                                  <Link
-                                    to={`/player/${player.discordUsername}`}
-                                    className="text-sm text-primary hover:underline font-medium"
+                                  <PlayerProfileLink
+                                    discordUsername={player.discordUsername}
+                                    className="text-sm font-medium"
                                   >
                                     {player.playerName}
-                                  </Link>
+                                  </PlayerProfileLink>
                                 ) : (
                                   <span className="text-sm font-medium">{player.playerName}</span>
                                 )}
@@ -586,16 +573,12 @@ export default function EventDetail() {
                                 <div className="flex flex-wrap gap-1">
                                   {result.members.map((member, idx) => (
                                     <span key={member.epicUsername}>
-                                      {member.discordUsername ? (
-                                        <Link
-                                          to={`/player/${member.discordUsername}`}
-                                          className="text-sm text-primary hover:underline font-medium"
-                                        >
-                                          {member.playerName}
-                                        </Link>
-                                      ) : (
-                                        <span className="text-sm font-medium">{member.playerName}</span>
-                                      )}
+                                      <PlayerProfileLink
+                                        discordUsername={member.discordUsername}
+                                        className="text-sm font-medium"
+                                      >
+                                        {member.playerName}
+                                      </PlayerProfileLink>
                                       {idx < result.members.length - 1 && <span className="text-sm text-muted-foreground">, </span>}
                                     </span>
                                   ))}
@@ -675,40 +658,28 @@ export default function EventDetail() {
                                 <TableCell>
                                   <div className="flex items-center gap-2">
                                     <div className="flex flex-wrap gap-1">
-                                      {duo.player1.discordUsername ? (
-                                        <Link
-                                          to={`/player/${duo.player1.discordUsername}`}
-                                          className="text-sm text-primary hover:underline font-medium"
-                                        >
-                                          {duo.player1.playerName}
-                                        </Link>
-                                      ) : (
-                                        <span className="text-sm font-medium">{duo.player1.playerName}</span>
-                                      )}
+                                      <PlayerProfileLink
+                                        discordUsername={duo.player1.discordUsername}
+                                        className="text-sm font-medium"
+                                      >
+                                        {duo.player1.playerName}
+                                      </PlayerProfileLink>
                                       <span className="text-sm text-muted-foreground">&</span>
-                                      {duo.player2.discordUsername ? (
-                                        <Link
-                                          to={`/player/${duo.player2.discordUsername}`}
-                                          className="text-sm text-primary hover:underline font-medium"
-                                        >
-                                          {duo.player2.playerName}
-                                        </Link>
-                                      ) : (
-                                        <span className="text-sm font-medium">{duo.player2.playerName}</span>
-                                      )}
+                                      <PlayerProfileLink
+                                        discordUsername={duo.player2.discordUsername}
+                                        className="text-sm font-medium"
+                                      >
+                                        {duo.player2.playerName}
+                                      </PlayerProfileLink>
                                       {duo.player3 && (
                                         <>
                                           <span className="text-sm text-muted-foreground">&</span>
-                                          {duo.player3.discordUsername ? (
-                                            <Link
-                                              to={`/player/${duo.player3.discordUsername}`}
-                                              className="text-sm text-primary hover:underline font-medium"
+                                            <PlayerProfileLink
+                                              discordUsername={duo.player3.discordUsername}
+                                              className="text-sm font-medium"
                                             >
                                               {duo.player3.playerName}
-                                            </Link>
-                                          ) : (
-                                            <span className="text-sm font-medium">{duo.player3.playerName}</span>
-                                          )}
+                                            </PlayerProfileLink>
                                         </>
                                       )}
                                     </div>
@@ -765,16 +736,12 @@ export default function EventDetail() {
                                 <div className="flex flex-wrap gap-1">
                                   {result.members.map((member, idx) => (
                                     <span key={member.epicUsername}>
-                                      {member.discordUsername ? (
-                                        <Link
-                                          to={`/player/${member.discordUsername}`}
-                                          className="text-sm text-primary hover:underline font-medium"
-                                        >
-                                          {member.playerName}
-                                        </Link>
-                                      ) : (
-                                        <span className="text-sm font-medium">{member.playerName}</span>
-                                      )}
+                                      <PlayerProfileLink
+                                        discordUsername={member.discordUsername}
+                                        className="text-sm font-medium"
+                                      >
+                                        {member.playerName}
+                                      </PlayerProfileLink>
                                       {idx < result.members.length - 1 && <span className="text-sm text-muted-foreground">, </span>}
                                     </span>
                                   ))}
@@ -824,16 +791,12 @@ export default function EventDetail() {
                           <div className="flex flex-wrap gap-1">
                             {result.members.map((member, idx) => (
                               <span key={member.epicUsername}>
-                                {member.discordUsername ? (
-                                  <Link 
-                                    to={`/player/${member.discordUsername}`}
-                                    className="text-sm text-primary hover:underline font-medium"
-                                  >
-                                    {member.playerName}
-                                  </Link>
-                                ) : (
-                                  <span className="text-sm font-medium">{member.playerName}</span>
-                                )}
+                                <PlayerProfileLink
+                                  discordUsername={member.discordUsername}
+                                  className="text-sm font-medium"
+                                >
+                                  {member.playerName}
+                                </PlayerProfileLink>
                                 {idx < result.members.length - 1 && <span className="text-sm text-muted-foreground">, </span>}
                               </span>
                             ))}
@@ -946,27 +909,19 @@ export default function EventDetail() {
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   <div className="flex flex-wrap gap-1">
-                                    {duo.player1.discordUsername ? (
-                                      <Link 
-                                        to={`/player/${duo.player1.discordUsername}`}
-                                        className="text-sm text-primary hover:underline font-medium"
-                                      >
-                                        {duo.player1.playerName}
-                                      </Link>
-                                    ) : (
-                                      <span className="text-sm font-medium">{duo.player1.playerName}</span>
-                                    )}
+                                    <PlayerProfileLink
+                                      discordUsername={duo.player1.discordUsername}
+                                      className="text-sm font-medium"
+                                    >
+                                      {duo.player1.playerName}
+                                    </PlayerProfileLink>
                                     <span className="text-sm text-muted-foreground"> & </span>
-                                    {duo.player2.discordUsername ? (
-                                      <Link 
-                                        to={`/player/${duo.player2.discordUsername}`}
-                                        className="text-sm text-primary hover:underline font-medium"
-                                      >
-                                        {duo.player2.playerName}
-                                      </Link>
-                                    ) : (
-                                      <span className="text-sm font-medium">{duo.player2.playerName}</span>
-                                    )}
+                                    <PlayerProfileLink
+                                      discordUsername={duo.player2.discordUsername}
+                                      className="text-sm font-medium"
+                                    >
+                                      {duo.player2.playerName}
+                                    </PlayerProfileLink>
                                   </div>
                                   {duoTiers && duoTiers !== "?" && duoTiers !== "??" && (
                                     <Badge variant="secondary" className="text-xs font-mono">
@@ -1007,16 +962,12 @@ export default function EventDetail() {
                             <TableRow key={player.epicUsername}>
                               <TableCell className="font-medium">#{player.rank}</TableCell>
                               <TableCell>
-                                {player.discordUsername ? (
-                                  <Link 
-                                    to={`/player/${player.discordUsername}`}
-                                    className="text-sm text-primary hover:underline font-medium"
-                                  >
-                                    {player.playerName}
-                                  </Link>
-                                ) : (
-                                  <span className="text-sm font-medium">{player.playerName}</span>
-                                )}
+                                <PlayerProfileLink
+                                  discordUsername={player.discordUsername}
+                                  className="text-sm font-medium"
+                                >
+                                  {player.playerName}
+                                </PlayerProfileLink>
                               </TableCell>
                               <TableCell className="font-bold">{player.totalPoints}</TableCell>
                               <TableCell>{player.bestPlacement}</TableCell>
@@ -1061,16 +1012,12 @@ export default function EventDetail() {
                                 <div className="flex flex-wrap gap-1">
                                   {result.members.map((member, idx) => (
                                     <span key={member.epicUsername}>
-                                      {member.discordUsername ? (
-                                        <Link 
-                                          to={`/player/${member.discordUsername}`}
-                                          className="text-sm text-primary hover:underline font-medium"
-                                        >
-                                          {member.playerName}
-                                        </Link>
-                                      ) : (
-                                        <span className="text-sm font-medium">{member.playerName}</span>
-                                      )}
+                                      <PlayerProfileLink
+                                        discordUsername={member.discordUsername}
+                                        className="text-sm font-medium"
+                                      >
+                                        {member.playerName}
+                                      </PlayerProfileLink>
                                       {idx < result.members.length - 1 && <span className="text-sm text-muted-foreground">, </span>}
                                     </span>
                                   ))}
@@ -1159,16 +1106,12 @@ export default function EventDetail() {
                                     <div className="flex flex-wrap gap-1">
                                       {result.members.map((member, idx) => (
                                         <span key={member.epicUsername}>
-                                          {member.discordUsername ? (
-                                            <Link 
-                                              to={`/player/${member.discordUsername}`}
-                                              className="text-sm text-primary hover:underline font-medium"
-                                            >
-                                              {member.playerName}
-                                            </Link>
-                                          ) : (
-                                            <span className="text-sm font-medium">{member.playerName}</span>
-                                          )}
+                                        <PlayerProfileLink
+                                          discordUsername={member.discordUsername}
+                                          className="text-sm font-medium"
+                                        >
+                                          {member.playerName}
+                                        </PlayerProfileLink>
                                           {idx < result.members.length - 1 && <span className="text-sm text-muted-foreground">, </span>}
                                         </span>
                                       ))}
@@ -1197,6 +1140,6 @@ export default function EventDetail() {
         </Card>
       )}
       </div>
-    </>
+    </PageShell>
   );
 }

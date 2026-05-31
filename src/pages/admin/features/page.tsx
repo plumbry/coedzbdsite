@@ -1,17 +1,15 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
 import { 
   Download, Users, Zap, AlertTriangle, Trash2, Database, Wrench, Archive, RefreshCw, ShieldOff,
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import SiteHeader from "@/components/site-header.tsx";
-import AdminSidebar from "../_components/admin-sidebar.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import RoleGate from "@/components/role-gate.tsx";
 import ExportOptionsDialog from "../_components/export-options-dialog.tsx";
 import MergePlayersDialog from "../_components/merge-players-dialog.tsx";
 import RelinkResultsButton from "../_components/relink-results-button.tsx";
@@ -56,24 +54,16 @@ function FeaturesContent() {
   
   // Show loading while checking permissions
   if (isAdmin === undefined) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
+    return <Skeleton className="h-96 w-full" />;
   }
-  
-  // Redirect users without permission
+
   if (!isAdmin) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p className="text-muted-foreground mb-6">
-            This page is only accessible to administrators.
-          </p>
-        </div>
-      </div>
+      <RoleGate
+        allowed={false}
+        description="This page is only accessible to administrators."
+        showBackButton={false}
+      />
     );
   }
   
@@ -423,18 +413,7 @@ function FeaturesContent() {
   };
   
   return (
-    <div className="flex min-h-screen pt-14 lg:pt-0 bg-background">
-      <AdminSidebar />
-      <main className="flex-1">
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold mb-2">Features</h1>
-            <p className="text-muted-foreground">
-              Advanced admin tools and utilities
-            </p>
-          </div>
-          
-          <div className="space-y-4">
+    <div className="space-y-4">
             {/* Refresh All Stats */}
             <Card className="border-primary bg-primary/5">
               <CardHeader className="pb-2">
@@ -682,9 +661,6 @@ function FeaturesContent() {
             
             <GoogleSheetsManager />
             <YuniteDashboard showMatchData={false} />
-          </div>
-        </div>
-      </main>
       
       {/* Dialogs */}
       <ExportOptionsDialog
@@ -703,30 +679,12 @@ function FeaturesContent() {
 
 export default function FeaturesPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      
-      <Unauthenticated>
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="text-center space-y-6">
-            <h1 className="text-4xl text-balance font-bold tracking-tight">
-              Sign in to access staff panel
-            </h1>
-            <SignInButton />
-          </div>
-        </div>
-      </Unauthenticated>
-
-      <AuthLoading>
-        <div className="flex min-h-screen items-center justify-center">
-          <Skeleton className="h-96 w-full max-w-6xl" />
-        </div>
-      </AuthLoading>
-
-      <Authenticated>
-        <FeaturesContent />
-      </Authenticated>
-    </div>
+    <AdminPageLayout
+      title="Features"
+      description="Advanced admin tools and utilities"
+    >
+      <FeaturesContent />
+    </AdminPageLayout>
   );
 }
 

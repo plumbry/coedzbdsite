@@ -24,4 +24,11 @@ crons.daily(
   internal.discord.sync.syncDiscordMembersInternal,
 );
 
+// Refresh Osirion tournament cache for in-game earnings scans
+crons.daily(
+  "refresh tournament scan cache",
+  { hourUTC: 4, minuteUTC: 0 }, // 4:00 AM UTC daily
+  internal.inGameEarnings.actions.refreshTournamentCache,
+);
+
 export default crons;

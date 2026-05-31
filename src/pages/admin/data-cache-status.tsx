@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import {
@@ -22,9 +21,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { ArrowLeft, Database, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import SiteHeader from "@/components/site-header.tsx";
-import AdminSidebar from "./_components/admin-sidebar.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import RoleGate from "@/components/role-gate.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import { toast } from "sonner";
@@ -84,29 +82,15 @@ function DataCacheStatusContent() {
   };
 
   if (isAdmin === undefined) {
-    return (
-      <div className="container mx-auto px-4 py-4 max-w-7xl">
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
+    return <Skeleton className="h-96 w-full" />;
   }
 
   if (!isAdmin) {
     return (
-      <div className="container mx-auto px-4 py-4 max-w-7xl">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p className="text-muted-foreground mb-6">
-            This page is only accessible to administrators.
-          </p>
-          <Link to="/">
-            <Button>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Home
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <RoleGate
+        allowed={false}
+        description="This page is only accessible to administrators."
+      />
     );
   }
 
@@ -134,17 +118,7 @@ function DataCacheStatusContent() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-4 max-w-7xl">
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <Database className="h-8 w-8" />
-          <h1 className="text-3xl font-bold">Data Cache Status</h1>
-        </div>
-        <p className="text-muted-foreground">
-          Monitor what data is cached locally and when it was last synced
-        </p>
-      </div>
-
+    <div className="space-y-4">
       {playerStats === undefined || eventStats === undefined || importStats === undefined || matchStatsData === undefined || resultStats === undefined || cacheMetadata === undefined ? (
         <Skeleton className="h-96 w-full" />
       ) : (
@@ -683,30 +657,12 @@ function DataCacheStatusContent() {
 
 export default function DataCacheStatus() {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      <AuthLoading>
-        <div className="container mx-auto px-4 py-8">
-          <Skeleton className="h-96 w-full" />
-        </div>
-      </AuthLoading>
-      <Unauthenticated>
-        <div className="container mx-auto px-4 py-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">Sign In Required</h2>
-          <p className="text-muted-foreground mb-6">
-            Please sign in to view the data cache status.
-          </p>
-          <SignInButton />
-        </div>
-      </Unauthenticated>
-      <Authenticated>
-        <div className="flex min-h-screen pt-14 lg:pt-0 bg-background">
-          <AdminSidebar />
-          <div className="flex-1">
-            <DataCacheStatusContent />
-          </div>
-        </div>
-      </Authenticated>
-    </div>
+    <AdminPageLayout
+      title="Data Cache Status"
+      description="Monitor and rebuild cached player, event, and import data"
+      authTitle="Sign in to view the data cache status"
+    >
+      <DataCacheStatusContent />
+    </AdminPageLayout>
   );
 }

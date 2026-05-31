@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -65,8 +64,9 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import SiteHeader from "@/components/site-header.tsx";
-import AdminSidebar from "./_components/admin-sidebar.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import PageHeader from "@/components/page-header.tsx";
+import RoleGate from "@/components/role-gate.tsx";
 import {
   Tooltip,
   TooltipContent,
@@ -76,6 +76,7 @@ import {
 import { Badge } from "@/components/ui/badge.tsx";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -87,7 +88,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
 import { toast } from "sonner";
 
 type SortField =
@@ -609,31 +609,11 @@ function TierReEvaluationContent() {
 
   // Show loading while checking permissions
   if (isLoadingUser) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
+    return <Skeleton className="h-96 w-full" />;
   }
 
-  // Redirect users without permission
   if (!canView) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p className="text-muted-foreground mb-6">
-            This page is only accessible to administrators and moderators.
-          </p>
-          <Link to="/">
-            <Button>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Home
-            </Button>
-          </Link>
-        </div>
-      </div>
-    );
+    return <RoleGate allowed={false} />;
   }
 
   const handleSort = (field: SortField) => {
@@ -659,7 +639,7 @@ function TierReEvaluationContent() {
   if (cachedData === undefined && canView && !isLoadingUser) {
     // Still loading initial query
     return (
-      <div className="container mx-auto px-4 py-4 max-w-7xl">
+      <div className="space-y-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Loading Tier Re-Evaluation Data</CardTitle>
@@ -680,7 +660,7 @@ function TierReEvaluationContent() {
   // If query is being skipped (no permissions), cachedData will stay undefined
   if (cachedData === undefined && (!canView || isLoadingUser)) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="space-y-4">
         <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950 dark:border-orange-900">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
@@ -699,7 +679,7 @@ function TierReEvaluationContent() {
   if (cachedData === null || !evaluationData || !evaluationData.evaluations) {
     // No cache available - admin needs to rebuild it
     return (
-      <div className="container mx-auto px-4 py-4 max-w-7xl">
+      <div className="space-y-4">
         <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950 dark:border-orange-900">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
@@ -740,7 +720,7 @@ function TierReEvaluationContent() {
   // Display error if one occurred
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-4 max-w-7xl">
+      <div className="space-y-4">
         <Card className="border-destructive">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
@@ -765,7 +745,7 @@ function TierReEvaluationContent() {
   // Safety check for data structure
   if (evaluationData && !Array.isArray(evaluationData.evaluations)) {
     return (
-      <div className="container mx-auto px-4 py-4 max-w-7xl">
+      <div className="space-y-4">
         <Card className="border-destructive">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
@@ -886,29 +866,26 @@ function TierReEvaluationContent() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-2 max-w-7xl space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold">Tier Re-Evaluation</h1>
-            {evaluationData && 'lastUpdated' in evaluationData && (
-              <Badge variant="outline" className="text-xs">
-                Cached: {new Date(evaluationData.lastUpdated).toLocaleString()}
-              </Badge>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Automatic tier re-evaluation suggestions based on holistic scoring (placement, win rate, kills per match) and recent performance
-          </p>
-          <div className="flex items-center gap-4 mt-1">
-            <Link to="/admin/leaderboard-stats" className="text-sm text-primary hover:underline">
-              View Leaderboard Statistics →
-            </Link>
-            <Link to="/admin/average-stats" className="text-sm text-primary hover:underline">
-              View Average Stats →
-            </Link>
-          </div>
-        </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="Tier Re-Evaluation"
+        description="Automatic tier re-evaluation suggestions based on holistic scoring (placement, win rate, kills per match) and recent performance"
+        variant="compact"
+        actions={
+          evaluationData && "lastUpdated" in evaluationData ? (
+            <Badge variant="outline" className="text-xs">
+              Cached: {new Date(evaluationData.lastUpdated).toLocaleString()}
+            </Badge>
+          ) : undefined
+        }
+      />
+      <div className="flex items-center gap-4 flex-wrap text-sm">
+        <Link to="/admin/stats" className="text-primary hover:underline">
+          View all stats →
+        </Link>
+        <Link to="/admin/tier-re-evaluation" className="text-primary hover:underline">
+          Tier Re-Evaluation →
+        </Link>
       </div>
       {isAdmin && (
         <div className="flex items-center gap-2 flex-wrap">
@@ -2065,13 +2042,14 @@ function TierReEvaluationContent() {
 
       {/* Player Comparison Dialog */}
       <Dialog open={showComparisonDialog} onOpenChange={setShowComparisonDialog}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogContent size="full">
           <DialogHeader>
             <DialogTitle>Player Comparison</DialogTitle>
             <DialogDescription>
               Side-by-side comparison of {selectedPlayers.size} selected player{selectedPlayers.size !== 1 ? "s" : ""}
             </DialogDescription>
           </DialogHeader>
+          <DialogBody>
           <div className="space-y-4">
             {getSelectedPlayerData().length > 0 ? (
               <>
@@ -2243,6 +2221,7 @@ function TierReEvaluationContent() {
               </div>
             )}
           </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
 
@@ -2269,32 +2248,8 @@ function TierReEvaluationContent() {
 
 export default function TierReEvaluation() {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      <Authenticated>
-        <div className="flex min-h-screen pt-14 lg:pt-0 bg-background">
-          <AdminSidebar />
-          <div className="flex-1">
-            <TierReEvaluationContent />
-          </div>
-        </div>
-      </Authenticated>
-      <Unauthenticated>
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-4">Authentication Required</h1>
-            <p className="text-muted-foreground mb-6">
-              Please sign in to access this page.
-            </p>
-            <SignInButton />
-          </div>
-        </div>
-      </Unauthenticated>
-      <AuthLoading>
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
-          <Skeleton className="h-96 w-full" />
-        </div>
-      </AuthLoading>
-    </div>
+    <AdminPageLayout skipHeader authTitle="Sign in to access tier re-evaluation">
+      <TierReEvaluationContent />
+    </AdminPageLayout>
   );
 }

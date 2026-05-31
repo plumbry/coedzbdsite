@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Loader2, ExternalLink, FileUp, RefreshCw, Trash2, Edit, Users, Download, Zap, X, Eye, Search, ChevronDown, ChevronRight, CheckSquare, Square, CalendarPlus, Link2 } from "lucide-react";
@@ -1717,7 +1717,7 @@ export default function ImportThirdParty() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingImport} onOpenChange={(open) => !open && setEditingImport(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>Edit Import Details</DialogTitle>
             <DialogDescription>
@@ -1835,13 +1835,14 @@ export default function ImportThirdParty() {
 
       {/* Create Event from Import Dialog */}
       <Dialog open={!!creatingEventFromImport} onOpenChange={(open) => !open && setCreatingEventFromImport(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>Create Event from Import</DialogTitle>
             <DialogDescription>
               Review and adjust the detected event details before creating
             </DialogDescription>
           </DialogHeader>
+          <DialogBody>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="create-event-name">
@@ -1964,6 +1965,7 @@ export default function ImportThirdParty() {
               </Button>
             </div>
           </div>
+          </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreatingEventFromImport(null)} disabled={isCreatingEvent}>
               Cancel
@@ -1996,7 +1998,7 @@ export default function ImportThirdParty() {
           setInspectMatchesResult(null);
         }
       }}>
-        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+        <DialogContent size="lg">
           <DialogHeader>
             <DialogTitle>Raw Yunite API Data</DialogTitle>
             <DialogDescription>
@@ -2005,6 +2007,7 @@ export default function ImportThirdParty() {
             </DialogDescription>
           </DialogHeader>
 
+          <DialogBody className="space-y-3">
           {/* Tabs for Tournament vs Matches */}
           <div className="flex gap-2 border-b pb-2">
             <Button
@@ -2029,7 +2032,7 @@ export default function ImportThirdParty() {
             </Button>
           </div>
 
-          <div className="flex-1 overflow-auto">
+          <div>
             {inspectTab === "tournament" && (
               <>
                 {isInspecting ? (
@@ -2074,6 +2077,7 @@ export default function ImportThirdParty() {
               </>
             )}
           </div>
+          </DialogBody>
 
           <DialogFooter>
             {inspectTab === "tournament" && inspectResult && (

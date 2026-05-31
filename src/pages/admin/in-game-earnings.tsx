@@ -1,5 +1,4 @@
 import { useQuery, useAction, useMutation } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -12,8 +11,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty.tsx";
-import SiteHeader from "@/components/site-header.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
 function JobProgressBanner() {
@@ -26,8 +24,9 @@ function JobProgressBanner() {
 
   const progressPct = job.totalPlayers > 0 ? (job.processed / job.totalPlayers) * 100 : 0;
   const isRunning = job.status === "running";
-  const batchesTotal = Math.ceil(job.totalPlayers / 8);
-  const batchesDone = Math.ceil(job.processed / 8);
+  const scanProgress = job.scanLeaderboardIndex !== undefined && job.currentEpicUsername
+    ? ` — scanning ${job.currentEpicUsername}`
+    : "";
 
   return (
     <Card className={
@@ -44,7 +43,7 @@ function JobProgressBanner() {
             {job.status === "completed" && <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />}
             {job.status === "cancelled" && <XCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />}
             <span className="text-sm font-medium">
-              {isRunning && `Processing batch ${batchesDone + 1} of ${batchesTotal}...`}
+              {isRunning && `Processing player ${job.processed + 1} of ${job.totalPlayers}${scanProgress}...`}
               {job.status === "completed" && `Completed: ${job.succeeded} succeeded, ${job.failed} failed`}
               {job.status === "cancelled" && `Cancelled after ${job.processed} of ${job.totalPlayers} players`}
               {job.status === "failed" && `Failed: ${job.lastError ?? "Unknown error"}`}
@@ -66,7 +65,7 @@ function JobProgressBanner() {
           <Progress value={progressPct} className="h-2" />
           <p className="text-xs text-muted-foreground">
             {job.processed} / {job.totalPlayers} players ({job.succeeded} ok, {job.failed} errors)
-            {isRunning && " — next batch in ~65s"}
+            {isRunning && " — next batch in ~45s"}
           </p>
         </div>
       </CardContent>
@@ -118,7 +117,11 @@ function InGameEarningsContent() {
         playerId: playerId as Id<"players">,
       });
       if (result.success) {
-        toast.success(`Found $${result.totalEarnings?.toLocaleString()} from ${result.tournamentCount} events`);
+        if (result.jobStarted) {
+          toast.success("Earnings fetch started — check progress above");
+        } else {
+          toast.success(`Found $${result.totalEarnings?.toLocaleString()} from ${result.tournamentCount} events`);
+        }
       } else {
         toast.error(result.error ?? "Failed to fetch");
       }
@@ -223,8 +226,7 @@ function InGameEarningsContent() {
         {recentPlayers && (
           <p className="text-xs text-muted-foreground">
             Only players with scrim activity in the last 60 days.
-            ~{Math.ceil((recentPlayers.length / 8) * 65 / 60)} min estimated.
-            Uses {recentPlayers.length} of 500 monthly API calls.
+            Each player scan takes ~30–45 min via the Osirion API.
           </p>
         )}
       </div>
@@ -386,31 +388,12 @@ function InGameEarningsContent() {
 
 export default function InGameEarningsPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      <main className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">In-Game Earnings</h1>
-          <p className="text-muted-foreground mt-1">
-            Official Fortnite tournament earnings for players active in the last 60 days
-          </p>
-        </div>
-
-        <Authenticated>
-          <InGameEarningsContent />
-        </Authenticated>
-        <Unauthenticated>
-          <Card>
-            <CardContent className="py-12 text-center space-y-4">
-              <p className="text-muted-foreground">Sign in to access earnings data</p>
-              <SignInButton />
-            </CardContent>
-          </Card>
-        </Unauthenticated>
-        <AuthLoading>
-          <Skeleton className="h-64 w-full" />
-        </AuthLoading>
-      </main>
-    </div>
+    <AdminPageLayout
+      title="In-Game Earnings"
+      description="Official Fortnite tournament earnings for players active in the last 60 days"
+      authTitle="Sign in to access earnings data"
+    >
+      <InGameEarningsContent />
+    </AdminPageLayout>
   );
 }

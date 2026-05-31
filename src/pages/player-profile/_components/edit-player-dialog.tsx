@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -89,7 +89,7 @@ export default function EditPlayerDialog({ player, open, onOpenChange }: EditPla
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle>Edit Player</DialogTitle>
           <DialogDescription>
@@ -97,6 +97,7 @@ export default function EditPlayerDialog({ player, open, onOpenChange }: EditPla
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -198,6 +199,7 @@ export default function EditPlayerDialog({ player, open, onOpenChange }: EditPla
             />
           </div>
         </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>

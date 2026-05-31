@@ -1,13 +1,10 @@
-import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
-import { ArrowLeft, Calendar, Target, Crosshair, TrendingUp, Activity, Medal, Users, BarChart3, TrendingDown, RefreshCw } from "lucide-react";
-import SiteHeader from "@/components/site-header.tsx";
+import { Calendar, Target, Crosshair, TrendingUp, Activity, Medal, Users, BarChart3, TrendingDown, RefreshCw } from "lucide-react";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { toast } from "sonner";
 import { ConvexError } from "convex/values";
@@ -66,16 +63,11 @@ function AverageStatsContent() {
   }
   
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-4">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Average Player Statistics</h1>
-          <p className="text-muted-foreground mt-2">
-            Aggregated performance metrics across all active players with match data from Yunite sync
-          </p>
           {stats?.lastUpdated && (
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground">
               Last updated: {new Date(stats.lastUpdated).toLocaleString()}
             </p>
           )}
@@ -382,33 +374,15 @@ function AverageStatsContent() {
 
 export default function AverageStats() {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <Link to="/admin/tier-re-evaluation">
-          <Button variant="secondary" size="sm" className="mb-6">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Tier Re-Evaluation
-          </Button>
-        </Link>
-        
-        <AuthLoading>
-          <Skeleton className="h-96 w-full" />
-        </AuthLoading>
-        
-        <Unauthenticated>
-          <Card>
-            <CardContent className="py-12 text-center space-y-4">
-              <p className="text-muted-foreground">Please sign in to view average statistics</p>
-              <SignInButton />
-            </CardContent>
-          </Card>
-        </Unauthenticated>
-        
-        <Authenticated>
-          <AverageStatsContent />
-        </Authenticated>
-      </div>
-    </div>
+    <AdminPageLayout
+      title="Average Player Statistics"
+      description="Aggregated performance metrics across all active players with match data from Yunite sync"
+      authTitle="Sign in to view average statistics"
+      header={{
+        back: { label: "Back to Tier Re-Evaluation", href: "/admin/tier-re-evaluation" },
+      }}
+    >
+      <AverageStatsContent />
+    </AdminPageLayout>
   );
 }

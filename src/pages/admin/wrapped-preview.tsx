@@ -6,8 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { ChevronRight, Sparkles, ArrowLeft } from "lucide-react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { useNavigate } from "react-router-dom";
 
@@ -474,28 +473,8 @@ function WrappedPreviewInner() {
 
 export default function WrappedPreviewPage() {
   return (
-    <>
-      <Unauthenticated>
-        <div className="flex min-h-screen items-center justify-center">
-          <Card>
-            <CardHeader>
-              <CardTitle>Sign in required</CardTitle>
-              <CardDescription>Please sign in to preview the wrapped page</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <SignInButton />
-            </CardContent>
-          </Card>
-        </div>
-      </Unauthenticated>
-      <AuthLoading>
-        <div className="flex min-h-screen items-center justify-center">
-          <Skeleton className="h-96 w-full max-w-2xl" />
-        </div>
-      </AuthLoading>
-      <Authenticated>
-        <WrappedPreviewInner />
-      </Authenticated>
-    </>
+    <AdminPageLayout skipHeader authTitle="Sign in to preview the wrapped page">
+      <WrappedPreviewInner />
+    </AdminPageLayout>
   );
 }

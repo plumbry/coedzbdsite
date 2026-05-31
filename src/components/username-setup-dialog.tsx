@@ -64,7 +64,7 @@ export default function UsernameSetupDialog() {
 
   return (
     <Dialog open={isOpen}>
-      <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent size="sm" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Choose a username</DialogTitle>
           <DialogDescription>

@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useConvex } from "convex/react";
-import { Link } from "react-router-dom";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -10,7 +9,6 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import {
-  ArrowLeftIcon,
   SearchIcon,
   UserIcon,
   SkullIcon,
@@ -21,6 +19,8 @@ import {
   TrophyIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
+import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import PageHeader from "@/components/page-header.tsx";
 
 type SelectedPlayer = {
   _id: Id<"players">;
@@ -119,7 +119,7 @@ function PlayerSearchInput({
             {selected.tier}
           </Badge>
         )}
-        <Button variant="ghost" size="icon" className="ml-auto h-6 w-6" onClick={onClear}>
+        <Button variant="ghost" size="icon" className="ml-auto min-h-9 min-w-9 h-9 w-9" onClick={onClear}>
           <XIcon className="h-3 w-3" />
         </Button>
       </div>
@@ -265,7 +265,7 @@ function RankedList({
   );
 }
 
-export default function UpsetKillsTop() {
+function UpsetKillsTopContent() {
   const convex = useConvex();
   const [player, setPlayer] = useState<SelectedPlayer | null>(null);
   const [data, setData] = useState<TopResult | null>(null);
@@ -294,27 +294,20 @@ export default function UpsetKillsTop() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6 pt-14 lg:pt-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/admin/upset-kills">
-            <ArrowLeftIcon className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <TargetIcon className="h-6 w-6 text-amber-500" />
-            Top Kills Lookup
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {"See a player's top 5 killers and top 5 victims"}
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Based on Yunite match replay data. Knocker always gets credit. Counts may differ from leaderboard totals.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="Top Kills Lookup"
+        icon={TargetIcon}
+        description="See a player's top 5 killers and top 5 victims. Based on Yunite match replay data — knocker always gets credit."
+        back={{ label: "Upset Kills", href: "/admin/upset-kills" }}
+        breadcrumbs={[
+          { label: "Admin", href: "/admin" },
+          { label: "Stats", href: "/admin/stats" },
+          { label: "Upset Kills", href: "/admin/upset-kills" },
+          { label: "Top Kills" },
+        ]}
+        variant="compact"
+      />
 
       {/* Player Picker */}
       <Card>
@@ -420,5 +413,18 @@ export default function UpsetKillsTop() {
         </>
       )}
     </div>
+  );
+}
+
+export default function UpsetKillsTop() {
+  return (
+    <AdminPageLayout
+      title="Top Upset Kills"
+      skipHeader
+      authTitle="Sign in to view upset kills"
+      header={{ back: { label: "Back to Upset Kills", href: "/admin/upset-kills" } }}
+    >
+      <UpsetKillsTopContent />
+    </AdminPageLayout>
   );
 }

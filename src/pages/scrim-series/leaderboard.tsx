@@ -10,12 +10,12 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@/components/ui/empty.tsx";
+import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { Trophy, Columns3, EyeOff } from "lucide-react";
+import PageShell from "@/components/page-shell.tsx";
+import PageHeader from "@/components/page-header.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { Trophy, ArrowLeft, Columns3, EyeOff } from "lucide-react";
-import { Link } from "react-router-dom";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
-import SiteHeader from "@/components/site-header.tsx";
 
 export default function ScrimSeriesLeaderboardPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -43,116 +43,87 @@ export default function ScrimSeriesLeaderboardPage() {
 
   if (!slug) {
     return (
-      <div className="min-h-screen bg-background">
-        <SiteHeader />
-        <div className="mx-auto max-w-7xl px-6 py-16">
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Trophy />
-              </EmptyMedia>
-              <EmptyTitle>No Series Selected</EmptyTitle>
-              <EmptyDescription>
-                Go back to view all series.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        </div>
-      </div>
+      <PageShell>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Trophy />
+            </EmptyMedia>
+            <EmptyTitle>No Series Selected</EmptyTitle>
+            <EmptyDescription>
+              Go back to view all series.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </PageShell>
     );
   }
 
   // Loading state
   if (series === undefined || leaderboard === undefined) {
     return (
-      <div className="min-h-screen bg-background">
-        <SiteHeader />
-        <div className="border-b bg-card">
-          <div className="mx-auto max-w-7xl px-6 py-10">
-            <Skeleton className="h-10 w-64" />
-          </div>
-        </div>
-        <div className="mx-auto max-w-7xl px-6 py-8">
-          <Skeleton className="h-[400px] w-full" />
-        </div>
-      </div>
+      <PageShell>
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-[400px] w-full" />
+      </PageShell>
     );
   }
 
   if (!series) {
     return (
-      <div className="min-h-screen bg-background">
-        <SiteHeader />
-        <div className="mx-auto max-w-7xl px-6 py-16">
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Trophy />
-              </EmptyMedia>
-              <EmptyTitle>Series Not Found</EmptyTitle>
-              <EmptyDescription>
-                This series may have been deleted.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        </div>
-      </div>
+      <PageShell>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Trophy />
+            </EmptyMedia>
+            <EmptyTitle>Series Not Found</EmptyTitle>
+            <EmptyDescription>
+              This series may have been deleted.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </PageShell>
     );
   }
 
+  const totalGames = series.gamesPerSession.reduce((a: number, b: number) => a + b, 0);
+
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
+    <PageShell>
+      <PageHeader
+        title={series.name}
+        icon={Trophy}
+        description={`Best ${series.bestN} of ${totalGames} games`}
+        back={{ label: "Back to Scrim Series", href: "/scrim-series" }}
+        actions={
+          <Badge variant={series.isActive ? "default" : "secondary"}>
+            {series.isActive ? "Active" : "Completed"}
+          </Badge>
+        }
+      />
 
-      {/* Header */}
-      <div className="border-b bg-card">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
-          <div className="flex items-center gap-3 mb-2">
-            <Link
-              to="/scrim-series"
-              className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-            <Trophy className="h-7 w-7 text-primary" />
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-              {series.name}
-            </h1>
-            <Badge variant={series.isActive ? "default" : "secondary"}>
-              {series.isActive ? "Active" : "Completed"}
-            </Badge>
-          </div>
-          <p className="text-muted-foreground text-sm ml-8 sm:ml-11">
-            Best {series.bestN} of{" "}
-            {series.gamesPerSession.reduce((a: number, b: number) => a + b, 0)}{" "}
-            games
-          </p>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6">
-        {leaderboard.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Trophy />
-              </EmptyMedia>
-              <EmptyTitle>No Scores Yet</EmptyTitle>
-              <EmptyDescription>
-                No players have scores recorded for this series.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <LeaderboardTable
-            entries={leaderboard}
-            bestN={series.bestN}
-            penaltyAmount={series.penaltyAmount}
-            gamesPerSession={series.gamesPerSession}
-          />
-        )}
-      </div>
-    </div>
+      {leaderboard.length === 0 ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Trophy />
+            </EmptyMedia>
+            <EmptyTitle>No Scores Yet</EmptyTitle>
+            <EmptyDescription>
+              No players have scores recorded for this series.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <LeaderboardTable
+          entries={leaderboard}
+          bestN={series.bestN}
+          penaltyAmount={series.penaltyAmount}
+          gamesPerSession={series.gamesPerSession}
+        />
+      )}
+    </PageShell>
   );
 }
 

@@ -183,24 +183,12 @@ export default function AuditLogView() {
   };
 
   if (logs === undefined) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Audit Log</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-96 w-full" />
-        </CardContent>
-      </Card>
-    );
+    return <Skeleton className="h-96 w-full" />;
   }
-
-
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Audit Log</CardTitle>
+      <CardHeader className="pb-3">
         <CardDescription>
           Track all admin actions and changes in the system
         </CardDescription>
