@@ -5,6 +5,8 @@ export function useServiceWorker() {
   const toastShown = useRef(false);
 
   useEffect(() => {
+    // Service worker caching breaks Vite HMR and can white-screen local dev.
+    if (import.meta.env.DEV) return;
     if (!("serviceWorker" in navigator)) return;
 
     const showUpdateToast = () => {

@@ -1,4 +1,5 @@
 import { mutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel.d.ts";
 
@@ -116,7 +117,7 @@ export const fixOrphanedMatchStats = mutation({
 });
 
 async function processDiscordId(
-  ctx: { db: any },
+  ctx: MutationCtx,
   discordId: string
 ): Promise<{ updated: number; skipped: number; updates: Array<{ discordId: string; oldPlayerId: string; newPlayerId: string; count: number }> }> {
   let updated = 0;
@@ -125,7 +126,7 @@ async function processDiscordId(
   // Find the current player with this Discord ID
   const currentPlayer = await ctx.db
     .query("players")
-    .filter((q: any) => q.eq(q.field("discordUserId"), discordId))
+    .filter((q) => q.eq(q.field("discordUserId"), discordId))
     .first();
   
   if (!currentPlayer) {
@@ -136,7 +137,7 @@ async function processDiscordId(
   // We only need to check a few to find the old player ID pattern
   const sampleStats = await ctx.db
     .query("matchPlayerStats")
-    .filter((q: any) => q.eq(q.field("discordId"), discordId))
+    .filter((q) => q.eq(q.field("discordId"), discordId))
     .take(10);
   
   if (sampleStats.length === 0) {
@@ -165,7 +166,7 @@ async function processDiscordId(
       let batchUpdated = 0;
       const statsToUpdate = await ctx.db
         .query("matchPlayerStats")
-        .filter((q: any) => 
+        .filter((q) =>
           q.and(
             q.eq(q.field("discordId"), discordId),
             q.eq(q.field("playerId"), oldPlayerId)

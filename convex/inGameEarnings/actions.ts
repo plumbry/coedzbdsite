@@ -1,6 +1,7 @@
 "use node";
 
 import { action, internalAction } from "../_generated/server";
+import type { ActionCtx } from "../_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel.d.ts";
@@ -29,7 +30,7 @@ type SaveFn = (data: {
   tournaments: TournamentEarning[];
 }) => Promise<void>;
 
-async function ensureTournamentCache(ctx: { runQuery: Function; runMutation: Function }) {
+async function ensureTournamentCache(ctx: Pick<ActionCtx, "runQuery" | "runMutation">) {
   const cache = await ctx.runQuery(internal.inGameEarnings.queries.getTournamentScanCache, {});
   const isFresh = cache && Date.now() - cache.updatedAt < CACHE_MAX_AGE_MS;
 
