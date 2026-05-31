@@ -73,7 +73,7 @@ function SpinModerationContent() {
 
 export default function SpinModerationPage() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireEventBanAccess
       title="Spin Moderation"
       description="Manage scrim event unlock codes for non-mod helpers."
     >

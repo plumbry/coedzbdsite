@@ -657,7 +657,7 @@ function DataCacheStatusContent() {
 
 export default function DataCacheStatus() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Data Cache Status"
       description="Monitor and rebuild cached player, event, and import data"
       authTitle="Sign in to view the data cache status"

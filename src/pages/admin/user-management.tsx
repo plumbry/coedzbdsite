@@ -3,7 +3,7 @@ import UserManagementContent from "./_components/user-management-content.tsx";
 
 export default function UserManagementPage() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="User Management"
       description="Manage admin access for users"
       authTitle="Sign in to access user management"

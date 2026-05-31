@@ -145,25 +145,8 @@ export default function DataMaintenanceTools() {
     }
   };
 
-  const handleDeleteDiscordOnlyMembers = async () => {
+  const runDeleteDiscordOnlyMembers = async () => {
     if (!players) return;
-
-    const discordOnlyCount = players.filter((p) => {
-      const hasRealDiscordId = p.discordUserId && !p.discordUserId.startsWith("placeholder_");
-      const hasNoTier = !p.tier;
-      return hasRealDiscordId && hasNoTier;
-    }).length;
-
-    if (discordOnlyCount === 0) {
-      toast.info("No Discord-only members to delete");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `⚠️ CLEAR DISCORD SYNC DATA ⚠️\n\nThis will delete ${discordOnlyCount} Discord member${discordOnlyCount === 1 ? "" : "s"} who have NOT been evaluated/assigned a tier.\n\nThis clears everything the bot has synced and reverts to your manually managed players.\n\nYour ${players.length - discordOnlyCount} evaluated player${players.length - discordOnlyCount === 1 ? "" : "s"} with tier assignments will be PRESERVED.\n\nContinue?`,
-    );
-
-    if (!confirmed) return;
 
     setIsDeletingDiscordOnly(true);
     try {
@@ -181,12 +164,6 @@ export default function DataMaintenanceTools() {
   const runDeleteAllPlayers = async () => {
     if (!players) return;
 
-    const totalCount = players.length;
-    if (totalCount === 0) {
-      toast.info("No players to delete");
-      return;
-    }
-
     setIsDeletingAllPlayers(true);
     try {
       const result = await deleteAllPlayers({});
@@ -198,12 +175,7 @@ export default function DataMaintenanceTools() {
     }
   };
 
-  const handleArchiveNoDiscord = async () => {
-    const confirmed = window.confirm(
-      `⚠️ ARCHIVE NO-DISCORD PLAYERS ⚠️\n\nThis will archive ALL active players who have no real Discord ID (placeholder IDs only).\n\nThey will be set to "former" status. This cannot be undone automatically.\n\nContinue?`,
-    );
-    if (!confirmed) return;
-
+  const runArchiveNoDiscord = async () => {
     setIsArchivingNoDiscord(true);
     try {
       const result = await archiveAllWithoutDiscordId({});
@@ -215,13 +187,7 @@ export default function DataMaintenanceTools() {
     }
   };
 
-  const handleMigrateMembershipStatus = async () => {
-    const confirmed = window.confirm(
-      `Run Membership Status Migration?\n\nThis will update all existing players to set their membership status based on their current status:\n\n• "active" players → "accepted"\n• "archived" players → "former"\n• "rejected" players → "rejected"\n• "discord_member" → (no status, not yet evaluated)\n\nThis is a one-time migration to populate the new Member Management system.\n\nContinue?`,
-    );
-
-    if (!confirmed) return;
-
+  const runMigrateMembershipStatus = async () => {
     setIsMigrating(true);
     try {
       const result = await migrateMembershipStatus({});
@@ -233,13 +199,7 @@ export default function DataMaintenanceTools() {
     }
   };
 
-  const handleFixPlacements = async () => {
-    const confirmed = window.confirm(
-      `Fix Yunite Leaderboard Placements?\n\nThis will re-fetch all Yunite tournament leaderboards and fix the placement values.\n\nProcesses 5 imports at a time to avoid timeouts.\n\nContinue?`,
-    );
-
-    if (!confirmed) return;
-
+  const runFixPlacements = async () => {
     setIsFixingPlacements(true);
     setFixProgress(null);
 
@@ -285,12 +245,7 @@ export default function DataMaintenanceTools() {
     }
   };
 
-  const handleRemoveAllTierRoles = async () => {
-    const confirmed = window.confirm(
-      `⚠️ REMOVE ALL TIER ROLES ⚠️\n\nThis will remove ALL tier roles (Tier S, A, B, C, D) from EVERY member in the Discord server.\n\nThis action affects real Discord roles and cannot be undone automatically.\n\nAre you sure you want to continue?`,
-    );
-    if (!confirmed) return;
-
+  const runRemoveAllTierRoles = async () => {
     setIsRemovingRoles(true);
     try {
       const result = await removeAllTierRoles({});
@@ -300,6 +255,29 @@ export default function DataMaintenanceTools() {
     } finally {
       setIsRemovingRoles(false);
     }
+  };
+
+  const promptClearDiscordSync = () => {
+    if (!players) return;
+
+    const discordOnlyCount = players.filter((p) => {
+      const hasRealDiscordId = p.discordUserId && !p.discordUserId.startsWith("placeholder_");
+      const hasNoTier = !p.tier;
+      return hasRealDiscordId && hasNoTier;
+    }).length;
+
+    if (discordOnlyCount === 0) {
+      toast.info("No Discord-only members to delete");
+      return;
+    }
+
+    setPendingConfirm({
+      title: "Clear Discord sync data?",
+      description: `This will delete ${discordOnlyCount} Discord member${discordOnlyCount === 1 ? "" : "s"} who have NOT been evaluated/assigned a tier.\n\nYour ${players.length - discordOnlyCount} evaluated player${players.length - discordOnlyCount === 1 ? "" : "s"} with tier assignments will be preserved.`,
+      confirmLabel: "Clear Discord Sync Data",
+      variant: "destructive",
+      onConfirm: runDeleteDiscordOnlyMembers,
+    });
   };
 
   return (
@@ -351,7 +329,20 @@ export default function DataMaintenanceTools() {
             </CardDescription>
           </CardHeader>
           <CardContent className="py-3">
-            <Button size="sm" variant="secondary" onClick={handleMigrateMembershipStatus} disabled={isMigrating}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                setPendingConfirm({
+                  title: "Run membership status migration?",
+                  description:
+                    'This will update all existing players:\n\n• "active" → "accepted"\n• "archived" → "former"\n• "rejected" → "rejected"\n• "discord_member" → (no status)\n\nThis is a one-time migration.',
+                  confirmLabel: "Run Migration",
+                  onConfirm: runMigrateMembershipStatus,
+                })
+              }
+              disabled={isMigrating}
+            >
               <Database className="mr-2 h-4 w-4" />
               {isMigrating ? "Running Migration..." : "Run Migration"}
             </Button>
@@ -369,7 +360,20 @@ export default function DataMaintenanceTools() {
             </CardDescription>
           </CardHeader>
           <CardContent className="py-3">
-            <Button size="sm" variant="secondary" onClick={handleFixPlacements} disabled={isFixingPlacements}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                setPendingConfirm({
+                  title: "Fix Yunite leaderboard placements?",
+                  description:
+                    "This will re-fetch all Yunite tournament leaderboards and fix placement values.\n\nProcesses 5 imports at a time to avoid timeouts.",
+                  confirmLabel: "Fix Placements",
+                  onConfirm: runFixPlacements,
+                })
+              }
+              disabled={isFixingPlacements}
+            >
               <Wrench className="mr-2 h-4 w-4" />
               {isFixingPlacements
                 ? fixProgress
@@ -393,7 +397,21 @@ export default function DataMaintenanceTools() {
             </CardDescription>
           </CardHeader>
           <CardContent className="py-3">
-            <Button size="sm" variant="secondary" onClick={handleRemoveAllTierRoles} disabled={isRemovingRoles}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                setPendingConfirm({
+                  title: "Remove all tier roles?",
+                  description:
+                    "This will remove ALL tier roles (Tier S, A, B, C, D) from EVERY member in the Discord server.\n\nThis affects real Discord roles and cannot be undone automatically.",
+                  confirmLabel: "Remove All Tier Roles",
+                  variant: "destructive",
+                  onConfirm: runRemoveAllTierRoles,
+                })
+              }
+              disabled={isRemovingRoles}
+            >
               <ShieldOff className="mr-2 h-4 w-4" />
               {isRemovingRoles ? "Removing Roles..." : "Remove All Tier Roles"}
             </Button>
@@ -411,7 +429,21 @@ export default function DataMaintenanceTools() {
             </CardDescription>
           </CardHeader>
           <CardContent className="py-3">
-            <Button size="sm" variant="secondary" onClick={handleArchiveNoDiscord} disabled={isArchivingNoDiscord}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                setPendingConfirm({
+                  title: "Archive no-Discord players?",
+                  description:
+                    'This will archive ALL active players who have no real Discord ID (placeholder IDs only).\n\nThey will be set to "former" status.',
+                  confirmLabel: "Archive No-Discord",
+                  variant: "destructive",
+                  onConfirm: runArchiveNoDiscord,
+                })
+              }
+              disabled={isArchivingNoDiscord}
+            >
               <Archive className="mr-2 h-4 w-4" />
               {isArchivingNoDiscord ? "Archiving..." : "Archive No-Discord"}
             </Button>
@@ -432,7 +464,7 @@ export default function DataMaintenanceTools() {
             <Button
               size="sm"
               variant="secondary"
-              onClick={handleDeleteDiscordOnlyMembers}
+              onClick={promptClearDiscordSync}
               disabled={isDeletingDiscordOnly || !players || players.length === 0}
             >
               <Trash2 className="mr-2 h-4 w-4" />

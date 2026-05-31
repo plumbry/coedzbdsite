@@ -434,7 +434,7 @@ function TierSimulationContent() {
 
 export default function TierSimulation() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Tier Simulation Tool"
       description="Preview how tier median changes would look if you changed specific players' tiers"
       authTitle="Sign in to access tier simulation"

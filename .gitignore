@@ -25,6 +25,7 @@ tsconfig.tsbuildinfo
 *.njsproj
 *.sln
 *.sw?
+*.bak
 
 # Environment variables
 .env*

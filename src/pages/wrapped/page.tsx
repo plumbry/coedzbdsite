@@ -1,17 +1,30 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { CalculatedSection, CalculatedStat } from "@/convex/wrappedStats.ts";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button.tsx";
 import { Card } from "@/components/ui/card.tsx";
-import { ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight, Sparkles, X } from "lucide-react";
 
 const ZBD_COLORS = {
   lightBlue: "#1e98e5",
   blue: "#2647bb",
   yellow: "#fae904",
 };
+
+function WrappedExitLink() {
+  return (
+    <Link
+      to="/"
+      className="fixed top-4 right-4 z-50 inline-flex items-center gap-1.5 rounded-md bg-black/20 px-3 py-1.5 text-sm text-white backdrop-blur hover:bg-black/30"
+    >
+      Exit
+      <X className="h-4 w-4" />
+    </Link>
+  );
+}
 
 type SlideData =
   | { type: "intro" }
@@ -94,6 +107,7 @@ export default function Wrapped2025Page() {
           background: `linear-gradient(135deg, ${ZBD_COLORS.blue} 0%, ${ZBD_COLORS.lightBlue} 100%)`,
         }}
       >
+        <WrappedExitLink />
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -115,6 +129,7 @@ export default function Wrapped2025Page() {
           background: `linear-gradient(135deg, ${ZBD_COLORS.blue} 0%, ${ZBD_COLORS.lightBlue} 100%)`,
         }}
       >
+        <WrappedExitLink />
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -137,6 +152,7 @@ export default function Wrapped2025Page() {
         background: `linear-gradient(135deg, ${ZBD_COLORS.blue} 0%, ${ZBD_COLORS.lightBlue} 100%)`,
       }}
     >
+      <WrappedExitLink />
       {/* Intro slide */}
       {!hasStarted && (
         <motion.div

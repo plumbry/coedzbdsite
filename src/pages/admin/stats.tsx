@@ -86,7 +86,7 @@ const statsLinks = [
 
 export default function StatsPage() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Stats"
       description="Access all player and event statistics from one place."
       authTitle="Sign in to access stats"

@@ -89,6 +89,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover.tsx";
 import { toast } from "sonner";
+import ConfirmDialog from "@/components/confirm-dialog.tsx";
 
 type SortField =
   | "playerName"
@@ -169,6 +170,7 @@ function TierReEvaluationContent() {
   const recalculateAllCS = useMutation(api.calculateContributionScore.recalculateAllCS);
   const rebuildDCACache = useMutation(api.dcaCache.rebuildDCACache);
   const [isRecalculatingTCDCA, setIsRecalculatingTCDCA] = useState(false);
+  const [showTCDCAConfirm, setShowTCDCAConfirm] = useState(false);
   
   // Debug logging
   console.log("TierReEvaluation Debug:", {
@@ -550,11 +552,6 @@ function TierReEvaluationContent() {
   };
   
   const handleRecalculateTCDCA = async () => {
-    const confirmed = window.confirm(
-      "Recalculate TC/DCA?\n\nThis will:\n1. Recalculate TC (Team Contribution) for all players\n2. Recalculate DCA (Duo Carry Adjustment) for all players\n\nThis may take a minute or two. Continue?"
-    );
-    if (!confirmed) return;
-
     setIsRecalculatingTCDCA(true);
     const TOAST_ID = "recalculate-tcdca";
 
@@ -894,7 +891,7 @@ function TierReEvaluationContent() {
               <TooltipTrigger asChild>
                 <div>
                   <Button
-                    onClick={handleRecalculateTCDCA}
+                    onClick={() => setShowTCDCAConfirm(true)}
                     disabled={isRecalculatingTCDCA || isRebuilding}
                     variant="secondary"
                   >
@@ -2242,13 +2239,31 @@ function TierReEvaluationContent() {
           </p>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={showTCDCAConfirm}
+        onOpenChange={setShowTCDCAConfirm}
+        title="Recalculate TC/DCA?"
+        description={
+          <>
+            <p>This will:</p>
+            <ol className="list-decimal list-inside space-y-1 mt-2">
+              <li>Recalculate TC (Team Contribution) for all players</li>
+              <li>Recalculate DCA (Duo Carry Adjustment) for all players</li>
+            </ol>
+            <p className="mt-2">This may take a minute or two.</p>
+          </>
+        }
+        confirmLabel="Recalculate"
+        onConfirm={handleRecalculateTCDCA}
+      />
     </div>
   );
 }
 
 export default function TierReEvaluation() {
   return (
-    <AdminPageLayout skipHeader authTitle="Sign in to access tier re-evaluation">
+    <AdminPageLayout skipHeader requireAdmin authTitle="Sign in to access tier re-evaluation">
       <TierReEvaluationContent />
     </AdminPageLayout>
   );

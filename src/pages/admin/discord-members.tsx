@@ -6,7 +6,7 @@ import DiscordMembers from "./_components/discord-members.tsx";
 
 export default function DiscordMembersPage() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Discord Directory"
       description="Advanced Discord role view, matching, and ID management"
       authTitle="Sign in to access the Discord directory"

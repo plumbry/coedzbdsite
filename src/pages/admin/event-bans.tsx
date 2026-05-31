@@ -3,7 +3,7 @@ import EventBansManager from "./_components/event-bans-manager.tsx";
 
 export default function EventBansPage() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireEventBanAccess
       skipHeader
       title="Event Bans"
       description="Synced to the Mod Log Google Sheet"

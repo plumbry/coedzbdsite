@@ -167,7 +167,7 @@ function TopFiveDetailsContent() {
 
 export default function TopFiveDetails() {
   return (
-    <AdminPageLayout skipHeader authTitle="Sign in to view top 5 details">
+    <AdminPageLayout skipHeader requireAdmin authTitle="Sign in to view top 5 details">
       <TopFiveDetailsContent />
     </AdminPageLayout>
   );

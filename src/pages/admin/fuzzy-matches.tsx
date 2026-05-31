@@ -28,7 +28,7 @@ export default function FuzzyMatches() {
   };
 
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Fuzzy Match Suggestions"
       description="Automatically detected potential matches between Discord members and existing players"
       header={{

@@ -3,7 +3,7 @@ import AuditLogView from "./_components/audit-log-view.tsx";
 
 export default function AuditPage() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Audit Log"
       description="Review staff actions and system changes"
     >

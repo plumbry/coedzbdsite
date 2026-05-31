@@ -591,7 +591,7 @@ function TierPresenceOverTimeChart({ perEventData }: { perEventData: PerEventDat
 
 export default function TierImpactPage() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Tier Impact Analytics"
       description="How much does each tier actually dominate your leaderboards?"
       authTitle="Sign in to view tier impact analytics"

@@ -92,7 +92,8 @@ export default function App() {
             <Route path="audit" element={<AuditPage />} />
             <Route path="features" element={<FeaturesPage />} />
             <Route path="player-earnings" element={<PlayerEarningsPage />} />
-            <Route path="member-management" element={<MemberManagement />} />
+            <Route path="member-management/:tab?" element={<MemberManagement />} />
+            <Route path="members/:tab?" element={<MemberManagement />} />
             <Route path="2025-wrapped-editor" element={<WrappedEditorPage />} />
             <Route path="2025-wrapped-preview" element={<WrappedPreviewPage />} />
             <Route path="upset-kills" element={<UpsetKillsPage />} />

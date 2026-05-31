@@ -374,7 +374,7 @@ function AverageStatsContent() {
 
 export default function AverageStats() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Average Player Statistics"
       description="Aggregated performance metrics across all active players with match data from Yunite sync"
       authTitle="Sign in to view average statistics"

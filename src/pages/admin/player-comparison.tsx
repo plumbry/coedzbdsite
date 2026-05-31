@@ -722,7 +722,7 @@ function PlayerComparisonContent() {
 
 export default function PlayerComparison() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Player Comparison"
       description="Compare up to 4 players side-by-side with ZBD performance stats and percentage differences"
       authTitle="Sign in to access player comparison"

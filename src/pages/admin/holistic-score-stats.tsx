@@ -1282,7 +1282,7 @@ function HolisticScoreStatsContent() {
 
 export default function HolisticScoreStats() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       maxWidth="wide"
       skipHeader
       authTitle="Sign in to access holistic score statistics"

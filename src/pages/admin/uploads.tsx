@@ -25,7 +25,7 @@ export default function UploadsPage() {
   };
 
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Uploads & Imports"
       description="Import player data, third-party results, and Yunite tournament sync"
     >

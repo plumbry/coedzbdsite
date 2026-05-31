@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { UserCheck, UserX, UserMinus, Loader2, ExternalLink, AlertTriangle, Edit, Award, ArrowUpDown, Search, Trash2, ShieldAlert, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useParams, useNavigate } from "react-router-dom";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import ScorePlayerDialog from "../_components/score-player-dialog.tsx";
 import EditPlayerDialog from "./_components/edit-player-dialog.tsx";
@@ -29,14 +29,21 @@ export default function MemberManagement() {
   const { user, isAdmin, isModeratorOrAdmin, isLoading: isRoleLoading } = useUserRole();
   const isAuthenticated = !!user;
   const [searchParams] = useSearchParams();
+  const { tab: tabFromPath } = useParams<{ tab?: string }>();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("accepted");
   const [roleResolved, setRoleResolved] = useState(false);
 
-  // Once role loads, set the correct default tab (URL ?tab= takes precedence)
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    navigate(`/admin/member-management/${tab}`, { replace: true });
+  };
+
+  // Once role loads, set the correct default tab (URL path or ?tab= takes precedence)
   useEffect(() => {
     if (!isRoleLoading && !roleResolved) {
       setRoleResolved(true);
-      const tab = searchParams.get("tab");
+      const tab = tabFromPath || searchParams.get("tab");
       const adminTabs = ["applications", "accepted", "rejected", "former", "discord"];
       const publicTabs = ["accepted", "former"];
       if (tab === "discord" && isAdmin) {
@@ -47,7 +54,7 @@ export default function MemberManagement() {
         setActiveTab("applications");
       }
     }
-  }, [isRoleLoading, isAdmin, roleResolved, searchParams]);
+  }, [isRoleLoading, isAdmin, roleResolved, searchParams, tabFromPath]);
   
   // New Application Dialog state
   const [newAppDialogOpen, setNewAppDialogOpen] = useState(false);
@@ -297,7 +304,7 @@ export default function MemberManagement() {
       authTitle="Sign in to access member management"
       showSidebar={!!isModeratorOrAdmin}
     >
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
           <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
             <TabsList className={`inline-flex w-auto min-w-full md:grid md:w-full h-10 ${isAdmin ? "md:grid-cols-5" : "md:grid-cols-2"}`}>
               {isAdmin && <TabsTrigger value="applications" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Applications</TabsTrigger>}

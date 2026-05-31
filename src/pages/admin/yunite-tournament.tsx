@@ -637,7 +637,7 @@ function YuniteTournamentContent() {
 
 export default function YuniteTournamentDetails() {
   return (
-    <AdminPageLayout skipHeader authTitle="Sign in to view tournament details">
+    <AdminPageLayout skipHeader requireAdmin authTitle="Sign in to view tournament details">
       <YuniteTournamentContent />
     </AdminPageLayout>
   );

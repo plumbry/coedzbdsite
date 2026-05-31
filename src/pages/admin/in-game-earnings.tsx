@@ -405,7 +405,7 @@ function InGameEarningsContent() {
 
 export default function InGameEarningsPage() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="In-Game Earnings"
       description="Official Fortnite tournament earnings for players active in the last 60 days"
       authTitle="Sign in to access earnings data"

@@ -2,7 +2,7 @@
 
 **Prioritized remediation from `PRODUCT_CLEANUP_AUDIT.md`**  
 **Goal:** Polished commercial product — consistent design system, clear flows, minimal duplication  
-**Status:** Planning only — no implementation in this document
+**Status:** Sprints A–C largely complete (2026-05-31). P3 mega-file splits and advanced UX remain optional.
 
 Priority key:
 

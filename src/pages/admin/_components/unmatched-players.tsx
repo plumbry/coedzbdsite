@@ -299,7 +299,7 @@ function UnmatchedPlayersContent() {
 
 export default function UnmatchedPlayers() {
   return (
-    <AdminPageLayout skipHeader authTitle="Sign in to manage unmatched players">
+    <AdminPageLayout skipHeader requireAdmin authTitle="Sign in to manage unmatched players">
       <UnmatchedPlayersContent />
     </AdminPageLayout>
   );

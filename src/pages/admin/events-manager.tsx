@@ -100,7 +100,7 @@ function SolosMeetsDuosSection() {
 
 export default function EventsManagerPage() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireModerator
       title="Events Manager"
       description="Create and manage events, duo groups, and solos-meets-duos pairings."
       authTitle="Sign in to manage events"

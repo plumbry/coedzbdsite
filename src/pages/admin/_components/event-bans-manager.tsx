@@ -12,7 +12,16 @@ import { toast } from "sonner";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import CreateBanDialog from "./create-ban-dialog.tsx";
 import PageHeader from "@/components/page-header.tsx";
+import ConfirmDialog from "@/components/confirm-dialog.tsx";
 import { formatDistanceToNow } from "date-fns";
+
+type PendingConfirm = {
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  variant?: "default" | "destructive";
+  onConfirm: () => Promise<void>;
+} | null;
 
 export default function EventBansManager() {
   const { hasEventBanAccess } = useUserRole();
@@ -39,6 +48,7 @@ export default function EventBansManager() {
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isUndoing, setIsUndoing] = useState(false);
   const [eventPassedQty, setEventPassedQty] = useState(1);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   const cancelEventPassed = useCallback(() => {
     if (countdownRef.current) {
@@ -105,19 +115,27 @@ export default function EventBansManager() {
     };
   }, []);
 
-  const handleUndoEventPassed = async () => {
-    if (!window.confirm("Are you sure you want to undo the last event passed? This will increment remaining events and reactivate any bans ended today.")) {
-      return;
-    }
-    setIsUndoing(true);
-    try {
-      const result = await undoEventPassedMutation({});
-      toast.success(`Undo complete: ${result.incremented} bans incremented, ${result.reactivated} bans reactivated`);
-    } catch (error) {
-      toast.error("Failed to undo event passed.");
-    } finally {
-      setIsUndoing(false);
-    }
+  const handleUndoEventPassed = () => {
+    setPendingConfirm({
+      title: "Undo last event passed?",
+      description:
+        "This will increment remaining events and reactivate any bans ended today.",
+      confirmLabel: "Undo",
+      variant: "destructive",
+      onConfirm: async () => {
+        setIsUndoing(true);
+        try {
+          const result = await undoEventPassedMutation({});
+          toast.success(
+            `Undo complete: ${result.incremented} bans incremented, ${result.reactivated} bans reactivated`,
+          );
+        } catch {
+          toast.error("Failed to undo event passed.");
+        } finally {
+          setIsUndoing(false);
+        }
+      },
+    });
   };
 
 
@@ -344,6 +362,18 @@ export default function EventBansManager() {
           </Button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingConfirm !== null}
+        onOpenChange={(open) => !open && setPendingConfirm(null)}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description ?? ""}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        variant={pendingConfirm?.variant}
+        onConfirm={async () => {
+          if (pendingConfirm) await pendingConfirm.onConfirm();
+        }}
+      />
     </div>
   );
 }
@@ -374,24 +404,31 @@ function BansTable({
 }) {
   const deleteBanAction = useAction(api.eventBans.sync.deleteBan);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
-  const handleDelete = async (ban: { _id: string; playerTag: string }) => {
-    if (!confirm(`Are you sure you want to delete the ban for ${ban.playerTag}? This will also remove it from the Google Sheet.`)) {
-      return;
-    }
-    setDeletingId(ban._id);
-    try {
-      const result = await deleteBanAction({ banId: ban._id as Id<"eventBans"> });
-      if (result.removedFromSheet) {
-        toast.success(`Ban deleted from site and Google Sheet`);
-      } else {
-        toast.success(`Ban deleted from site (could not find matching row in sheet)`);
-      }
-    } catch (error) {
-      toast.error("Failed to delete ban");
-    } finally {
-      setDeletingId(null);
-    }
+  const handleDelete = (ban: { _id: string; playerTag: string }) => {
+    setPendingConfirm({
+      title: `Delete ban for ${ban.playerTag}?`,
+      description:
+        "This will remove the ban from the site and the Google Sheet.",
+      confirmLabel: "Delete",
+      variant: "destructive",
+      onConfirm: async () => {
+        setDeletingId(ban._id);
+        try {
+          const result = await deleteBanAction({ banId: ban._id as Id<"eventBans"> });
+          if (result.removedFromSheet) {
+            toast.success("Ban deleted from site and Google Sheet");
+          } else {
+            toast.success("Ban deleted from site (could not find matching row in sheet)");
+          }
+        } catch {
+          toast.error("Failed to delete ban");
+        } finally {
+          setDeletingId(null);
+        }
+      },
+    });
   };
 
   if (isLoading) {
@@ -522,6 +559,18 @@ function BansTable({
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={pendingConfirm !== null}
+        onOpenChange={(open) => !open && setPendingConfirm(null)}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description ?? ""}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        variant={pendingConfirm?.variant}
+        onConfirm={async () => {
+          if (pendingConfirm) await pendingConfirm.onConfirm();
+        }}
+      />
     </>
   );
 }
@@ -542,17 +591,26 @@ function OffenseCountsTable({
 }) {
   const { hasEventBanAccess } = useUserRole();
   const deleteOffenses = useAction(api.eventBans.sync.deletePlayerOffenses);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
-  const handleDeleteOffenses = async (discordId: string, playerTag: string) => {
-    if (!window.confirm(`Delete ALL offense records for ${playerTag}? This removes all ban entries with offense tracking for this player from both the site and the Google Sheet.`)) {
-      return;
-    }
-    try {
-      const result = await deleteOffenses({ discordId });
-      toast.success(`Deleted ${result.deleted} offense record(s) for ${playerTag}${result.removedFromSheet > 0 ? ` (${result.removedFromSheet} removed from sheet)` : ""}`);
-    } catch (error) {
-      toast.error("Failed to delete offense records.");
-    }
+  const handleDeleteOffenses = (discordId: string, playerTag: string) => {
+    setPendingConfirm({
+      title: `Delete all offenses for ${playerTag}?`,
+      description:
+        "This removes all ban entries with offense tracking for this player from both the site and the Google Sheet.",
+      confirmLabel: "Delete all",
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          const result = await deleteOffenses({ discordId });
+          toast.success(
+            `Deleted ${result.deleted} offense record(s) for ${playerTag}${result.removedFromSheet > 0 ? ` (${result.removedFromSheet} removed from sheet)` : ""}`,
+          );
+        } catch {
+          toast.error("Failed to delete offense records.");
+        }
+      },
+    });
   };
   if (isLoading) {
     return (
@@ -584,6 +642,7 @@ function OffenseCountsTable({
   );
 
   return (
+    <>
     <Card>
       <CardHeader className="px-3 sm:px-6">
         <CardTitle className="text-sm sm:text-base">Offense Progression per Player</CardTitle>
@@ -696,6 +755,19 @@ function OffenseCountsTable({
         </div>
       </CardContent>
     </Card>
+
+    <ConfirmDialog
+      open={pendingConfirm !== null}
+      onOpenChange={(open) => !open && setPendingConfirm(null)}
+      title={pendingConfirm?.title ?? ""}
+      description={pendingConfirm?.description ?? ""}
+      confirmLabel={pendingConfirm?.confirmLabel}
+      variant={pendingConfirm?.variant}
+      onConfirm={async () => {
+        if (pendingConfirm) await pendingConfirm.onConfirm();
+      }}
+    />
+  </>
   );
 }
 

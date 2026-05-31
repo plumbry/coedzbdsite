@@ -542,7 +542,7 @@ function TierMismatchesInner() {
 
 export default function TierMismatchesPage() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Tier Mismatches"
       description="Players whose website tier doesn't match their Discord tier role"
       authTitle="Sign in to view tier mismatches"

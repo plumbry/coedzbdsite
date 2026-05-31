@@ -339,7 +339,7 @@ function DataBackupContent() {
 
 export default function DataBackup() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Data Backup"
       description="Export your cached data to JSON files for safekeeping"
       authTitle="Sign in to access data backups"

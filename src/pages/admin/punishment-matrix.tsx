@@ -41,7 +41,7 @@ const PROBATION_INFO = {
 
 export default function PunishmentMatrixPage() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireEventBanAccess
       title="Punishment Matrix"
       description="Offense progression tracks for event bans and disciplinary actions"
     >

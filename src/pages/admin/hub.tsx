@@ -80,7 +80,7 @@ export default function AdminHubPage() {
         {
           title: "Member Management",
           description: "Applications, accepted members, and Discord evaluation queue.",
-          href: "/admin/member-management",
+          href: "/admin/member-management/applications",
           icon: Users,
         },
         {
@@ -258,7 +258,7 @@ export default function AdminHubPage() {
   const visibleSections = sections.filter((section) => section.show);
 
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireModerator
       title="Admin"
       description="Staff tools organized by area — pick a section to get started."
       authTitle="Sign in to access the admin panel"

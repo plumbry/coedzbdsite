@@ -203,7 +203,7 @@ function PlayerEarningsContent() {
 
 export default function PlayerEarnings() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Player Earnings"
       description="Track which players have earned money in scrim events"
       authTitle="Sign in to access player earnings"

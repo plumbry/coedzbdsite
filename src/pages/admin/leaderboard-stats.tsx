@@ -677,7 +677,7 @@ function LeaderboardStatsContent() {
 
 export default function LeaderboardStats() {
   return (
-    <AdminPageLayout
+    <AdminPageLayout requireAdmin
       title="Leaderboard Statistics"
       authTitle="Sign in to view leaderboard statistics"
     >

@@ -869,14 +869,14 @@ export default function ScrimEventPage() {
           </h3>
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <p className="text-sm text-muted-foreground">
-              To create scrim events directly from Discord, set up a bot with the following slash command:
+              To create Spin events directly from Discord, set up a bot with the following slash command:
             </p>
             <div className="rounded-lg bg-muted/50 p-4 font-mono text-xs space-y-2 overflow-x-auto">
               <p className="font-sans text-sm font-medium text-foreground mb-2">
                 /scrim command parameters:
               </p>
               <div className="space-y-1 text-muted-foreground">
-                <p><span className="text-primary">event_name</span> - Name of the scrim event</p>
+                <p><span className="text-primary">event_name</span> - Name of the Spin event</p>
                 <p><span className="text-primary">games</span> - Number of games (1-10)</p>
                 <p><span className="text-primary">duos</span> - Comma-separated list of duo names (e.g. "Team1, Team2, Team3")</p>
                 <p><span className="text-primary">players</span> - Comma-separated player pairs matching duo order (e.g. "P1+P2, P3+P4, P5+P6")</p>

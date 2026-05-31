@@ -473,7 +473,7 @@ function WrappedPreviewInner() {
 
 export default function WrappedPreviewPage() {
   return (
-    <AdminPageLayout skipHeader authTitle="Sign in to preview the wrapped page">
+    <AdminPageLayout skipHeader requireAdmin authTitle="Sign in to preview the wrapped page">
       <WrappedPreviewInner />
     </AdminPageLayout>
   );

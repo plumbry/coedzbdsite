@@ -437,7 +437,7 @@ function WrappedEditorInner() {
 
 export default function WrappedEditorPage() {
   return (
-    <AdminPageLayout authTitle="Sign in to edit the wrapped page" skipHeader>
+    <AdminPageLayout requireAdmin authTitle="Sign in to edit the wrapped page" skipHeader>
       <WrappedEditorInner />
     </AdminPageLayout>
   );

@@ -986,7 +986,7 @@ function ScrimSeriesAdminContent() {
 
 export default function ScrimSeriesAdminPage() {
   return (
-    <AdminPageLayout title="Scrim Series Manager">
+    <AdminPageLayout requireModerator title="Scrim Series Manager">
       <ScrimSeriesAdminContent />
     </AdminPageLayout>
   );
