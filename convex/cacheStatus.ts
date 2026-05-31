@@ -101,6 +101,51 @@ export const getMatchStatsCount = query({
   },
 });
 
+export const getKillEventsCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const metadata = await ctx.db.query("matchKillEventsMetadata").first();
+    if (metadata) {
+      return {
+        killEventsCount: metadata.totalKillEvents,
+        upsetKillEventsCount: metadata.totalUpsetKillEvents,
+        lastUpdated: metadata.lastUpdated,
+      };
+    }
+
+    let killEventsCount = 0;
+    let upsetKillEventsCount = 0;
+    let lastUpdated: number | undefined;
+    let cursor: string | null = null;
+    let done = false;
+
+    while (!done) {
+      const page = await ctx.db
+        .query("matchKillEvents")
+        .paginate({ numItems: 1000, cursor });
+
+      for (const event of page.page) {
+        killEventsCount++;
+        if (event.isUpset) {
+          upsetKillEventsCount++;
+        }
+        if (!lastUpdated || event._creationTime > lastUpdated) {
+          lastUpdated = event._creationTime;
+        }
+      }
+
+      done = page.isDone;
+      cursor = page.continueCursor;
+    }
+
+    return {
+      killEventsCount,
+      upsetKillEventsCount,
+      lastUpdated,
+    };
+  },
+});
+
 export const getResultStats = query({
   args: {},
   handler: async (ctx) => {

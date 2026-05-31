@@ -886,34 +886,30 @@ export const getAllPlayerKills = query({
 export const removeDuplicateKillEvents = mutation({
   args: {},
   handler: async (ctx) => {
-    const allEvents = await ctx.db.query("matchKillEvents").collect();
-    
-    // Build a map to track unique events
-    // Key: importId-sessionId-killerDiscordId-victimDiscordId-timeInMatch
-    const seen = new Map<string, Id<"matchKillEvents">>();
-    const duplicateIds: Id<"matchKillEvents">[] = [];
-    
-    for (const event of allEvents) {
-      const key = `${event.importId}-${event.sessionId}-${event.killerDiscordId}-${event.victimDiscordId}-${event.timeInMatch ?? "null"}`;
-      
-      if (seen.has(key)) {
-        // This is a duplicate - mark for deletion
-        duplicateIds.push(event._id);
-      } else {
-        // First occurrence - keep it
-        seen.set(key, event._id);
-      }
+    const imports = await ctx.db.query("thirdPartyImports").collect();
+
+    let totalEvents = 0;
+    let duplicatesRemoved = 0;
+    let upsetDuplicatesRemoved = 0;
+
+    for (const imp of imports) {
+      const result = await dedupeKillEventsForImport(ctx, imp._id);
+      totalEvents += result.total;
+      duplicatesRemoved += result.duplicatesRemoved;
+      upsetDuplicatesRemoved += result.upsetDuplicatesRemoved;
     }
-    
-    // Delete duplicates
-    for (const id of duplicateIds) {
-      await ctx.db.delete(id);
+
+    if (duplicatesRemoved > 0) {
+      await adjustKillEventsMetadata(ctx, {
+        totalKillEvents: -duplicatesRemoved,
+        upsetKillEvents: -upsetDuplicatesRemoved,
+      });
     }
-    
+
     return {
-      totalEvents: allEvents.length,
-      duplicatesRemoved: duplicateIds.length,
-      uniqueEvents: allEvents.length - duplicateIds.length,
+      totalEvents,
+      duplicatesRemoved,
+      uniqueEvents: totalEvents - duplicatesRemoved,
     };
   },
 });
@@ -1199,12 +1195,20 @@ export const clearAllKillEvents = mutation({
     for (const event of events) {
       await ctx.db.delete(event._id);
     }
-    
+
+    if (events.length > 0) {
+      const upsetDeleted = events.filter((event) => event.isUpset).length;
+      await adjustKillEventsMetadata(ctx, {
+        totalKillEvents: -events.length,
+        upsetKillEvents: -upsetDeleted,
+      });
+    }
+
     // Check if there are more events
     const remaining = await ctx.db.query("matchKillEvents").first();
     const hasMore = !!remaining;
-    
-    // Clear stats cache only when done
+
+    // Clear stats cache when fully empty
     if (!hasMore) {
       const cache = await ctx.db.query("upsetKillsStatsCache").first();
       if (cache) {
