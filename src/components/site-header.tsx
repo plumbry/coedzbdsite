@@ -20,12 +20,19 @@ export default function SiteHeader() {
     <header className="border-b bg-background">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 md:px-6 py-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          {isModeratorOrAdmin && !isOnAdminPage && (
+          {isModeratorOrAdmin && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/admin")}
+              onClick={() => {
+                if (isOnAdminPage) {
+                  window.dispatchEvent(new CustomEvent("toggleAdminSidebar"));
+                } else {
+                  navigate("/admin");
+                }
+              }}
               className="p-2 -ml-1 shrink-0"
+              aria-label={isOnAdminPage ? "Toggle admin sidebar" : "Open admin"}
             >
               <Menu className="h-5 w-5" />
             </Button>

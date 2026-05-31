@@ -58,9 +58,9 @@ export function AdminMain({
   children,
 }: AdminMainProps) {
   return (
-    <div className="flex flex-1 min-w-0 bg-background">
+    <div className="flex min-h-0 min-w-0 flex-1 bg-background">
       {showSidebar && <AdminSidebar />}
-      <div className="flex min-h-screen flex-1 flex-col min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {showSiteHeader && <SiteHeader />}
         <main className="flex-1 overflow-x-auto p-4 md:p-5">
           <div
