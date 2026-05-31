@@ -3,6 +3,13 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
+// Refresh member activity flags for public directory
+crons.daily(
+  "refresh member activity flags",
+  { hourUTC: 3, minuteUTC: 30 },
+  internal.memberManagement.refreshRecentlyActiveFlags,
+);
+
 // Sync Discord scheduled events to website every 24 hours
 crons.daily(
   "sync discord events",

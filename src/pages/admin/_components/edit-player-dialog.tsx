@@ -18,7 +18,10 @@ interface EditPlayerDialogProps {
 }
 
 export default function EditPlayerDialog({ open, onOpenChange, playerId }: EditPlayerDialogProps) {
-  const player = useQuery(api.players.getPlayerById, { id: playerId });
+  const player = useQuery(
+    api.players.getPlayerById,
+    open ? { id: playerId } : "skip",
+  );
   const updatePlayer = useMutation(api.players.updatePlayerProfile);
   const addAlternateId = useMutation(api.discord.addAlternateDiscordId);
   const removeAlternateId = useMutation(api.discord.removeAlternateDiscordId);

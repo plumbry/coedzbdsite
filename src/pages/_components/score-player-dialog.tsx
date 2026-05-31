@@ -111,8 +111,14 @@ const TIER_PRESETS: Record<"S" | "A" | "B" | "C", ScoreState> = {
 };
 
 export default function ScorePlayerDialog({ open, onOpenChange, playerId }: ScorePlayerDialogProps) {
-  const player = useQuery(api.players.getPlayers, {});
-  const existingScore = useQuery(api.scores.getPlayerScore, { playerId });
+  const player = useQuery(
+    api.players.getPlayerById,
+    open ? { id: playerId } : "skip",
+  );
+  const existingScore = useQuery(
+    api.scores.getPlayerScore,
+    open ? { playerId } : "skip",
+  );
   const createOrUpdateScore = useMutation(api.scores.createOrUpdateScore);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [femaleVerified, setFemaleVerified] = useState(false);
@@ -157,7 +163,7 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
     }
   }, [existingScore]);
   
-  const currentPlayer = player?.find(p => p._id === playerId);
+  const currentPlayer = player;
   const totalScore = Object.values(scores).reduce((sum, score) => sum + (typeof score === "number" ? score : 0), 0);
   const tier = calculateTier(totalScore);
   

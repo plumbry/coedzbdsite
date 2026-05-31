@@ -20,7 +20,6 @@ import DiscordMembersPage from "./pages/admin/discord-members.tsx";
 import FuzzyMatchesPage from "./pages/admin/fuzzy-matches.tsx";
 import UnmatchedPlayers from "./pages/admin/_components/unmatched-players.tsx";
 import YuniteTournamentDetails from "./pages/admin/yunite-tournament.tsx";
-import YuniteDebugPage from "./pages/admin/yunite-debug.tsx";
 import EventsManagerPage from "./pages/admin/events-manager.tsx";
 import EventResultsPage from "./pages/admin/event-results.tsx";
 import UploadsPage from "./pages/admin/uploads.tsx";
@@ -38,6 +37,8 @@ import UpsetKillsTopPage from "./pages/admin/upset-kills-top.tsx";
 import EliminationsPage from "./pages/admin/upset-kills-eliminations.tsx";
 import TierImpactPage from "./pages/admin/tier-impact.tsx";
 import StatsPage from "./pages/admin/stats.tsx";
+import AdminHubPage from "./pages/admin/hub.tsx";
+import DataMaintenancePage from "./pages/admin/data-maintenance.tsx";
 import InGameEarningsPage from "./pages/admin/in-game-earnings.tsx";
 import TierMismatchesPage from "./pages/admin/tier-mismatches.tsx";
 import Wrapped2025Page from "./pages/wrapped/page.tsx";
@@ -67,7 +68,7 @@ export default function App() {
           <Route path="/player/:username" element={<PlayerProfile />} />
 
           <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<Navigate to="member-management" replace />} />
+            <Route index element={<AdminHubPage />} />
             <Route path="tier-re-evaluation" element={<TierReEvaluation />} />
             <Route path="tier-simulation" element={<TierSimulation />} />
             <Route path="average-stats" element={<AverageStats />} />
@@ -77,12 +78,13 @@ export default function App() {
             <Route path="leaderboard-stats" element={<LeaderboardStats />} />
             <Route path="data-cache-status" element={<DataCacheStatus />} />
             <Route path="data-backup" element={<DataBackup />} />
+            <Route path="data-maintenance" element={<DataMaintenancePage />} />
             <Route path="user-management" element={<UserManagementPage />} />
             <Route path="discord-members" element={<DiscordMembersPage />} />
             <Route path="fuzzy-matches" element={<FuzzyMatchesPage />} />
             <Route path="unmatched/:importId" element={<UnmatchedPlayers />} />
             <Route path="yunite/:importId" element={<YuniteTournamentDetails />} />
-            <Route path="yunite-debug" element={<YuniteDebugPage />} />
+            <Route path="yunite-debug" element={<Navigate to="/admin/uploads?tab=debug" replace />} />
             <Route path="events-manager" element={<EventsManagerPage />} />
             <Route path="event-results" element={<EventResultsPage />} />
             <Route path="uploads" element={<UploadsPage />} />

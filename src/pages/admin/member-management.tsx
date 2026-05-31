@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { UserCheck, UserX, UserMinus, Loader2, ExternalLink, AlertTriangle, Edit, Award, ArrowUpDown, Search, Trash2, ShieldAlert, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import ScorePlayerDialog from "../_components/score-player-dialog.tsx";
 import EditPlayerDialog from "./_components/edit-player-dialog.tsx";
@@ -23,22 +23,31 @@ import EditMemberStatusDialog from "../_components/edit-member-status-dialog.tsx
 import NewApplicationDialog from "./_components/new-application-dialog.tsx";
 import EditApplicationDialog from "./_components/edit-application-dialog.tsx";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 
 export default function MemberManagement() {
   const { user, isAdmin, isModeratorOrAdmin, isLoading: isRoleLoading } = useUserRole();
   const isAuthenticated = !!user;
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("accepted");
   const [roleResolved, setRoleResolved] = useState(false);
 
-  // Once role loads, set the correct default tab
+  // Once role loads, set the correct default tab (URL ?tab= takes precedence)
   useEffect(() => {
     if (!isRoleLoading && !roleResolved) {
       setRoleResolved(true);
-      if (isAdmin) {
+      const tab = searchParams.get("tab");
+      const adminTabs = ["applications", "accepted", "rejected", "former", "discord"];
+      const publicTabs = ["accepted", "former"];
+      if (tab === "discord" && isAdmin) {
+        setActiveTab("discord");
+      } else if (tab && (isAdmin ? adminTabs : publicTabs).includes(tab)) {
+        setActiveTab(tab);
+      } else if (isAdmin) {
         setActiveTab("applications");
       }
     }
-  }, [isRoleLoading, isAdmin, roleResolved]);
+  }, [isRoleLoading, isAdmin, roleResolved, searchParams]);
   
   // New Application Dialog state
   const [newAppDialogOpen, setNewAppDialogOpen] = useState(false);
@@ -69,11 +78,26 @@ export default function MemberManagement() {
   const [formerSort, setFormerSort] = useState<{ field: string; direction: "asc" | "desc" }>({ field: "discordUsername", direction: "asc" });
   
   // Queries — only fire when authenticated
-  const pendingApplications = useQuery(api.memberManagement.getPendingApplications, isAdmin ? {} : "skip");
-  const acceptedMembers = useQuery(api.memberManagement.getAcceptedMembers, isAuthenticated ? {} : "skip");
-  const rejectedMembers = useQuery(api.memberManagement.getRejectedMembers, isAdmin ? {} : "skip");
-  const formerMembers = useQuery(api.memberManagement.getFormerMembers, isAuthenticated ? {} : "skip");
-  const discordMembers = useQuery(api.memberManagement.getDiscordMembers, isAdmin ? {} : "skip");
+  const pendingApplications = useQuery(
+    api.memberManagement.getPendingApplications,
+    isAdmin && activeTab === "applications" ? {} : "skip",
+  );
+  const acceptedMembers = useQuery(
+    api.memberManagement.getAcceptedMembers,
+    isAuthenticated && activeTab === "accepted" ? {} : "skip",
+  );
+  const rejectedMembers = useQuery(
+    api.memberManagement.getRejectedMembers,
+    isAdmin && activeTab === "rejected" ? {} : "skip",
+  );
+  const formerMembers = useQuery(
+    api.memberManagement.getFormerMembers,
+    isAuthenticated && activeTab === "former" ? {} : "skip",
+  );
+  const discordMembers = useQuery(
+    api.memberManagement.getDiscordMembers,
+    isAdmin && activeTab === "discord" ? {} : "skip",
+  );
   
   // Mutations
   const deleteApplicationMutation = useMutation(api.memberManagement.deleteApplication);
@@ -627,9 +651,20 @@ export default function MemberManagement() {
           {/* Discord Members Tab - Admin Only */}
           {isAdmin && (
             <TabsContent value="discord">
+            <Alert className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Evaluation queue only</AlertTitle>
+              <AlertDescription>
+                For the full Discord member directory, role management, and ID tools, use{" "}
+                <Link to="/admin/discord-members" className="font-medium text-primary underline-offset-4 hover:underline">
+                  Discord Directory
+                </Link>
+                .
+              </AlertDescription>
+            </Alert>
             <Card className="p-0 sm:p-6">
               <CardHeader className="px-3 py-4 sm:px-6 sm:py-6">
-                <CardTitle>Discord Members</CardTitle>
+                <CardTitle>Discord Evaluation Queue</CardTitle>
                 <CardDescription>
                   {discordMembers?.length || 0} Discord member(s) synced but not yet evaluated
                 </CardDescription>

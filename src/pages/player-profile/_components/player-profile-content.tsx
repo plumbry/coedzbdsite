@@ -27,6 +27,7 @@ export default function PlayerProfileContent({ playerId }: PlayerProfileContentP
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
   const [isEditPlayerOpen, setIsEditPlayerOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [activeTab, setActiveTab] = useState("zbd");
   const syncPlayerMatchData = useAction(api.yunite.sync.syncPlayerMatchData);
   
   const handleSyncMatchData = async () => {
@@ -198,7 +199,7 @@ export default function PlayerProfileContent({ playerId }: PlayerProfileContentP
       </Card>
       
       {/* Performance Tabs */}
-      <Tabs defaultValue="zbd" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="zbd" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
@@ -215,18 +216,24 @@ export default function PlayerProfileContent({ playerId }: PlayerProfileContentP
         </TabsList>
         
         <TabsContent value="zbd">
-          <ZBDPerformanceTab 
-            playerId={playerId}
-            onAddEvent={() => setIsAddEventOpen(true)}
-          />
+          {activeTab === "zbd" && (
+            <ZBDPerformanceTab
+              playerId={playerId}
+              onAddEvent={() => setIsAddEventOpen(true)}
+            />
+          )}
         </TabsContent>
-        
+
         <TabsContent value="ingame">
-          <InGameStatsTab epicUsername={player.epicUsername} />
+          {activeTab === "ingame" && (
+            <InGameStatsTab epicUsername={player.epicUsername} />
+          )}
         </TabsContent>
-        
+
         <TabsContent value="thirdparty">
-          <ThirdPartiesTab playerId={playerId} />
+          {activeTab === "thirdparty" && (
+            <ThirdPartiesTab playerId={playerId} />
+          )}
         </TabsContent>
       </Tabs>
       

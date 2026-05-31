@@ -89,6 +89,8 @@ export default defineSchema({
     needsReview: v.optional(v.boolean()),
     // Flag if player has left Discord server (no longer appears in member sync)
     hasLeftServer: v.optional(v.boolean()),
+    /** Cached: played in an event linked to a recent import (refreshed by cron). */
+    isRecentlyActive: v.optional(v.boolean()),
     // Discord sync match quality (when bot syncs Discord members)
     matchConfidence: v.optional(v.union(
       v.literal("exact"), // Exact Discord ID match
@@ -890,6 +892,29 @@ export default defineSchema({
     publishedBy: v.optional(v.id("users")),
     publishedAt: v.optional(v.number()),
     lastEditedBy: v.id("users"),
+    /** Precomputed stat sections — populated on publish to avoid live full-table scans. */
+    computedSections: v.optional(v.array(v.object({
+      name: v.string(),
+      tagline: v.optional(v.string()),
+      stats: v.array(v.object({
+        type: v.string(),
+        label: v.string(),
+        value: v.optional(v.number()),
+        subtitle: v.optional(v.string()),
+        players: v.optional(v.array(v.object({
+          name: v.string(),
+          value: v.number(),
+          metric: v.string(),
+        }))),
+        tierData: v.optional(v.array(v.object({
+          tier: v.string(),
+          count: v.number(),
+          percentage: v.number(),
+        }))),
+        breakdown: v.optional(v.record(v.string(), v.union(v.number(), v.string()))),
+      })),
+    }))),
+    computedSectionsUpdatedAt: v.optional(v.number()),
   }).index("by_year", ["year"]),
 
   // Background job tracking for kill events backfill
@@ -1036,7 +1061,9 @@ export default defineSchema({
   })
     .index("by_discord_id", ["discordId"])
     .index("by_status", ["status"])
-    .index("by_message_id", ["messageId"]),
+    .index("by_message_id", ["messageId"])
+    .index("by_synced_to_discord", ["syncedToDiscord"])
+    .index("by_role_removed", ["roleRemovedFromDiscord"]),
 
   // Queued role removals for deleted bans (bot polls and acknowledges these)
   pendingRoleRemovals: defineTable({

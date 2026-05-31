@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 export interface CalculatedStat {
   type: string;
@@ -18,11 +19,62 @@ export interface CalculatedSection {
   stats: CalculatedStat[];
 }
 
-// Calculate all stats for wrapped content
+// Calculate all stats for wrapped content (shared by query + store mutation)
+async function computeAllStatsForContent(
+  ctx: QueryCtx | MutationCtx,
+  year: number,
+  content: Doc<"wrappedContent">,
+): Promise<CalculatedSection[]> {
+  const allEvents = await ctx.db.query("events").collect();
+  const eventsInYear = (allEvents as Doc<"events">[]).filter((event) => {
+    const eventYear = new Date(event.startDate).getFullYear();
+    return eventYear === year;
+  });
+  const eventIdsInYear = new Set(eventsInYear.map((e) => e._id));
+
+  const sections: CalculatedSection[] = [];
+
+  for (const section of content.sections) {
+    const sectionStats: CalculatedStat[] = [];
+
+    for (const stat of section.stats) {
+      const statResult = await calculateIndividualStat(ctx, stat, eventIdsInYear, eventsInYear);
+      if (statResult) {
+        sectionStats.push(statResult);
+      }
+    }
+
+    sections.push({
+      name: section.name,
+      tagline: section.tagline,
+      stats: sectionStats,
+    });
+  }
+
+  return sections;
+}
+
+// Calculate all stats for wrapped content (admin preview — live compute)
 export const calculateAllStats = query({
   args: { year: v.number() },
   handler: async (ctx, args): Promise<CalculatedSection[]> => {
-    // Get wrapped content
+    const content = await ctx.db
+      .query("wrappedContent")
+      .withIndex("by_year", (q) => q.eq("year", args.year))
+      .first();
+
+    if (!content) {
+      return [];
+    }
+
+    return await computeAllStatsForContent(ctx, args.year, content);
+  },
+});
+
+// Public: return precomputed sections only (no live full-table scans)
+export const getPublishedWrappedStats = query({
+  args: { year: v.number() },
+  handler: async (ctx, args): Promise<CalculatedSection[]> => {
     const content = await ctx.db
       .query("wrappedContent")
       .withIndex("by_year", (q) => q.eq("year", args.year))
@@ -32,34 +84,28 @@ export const calculateAllStats = query({
       return [];
     }
 
-    // Get all events from the year
-    const allEvents = await ctx.db.query("events").collect();
-    const eventsInYear = allEvents.filter((event) => {
-      const year = new Date(event.startDate).getFullYear();
-      return year === args.year;
-    });
-    const eventIdsInYear = new Set(eventsInYear.map((e) => e._id));
+    return (content.computedSections as CalculatedSection[] | undefined) ?? [];
+  },
+});
 
-    const sections: CalculatedSection[] = [];
+// Store precomputed sections on publish (avoids public live compute)
+export const storeComputedSections = internalMutation({
+  args: { year: v.number() },
+  handler: async (ctx, args) => {
+    const content = await ctx.db
+      .query("wrappedContent")
+      .withIndex("by_year", (q) => q.eq("year", args.year))
+      .first();
 
-    for (const section of content.sections) {
-      const sectionStats: CalculatedStat[] = [];
-
-      for (const stat of section.stats) {
-        const statResult = await calculateIndividualStat(ctx, stat, eventIdsInYear, eventsInYear);
-        if (statResult) {
-          sectionStats.push(statResult);
-        }
-      }
-
-      sections.push({
-        name: section.name,
-        tagline: section.tagline,
-        stats: sectionStats,
-      });
+    if (!content) {
+      return;
     }
 
-    return sections;
+    const sections = await computeAllStatsForContent(ctx, args.year, content);
+    await ctx.db.patch(content._id, {
+      computedSections: sections,
+      computedSectionsUpdatedAt: Date.now(),
+    });
   },
 });
 

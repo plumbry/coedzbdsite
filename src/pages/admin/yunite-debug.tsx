@@ -24,7 +24,7 @@ export default function YuniteDebugPage() {
   );
 }
 
-function YuniteDebugContent() {
+export function YuniteDebugContent() {
   const navigate = useNavigate();
   const [tournamentId, setTournamentId] = useState("");
   const [sessionId, setSessionId] = useState("");

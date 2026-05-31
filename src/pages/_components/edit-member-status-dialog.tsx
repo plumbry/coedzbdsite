@@ -17,9 +17,15 @@ interface EditMemberStatusDialogProps {
 }
 
 export default function EditMemberStatusDialog({ open, onOpenChange, playerId }: EditMemberStatusDialogProps) {
-  const players = useQuery(api.players.getPlayers, {});
-  const formerMembers = useQuery(api.memberManagement.getFormerMembers);
-  const rejectedMembers = useQuery(api.memberManagement.getRejectedMembers);
+  const players = useQuery(api.players.getPlayers, open ? {} : "skip");
+  const formerMembers = useQuery(
+    api.memberManagement.getFormerMembers,
+    open ? undefined : "skip",
+  );
+  const rejectedMembers = useQuery(
+    api.memberManagement.getRejectedMembers,
+    open ? {} : "skip",
+  );
   const updateMemberStatus = useMutation(api.memberManagement.updateMemberStatus);
   const [isSubmitting, setIsSubmitting] = useState(false);
   

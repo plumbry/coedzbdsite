@@ -7,32 +7,30 @@ import { internal } from "./_generated/api";
 export const getPlayers = query({
   args: {},
   handler: async (ctx) => {
-    // Public query - only show accepted/active members
-    const allPlayers = await ctx.db
+    const activePlayers = await ctx.db
       .query("players")
+      .withIndex("by_membership_status", (q) =>
+        q.eq("currentMembershipStatus", "accepted"),
+      )
       .order("desc")
       .collect();
-    
-    // Only show accepted members (current active members)
-    const activePlayers = allPlayers.filter(p => p.currentMembershipStatus === "accepted");
-    
-    // Enrich with female verification status and gender
+
     const enrichedPlayers = await Promise.all(
       activePlayers.map(async (player) => {
         const score = await ctx.db
           .query("manualScores")
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .first();
-        
+
         return {
           ...player,
           femaleVerified: score?.femaleVerified ?? false,
           verificationMethod: score?.verificationMethod,
           gender: score?.gender,
         };
-      })
+      }),
     );
-    
+
     return enrichedPlayers;
   },
 });
@@ -98,30 +96,30 @@ export const getPlayerProfile = query({
 export const getArchivedPlayers = query({
   args: {},
   handler: async (ctx) => {
-    const allPlayers = await ctx.db
+    const archivedPlayers = await ctx.db
       .query("players")
+      .withIndex("by_membership_status", (q) =>
+        q.eq("currentMembershipStatus", "former"),
+      )
       .order("desc")
       .collect();
-    
-    const archivedPlayers = allPlayers.filter(p => p.currentMembershipStatus === "former");
-    
-    // Enrich with female verification status and gender
+
     const enrichedPlayers = await Promise.all(
       archivedPlayers.map(async (player) => {
         const score = await ctx.db
           .query("manualScores")
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .first();
-        
+
         return {
           ...player,
           femaleVerified: score?.femaleVerified ?? false,
           verificationMethod: score?.verificationMethod,
           gender: score?.gender,
         };
-      })
+      }),
     );
-    
+
     return enrichedPlayers;
   },
 });
@@ -130,32 +128,32 @@ export const getArchivedPlayers = query({
 export const getRejectedPlayers = query({
   args: {},
   handler: async (ctx) => {
-    const user = await requireAdmin(ctx);
-    
-    const allPlayers = await ctx.db
+    await requireAdmin(ctx);
+
+    const rejectedPlayers = await ctx.db
       .query("players")
+      .withIndex("by_membership_status", (q) =>
+        q.eq("currentMembershipStatus", "rejected"),
+      )
       .order("desc")
       .collect();
-    
-    const rejectedPlayers = allPlayers.filter(p => p.currentMembershipStatus === "rejected");
-    
-    // Enrich with female verification status and gender
+
     const enrichedPlayers = await Promise.all(
       rejectedPlayers.map(async (player) => {
         const score = await ctx.db
           .query("manualScores")
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .first();
-        
+
         return {
           ...player,
           femaleVerified: score?.femaleVerified ?? false,
           verificationMethod: score?.verificationMethod,
           gender: score?.gender,
         };
-      })
+      }),
     );
-    
+
     return enrichedPlayers;
   },
 });

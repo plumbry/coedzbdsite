@@ -34,6 +34,8 @@ import {
   KeyRound,
   PanelLeftClose,
   PanelLeftOpen,
+  LayoutDashboard,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
@@ -157,7 +159,10 @@ export default function AdminSidebar() {
     return () => window.removeEventListener("toggleAdminSidebar", handleToggle);
   }, []);
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) =>
+    path === "/admin"
+      ? location.pathname === "/admin" || location.pathname === "/admin/"
+      : location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) => {
@@ -177,7 +182,7 @@ export default function AdminSidebar() {
         label: "Players",
         items: [
           { path: "/admin/member-management", label: "Member Management", icon: Users },
-          { path: "/admin/discord-members", label: "Discord Members", icon: Shield },
+          { path: "/admin/discord-members", label: "Discord Directory", icon: Shield },
           { path: "/admin/tier-mismatches", label: "Tier Mismatches", icon: ShieldAlert },
         ],
       });
@@ -202,7 +207,7 @@ export default function AdminSidebar() {
           { path: "/admin/event-results", label: "Event Results", icon: ListChecks },
         );
       }
-      eventItems.push({ path: "/admin/uploads", label: "Uploads", icon: Upload });
+      eventItems.push({ path: "/admin/uploads", label: "Uploads & Imports", icon: Upload });
       if (isModeratorOrAdmin) {
         eventItems.push({
           path: "/admin/scrim-series",
@@ -246,6 +251,7 @@ export default function AdminSidebar() {
         items: [
           { path: "/admin/data-cache-status", label: "Data Cache", icon: Database },
           { path: "/admin/data-backup", label: "Data Backup", icon: HardDrive },
+          { path: "/admin/data-maintenance", label: "Data Maintenance", icon: Wrench },
           { path: "/admin/2025-wrapped-editor", label: "2025 Wrapped", icon: Sparkles },
         ],
       });
@@ -353,6 +359,15 @@ export default function AdminSidebar() {
         {/* Navigation */}
         {showNav && (
           <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden">
+            <div className={cn("pb-2", collapsed && "flex justify-center")}>
+              <SidebarNavLink
+                path="/admin"
+                label="Admin Home"
+                icon={LayoutDashboard}
+                active={isActive("/admin")}
+                collapsed={collapsed}
+              />
+            </div>
             {collapsed
               ? sections.map((section, sectionIndex) => (
                   <div key={section.id}>

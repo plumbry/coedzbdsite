@@ -1,8 +1,10 @@
 "use node";
 
 import { action, internalAction } from "../_generated/server";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
+
+const SYNC_BATCH_SIZE = 25;
 
 interface DiscordMember {
   user: {
@@ -89,34 +91,34 @@ async function fetchAndSyncDiscordMembers(ctx: ActionCtx): Promise<SyncResult> {
       let added = 0;
       let updated = 0;
       const discordUserIds: string[] = [];
-      
-      for (const member of humanMembers) {
-        const username = member.user.discriminator === "0" 
-          ? member.user.username 
-          : `${member.user.username}#${member.user.discriminator}`;
-        
-        const result = await ctx.runMutation(api.discord.upsertPlayer, {
-          discordUsername: username,
-          discordUserId: member.user.id,
-          nickname: member.nick || undefined,
-          serverJoinDate: member.joined_at,
+
+      for (let i = 0; i < humanMembers.length; i += SYNC_BATCH_SIZE) {
+        const batch = humanMembers.slice(i, i + SYNC_BATCH_SIZE).map((member) => {
+          const username =
+            member.user.discriminator === "0"
+              ? member.user.username
+              : `${member.user.username}#${member.user.discriminator}`;
+          discordUserIds.push(member.user.id);
+          return {
+            discordUsername: username,
+            discordUserId: member.user.id,
+            nickname: member.nick || undefined,
+            serverJoinDate: member.joined_at,
+          };
         });
-        
-        discordUserIds.push(member.user.id);
-        
-        if (result.created) {
-          added++;
-        } else {
-          updated++;
-        }
+
+        const result = await ctx.runMutation(internal.discord.syncDiscordMembersBatch, {
+          members: batch,
+        });
+        added += result.added;
+        updated += result.updated;
       }
-      
-      // Archive players who are no longer in the Discord server
-      const archiveResult: { archived: number } = await ctx.runMutation(api.discord.archiveMissingPlayers, {
-        currentDiscordUserIds: discordUserIds,
-      });
-      
-      // Update sync status to success
+
+      const archiveResult: { archived: number } = await ctx.runMutation(
+        internal.discord.archiveMissingPlayersInternal,
+        { currentDiscordUserIds: discordUserIds },
+      );
+
       await ctx.runMutation(api.sync.updateSyncStatus, {
         syncType: "discord",
         status: "success",

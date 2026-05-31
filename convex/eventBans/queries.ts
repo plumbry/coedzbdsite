@@ -75,11 +75,16 @@ export const getEventPassedMetadata = query({
 export const getSyncStatus = query({
   args: {},
   handler: async (ctx) => {
-    const allBans = await ctx.db.query("eventBans").collect();
-    const activeBans = allBans.filter((b) => b.status === "ACTIVE");
-    const endedBans = allBans.filter((b) => b.status === "ENDED");
+    const activeBans = await ctx.db
+      .query("eventBans")
+      .withIndex("by_status", (q) => q.eq("status", "ACTIVE"))
+      .collect();
+    const endedBans = await ctx.db
+      .query("eventBans")
+      .withIndex("by_status", (q) => q.eq("status", "ENDED"))
+      .collect();
     return {
-      totalBans: allBans.length,
+      totalBans: activeBans.length + endedBans.length,
       activeBans: activeBans.length,
       endedBans: endedBans.length,
     };
@@ -239,26 +244,32 @@ export const getBanById = internalQuery({
 export const getPendingRoleSyncs = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const allBans = await ctx.db.query("eventBans").collect();
-
-    // Filter for: not yet synced AND ban type that requires Discord role sync
-    const roleSyncBanTypes = [
+    const roleSyncBanTypes = new Set([
       "Minor Event Ban",
       "Major Event Ban",
       "Event Ban",
       "Probation",
-    ];
+    ]);
 
-    return allBans
-      .filter(
-        (ban) =>
-          !ban.syncedToDiscord && roleSyncBanTypes.includes(ban.banType)
-      )
-      .map((ban) => ({
-        _id: ban._id,
-        discordId: ban.discordId,
-        banType: ban.banType,
-      }));
+    const unsynced = await ctx.db
+      .query("eventBans")
+      .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", false))
+      .collect();
+
+    const neverSynced = await ctx.db
+      .query("eventBans")
+      .filter((q) => q.eq(q.field("syncedToDiscord"), undefined))
+      .collect();
+
+    const pending = [...unsynced, ...neverSynced].filter(
+      (ban) => roleSyncBanTypes.has(ban.banType),
+    );
+
+    return pending.map((ban) => ({
+      _id: ban._id,
+      discordId: ban.discordId,
+      banType: ban.banType,
+    }));
   },
 });
 
@@ -270,32 +281,31 @@ export const getPendingRoleSyncs = internalQuery({
 export const getPendingRoleRemovals = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const allBans = await ctx.db.query("eventBans").collect();
-
-    const roleSyncBanTypes = [
+    const roleSyncBanTypes = new Set([
       "Minor Event Ban",
       "Major Event Ban",
       "Event Ban",
       "Probation",
-    ];
+    ]);
 
     const now = Date.now();
     const TWENTY_EIGHT_DAYS_MS = 28 * 24 * 60 * 60 * 1000;
 
-    const fromBans = allBans
-      .filter((ban) => {
-        // Only consider bans that had a role added but not yet removed
-        if (!ban.syncedToDiscord || ban.roleRemovedFromDiscord) return false;
-        if (!roleSyncBanTypes.includes(ban.banType)) return false;
+    const syncedNotRemoved = await ctx.db
+      .query("eventBans")
+      .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", true))
+      .collect();
 
-        // Case 1: Event ban that has ended (remainingEvents hit 0)
+    const fromBans = syncedNotRemoved
+      .filter((ban) => {
+        if (ban.roleRemovedFromDiscord) return false;
+        if (!roleSyncBanTypes.has(ban.banType)) return false;
+
         if (ban.banType !== "Probation" && ban.status === "ENDED") {
           return true;
         }
 
-        // Case 2: Probation - 28 days have passed since start date
         if (ban.banType === "Probation") {
-          // Parse DD/MM/YYYY start date
           const parts = ban.startDate.split("/");
           if (parts.length === 3) {
             const day = parseInt(parts[0], 10);
@@ -317,7 +327,6 @@ export const getPendingRoleRemovals = internalQuery({
         source: "eventBans" as const,
       }));
 
-    // Also include queued removals from deleted bans
     const queuedRemovals = await ctx.db.query("pendingRoleRemovals").collect();
     const fromQueue = queuedRemovals.map((entry) => ({
       _id: entry._id,

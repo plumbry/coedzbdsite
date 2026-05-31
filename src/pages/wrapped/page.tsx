@@ -22,7 +22,7 @@ type SlideData =
 
 export default function Wrapped2025Page() {
   const wrappedContent = useQuery(api.wrapped.getPublishedWrappedContent, { year: 2025 });
-  const calculatedSections = useQuery(api.wrappedStats.calculateAllStats, { year: 2025 });
+  const calculatedSections = useQuery(api.wrappedStats.getPublishedWrappedStats, { year: 2025 });
   const [currentSlide, setCurrentSlide] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
 

@@ -1,6 +1,18 @@
 import { Link } from "react-router-dom";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
-import { Trophy, TrendingUp, GitCompare, DollarSign, Swords, Target, BarChart3 } from "lucide-react";
+import {
+  Trophy,
+  TrendingUp,
+  GitCompare,
+  DollarSign,
+  Swords,
+  Target,
+  BarChart3,
+  Brain,
+  LineChart,
+  Database,
+  FlaskConical,
+} from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card.tsx";
 
 const statsLinks = [
@@ -45,6 +57,30 @@ const statsLinks = [
     description: "See how tier placement affects player performance over time.",
     href: "/admin/tier-impact",
     icon: Target,
+  },
+  {
+    title: "Holistic Score Stats",
+    description: "Deep dive into holistic score components and distributions.",
+    href: "/admin/holistic-score-stats",
+    icon: Brain,
+  },
+  {
+    title: "Average Stats",
+    description: "Tier and event averages across placement, kills, and win rate.",
+    href: "/admin/average-stats",
+    icon: LineChart,
+  },
+  {
+    title: "Data Cache Status",
+    description: "Monitor cache health and trigger rebuilds for stat pipelines.",
+    href: "/admin/data-cache-status",
+    icon: Database,
+  },
+  {
+    title: "Tier Simulation",
+    description: "Simulate tier changes and preview impact on rankings.",
+    href: "/admin/tier-simulation",
+    icon: FlaskConical,
   },
 ];
 

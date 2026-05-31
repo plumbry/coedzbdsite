@@ -3,6 +3,7 @@ import { query, mutation } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
 import { VALID_STAT_IDS } from "./wrappedStatsConfig.js";
+import { internal } from "./_generated/api";
 
 type StatType = "totalEvents" | "peakAttendance" | "playersPaid" | "mostActive" | "mostTop5s" | "mostWins" | "highestWinRate" | "mostEliminations";
 
@@ -416,7 +417,6 @@ export const saveWrappedContent = mutation({
       .first();
 
     if (existing) {
-      // Update existing
       await ctx.db.patch(existing._id, {
         introTagline: args.introTagline,
         sponsors: args.sponsors,
@@ -424,6 +424,11 @@ export const saveWrappedContent = mutation({
         customMessage: args.customMessage,
         lastEditedBy: user._id,
       });
+      if (existing.isPublished) {
+        await ctx.scheduler.runAfter(0, internal.wrappedStats.storeComputedSections, {
+          year: args.year,
+        });
+      }
       return existing._id;
     } else {
       // Create new
@@ -483,6 +488,42 @@ export const publishWrappedContent = mutation({
       isPublished: true,
       publishedBy: user._id,
       publishedAt: Date.now(),
+    });
+
+    await ctx.scheduler.runAfter(0, internal.wrappedStats.storeComputedSections, {
+      year: args.year,
+    });
+  },
+});
+
+// Admin: recompute precomputed wrapped stats without republishing
+export const recomputeWrappedStats = mutation({
+  args: { year: v.number() },
+  handler: async (ctx, args): Promise<void> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({
+        message: "User not logged in",
+        code: "UNAUTHENTICATED",
+      });
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+
+    if (!user || user.role !== "admin") {
+      throw new ConvexError({
+        message: "Admin access required",
+        code: "FORBIDDEN",
+      });
+    }
+
+    await ctx.scheduler.runAfter(0, internal.wrappedStats.storeComputedSections, {
+      year: args.year,
     });
   },
 });

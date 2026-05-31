@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { mutation, query, internalQuery } from "./_generated/server";
+import { mutation, query, internalQuery, internalMutation } from "./_generated/server";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
+import { internal } from "./_generated/api";
 
 // Submit new application
 export const submitApplication = mutation({
@@ -488,7 +489,7 @@ export const createPlayerForApplication = mutation({
   },
 });
 
-// Get accepted members (public)
+// Get accepted members (public + admin)
 export const getAcceptedMembers = query({
   args: {},
   handler: async (ctx) => {
@@ -498,28 +499,6 @@ export const getAcceptedMembers = query({
       .order("desc")
       .collect();
 
-    // Calculate the date 6 weeks ago (YYYY-MM-DD)
-    const sixWeeksAgo = new Date(Date.now() - 6 * 7 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
-
-    // Get all events with startDate in the last 6 weeks
-    const allEvents = await ctx.db.query("events").collect();
-    const recentEventIds = new Set(
-      allEvents
-        .filter((e) => e.startDate >= sixWeeksAgo)
-        .map((e) => e._id)
-    );
-
-    // Get all thirdPartyImports linked to recent events
-    const allImports = await ctx.db.query("thirdPartyImports").collect();
-    const recentImportIds = new Set(
-      allImports
-        .filter((i) => i.eventId && recentEventIds.has(i.eventId))
-        .map((i) => i._id)
-    );
-
-    // Enrich with gender from manualScores and active status from match participation
     const enriched = await Promise.all(
       players.map(async (player) => {
         const score = await ctx.db
@@ -527,26 +506,106 @@ export const getAcceptedMembers = query({
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .first();
 
-        // Check if player has any matchPlayerStats linked to a recent import
+        return {
+          ...player,
+          gender: score?.gender,
+          isActive: player.isRecentlyActive ?? false,
+        };
+      }),
+    );
+
+    return enriched;
+  },
+});
+
+// Slim public member directory (home page) — no admin-only fields
+export const getPublicMemberDirectory = query({
+  args: {},
+  handler: async (ctx) => {
+    const players = await ctx.db
+      .query("players")
+      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
+      .order("desc")
+      .collect();
+
+    return await Promise.all(
+      players.map(async (player) => {
+        const score = await ctx.db
+          .query("manualScores")
+          .withIndex("by_player", (q) => q.eq("playerId", player._id))
+          .first();
+
+        return {
+          _id: player._id,
+          discordUsername: player.discordUsername,
+          epicUsername: player.epicUsername,
+          nickname: player.nickname,
+          tier: player.tier,
+          avatarUrl: player.avatarUrl,
+          totalScore: player.totalScore,
+          gender: score?.gender,
+          isActive: player.isRecentlyActive ?? false,
+        };
+      }),
+    );
+  },
+});
+
+// Refresh cached isRecentlyActive flags (cron / post-import)
+export const refreshRecentlyActiveFlags = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const sixWeeksAgo = new Date(Date.now() - 6 * 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+
+    const recentEvents = await ctx.db
+      .query("events")
+      .withIndex("by_date")
+      .filter((q) => q.gte(q.field("startDate"), sixWeeksAgo))
+      .collect();
+
+    const recentEventIds = new Set(recentEvents.map((e) => e._id));
+    const recentImportIds = new Set<Id<"thirdPartyImports">>();
+
+    for (const eventId of recentEventIds) {
+      const imports = await ctx.db
+        .query("thirdPartyImports")
+        .withIndex("by_event", (q) => q.eq("eventId", eventId))
+        .collect();
+      for (const imp of imports) {
+        recentImportIds.add(imp._id);
+      }
+    }
+
+    const players = await ctx.db
+      .query("players")
+      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
+      .collect();
+
+    for (const player of players) {
+      let isActive = false;
+      if (recentImportIds.size > 0) {
         const playerMatches = await ctx.db
           .query("matchPlayerStats")
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .order("desc")
-          .take(200);
+          .take(30);
+        isActive = playerMatches.some((m) => recentImportIds.has(m.importId));
+      }
+      if (player.isRecentlyActive !== isActive) {
+        await ctx.db.patch(player._id, { isRecentlyActive: isActive });
+      }
+    }
+  },
+});
 
-        const isActive = playerMatches.some(
-          (m) => recentImportIds.has(m.importId)
-        );
-
-        return {
-          ...player,
-          gender: score?.gender,
-          isActive,
-        };
-      })
-    );
-
-    return enriched;
+// Admin: refresh isRecentlyActive flags immediately (also runs daily via cron)
+export const triggerRefreshRecentlyActive = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    await ctx.scheduler.runAfter(0, internal.memberManagement.refreshRecentlyActiveFlags, {});
   },
 });
 
@@ -555,14 +614,15 @@ export const getRejectedMembers = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    
-    // Get rejected players (not applications)
+
     const rejectedPlayers = await ctx.db
       .query("players")
-      .filter((q) => q.eq(q.field("currentMembershipStatus"), "rejected"))
+      .withIndex("by_membership_status", (q) =>
+        q.eq("currentMembershipStatus", "rejected"),
+      )
       .order("desc")
       .collect();
-    
+
     return rejectedPlayers;
   },
 });

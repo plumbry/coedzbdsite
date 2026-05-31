@@ -27,7 +27,7 @@ export default function Index() {
     direction: "asc" 
   });
   
-  const acceptedMembers = useQuery(api.memberManagement.getAcceptedMembers);
+  const acceptedMembers = useQuery(api.memberManagement.getPublicMemberDirectory);
   
   const filteredMembers = acceptedMembers?.filter((member) => {
     const searchLower = search.toLowerCase();

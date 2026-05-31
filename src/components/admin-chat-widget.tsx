@@ -16,7 +16,10 @@ export default function AdminChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const messages = useQuery(api.chat.getMessages, isAdmin ? {} : "skip");
+  const messages = useQuery(
+    api.chat.getMessages,
+    isAdmin && isOpen ? {} : "skip",
+  );
   const sendMessage = useMutation(api.chat.sendMessage);
 
   // Hide on /spin pages (public-facing, not admin)

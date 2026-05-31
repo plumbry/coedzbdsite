@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { ConvexError } from "convex/values";
 import {
@@ -17,7 +17,11 @@ import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce.ts";
 
 export default function UsernameSetupDialog() {
-  const currentUser = useQuery(api.users.getCurrentUser);
+  const { isAuthenticated } = useConvexAuth();
+  const currentUser = useQuery(
+    api.users.getCurrentUser,
+    isAuthenticated ? undefined : "skip",
+  );
   const [username, setUsername] = useState("");
   const [debouncedUsername] = useDebounce(username, 500);
   const [error, setError] = useState("");

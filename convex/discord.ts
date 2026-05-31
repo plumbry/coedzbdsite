@@ -1,6 +1,93 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel.d.ts";
+import type { MutationCtx } from "./_generated/server";
 import { getDisplayName } from "./auth_helpers";
+
+type SyncMatchConfidence = "exact" | "username" | "fuzzy";
+
+function isDiscordPlaceholderId(id?: string): boolean {
+  return !id || id.startsWith("placeholder_") || id === "imported";
+}
+
+async function resolveExistingPlayerForSync(
+  ctx: MutationCtx,
+  args: {
+    discordUserId: string;
+    discordUsername: string;
+    nickname?: string | null;
+  },
+  playersCache?: Doc<"players">[],
+): Promise<{
+  existingPlayer: Doc<"players"> | null;
+  matchConfidence: SyncMatchConfidence | null;
+}> {
+  const epicUsername = args.nickname || args.discordUsername;
+
+  const byPrimary = await ctx.db
+    .query("players")
+    .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", args.discordUserId))
+    .first();
+  if (byPrimary) {
+    return { existingPlayer: byPrimary, matchConfidence: "exact" };
+  }
+
+  const allPlayers = playersCache ?? (await ctx.db.query("players").collect());
+
+  const byAlternate =
+    allPlayers.find((p) => p.alternateDiscordUserIds?.includes(args.discordUserId)) ?? null;
+  if (byAlternate) {
+    return { existingPlayer: byAlternate, matchConfidence: "exact" };
+  }
+
+  const normalizedIncomingDiscord = normalizeUsername(args.discordUsername);
+  const byDiscordName =
+    allPlayers.find(
+      (p) =>
+        isDiscordPlaceholderId(p.discordUserId) &&
+        normalizeUsername(p.discordUsername) === normalizedIncomingDiscord,
+    ) ?? null;
+  if (byDiscordName) {
+    return { existingPlayer: byDiscordName, matchConfidence: "username" };
+  }
+
+  if (args.nickname) {
+    const normalizedIncomingEpic = normalizeUsername(epicUsername);
+    const byEpicName =
+      allPlayers.find(
+        (p) =>
+          isDiscordPlaceholderId(p.discordUserId) &&
+          normalizeUsername(p.epicUsername) === normalizedIncomingEpic,
+      ) ?? null;
+    if (byEpicName) {
+      return { existingPlayer: byEpicName, matchConfidence: "username" };
+    }
+  }
+
+  let fuzzyMatch =
+    allPlayers.find(
+      (p) =>
+        isDiscordPlaceholderId(p.discordUserId) &&
+        areUsernamesSimilar(p.discordUsername, args.discordUsername),
+    ) ?? null;
+  if (fuzzyMatch) {
+    return { existingPlayer: fuzzyMatch, matchConfidence: "fuzzy" };
+  }
+
+  if (args.nickname) {
+    fuzzyMatch =
+      allPlayers.find(
+        (p) =>
+          isDiscordPlaceholderId(p.discordUserId) &&
+          areUsernamesSimilar(p.epicUsername, epicUsername),
+      ) ?? null;
+    if (fuzzyMatch) {
+      return { existingPlayer: fuzzyMatch, matchConfidence: "fuzzy" };
+    }
+  }
+
+  return { existingPlayer: null, matchConfidence: null };
+}
 
 export const upsertPlayer = mutation({
   args: {
@@ -10,98 +97,14 @@ export const upsertPlayer = mutation({
     serverJoinDate: v.string(),
   },
   handler: async (ctx, args) => {
-    // Server nickname is the Epic username
-    // Fall back to Discord username if no nickname is set
     const epicUsername = args.nickname || args.discordUsername;
-    
-    // Try to find existing player using multiple strategies
-    let existingPlayer = null;
-    let matchConfidence: "exact" | "username" | "fuzzy" | null = null;
-    
-    // 1. By Discord ID (exact match - check primary and alternates)
-    existingPlayer = await ctx.db
-      .query("players")
-      .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", args.discordUserId))
-      .first();
-    
-    if (existingPlayer) {
-      matchConfidence = "exact";
-    }
-    
-    // Check alternates if not found by primary
-    if (!existingPlayer) {
-      const allPlayers = await ctx.db.query("players").collect();
-      existingPlayer = allPlayers.find(p => 
-        p.alternateDiscordUserIds?.includes(args.discordUserId)
-      ) || null;
-      
-      if (existingPlayer) {
-        matchConfidence = "exact";
-      }
-    }
-    
-    // Helper to check if a Discord ID is a placeholder (not a real Discord ID)
-    const isPlaceholderId = (id?: string) => {
-      return !id || id.startsWith("placeholder_") || id === "imported";
-    };
-    
-    // 2. Try normalized username matching (only for players without real Discord ID)
-    if (!existingPlayer) {
-      const allPlayers = await ctx.db.query("players").collect();
-      const normalizedIncoming = normalizeUsername(args.discordUsername);
-      
-      existingPlayer = allPlayers.find(p => 
-        isPlaceholderId(p.discordUserId) &&
-        normalizeUsername(p.discordUsername) === normalizedIncoming
-      ) || null;
-      
-      if (existingPlayer) {
-        matchConfidence = "username";
-      }
-    }
-    
-    // 3. Try normalized Epic username matching
-    if (!existingPlayer && args.nickname) {
-      const allPlayers = await ctx.db.query("players").collect();
-      const normalizedIncoming = normalizeUsername(epicUsername);
-      
-      existingPlayer = allPlayers.find(p => 
-        isPlaceholderId(p.discordUserId) &&
-        normalizeUsername(p.epicUsername) === normalizedIncoming
-      ) || null;
-      
-      if (existingPlayer) {
-        matchConfidence = "username";
-      }
-    }
-    
-    // 4. Try fuzzy matching (only for players without real Discord ID)
-    if (!existingPlayer) {
-      const allPlayers = await ctx.db.query("players").collect();
-      
-      // Try Discord username
-      existingPlayer = allPlayers.find(p => 
-        isPlaceholderId(p.discordUserId) &&
-        areUsernamesSimilar(p.discordUsername, args.discordUsername)
-      ) || null;
-      
-      if (existingPlayer) {
-        matchConfidence = "fuzzy";
-      }
-      
-      // Try Epic username if we have a nickname
-      if (!existingPlayer && args.nickname) {
-        existingPlayer = allPlayers.find(p => 
-          isPlaceholderId(p.discordUserId) &&
-          areUsernamesSimilar(p.epicUsername, epicUsername)
-        ) || null;
-        
-        if (existingPlayer) {
-          matchConfidence = "fuzzy";
-        }
-      }
-    }
-    
+
+    const { existingPlayer, matchConfidence } = await resolveExistingPlayerForSync(ctx, {
+      discordUserId: args.discordUserId,
+      discordUsername: args.discordUsername,
+      nickname: args.nickname,
+    });
+
     if (existingPlayer) {
       // Update existing player
       const updateData: {
@@ -970,6 +973,90 @@ function getLevenshteinDistance(str1: string, str2: string): number {
   return dp[m][n];
 }
 
+// Batch upsert for daily Discord sync — one players table read per batch
+export const syncDiscordMembersBatch = internalMutation({
+  args: {
+    members: v.array(
+      v.object({
+        discordUsername: v.string(),
+        discordUserId: v.string(),
+        nickname: v.optional(v.string()),
+        serverJoinDate: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const allPlayers = await ctx.db.query("players").collect();
+    let added = 0;
+    let updated = 0;
+
+    for (const member of args.members) {
+      const epicUsername = member.nickname || member.discordUsername;
+      const { existingPlayer, matchConfidence } = await resolveExistingPlayerForSync(
+        ctx,
+        {
+          discordUserId: member.discordUserId,
+          discordUsername: member.discordUsername,
+          nickname: member.nickname,
+        },
+        allPlayers,
+      );
+
+      if (existingPlayer) {
+        const updateData: {
+          discordUsername: string;
+          discordUserId: string;
+          nickname?: string;
+          epicUsername: string;
+          serverJoinDate: string;
+          status?: "active";
+          currentMembershipStatus?: "accepted";
+          matchConfidence?: SyncMatchConfidence;
+          needsReview?: boolean;
+          hasLeftServer?: boolean;
+        } = {
+          discordUsername: member.discordUsername,
+          discordUserId: member.discordUserId,
+          nickname: member.nickname,
+          epicUsername,
+          serverJoinDate: member.serverJoinDate,
+          hasLeftServer: false,
+        };
+
+        if (matchConfidence) {
+          updateData.matchConfidence = matchConfidence;
+          if (matchConfidence === "fuzzy") {
+            updateData.needsReview = true;
+          }
+        }
+
+        if (
+          existingPlayer.status === "archived" ||
+          existingPlayer.currentMembershipStatus === "former"
+        ) {
+          updateData.status = "active";
+          updateData.currentMembershipStatus = "accepted";
+        }
+
+        await ctx.db.patch(existingPlayer._id, updateData);
+        updated++;
+      } else {
+        await ctx.db.insert("players", {
+          discordUsername: member.discordUsername,
+          discordUserId: member.discordUserId,
+          nickname: member.nickname,
+          serverJoinDate: member.serverJoinDate,
+          epicUsername,
+          matchConfidence: "exact" as const,
+        });
+        added++;
+      }
+    }
+
+    return { added, updated };
+  },
+});
+
 // Internal mutation for Discord bot webhook to sync individual members
 export const upsertDiscordMember = internalMutation({
   args: {
@@ -993,101 +1080,13 @@ export const upsertDiscordMember = internalMutation({
     // Check if user has a tier role (Tier S, A, B, C, or D)
     const tierRoleNames = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
     const hasTierRole = args.roles?.some(role => tierRoleNames.includes(role.name)) || false;
-    
-    // Try to find existing player using multiple strategies
-    let existingPlayer = null;
-    let matchConfidence: "exact" | "username" | "fuzzy" | null = null;
-    
-    // 1. By Discord ID (check both primary and alternates)
-    // First try primary Discord ID (indexed - fastest)
-    existingPlayer = await ctx.db
-      .query("players")
-      .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", args.discordUserId))
-      .first();
-    
-    if (existingPlayer) {
-      matchConfidence = "exact";
-    }
-    
-    // If not found by primary, check if this ID exists in alternates
-    if (!existingPlayer) {
-      const allPlayers = await ctx.db.query("players").collect();
-      existingPlayer = allPlayers.find(p => 
-        p.alternateDiscordUserIds?.includes(args.discordUserId)
-      ) || null;
-      
-      if (existingPlayer) {
-        matchConfidence = "exact";
-      }
-    }
-    
-    // Helper to check if a Discord ID is a placeholder (not a real Discord ID)
-    const isPlaceholderId = (id?: string) => {
-      return !id || id.startsWith("placeholder_") || id === "imported";
-    };
-    
-    // 2. If not found by Discord ID, try normalized username matching
-    // IMPORTANT: Only match players that DON'T have a real Discord ID yet
-    // This prevents overwriting existing Discord ID links
-    if (!existingPlayer) {
-      const allPlayers = await ctx.db.query("players").collect();
-      const normalizedIncoming = normalizeUsername(args.discordUsername);
-      
-      // Try exact match after normalization (case-insensitive + no special chars)
-      existingPlayer = allPlayers.find(p => 
-        isPlaceholderId(p.discordUserId) && // Must not have a real Discord ID already
-        normalizeUsername(p.discordUsername) === normalizedIncoming
-      ) || null;
-      
-      if (existingPlayer) {
-        matchConfidence = "username";
-      }
-    }
-    
-    // 3. If not found, try normalized Epic username matching (if we have a nickname)
-    // IMPORTANT: Only match players that DON'T have a real Discord ID yet
-    if (!existingPlayer && args.nickname) {
-      const allPlayers = await ctx.db.query("players").collect();
-      const normalizedIncoming = normalizeUsername(epicUsername);
-      
-      existingPlayer = allPlayers.find(p => 
-        isPlaceholderId(p.discordUserId) && // Must not have a real Discord ID already
-        normalizeUsername(p.epicUsername) === normalizedIncoming
-      ) || null;
-      
-      if (existingPlayer) {
-        matchConfidence = "username";
-      }
-    }
-    
-    // 4. If still not found, try fuzzy matching on both usernames
-    // IMPORTANT: Only match players that DON'T have a real Discord ID yet
-    if (!existingPlayer) {
-      const allPlayers = await ctx.db.query("players").collect();
-      
-      // Try fuzzy matching on Discord username - but only for players without real Discord ID
-      existingPlayer = allPlayers.find(p => 
-        isPlaceholderId(p.discordUserId) && // Must not have a real Discord ID already
-        areUsernamesSimilar(p.discordUsername, args.discordUsername)
-      ) || null;
-      
-      if (existingPlayer) {
-        matchConfidence = "fuzzy";
-      }
-      
-      // If still not found and we have a nickname, try fuzzy matching on Epic username
-      if (!existingPlayer && args.nickname) {
-        existingPlayer = allPlayers.find(p => 
-          isPlaceholderId(p.discordUserId) && // Must not have a real Discord ID already
-          areUsernamesSimilar(p.epicUsername, epicUsername)
-        ) || null;
-        
-        if (existingPlayer) {
-          matchConfidence = "fuzzy";
-        }
-      }
-    }
-    
+
+    const { existingPlayer, matchConfidence } = await resolveExistingPlayerForSync(ctx, {
+      discordUserId: args.discordUserId,
+      discordUsername: args.discordUsername,
+      nickname: args.nickname,
+    });
+
     if (existingPlayer) {
       // Update existing player/member
       // Discord ID: Set/update to incoming ID (protected by matching logic above)
