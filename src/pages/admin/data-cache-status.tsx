@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Component, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -25,7 +25,35 @@ import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import RoleGate from "@/components/role-gate.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { toast } from "sonner";
+
+class DataCacheStatusErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <Alert variant="destructive">
+          <XCircle className="h-4 w-4" />
+          <AlertTitle>Data cache status failed to load</AlertTitle>
+          <AlertDescription>
+            {this.state.error.message || "Refresh the page or check the Convex logs for the failed query."}
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function DataCacheStatusContent() {
   const { isAdmin } = useUserRole();
@@ -129,6 +157,9 @@ function DataCacheStatusContent() {
     if (total === 0) return 0;
     return Math.round((count / total) * 100);
   };
+
+  const formatCount = (count: number, sampled?: boolean) =>
+    `${count.toLocaleString()}${sampled ? "+" : ""}`;
 
   return (
     <div className="space-y-4">
@@ -327,12 +358,14 @@ function DataCacheStatusContent() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{matchStatsData.matchStatsCount}</div>
+                <div className="text-2xl font-bold">
+                  {formatCount(matchStatsData.matchStatsCount, matchStatsData.matchStatsCountIsSampled)}
+                </div>
                 <div className="space-y-1 mt-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total Results</span>
                     <span className="font-medium">
-                      {resultStats.total}
+                      {formatCount(resultStats.total, resultStats.totalIsSampled)}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -758,7 +791,9 @@ export default function DataCacheStatus() {
       description="Monitor and rebuild cached player, event, and import data"
       authTitle="Sign in to view the data cache status"
     >
-      <DataCacheStatusContent />
+      <DataCacheStatusErrorBoundary>
+        <DataCacheStatusContent />
+      </DataCacheStatusErrorBoundary>
     </AdminPageLayout>
   );
 }

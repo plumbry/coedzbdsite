@@ -4,6 +4,7 @@ import { ConvexError } from "convex/values";
 import { internal, api } from "./_generated/api";
 
 // Split into focused queries to avoid exceeding Convex scan limits
+const STATUS_SAMPLE_LIMIT = 1000;
 
 export const getPlayerStats = query({
   args: {},
@@ -75,28 +76,15 @@ export const getImportStats = query({
 export const getMatchStatsCount = query({
   args: {},
   handler: async (ctx) => {
-    let matchStatsCount = 0;
-    let mostRecentMatchStat: number | undefined = undefined;
-    let matchStatsCursor: string | null = null;
-    let matchStatsDone = false;
-    
-    while (!matchStatsDone) {
-      const page = await ctx.db
-        .query("matchPlayerStats")
-        .paginate({ numItems: 1000, cursor: matchStatsCursor });
-      matchStatsCount += page.page.length;
-      for (const doc of page.page) {
-        if (!mostRecentMatchStat || doc._creationTime > mostRecentMatchStat) {
-          mostRecentMatchStat = doc._creationTime;
-        }
-      }
-      matchStatsDone = page.isDone;
-      matchStatsCursor = page.continueCursor;
-    }
+    const page = await ctx.db
+      .query("matchPlayerStats")
+      .paginate({ numItems: STATUS_SAMPLE_LIMIT, cursor: null });
+    const latest = await ctx.db.query("matchPlayerStats").order("desc").first();
     
     return {
-      matchStatsCount,
-      matchStatsLastUpdated: mostRecentMatchStat,
+      matchStatsCount: page.page.length,
+      matchStatsCountIsSampled: !page.isDone,
+      matchStatsLastUpdated: latest?._creationTime,
     };
   },
 });
@@ -155,27 +143,22 @@ export const getResultStats = query({
     let resultsWithDiscordId = 0;
     let resultsWithTeamMembers = 0;
     let resultsWithMatchData = 0;
-    let resultsCursor: string | null = null;
-    let resultsDone = false;
-    
-    while (!resultsDone) {
-      const page = await ctx.db
-        .query("thirdPartyResults")
-        .paginate({ numItems: 1000, cursor: resultsCursor });
-      for (const r of page.page) {
-        resultsTotal++;
-        if (r.matched) resultsMatched++;
-        if (r.epicId) resultsWithEpicId++;
-        if (r.discordId) resultsWithDiscordId++;
-        if (r.teamMembers && r.teamMembers.length > 0) resultsWithTeamMembers++;
-        if (r.wins !== undefined || r.matchesPlayed !== undefined) resultsWithMatchData++;
-      }
-      resultsDone = page.isDone;
-      resultsCursor = page.continueCursor;
+    const page = await ctx.db
+      .query("thirdPartyResults")
+      .paginate({ numItems: STATUS_SAMPLE_LIMIT, cursor: null });
+
+    for (const r of page.page) {
+      resultsTotal++;
+      if (r.matched) resultsMatched++;
+      if (r.epicId) resultsWithEpicId++;
+      if (r.discordId) resultsWithDiscordId++;
+      if (r.teamMembers && r.teamMembers.length > 0) resultsWithTeamMembers++;
+      if (r.wins !== undefined || r.matchesPlayed !== undefined) resultsWithMatchData++;
     }
     
     return {
       total: resultsTotal,
+      totalIsSampled: !page.isDone,
       matched: resultsMatched,
       withEpicId: resultsWithEpicId,
       withDiscordId: resultsWithDiscordId,
