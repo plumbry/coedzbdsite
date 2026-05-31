@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button.tsx";
+import { ScrollArea } from "@/components/ui/scroll-area.tsx";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import {
   Tooltip,
@@ -43,6 +44,7 @@ import { useAuth } from "@/hooks/use-auth.ts";
 import { cn } from "@/lib/utils.ts";
 
 const STORAGE_KEY = "admin-sidebar-collapsed";
+const SECTIONS_STORAGE_KEY = "admin-sidebar-open-sections";
 
 type NavItem = {
   path: string;
@@ -56,6 +58,32 @@ type NavSection = {
   items: NavItem[];
 };
 
+function readStoredOpenSections(): Set<string> | null {
+  if (typeof window === "undefined") return null;
+  const stored = localStorage.getItem(SECTIONS_STORAGE_KEY);
+  if (!stored) return null;
+  try {
+    const parsed = JSON.parse(stored) as string[];
+    return new Set(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function findActiveSectionId(sections: NavSection[], pathname: string): string | null {
+  for (const section of sections) {
+    if (
+      section.items.some(
+        (item) =>
+          pathname === item.path || pathname.startsWith(`${item.path}/`),
+      )
+    ) {
+      return section.id;
+    }
+  }
+  return null;
+}
+
 function SidebarNavLink({
   path,
   label,
@@ -68,17 +96,20 @@ function SidebarNavLink({
       variant={active ? "secondary" : "ghost"}
       size={collapsed ? "icon" : "sm"}
       className={cn(
-        collapsed ? "h-9 w-9 shrink-0" : "w-full justify-start",
+        collapsed ? "h-9 w-9 shrink-0" : "w-full min-w-0 justify-start",
       )}
       aria-label={label}
     >
       <Icon className={cn("h-4 w-4 shrink-0", !collapsed && "mr-2")} />
-      {!collapsed && <span className="truncate">{label}</span>}
+      {!collapsed && <span className="min-w-0 truncate">{label}</span>}
     </Button>
   );
 
   const link = (
-    <Link to={path} className={cn(collapsed && "flex justify-center")}>
+    <Link
+      to={path}
+      className={cn("block min-w-0", collapsed ? "flex justify-center" : "w-full")}
+    >
       {button}
     </Link>
   );
@@ -134,24 +165,70 @@ function IconAction({
   );
 }
 
+function CollapsedSectionToggle({
+  label,
+  open,
+  onToggle,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-9 shrink-0 text-muted-foreground"
+          onClick={onToggle}
+          aria-label={label}
+          aria-expanded={open}
+        >
+          {open ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export default function AdminSidebar() {
   const { isAdmin, isModeratorOrAdmin, isEventMod, hasEventBanAccess, user, isLoading } =
     useUserRole();
   const { signout } = useAuth();
   const location = useLocation();
-  const [openSections, setOpenSections] = useState<Set<string>>(
-    new Set(["players", "statistics", "events", "mods", "admin", "data"]),
-  );
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored !== null) return stored === "true";
-    return window.innerWidth < 1024;
+  const [openSections, setOpenSections] = useState<Set<string>>(() => {
+    const stored = readStoredOpenSections();
+    return stored ?? new Set();
   });
+  const openSectionsBeforeCollapse = useRef<Set<string> | null>(null);
+  const initialCollapsed =
+    typeof window !== "undefined"
+      ? (() => {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored !== null) return stored === "true";
+          return window.innerWidth < 1024;
+        })()
+      : false;
+  const wasCollapsed = useRef(initialCollapsed);
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, String(collapsed));
   }, [collapsed]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      SECTIONS_STORAGE_KEY,
+      JSON.stringify([...openSections]),
+    );
+  }, [openSections]);
 
   useEffect(() => {
     const handleToggle = () => setCollapsed((prev) => !prev);
@@ -260,6 +337,52 @@ export default function AdminSidebar() {
     return result;
   }, [isAdmin, isModeratorOrAdmin, hasEventBanAccess]);
 
+  useEffect(() => {
+    if (sections.length === 0) return;
+
+    setOpenSections((prev) => {
+      const validIds = new Set(sections.map((section) => section.id));
+      const next = new Set([...prev].filter((id) => validIds.has(id)));
+      if (next.size > 0) {
+        const unchanged =
+          next.size === prev.size && [...next].every((id) => prev.has(id));
+        return unchanged ? prev : next;
+      }
+
+      const activeSectionId = findActiveSectionId(sections, location.pathname);
+      return activeSectionId ? new Set([activeSectionId]) : new Set([sections[0].id]);
+    });
+  }, [sections, location.pathname]);
+
+  useEffect(() => {
+    if (sections.length === 0) return;
+
+    if (!wasCollapsed.current && collapsed) {
+      setOpenSections((prev) => {
+        openSectionsBeforeCollapse.current = new Set(prev);
+        const activeSectionId = findActiveSectionId(sections, location.pathname);
+        return activeSectionId ? new Set([activeSectionId]) : new Set();
+      });
+    } else if (wasCollapsed.current && !collapsed && openSectionsBeforeCollapse.current) {
+      setOpenSections(openSectionsBeforeCollapse.current);
+      openSectionsBeforeCollapse.current = null;
+    }
+
+    wasCollapsed.current = collapsed;
+  }, [collapsed, sections, location.pathname]);
+
+  useEffect(() => {
+    if (!collapsed || sections.length === 0) return;
+
+    const activeSectionId = findActiveSectionId(sections, location.pathname);
+    if (!activeSectionId) return;
+
+    setOpenSections((prev) => {
+      if (prev.size === 1 && prev.has(activeSectionId)) return prev;
+      return new Set([activeSectionId]);
+    });
+  }, [collapsed, location.pathname, sections]);
+
   const showNav = isModeratorOrAdmin || isEventMod;
 
   return (
@@ -358,63 +481,74 @@ export default function AdminSidebar() {
 
         {/* Navigation */}
         {showNav && (
-          <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden">
-            <div className={cn("pb-2", collapsed && "flex justify-center")}>
-              <SidebarNavLink
-                path="/admin"
-                label="Admin Home"
-                icon={LayoutDashboard}
-                active={isActive("/admin")}
-                collapsed={collapsed}
-              />
-            </div>
-            {collapsed
-              ? sections.map((section, sectionIndex) => (
-                  <div key={section.id}>
-                    {sectionIndex > 0 && (
-                      <div className="my-2 border-t border-border/60" />
-                    )}
-                    <div className="space-y-1">
-                      {section.items.map((item) => (
-                        <SidebarNavLink
-                          key={item.path}
-                          {...item}
-                          active={isActive(item.path)}
-                          collapsed
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))
-              : sections.map((section) => (
-                  <div key={section.id} className="pb-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSection(section.id)}
-                      className="mb-2 flex w-full items-center justify-between px-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <span>{section.label}</span>
-                      {openSections.has(section.id) ? (
-                        <ChevronDown className="h-3.5 w-3.5" />
-                      ) : (
-                        <ChevronRight className="h-3.5 w-3.5" />
+          <ScrollArea className="min-h-0 flex-1">
+            <nav className="space-y-1 pr-2">
+              <div className={cn("pb-2", collapsed && "flex justify-center")}>
+                <SidebarNavLink
+                  path="/admin"
+                  label="Admin Home"
+                  icon={LayoutDashboard}
+                  active={isActive("/admin")}
+                  collapsed={collapsed}
+                />
+              </div>
+              {collapsed
+                ? sections.map((section, sectionIndex) => (
+                    <div key={section.id}>
+                      {sectionIndex > 0 && (
+                        <div className="my-2 border-t border-border/60" />
                       )}
-                    </button>
-                    {openSections.has(section.id) && (
-                      <div className="space-y-1">
-                        {section.items.map((item) => (
-                          <SidebarNavLink
-                            key={item.path}
-                            {...item}
-                            active={isActive(item.path)}
-                            collapsed={false}
-                          />
-                        ))}
+                      <div className="flex justify-center">
+                        <CollapsedSectionToggle
+                          label={section.label}
+                          open={openSections.has(section.id)}
+                          onToggle={() => toggleSection(section.id)}
+                        />
                       </div>
-                    )}
-                  </div>
-                ))}
-          </nav>
+                      {openSections.has(section.id) && (
+                        <div className="space-y-1">
+                          {section.items.map((item) => (
+                            <SidebarNavLink
+                              key={item.path}
+                              {...item}
+                              active={isActive(item.path)}
+                              collapsed
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                : sections.map((section) => (
+                    <div key={section.id} className="pb-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleSection(section.id)}
+                        className="mb-2 flex w-full min-w-0 items-center justify-between px-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <span className="truncate">{section.label}</span>
+                        {openSections.has(section.id) ? (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                        )}
+                      </button>
+                      {openSections.has(section.id) && (
+                        <div className="space-y-1">
+                          {section.items.map((item) => (
+                            <SidebarNavLink
+                              key={item.path}
+                              {...item}
+                              active={isActive(item.path)}
+                              collapsed={false}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+            </nav>
+          </ScrollArea>
         )}
 
         {/* Collapse toggle */}
