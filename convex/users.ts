@@ -113,14 +113,6 @@ export const updateCurrentUser = mutation({
     }
 
     const discordMatches = await findUsersByDiscordId(ctx, discordUserId);
-    if (discordMatches.length === 0) {
-      throw new ConvexError({
-        message:
-          "Account not linked. Contact an admin to link your Discord account before signing in.",
-        code: "FORBIDDEN",
-      });
-    }
-
     if (discordMatches.length > 1) {
       throw new ConvexError({
         message: "Account linking error: duplicate Discord id in database. Contact an admin.",
@@ -128,13 +120,22 @@ export const updateCurrentUser = mutation({
       });
     }
 
-    const matchedUser = discordMatches[0];
-    await ctx.db.patch(matchedUser._id, {
+    if (discordMatches.length === 1) {
+      const matchedUser = discordMatches[0];
+      await ctx.db.patch(matchedUser._id, {
+        tokenIdentifier: identity.tokenIdentifier,
+        ...profilePatch,
+      });
+      return matchedUser._id;
+    }
+
+    // New staff: auto-create as viewer (Clerk Restricted sign-up controls who can register).
+    return await ctx.db.insert("users", {
       tokenIdentifier: identity.tokenIdentifier,
+      discordUserId,
+      role: "viewer",
       ...profilePatch,
     });
-
-    return matchedUser._id;
   },
 });
 
