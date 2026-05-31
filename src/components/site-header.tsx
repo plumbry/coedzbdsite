@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button.tsx";
-import { Badge } from "@/components/ui/badge.tsx";
+import { ScrollArea } from "@/components/ui/scroll-area.tsx";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { LogOut } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
@@ -29,31 +29,23 @@ export default function SiteHeader() {
   return (
     <header className="border-b bg-background">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 md:px-6 py-2">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <nav className="flex items-center gap-3 sm:gap-4 overflow-x-auto">
-            <NavLink to="/">Members</NavLink>
-            <NavLink to="/events">Events</NavLink>
-            <NavLink to="/scrim-series">Scrim Series</NavLink>
-            <NavLink to="/tier-restrictions" className="hidden sm:inline">
-              Tier Restrictions
-            </NavLink>
-            <NavLink to="/tier-restrictions" className="sm:hidden">
-              Tiers
-            </NavLink>
-            <NavLink to="/2025-wrapped">2025 Wrapped</NavLink>
-            <NavLink to="/support">Support</NavLink>
-            {isModeratorOrAdmin && (
-              <Link to="/spin" className={cn(navLinkClass, "inline-flex items-center gap-1.5")}>
-                Spin
-                <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-medium">
-                  Staff
-                </Badge>
-              </Link>
-            )}
-            {isModeratorOrAdmin && (
-              <NavLink to="/admin">Admin Home</NavLink>
-            )}
-          </nav>
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+          <ScrollArea className="w-full" scrollbars={["horizontal"]}>
+            <nav className="flex w-max items-center gap-3 sm:gap-4 pb-1">
+              <NavLink to="/">Members</NavLink>
+              <NavLink to="/events">Events</NavLink>
+              <NavLink to="/tier-restrictions" className="hidden sm:inline">
+                Tier Restrictions
+              </NavLink>
+              <NavLink to="/tier-restrictions" className="sm:hidden">
+                Tiers
+              </NavLink>
+              <NavLink to="/support">Support</NavLink>
+              {isModeratorOrAdmin && (
+                <NavLink to="/admin">Admin Home</NavLink>
+              )}
+            </nav>
+          </ScrollArea>
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
