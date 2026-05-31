@@ -434,12 +434,14 @@ function DataCacheStatusContent() {
                 <CardDescription className="text-xs">Match kill feed analytics</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{killEventsData.killEventsCount.toLocaleString()}</div>
+                <div className="text-2xl font-bold">
+                  {formatCount(killEventsData.killEventsCount, killEventsData.killEventsCountIsSampled)}
+                </div>
                 <div className="space-y-1 mt-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Upset kills</span>
                     <span className="font-medium">
-                      {killEventsData.upsetKillEventsCount.toLocaleString()}
+                      {formatCount(killEventsData.upsetKillEventsCount, killEventsData.killEventsCountIsSampled)}
                     </span>
                   </div>
                   <div className="flex justify-between">

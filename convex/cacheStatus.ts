@@ -103,33 +103,23 @@ export const getKillEventsCount = query({
 
     let killEventsCount = 0;
     let upsetKillEventsCount = 0;
-    let lastUpdated: number | undefined;
-    let cursor: string | null = null;
-    let done = false;
+    const page = await ctx.db
+      .query("matchKillEvents")
+      .paginate({ numItems: STATUS_SAMPLE_LIMIT, cursor: null });
+    const latest = await ctx.db.query("matchKillEvents").order("desc").first();
 
-    while (!done) {
-      const page = await ctx.db
-        .query("matchKillEvents")
-        .paginate({ numItems: 1000, cursor });
-
-      for (const event of page.page) {
-        killEventsCount++;
-        if (event.isUpset) {
-          upsetKillEventsCount++;
-        }
-        if (!lastUpdated || event._creationTime > lastUpdated) {
-          lastUpdated = event._creationTime;
-        }
+    for (const event of page.page) {
+      killEventsCount++;
+      if (event.isUpset) {
+        upsetKillEventsCount++;
       }
-
-      done = page.isDone;
-      cursor = page.continueCursor;
     }
 
     return {
       killEventsCount,
+      killEventsCountIsSampled: !page.isDone,
       upsetKillEventsCount,
-      lastUpdated,
+      lastUpdated: latest?._creationTime,
     };
   },
 });
