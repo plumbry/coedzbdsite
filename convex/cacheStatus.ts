@@ -588,6 +588,70 @@ export const rebuildAggregateStatsCache = mutation({
   },
 });
 
+export const backfillKillEventsMetadata = mutation({
+  args: {},
+  handler: async (ctx): Promise<{ success: boolean; message: string }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({
+        message: "User not logged in",
+        code: "UNAUTHENTICATED",
+      });
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+
+    if (!user || user.role !== "admin") {
+      throw new ConvexError({
+        message: "Only admins can backfill kill events metadata",
+        code: "FORBIDDEN",
+      });
+    }
+
+    const result = await ctx.runMutation(api.upsetKills.backfillKillEventsMetadata, {});
+
+    return {
+      success: true,
+      message: `Kill events metadata synced: ${result.totalKillEvents} total, ${result.totalUpsetKillEvents} upsets`,
+    };
+  },
+});
+
+export const rebuildUpsetKillEventsCache = mutation({
+  args: {},
+  handler: async (ctx): Promise<{ success: boolean; message: string }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({
+        message: "User not logged in",
+        code: "UNAUTHENTICATED",
+      });
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+
+    if (!user || user.role !== "admin") {
+      throw new ConvexError({
+        message: "Only admins can rebuild upset kill stats",
+        code: "FORBIDDEN",
+      });
+    }
+
+    const result = await ctx.runMutation(api.upsetKills.rebuildStatsCache, {});
+
+    return {
+      success: true,
+      message: `Upset kill stats rebuilt: ${result.totalUpsetKills} upsets across ${result.totalKillEvents} kill events`,
+    };
+  },
+});
+
 // Rebuild holistic scores cache (tier re-evaluation)
 export const rebuildHolisticScoresCache = mutation({
   args: {},

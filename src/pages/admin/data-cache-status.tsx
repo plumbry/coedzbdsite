@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { ArrowLeft, Database, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
+import { ArrowLeft, Database, CheckCircle2, XCircle, Clock, RefreshCw, Crosshair } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import RoleGate from "@/components/role-gate.tsx";
@@ -34,6 +34,7 @@ function DataCacheStatusContent() {
   const eventStats = useQuery(api.cacheStatus.getEventStats, {});
   const importStats = useQuery(api.cacheStatus.getImportStats, {});
   const matchStatsData = useQuery(api.cacheStatus.getMatchStatsCount, {});
+  const killEventsData = useQuery(api.cacheStatus.getKillEventsCount, {});
   const resultStats = useQuery(api.cacheStatus.getResultStats, {});
   const cacheMetadata = useQuery(api.cacheStatus.getCacheMetadata, {});
   const recentPlayerSyncs = useQuery(api.cacheStatus.getRecentPlayerCacheUpdates, { limit: 10 });
@@ -46,10 +47,12 @@ function DataCacheStatusContent() {
   const rebuildMatchStatsCache = useMutation(api.cacheStatus.rebuildMatchStatsCache);
   const rebuildAggregateStatsCache = useMutation(api.cacheStatus.rebuildAggregateStatsCache);
   const rebuildHolisticScoresCache = useMutation(api.cacheStatus.rebuildHolisticScoresCache);
-  
+  const backfillKillEventsMetadata = useMutation(api.cacheStatus.backfillKillEventsMetadata);
+  const rebuildUpsetKillEventsCache = useMutation(api.cacheStatus.rebuildUpsetKillEventsCache);
+
   const [rebuildingCache, setRebuildingCache] = useState<string | null>(null);
-  
-  const handleRebuildCache = async (cacheType: "players" | "events" | "imports" | "matchStats" | "aggregateStats" | "holisticScores") => {
+
+  const handleRebuildCache = async (cacheType: "players" | "events" | "imports" | "matchStats" | "aggregateStats" | "holisticScores" | "killEventsMetadata" | "upsetKillStats") => {
     setRebuildingCache(cacheType);
     try {
       let result;
@@ -71,6 +74,12 @@ function DataCacheStatusContent() {
           break;
         case "holisticScores":
           result = await rebuildHolisticScoresCache();
+          break;
+        case "killEventsMetadata":
+          result = await backfillKillEventsMetadata();
+          break;
+        case "upsetKillStats":
+          result = await rebuildUpsetKillEventsCache();
           break;
       }
       toast.success(result.message);
@@ -119,7 +128,7 @@ function DataCacheStatusContent() {
 
   return (
     <div className="space-y-4">
-      {playerStats === undefined || eventStats === undefined || importStats === undefined || matchStatsData === undefined || resultStats === undefined || cacheMetadata === undefined ? (
+      {playerStats === undefined || eventStats === undefined || importStats === undefined || matchStatsData === undefined || killEventsData === undefined || resultStats === undefined || cacheMetadata === undefined ? (
         <Skeleton className="h-96 w-full" />
       ) : (
         <div className="space-y-6">
@@ -326,6 +335,76 @@ function DataCacheStatusContent() {
                       <span className="text-muted-foreground">Last Updated</span>
                       <span className="font-medium">
                         {formatRelativeTime(matchStatsData.matchStatsLastUpdated)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Kill Events */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <Link to="/admin/upset-kills">
+                    <CardTitle className="text-sm font-medium hover:underline cursor-pointer flex items-center gap-1">
+                      <Crosshair className="h-3.5 w-3.5" />
+                      Kill Events →
+                    </CardTitle>
+                  </Link>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Sync metadata counts"
+                      onClick={() => handleRebuildCache("killEventsMetadata")}
+                      disabled={rebuildingCache === "killEventsMetadata"}
+                    >
+                      {rebuildingCache === "killEventsMetadata" ? (
+                        <Spinner className="h-3 w-3" />
+                      ) : (
+                        <Database className="h-3 w-3" />
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Rebuild upset kill stats cache"
+                      onClick={() => handleRebuildCache("upsetKillStats")}
+                      disabled={rebuildingCache === "upsetKillStats"}
+                    >
+                      {rebuildingCache === "upsetKillStats" ? (
+                        <Spinner className="h-3 w-3" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <CardDescription className="text-xs">Match kill feed analytics</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{killEventsData.killEventsCount.toLocaleString()}</div>
+                <div className="space-y-1 mt-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Upset kills</span>
+                    <span className="font-medium">
+                      {killEventsData.upsetKillEventsCount.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Upset rate</span>
+                    <span className="font-medium">
+                      {killEventsData.killEventsCount > 0
+                        ? `${Math.round((killEventsData.upsetKillEventsCount / killEventsData.killEventsCount) * 100)}%`
+                        : "—"}
+                    </span>
+                  </div>
+                  {killEventsData.lastUpdated && (
+                    <div className="flex justify-between pt-2 border-t">
+                      <span className="text-muted-foreground">Last Updated</span>
+                      <span className="font-medium">
+                        {formatRelativeTime(killEventsData.lastUpdated)}
                       </span>
                     </div>
                   )}

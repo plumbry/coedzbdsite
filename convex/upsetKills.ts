@@ -3,6 +3,7 @@ import { query, mutation, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
+import { requireAdmin } from "./auth_helpers";
 
 const KILL_EVENTS_PAGE_SIZE = 1000;
 
@@ -1219,6 +1220,27 @@ export const clearAllKillEvents = mutation({
     return {
       deletedInBatch: events.length,
       hasMore,
+    };
+  },
+});
+
+// One-time / manual backfill for matchKillEventsMetadata from paginated scans
+export const backfillKillEventsMetadata = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const totalKillEvents = await countMatchKillEventsPaginated(ctx);
+    const agg = await aggregateUpsetKillsPaginated(ctx);
+
+    await syncKillEventsMetadata(ctx, {
+      totalKillEvents,
+      upsetKillEvents: agg.upsetCount,
+    });
+
+    return {
+      totalKillEvents,
+      totalUpsetKillEvents: agg.upsetCount,
     };
   },
 });
