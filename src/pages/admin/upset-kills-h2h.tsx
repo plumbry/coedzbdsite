@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
-import PageHeader from "@/components/page-header.tsx";
+import UpsetKillsLayout from "./_components/upset-kills-layout.tsx";
 
 type SelectedPlayer = {
   _id: Id<"players">;
@@ -238,21 +238,7 @@ function UpsetKillsH2HContent() {
   const total = (h2h?.aKilledBCount ?? 0) + (h2h?.bKilledACount ?? 0);
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Head-to-Head Kills"
-        icon={SwordsIcon}
-        description="See how often two players have eliminated each other. Based on Yunite match replay data — knocker always gets credit."
-        back={{ label: "Upset Kills", href: "/admin/upset-kills" }}
-        breadcrumbs={[
-          { label: "Admin", href: "/admin" },
-          { label: "Stats", href: "/admin/stats" },
-          { label: "Upset Kills", href: "/admin/upset-kills" },
-          { label: "Head-to-Head" },
-        ]}
-        variant="compact"
-      />
-
+    <UpsetKillsLayout>
       {/* Player Pickers */}
       <Card>
         <CardHeader>
@@ -476,17 +462,13 @@ function UpsetKillsH2HContent() {
           )}
         </>
       )}
-    </div>
+    </UpsetKillsLayout>
   );
 }
 
 export default function UpsetKillsH2H() {
   return (
-    <AdminPageLayout
-      skipHeader
-      authTitle="Sign in to view upset kills"
-      header={{ back: { label: "Back to Upset Kills", href: "/admin/upset-kills" } }}
-    >
+    <AdminPageLayout skipHeader requireAdmin authTitle="Sign in to view upset kills">
       <UpsetKillsH2HContent />
     </AdminPageLayout>
   );

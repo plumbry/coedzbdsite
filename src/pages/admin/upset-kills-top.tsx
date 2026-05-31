@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
-import PageHeader from "@/components/page-header.tsx";
+import UpsetKillsLayout from "./_components/upset-kills-layout.tsx";
 
 type SelectedPlayer = {
   _id: Id<"players">;
@@ -294,21 +294,7 @@ function UpsetKillsTopContent() {
   };
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Top Kills Lookup"
-        icon={TargetIcon}
-        description="See a player's top 5 killers and top 5 victims. Based on Yunite match replay data — knocker always gets credit."
-        back={{ label: "Upset Kills", href: "/admin/upset-kills" }}
-        breadcrumbs={[
-          { label: "Admin", href: "/admin" },
-          { label: "Stats", href: "/admin/stats" },
-          { label: "Upset Kills", href: "/admin/upset-kills" },
-          { label: "Top Kills" },
-        ]}
-        variant="compact"
-      />
-
+    <UpsetKillsLayout>
       {/* Player Picker */}
       <Card>
         <CardHeader>
@@ -412,18 +398,13 @@ function UpsetKillsTopContent() {
           </div>
         </>
       )}
-    </div>
+    </UpsetKillsLayout>
   );
 }
 
 export default function UpsetKillsTop() {
   return (
-    <AdminPageLayout
-      title="Top Upset Kills"
-      skipHeader
-      authTitle="Sign in to view upset kills"
-      header={{ back: { label: "Back to Upset Kills", href: "/admin/upset-kills" } }}
-    >
+    <AdminPageLayout skipHeader requireAdmin authTitle="Sign in to view upset kills">
       <UpsetKillsTopContent />
     </AdminPageLayout>
   );

@@ -28,47 +28,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { CrosshairIcon, SkullIcon, TargetIcon } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
+import { TierBadge, TierDiffBadge } from "@/components/tier-badge.tsx";
 
-export function TierBadge({ tier }: { tier: string | undefined }) {
-  const tierColors: Record<string, string> = {
-    S: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-    A: "bg-red-500/20 text-red-400 border-red-500/30",
-    B: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-    C: "bg-green-500/20 text-green-400 border-green-500/30",
-    D: "bg-gray-500/20 text-gray-400 border-gray-500/30",
-  };
-
-  if (!tier) {
-    return <Badge variant="outline" className="text-muted-foreground">?</Badge>;
-  }
-
-  return (
-    <Badge variant="outline" className={cn("font-bold", tierColors[tier] || "")}>
-      {tier}
-    </Badge>
-  );
-}
-
-export function TierDiffBadge({ diff }: { diff: number }) {
-  if (diff === 0) return null;
-
-  const isUpset = diff > 0;
-  const diffText = diff > 0 ? `+${diff}` : `${diff}`;
-
-  return (
-    <Badge
-      variant="outline"
-      className={cn(
-        "ml-2 font-mono",
-        isUpset
-          ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-          : "bg-gray-500/20 text-gray-400",
-      )}
-    >
-      {diffText}
-    </Badge>
-  );
-}
+export { TierBadge, TierDiffBadge };
 
 export default function PlayerKillsDialog({
   playerId,

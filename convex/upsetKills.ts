@@ -1,7 +1,195 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
-import type { Id } from "./_generated/dataModel.d.ts";
+import type { Doc, Id } from "./_generated/dataModel.d.ts";
+
+const KILL_EVENTS_PAGE_SIZE = 1000;
+
+type PlayerUpsetCounts = Record<
+  string,
+  { kills: number; deaths: number; playerId: Id<"players"> | undefined }
+>;
+
+type UpsetAggregation = {
+  upsetCount: number;
+  byKillerTier: Record<string, number>;
+  byVictimTier: Record<string, number>;
+  byTierDiff: Record<string, number>;
+  playerUpsetCounts: PlayerUpsetCounts;
+};
+
+function emptyUpsetAggregation(): UpsetAggregation {
+  return {
+    upsetCount: 0,
+    byKillerTier: {},
+    byVictimTier: {},
+    byTierDiff: {},
+    playerUpsetCounts: {},
+  };
+}
+
+function foldUpsetKill(agg: UpsetAggregation, kill: Doc<"matchKillEvents">) {
+  agg.upsetCount++;
+
+  const kTier = kill.killerTier || "Unknown";
+  agg.byKillerTier[kTier] = (agg.byKillerTier[kTier] || 0) + 1;
+
+  const vTier = kill.victimTier || "Unknown";
+  agg.byVictimTier[vTier] = (agg.byVictimTier[vTier] || 0) + 1;
+
+  const tierDiffKey = String(kill.tierDifference);
+  agg.byTierDiff[tierDiffKey] = (agg.byTierDiff[tierDiffKey] || 0) + 1;
+
+  if (kill.killerDiscordId) {
+    if (!agg.playerUpsetCounts[kill.killerDiscordId]) {
+      agg.playerUpsetCounts[kill.killerDiscordId] = {
+        kills: 0,
+        deaths: 0,
+        playerId: kill.killerPlayerId,
+      };
+    }
+    agg.playerUpsetCounts[kill.killerDiscordId].kills++;
+  }
+
+  if (kill.victimDiscordId) {
+    if (!agg.playerUpsetCounts[kill.victimDiscordId]) {
+      agg.playerUpsetCounts[kill.victimDiscordId] = {
+        kills: 0,
+        deaths: 0,
+        playerId: kill.victimPlayerId,
+      };
+    }
+    agg.playerUpsetCounts[kill.victimDiscordId].deaths++;
+  }
+}
+
+async function countMatchKillEventsPaginated(ctx: MutationCtx): Promise<number> {
+  let total = 0;
+  let cursor: string | null = null;
+  let done = false;
+
+  while (!done) {
+    const page = await ctx.db
+      .query("matchKillEvents")
+      .paginate({ numItems: KILL_EVENTS_PAGE_SIZE, cursor });
+    total += page.page.length;
+    done = page.isDone;
+    cursor = page.continueCursor;
+  }
+
+  return total;
+}
+
+async function aggregateUpsetKillsPaginated(ctx: MutationCtx): Promise<UpsetAggregation> {
+  const agg = emptyUpsetAggregation();
+  let cursor: string | null = null;
+  let done = false;
+
+  while (!done) {
+    const page = await ctx.db
+      .query("matchKillEvents")
+      .withIndex("by_upset", (q) => q.eq("isUpset", true))
+      .paginate({ numItems: 500, cursor });
+
+    for (const kill of page.page) {
+      foldUpsetKill(agg, kill);
+    }
+
+    done = page.isDone;
+    cursor = page.continueCursor;
+  }
+
+  return agg;
+}
+
+async function getOrCreateKillEventsMetadata(ctx: MutationCtx) {
+  const existing = await ctx.db.query("matchKillEventsMetadata").first();
+  if (existing) {
+    return existing;
+  }
+
+  const id = await ctx.db.insert("matchKillEventsMetadata", {
+    totalKillEvents: 0,
+    totalUpsetKillEvents: 0,
+    lastUpdated: Date.now(),
+  });
+  return (await ctx.db.get(id))!;
+}
+
+async function adjustKillEventsMetadata(
+  ctx: MutationCtx,
+  delta: { totalKillEvents: number; upsetKillEvents: number },
+) {
+  const meta = await getOrCreateKillEventsMetadata(ctx);
+  await ctx.db.patch(meta._id, {
+    totalKillEvents: Math.max(0, meta.totalKillEvents + delta.totalKillEvents),
+    totalUpsetKillEvents: Math.max(0, meta.totalUpsetKillEvents + delta.upsetKillEvents),
+    lastUpdated: Date.now(),
+  });
+}
+
+async function syncKillEventsMetadata(
+  ctx: MutationCtx,
+  totals: { totalKillEvents: number; upsetKillEvents: number },
+) {
+  const meta = await getOrCreateKillEventsMetadata(ctx);
+  await ctx.db.patch(meta._id, {
+    totalKillEvents: totals.totalKillEvents,
+    totalUpsetKillEvents: totals.upsetKillEvents,
+    lastUpdated: Date.now(),
+  });
+}
+
+function duplicateKillEventKey(event: Doc<"matchKillEvents">): string {
+  return `${event.importId}-${event.sessionId}-${event.killerDiscordId}-${event.victimDiscordId}-${event.timeInMatch ?? "null"}`;
+}
+
+async function dedupeKillEventsForImport(
+  ctx: MutationCtx,
+  importId: Id<"thirdPartyImports">,
+) {
+  const seen = new Map<string, Id<"matchKillEvents">>();
+  const duplicateIds: Id<"matchKillEvents">[] = [];
+  let total = 0;
+  let cursor: string | null = null;
+  let done = false;
+
+  while (!done) {
+    const page = await ctx.db
+      .query("matchKillEvents")
+      .withIndex("by_import", (q) => q.eq("importId", importId))
+      .paginate({ numItems: 500, cursor });
+
+    for (const event of page.page) {
+      total++;
+      const key = duplicateKillEventKey(event);
+      if (seen.has(key)) {
+        duplicateIds.push(event._id);
+      } else {
+        seen.set(key, event._id);
+      }
+    }
+
+    done = page.isDone;
+    cursor = page.continueCursor;
+  }
+
+  let upsetDuplicatesRemoved = 0;
+  for (const id of duplicateIds) {
+    const doc = await ctx.db.get(id);
+    if (doc?.isUpset) {
+      upsetDuplicatesRemoved++;
+    }
+    await ctx.db.delete(id);
+  }
+
+  return {
+    total,
+    duplicatesRemoved: duplicateIds.length,
+    upsetDuplicatesRemoved,
+  };
+}
 
 // Helper function to convert tier to numeric value (higher = better)
 function tierToNumber(tier: string | undefined): number {
@@ -66,6 +254,11 @@ export const storeKillEvent = internalMutation({
       weapon: args.weapon,
       timeInMatch: args.timeInMatch,
     });
+
+    await adjustKillEventsMetadata(ctx, {
+      totalKillEvents: 1,
+      upsetKillEvents: isUpset ? 1 : 0,
+    });
   },
 });
 
@@ -91,7 +284,8 @@ export const storeKillEventsBatch = internalMutation({
   handler: async (ctx, args) => {
     let inserted = 0;
     let skipped = 0;
-    
+    let upsetInserted = 0;
+
     for (const event of args.events) {
       // Check for duplicate (same import, session, killer, victim)
       // Only check if skipDuplicateCheck is not set
@@ -141,8 +335,18 @@ export const storeKillEventsBatch = internalMutation({
         knockedBy: event.knockedBy,
       });
       inserted++;
+      if (isUpset) {
+        upsetInserted++;
+      }
     }
-    
+
+    if (inserted > 0) {
+      await adjustKillEventsMetadata(ctx, {
+        totalKillEvents: inserted,
+        upsetKillEvents: upsetInserted,
+      });
+    }
+
     return { inserted, skipped };
   },
 });
@@ -153,16 +357,37 @@ export const deleteKillEventsForImport = internalMutation({
     importId: v.id("thirdPartyImports"),
   },
   handler: async (ctx, args) => {
-    const events = await ctx.db
-      .query("matchKillEvents")
-      .withIndex("by_import", (q) => q.eq("importId", args.importId))
-      .collect();
-    
-    for (const event of events) {
-      await ctx.db.delete(event._id);
+    let deleted = 0;
+    let upsetDeleted = 0;
+    let cursor: string | null = null;
+    let done = false;
+
+    while (!done) {
+      const page = await ctx.db
+        .query("matchKillEvents")
+        .withIndex("by_import", (q) => q.eq("importId", args.importId))
+        .paginate({ numItems: 500, cursor });
+
+      for (const event of page.page) {
+        if (event.isUpset) {
+          upsetDeleted++;
+        }
+        await ctx.db.delete(event._id);
+        deleted++;
+      }
+
+      done = page.isDone;
+      cursor = page.continueCursor;
     }
-    
-    return { deleted: events.length };
+
+    if (deleted > 0) {
+      await adjustKillEventsMetadata(ctx, {
+        totalKillEvents: -deleted,
+        upsetKillEvents: -upsetDeleted,
+      });
+    }
+
+    return { deleted };
   },
 });
 
@@ -372,58 +597,17 @@ export const getUpsetKillsStats = query({
 export const rebuildStatsCache = mutation({
   args: {},
   handler: async (ctx) => {
-    // Get all upset kills
-    const upsetKills = await ctx.db
-      .query("matchKillEvents")
-      .withIndex("by_upset", (q) => q.eq("isUpset", true))
-      .collect();
-    
-    // Get total kill events count (just count, don't collect all)
-    const allEvents = await ctx.db.query("matchKillEvents").collect();
-    const totalEventsCount = allEvents.length;
-    
-    // Calculate stats
-    const byKillerTier: Record<string, number> = {};
-    const byVictimTier: Record<string, number> = {};
-    const byTierDiff: Record<string, number> = {};
-    const playerUpsetCounts: Record<string, { kills: number; deaths: number; playerId: Id<"players"> | undefined }> = {};
-    
-    for (const kill of upsetKills) {
-      // Count by killer tier
-      const kTier = kill.killerTier || "Unknown";
-      byKillerTier[kTier] = (byKillerTier[kTier] || 0) + 1;
-      
-      // Count by victim tier
-      const vTier = kill.victimTier || "Unknown";
-      byVictimTier[vTier] = (byVictimTier[vTier] || 0) + 1;
-      
-      // Count by tier difference (store as string key)
-      const tierDiffKey = String(kill.tierDifference);
-      byTierDiff[tierDiffKey] = (byTierDiff[tierDiffKey] || 0) + 1;
-      
-      // Count per player (killer)
-      if (kill.killerDiscordId) {
-        if (!playerUpsetCounts[kill.killerDiscordId]) {
-          playerUpsetCounts[kill.killerDiscordId] = { kills: 0, deaths: 0, playerId: kill.killerPlayerId };
-        }
-        playerUpsetCounts[kill.killerDiscordId].kills++;
-      }
-      
-      // Count per player (victim)
-      if (kill.victimDiscordId) {
-        if (!playerUpsetCounts[kill.victimDiscordId]) {
-          playerUpsetCounts[kill.victimDiscordId] = { kills: 0, deaths: 0, playerId: kill.victimPlayerId };
-        }
-        playerUpsetCounts[kill.victimDiscordId].deaths++;
-      }
-    }
-    
+    const agg = await aggregateUpsetKillsPaginated(ctx);
+    const totalEventsCount = await countMatchKillEventsPaginated(ctx);
+
+    const { byKillerTier, byVictimTier, byTierDiff, playerUpsetCounts } = agg;
+
     // Get top upset killers (most upsets)
     const topKillers = Object.entries(playerUpsetCounts)
       .filter(([, data]) => data.playerId)
       .sort((a, b) => b[1].kills - a[1].kills)
       .slice(0, 10);
-    
+
     // Enrich top killers with player names
     const enrichedTopKillers = await Promise.all(topKillers.map(async ([discordId, data]) => {
       const player = data.playerId ? await ctx.db.get(data.playerId) : null;
@@ -436,13 +620,13 @@ export const rebuildStatsCache = mutation({
         tier: player?.tier,
       };
     }));
-    
+
     // Get players who die most to upsets (higher tier players dying to lower)
     const topVictims = Object.entries(playerUpsetCounts)
       .filter(([, data]) => data.playerId)
       .sort((a, b) => b[1].deaths - a[1].deaths)
       .slice(0, 10);
-    
+
     const enrichedTopVictims = await Promise.all(topVictims.map(async ([discordId, data]) => {
       const player = data.playerId ? await ctx.db.get(data.playerId) : null;
       return {
@@ -454,19 +638,19 @@ export const rebuildStatsCache = mutation({
         tier: player?.tier,
       };
     }));
-    
-    const upsetPercentage = totalEventsCount > 0 
-      ? ((upsetKills.length / totalEventsCount) * 100).toFixed(2)
+
+    const upsetPercentage = totalEventsCount > 0
+      ? ((agg.upsetCount / totalEventsCount) * 100).toFixed(2)
       : "0";
-    
+
     // Delete existing cache and insert new
     const existingCache = await ctx.db.query("upsetKillsStatsCache").first();
     if (existingCache) {
       await ctx.db.delete(existingCache._id);
     }
-    
+
     await ctx.db.insert("upsetKillsStatsCache", {
-      totalUpsetKills: upsetKills.length,
+      totalUpsetKills: agg.upsetCount,
       totalKillEvents: totalEventsCount,
       upsetPercentage,
       byKillerTier: {
@@ -490,9 +674,14 @@ export const rebuildStatsCache = mutation({
       topUpsetVictims: enrichedTopVictims,
       lastUpdated: Date.now(),
     });
-    
+
+    await syncKillEventsMetadata(ctx, {
+      totalKillEvents: totalEventsCount,
+      upsetKillEvents: agg.upsetCount,
+    });
+
     return {
-      totalUpsetKills: upsetKills.length,
+      totalUpsetKills: agg.upsetCount,
       totalKillEvents: totalEventsCount,
       topKillersCount: enrichedTopKillers.length,
       topVictimsCount: enrichedTopVictims.length,

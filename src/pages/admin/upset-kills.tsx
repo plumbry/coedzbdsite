@@ -26,7 +26,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { cn } from "@/lib/utils.ts";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
-import PageHeader from "@/components/page-header.tsx";
+import UpsetKillsLayout from "./_components/upset-kills-layout.tsx";
 import PlayerKillsDialog, { TierBadge, TierDiffBadge } from "./_components/player-kills-dialog.tsx";
 
 function UpsetKillsContent() {
@@ -169,113 +169,84 @@ function UpsetKillsContent() {
   };
   
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Upset Kills"
-        icon={SwordsIcon}
-        description="Track when lower-tier players eliminate higher-tier players. Data from Yunite replay kill feeds — knocker always gets credit."
-        variant="compact"
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" asChild>
-              <Link to="/admin/upset-kills/eliminations">
-                <CrosshairIcon className="mr-2 h-4 w-4" />
-                Eliminations
-              </Link>
-            </Button>
-            <Button variant="secondary" size="sm" asChild>
-              <Link to="/admin/upset-kills/h2h">
-                <SwordsIcon className="mr-2 h-4 w-4" />
-                Head-to-Head
-              </Link>
-            </Button>
-            <Button variant="secondary" size="sm" asChild>
-              <Link to="/admin/upset-kills/top">
-                <TargetIcon className="mr-2 h-4 w-4" />
-                Top Kills
-              </Link>
-            </Button>
-            <Button variant="secondary" size="sm" asChild>
-              <Link to="/admin/upset-kills/search">
-                <SearchIcon className="mr-2 h-4 w-4" />
-                Search
-              </Link>
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => handleBackfill(false)}
-              disabled={isJobRunning}
-              variant="secondary"
-            >
-              {isJobRunning && jobStatus?.mode === "backfill" ? (
-                <>
-                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                  Backfilling...
-                </>
-              ) : (
-                <>
-                  <RefreshCwIcon className="mr-2 h-4 w-4" />
-                  Backfill New
-                </>
-              )}
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => handleBackfill(true)}
-              disabled={isJobRunning}
-              variant="destructive"
-            >
-              {isJobRunning && jobStatus?.mode === "refresh" ? (
-                <>
-                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                  Refreshing...
-                </>
-              ) : (
-                <>
-                  <RefreshCwIcon className="mr-2 h-4 w-4" />
-                  Refresh All
-                </>
-              )}
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleRemoveDuplicates}
-              disabled={isRemovingDuplicates || isJobRunning}
-              variant="secondary"
-            >
-              {isRemovingDuplicates ? (
-                <>
-                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                  Removing...
-                </>
-              ) : (
-                <>
-                  <Trash2Icon className="mr-2 h-4 w-4" />
-                  Remove Duplicates
-                </>
-              )}
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleClearAllData}
-              disabled={isClearingData || isJobRunning}
-              variant="destructive"
-            >
-              {isClearingData ? (
-                <>
-                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                  Clearing...
-                </>
-              ) : (
-                <>
-                  <Trash2Icon className="mr-2 h-4 w-4" />
-                  Clear All Data
-                </>
-              )}
-            </Button>
-          </div>
-        }
-      />
+    <UpsetKillsLayout
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => handleBackfill(false)}
+            disabled={isJobRunning}
+            variant="secondary"
+          >
+            {isJobRunning && jobStatus?.mode === "backfill" ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Backfilling...
+              </>
+            ) : (
+              <>
+                <RefreshCwIcon className="mr-2 h-4 w-4" />
+                Backfill New
+              </>
+            )}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => handleBackfill(true)}
+            disabled={isJobRunning}
+            variant="destructive"
+          >
+            {isJobRunning && jobStatus?.mode === "refresh" ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCwIcon className="mr-2 h-4 w-4" />
+                Refresh All
+              </>
+            )}
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleRemoveDuplicates}
+            disabled={isRemovingDuplicates || isJobRunning}
+            variant="secondary"
+          >
+            {isRemovingDuplicates ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Removing...
+              </>
+            ) : (
+              <>
+                <Trash2Icon className="mr-2 h-4 w-4" />
+                Remove Duplicates
+              </>
+            )}
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleClearAllData}
+            disabled={isClearingData || isJobRunning}
+            variant="destructive"
+          >
+            {isClearingData ? (
+              <>
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                Clearing...
+              </>
+            ) : (
+              <>
+                <Trash2Icon className="mr-2 h-4 w-4" />
+                Clear All Data
+              </>
+            )}
+          </Button>
+        </div>
+      }
+    >
 
       {/* Cache Status Banner */}
       {stats && (
@@ -810,16 +781,13 @@ function UpsetKillsContent() {
         open={playerDialogOpen}
         onOpenChange={setPlayerDialogOpen}
       />
-    </div>
+    </UpsetKillsLayout>
   );
 }
 
 export default function UpsetKillsPage() {
   return (
-    <AdminPageLayout
-      skipHeader
-      authTitle="Sign in to view upset kills"
-    >
+    <AdminPageLayout skipHeader requireAdmin authTitle="Sign in to view upset kills">
       <UpsetKillsContent />
     </AdminPageLayout>
   );

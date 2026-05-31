@@ -5,6 +5,7 @@ import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
+import LegendCard from "@/components/legend-card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
@@ -239,37 +240,37 @@ export default function DiscordMembers() {
 
   return (
     <>
-      {/* Legend */}
-      <Card className="mb-4">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Discord Member Legend</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-xs">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="font-semibold text-muted-foreground">Category:</span>
-            <div className="flex items-center gap-1.5">
-              <Badge className="text-xs bg-green-600 text-white">Active</Badge>
-              <span className="text-muted-foreground">Has a Tier role, plays in tournaments</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Badge variant="secondary" className="text-xs">Inactive</Badge>
-              <span className="text-muted-foreground">No Tier role, evaluated but not yet playing</span>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="font-semibold text-muted-foreground">Match:</span>
-            <div className="flex items-center gap-1.5">
-              <Badge variant="secondary" className="text-xs bg-blue-500 text-white">USERNAME</Badge>
-              <span className="text-muted-foreground">Username match</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Badge variant="secondary" className="text-xs bg-orange-500 text-white">FUZZY</Badge>
-              <span className="text-muted-foreground">Similar (needs review)</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <LegendCard
+        title="Discord Member Legend"
+        groups={[
+          {
+            title: "Category:",
+            items: [
+              {
+                label: <Badge className="text-xs bg-green-600 text-white">Active</Badge>,
+                description: "Has a Tier role, plays in tournaments",
+              },
+              {
+                label: <Badge variant="secondary" className="text-xs">Inactive</Badge>,
+                description: "No Tier role, evaluated but not yet playing",
+              },
+            ],
+          },
+          {
+            title: "Match:",
+            items: [
+              {
+                label: <Badge variant="secondary" className="text-xs bg-blue-500 text-white">USERNAME</Badge>,
+                description: "Username match",
+              },
+              {
+                label: <Badge variant="secondary" className="text-xs bg-orange-500 text-white">FUZZY</Badge>,
+                description: "Similar (needs review)",
+              },
+            ],
+          },
+        ]}
+      />
 
       <Card>
         <CardHeader className="pb-3">

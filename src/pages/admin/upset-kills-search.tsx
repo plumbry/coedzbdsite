@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table.tsx";
-import PageHeader from "@/components/page-header.tsx";
+import UpsetKillsLayout from "./_components/upset-kills-layout.tsx";
 import PlayerKillsDialog, { TierBadge, TierDiffBadge } from "./_components/player-kills-dialog.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { cn } from "@/lib/utils.ts";
@@ -62,21 +62,7 @@ function UpsetKillsSearchContent() {
   };
   
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Search Upset Kills"
-        icon={SearchIcon}
-        description="Find upset kills by player name"
-        back={{ label: "Upset Kills", href: "/admin/upset-kills" }}
-        breadcrumbs={[
-          { label: "Admin", href: "/admin" },
-          { label: "Stats", href: "/admin/stats" },
-          { label: "Upset Kills", href: "/admin/upset-kills" },
-          { label: "Search" },
-        ]}
-        variant="compact"
-      />
-
+    <UpsetKillsLayout>
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium">Filters</CardTitle>
@@ -234,17 +220,13 @@ function UpsetKillsSearchContent() {
         open={playerDialogOpen}
         onOpenChange={setPlayerDialogOpen}
       />
-    </div>
+    </UpsetKillsLayout>
   );
 }
 
 export default function UpsetKillsSearchPage() {
   return (
-    <AdminPageLayout
-      skipHeader
-      authTitle="Sign in to view upset kills"
-      header={{ back: { label: "Back to Upset Kills", href: "/admin/upset-kills" } }}
-    >
+    <AdminPageLayout skipHeader requireAdmin authTitle="Sign in to view upset kills">
       <UpsetKillsSearchContent />
     </AdminPageLayout>
   );

@@ -3,13 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.t
 import { Badge } from "@/components/ui/badge.tsx";
 import PageShell from "@/components/page-shell.tsx";
 import PageHeader from "@/components/page-header.tsx";
-
-const TIER_COLORS: Record<string, string> = {
-  S: "bg-amber-500/20 text-amber-400 border-amber-500/40",
-  A: "bg-red-500/20 text-red-400 border-red-500/40",
-  B: "bg-blue-500/20 text-blue-400 border-blue-500/40",
-  C: "bg-emerald-500/20 text-emerald-400 border-emerald-500/40",
-};
+import { TierBadge } from "@/components/tier-badge.tsx";
 
 const TIER_LABELS: Record<string, string> = {
   S: "S Tier",
@@ -54,23 +48,13 @@ const SQUADS_COMBOS = [
   ["C", "C", "C", "C"],
 ];
 
-function TierBadge({ tier }: { tier: string }) {
-  return (
-    <span
-      className={`inline-flex items-center justify-center w-8 h-8 rounded-md border font-bold text-sm ${TIER_COLORS[tier] ?? "bg-muted text-muted-foreground border-border"}`}
-    >
-      {tier}
-    </span>
-  );
-}
-
 function ComboRow({ combo }: { combo: string[] }) {
   return (
     <div className="flex items-center gap-1.5">
       {combo.map((tier, i) => (
         <span key={i} className="flex items-center gap-1.5">
           {i > 0 && <span className="text-muted-foreground text-xs">+</span>}
-          <TierBadge tier={tier} />
+          <TierBadge tier={tier} variant="square" />
         </span>
       ))}
     </div>
@@ -126,7 +110,7 @@ export default function TierRestrictionsPage() {
       <div className="flex flex-wrap gap-3">
         {Object.entries(TIER_LABELS).map(([key, label]) => (
           <div key={key} className="flex items-center gap-2">
-            <TierBadge tier={key} />
+            <TierBadge tier={key} variant="square" />
             <span className="text-sm text-muted-foreground">{label}</span>
           </div>
         ))}

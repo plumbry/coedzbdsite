@@ -1,15 +1,18 @@
 import { useState, useEffect } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
-import { Textarea } from "@/components/ui/textarea.tsx";
 import { Loader2, Plus, Trash2, ArrowUpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ConvexError } from "convex/values";
+import {
+  EditPlayerFormFields,
+  type EditPlayerFormValues,
+} from "@/components/edit-player-form-fields.tsx";
 
 interface EditPlayerDialogProps {
   open: boolean;
@@ -27,14 +30,18 @@ export default function EditPlayerDialog({ open, onOpenChange, playerId }: EditP
   const removeAlternateId = useMutation(api.discord.removeAlternateDiscordId);
   const setAsPrimary = useMutation(api.discord.setAlternateAsPrimary);
   
-  const [discordUsername, setDiscordUsername] = useState("");
-  const [nickname, setNickname] = useState("");
-  const [epicUsername, setEpicUsername] = useState("");
-  const [epicId, setEpicId] = useState("");
-  const [twitterUsername, setTwitterUsername] = useState("");
-  const [twitchUsername, setTwitchUsername] = useState("");
-  const [youtubeUsername, setYoutubeUsername] = useState("");
-  const [adminComments, setAdminComments] = useState("");
+  const [values, setValues] = useState<EditPlayerFormValues>({
+    discordUsername: "",
+    nickname: "",
+    epicUsername: "",
+    epicId: "",
+    twitterUsername: "",
+    twitchUsername: "",
+    youtubeUsername: "",
+    adminComments: "",
+    discordUserId: "",
+    serverJoinDate: "",
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newAlternateId, setNewAlternateId] = useState("");
   const [isAddingAlternate, setIsAddingAlternate] = useState(false);
@@ -42,19 +49,27 @@ export default function EditPlayerDialog({ open, onOpenChange, playerId }: EditP
   // Populate form when player data loads
   useEffect(() => {
     if (player) {
-      setDiscordUsername(player.discordUsername || "");
-      setNickname(player.nickname || "");
-      setEpicUsername(player.epicUsername || "");
-      setEpicId(player.epicId || "");
-      setTwitterUsername(player.twitterUsername || "");
-      setTwitchUsername(player.twitchUsername || "");
-      setYoutubeUsername(player.youtubeUsername || "");
-      setAdminComments(player.adminComments || "");
+      setValues({
+        discordUsername: player.discordUsername || "",
+        nickname: player.nickname || "",
+        epicUsername: player.epicUsername || "",
+        epicId: player.epicId || "",
+        twitterUsername: player.twitterUsername || "",
+        twitchUsername: player.twitchUsername || "",
+        youtubeUsername: player.youtubeUsername || "",
+        adminComments: player.adminComments || "",
+        discordUserId: player.discordUserId || "",
+        serverJoinDate: player.serverJoinDate || "",
+      });
     }
   }, [player]);
+
+  const handleFieldChange = (field: keyof EditPlayerFormValues, value: string) => {
+    setValues((prev) => ({ ...prev, [field]: value }));
+  };
   
   const handleSubmit = async () => {
-    if (!epicUsername.trim()) {
+    if (!values.epicUsername.trim()) {
       toast.error("Epic Username is required");
       return;
     }
@@ -63,14 +78,14 @@ export default function EditPlayerDialog({ open, onOpenChange, playerId }: EditP
     try {
       await updatePlayer({
         playerId,
-        discordUsername: discordUsername.trim() || player?.discordUsername || "",
-        nickname: nickname.trim() || undefined,
-        epicUsername: epicUsername.trim(),
-        epicId: epicId.trim() || undefined,
-        twitterUsername: twitterUsername.trim() || undefined,
-        twitchUsername: twitchUsername.trim() || undefined,
-        youtubeUsername: youtubeUsername.trim() || undefined,
-        adminComments: adminComments.trim() || undefined,
+        discordUsername: values.discordUsername.trim() || player?.discordUsername || "",
+        nickname: values.nickname.trim() || undefined,
+        epicUsername: values.epicUsername.trim(),
+        epicId: values.epicId.trim() || undefined,
+        twitterUsername: values.twitterUsername.trim() || undefined,
+        twitchUsername: values.twitchUsername.trim() || undefined,
+        youtubeUsername: values.youtubeUsername.trim() || undefined,
+        adminComments: values.adminComments.trim() || undefined,
       });
       
       toast.success("Player profile updated");
@@ -99,29 +114,14 @@ export default function EditPlayerDialog({ open, onOpenChange, playerId }: EditP
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="discord-username">Discord Username *</Label>
-                <Input
-                  id="discord-username"
-                  value={discordUsername}
-                  onChange={(e) => setDiscordUsername(e.target.value)}
-                  placeholder="username"
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="nickname">Nickname (Display Name)</Label>
-                <Input
-                  id="nickname"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  placeholder="Optional nickname"
-                />
-              </div>
-            </div>
-            
+            <EditPlayerFormFields
+              values={values}
+              onChange={handleFieldChange}
+              showEpic={false}
+              showSocial={false}
+              showAdminComments={false}
+            />
+
             {/* Alternate Discord IDs Section */}
             <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
               <div className="flex items-center justify-between">
@@ -228,8 +228,8 @@ export default function EditPlayerDialog({ open, onOpenChange, playerId }: EditP
               <Label htmlFor="epic-username">Epic Username *</Label>
               <Input
                 id="epic-username"
-                value={epicUsername}
-                onChange={(e) => setEpicUsername(e.target.value)}
+                value={values.epicUsername}
+                onChange={(e) => handleFieldChange("epicUsername", e.target.value)}
                 placeholder="EpicGamesUsername"
                 required
               />
@@ -239,8 +239,8 @@ export default function EditPlayerDialog({ open, onOpenChange, playerId }: EditP
               <Label htmlFor="epic-id">Epic Account ID</Label>
               <Input
                 id="epic-id"
-                value={epicId}
-                onChange={(e) => setEpicId(e.target.value)}
+                value={values.epicId}
+                onChange={(e) => handleFieldChange("epicId", e.target.value)}
                 placeholder="abc123def456..."
                 className="font-mono text-sm"
               />
@@ -258,54 +258,13 @@ export default function EditPlayerDialog({ open, onOpenChange, playerId }: EditP
                 </div>
               )}
             </div>
-            
-            <div className="border-t pt-4">
-              <h3 className="text-sm font-medium mb-3">Social Links</h3>
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="twitter">Twitter Username</Label>
-                  <Input
-                    id="twitter"
-                    value={twitterUsername}
-                    onChange={(e) => setTwitterUsername(e.target.value)}
-                    placeholder="username"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="twitch">Twitch Username</Label>
-                  <Input
-                    id="twitch"
-                    value={twitchUsername}
-                    onChange={(e) => setTwitchUsername(e.target.value)}
-                    placeholder="username"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="youtube">YouTube Username</Label>
-                  <Input
-                    id="youtube"
-                    value={youtubeUsername}
-                    onChange={(e) => setYoutubeUsername(e.target.value)}
-                    placeholder="@username"
-                  />
-                </div>
-              </div>
-            </div>
-            
-            <div className="border-t pt-4">
-              <div className="space-y-2">
-                <Label htmlFor="admin-comments">Admin Comments (Private)</Label>
-                <Textarea
-                  id="admin-comments"
-                  value={adminComments}
-                  onChange={(e) => setAdminComments(e.target.value)}
-                  placeholder="Internal notes visible only to admins..."
-                  rows={4}
-                />
-              </div>
-            </div>
+
+            <EditPlayerFormFields
+              values={values}
+              onChange={handleFieldChange}
+              showIdentity={false}
+              showEpic={false}
+            />
           </div>
         )}
         </DialogBody>

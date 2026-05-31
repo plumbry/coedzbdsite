@@ -1,41 +1,23 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Download, Users, Zap, Wrench, ArrowRight } from "lucide-react";
-import { useUserRole } from "@/hooks/use-user-role.ts";
+import { Link } from "react-router-dom";
+import { useState } from "react";
+import { toast } from "sonner";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
-import RoleGate from "@/components/role-gate.tsx";
 import ExportOptionsDialog from "../_components/export-options-dialog.tsx";
 import MergePlayersDialog from "../_components/merge-players-dialog.tsx";
 import RelinkResultsButton from "../_components/relink-results-button.tsx";
 import GoogleSheetsManager from "../_components/google-sheets-manager.tsx";
 import TierSnapshotTool from "../_components/tier-snapshot-tool.tsx";
-import { toast } from "sonner";
 
 function FeaturesContent() {
-  const { isAdmin } = useUserRole();
   const evaluations = useQuery(api.tierReEvaluation.getCachedTierReEvaluationData);
 
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
-
-  if (isAdmin === undefined) {
-    return <Skeleton className="h-96 w-full" />;
-  }
-
-  if (!isAdmin) {
-    return (
-      <RoleGate
-        allowed={false}
-        description="This page is only accessible to administrators."
-        showBackButton={false}
-      />
-    );
-  }
 
   const handleExportEvaluations = (filters?: { tiers: string[]; statuses: string[] }) => {
     if (!evaluations?.evaluations || evaluations.evaluations.length === 0) {
@@ -206,6 +188,7 @@ function FeaturesContent() {
 export default function FeaturesPage() {
   return (
     <AdminPageLayout
+      requireAdmin
       title="Features & Integrations"
       description="Exports, merges, Google Sheets, and utility tools"
     >

@@ -31,7 +31,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { cn } from "@/lib/utils.ts";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 
-import PageHeader from "@/components/page-header.tsx";
+import UpsetKillsLayout from "./_components/upset-kills-layout.tsx";
 import PlayerKillsDialog, { TierBadge, TierDiffBadge } from "./_components/player-kills-dialog.tsx";
 
 type KillStateFilter = "all" | "knocked" | "finished" | "eliminated";
@@ -100,21 +100,7 @@ function EliminationsContent() {
   };
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Killfeed"
-        icon={SwordsIcon}
-        description="Full killfeed showing who knocked, finished, and eliminated who. Based on Yunite match replay data."
-        back={{ label: "Upset Kills", href: "/admin/upset-kills" }}
-        breadcrumbs={[
-          { label: "Admin", href: "/admin" },
-          { label: "Stats", href: "/admin/stats" },
-          { label: "Upset Kills", href: "/admin/upset-kills" },
-          { label: "Killfeed" },
-        ]}
-        variant="compact"
-      />
-
+    <UpsetKillsLayout>
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <span className="text-muted-foreground font-medium">States:</span>
         <div className="flex items-center gap-1.5">
@@ -329,17 +315,13 @@ function EliminationsContent() {
         open={playerDialogOpen}
         onOpenChange={setPlayerDialogOpen}
       />
-    </div>
+    </UpsetKillsLayout>
   );
 }
 
 export default function EliminationsPage() {
   return (
-    <AdminPageLayout
-      skipHeader
-      authTitle="Sign in to view upset kills"
-      header={{ back: { label: "Back to Upset Kills", href: "/admin/upset-kills" } }}
-    >
+    <AdminPageLayout skipHeader requireAdmin authTitle="Sign in to view upset kills">
       <EliminationsContent />
     </AdminPageLayout>
   );

@@ -13,6 +13,16 @@ import {
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
+import ConfirmDialog from "@/components/confirm-dialog.tsx";
+
+type PendingConfirm = {
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  variant?: "default" | "destructive";
+  confirmText?: string;
+  onConfirm: () => Promise<void>;
+} | null;
 
 export default function DataMaintenanceTools() {
   const players = useQuery(api.players.getPlayers);
@@ -41,14 +51,10 @@ export default function DataMaintenanceTools() {
   const [fixProgress, setFixProgress] = useState<{ current: number; total: number } | null>(null);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
   const [refreshStep, setRefreshStep] = useState("");
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const cancelledRef = useRef(false);
 
-  const handleRefreshAllStats = async () => {
-    const confirmed = window.confirm(
-      "Refresh All Stats?\n\nThis will recalculate in order:\n1. TC (Team Contribution)\n2. DCA (Duo Carry Adjustment)\n3. Top Five Cache\n4. Holistic Scores\n\nThis may take several minutes. Continue?",
-    );
-    if (!confirmed) return;
-
+  const runRefreshAllStats = async () => {
     setIsRefreshingAll(true);
     cancelledRef.current = false;
     const TOAST_ID = "refresh-all";
@@ -172,28 +178,12 @@ export default function DataMaintenanceTools() {
     }
   };
 
-  const handleDeleteAllPlayers = async () => {
+  const runDeleteAllPlayers = async () => {
     if (!players) return;
 
     const totalCount = players.length;
-
     if (totalCount === 0) {
       toast.info("No players to delete");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `⚠️ DANGER: DELETE ALL PLAYERS ⚠️\n\nAre you sure you want to delete ALL ${totalCount} player${totalCount === 1 ? "" : "s"}?\n\nThis will permanently delete:\n- ALL player profiles (including evaluated players)\n- ALL scores\n- ALL tier history\n- ALL data in the database\n\nThis action CANNOT be undone!\n\nType "DELETE ALL" to confirm.`,
-    );
-
-    if (!confirmed) return;
-
-    const doubleConfirm = window.prompt(
-      `Type "DELETE ALL" (without quotes) to confirm deletion of all ${totalCount} players:`,
-    );
-
-    if (doubleConfirm !== "DELETE ALL") {
-      toast.info("Deletion cancelled - confirmation text did not match");
       return;
     }
 
@@ -325,7 +315,19 @@ export default function DataMaintenanceTools() {
           </CardDescription>
         </CardHeader>
         <CardContent className="py-3 flex items-center gap-3">
-          <Button size="sm" onClick={handleRefreshAllStats} disabled={isRefreshingAll}>
+          <Button
+            size="sm"
+            onClick={() =>
+              setPendingConfirm({
+                title: "Refresh All Stats?",
+                description:
+                  "This will recalculate in order:\n1. TC (Team Contribution)\n2. DCA (Duo Carry Adjustment)\n3. Top Five Cache\n4. Holistic Scores\n\nThis may take several minutes.",
+                confirmLabel: "Refresh All Stats",
+                onConfirm: runRefreshAllStats,
+              })
+            }
+            disabled={isRefreshingAll}
+          >
             <RefreshCw className={`mr-2 h-3 w-3 ${isRefreshingAll ? "animate-spin" : ""}`} />
             {isRefreshingAll ? `Running — ${refreshStep}...` : "Refresh All Stats"}
           </Button>
@@ -453,7 +455,17 @@ export default function DataMaintenanceTools() {
             <Button
               size="sm"
               variant="destructive"
-              onClick={handleDeleteAllPlayers}
+              onClick={() => {
+                if (!players || players.length === 0) return;
+                setPendingConfirm({
+                  title: "Delete ALL players?",
+                  description: `This will permanently delete all ${players.length} players, scores, tier history, and related data. This cannot be undone.`,
+                  confirmLabel: "Delete EVERYTHING",
+                  variant: "destructive",
+                  confirmText: "DELETE ALL",
+                  onConfirm: runDeleteAllPlayers,
+                });
+              }}
               disabled={isDeletingAllPlayers || !players || players.length === 0}
             >
               <Trash2 className="mr-2 h-4 w-4" />
@@ -462,6 +474,21 @@ export default function DataMaintenanceTools() {
           </CardContent>
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={pendingConfirm !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingConfirm(null);
+        }}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description ?? ""}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        variant={pendingConfirm?.variant}
+        confirmText={pendingConfirm?.confirmText}
+        onConfirm={async () => {
+          if (pendingConfirm) await pendingConfirm.onConfirm();
+        }}
+      />
     </div>
   );
 }

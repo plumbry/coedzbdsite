@@ -1063,6 +1063,13 @@ export default defineSchema({
     lastUpdated: v.number(),
   }),
 
+  // Running totals for matchKillEvents (avoids full-table scans for counts)
+  matchKillEventsMetadata: defineTable({
+    totalKillEvents: v.number(),
+    totalUpsetKillEvents: v.number(),
+    lastUpdated: v.number(),
+  }),
+
   // Metadata for event bans feature (single-document table)
   eventBansMetadata: defineTable({
     lastEventPassedAt: v.string(), // ISO 8601 UTC timestamp of last "Event Passed" usage
