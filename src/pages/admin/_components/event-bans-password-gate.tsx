@@ -6,13 +6,18 @@ import AuthGate from "@/components/auth-gate.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
+import { SignInButton } from "@/components/ui/signin.tsx";
 import { Ban } from "lucide-react";
 
 interface EventBansPasswordGateProps {
   onUnlock: (token: string) => void;
+  showStaffSignIn?: boolean;
 }
 
-export default function EventBansPasswordGate({ onUnlock }: EventBansPasswordGateProps) {
+export default function EventBansPasswordGate({
+  onUnlock,
+  showStaffSignIn = false,
+}: EventBansPasswordGateProps) {
   const createSession = useMutation(api.eventBans.viewerAuth.createViewerSession);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +71,16 @@ export default function EventBansPasswordGate({ onUnlock }: EventBansPasswordGat
           {isSubmitting ? "Checking..." : "View event bans"}
         </Button>
       </form>
+      {showStaffSignIn && (
+        <div className="pt-4 border-t space-y-2 text-center">
+          <p className="text-xs text-muted-foreground">Event mods and admins</p>
+          <SignInButton
+            variant="outline"
+            className="w-full cursor-pointer"
+            signInText="Sign in to edit bans"
+          />
+        </div>
+      )}
     </AuthGate>
   );
 }

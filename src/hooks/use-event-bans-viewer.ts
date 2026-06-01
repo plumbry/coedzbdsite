@@ -42,7 +42,7 @@ export function useEventBansViewer() {
     }
   }, [isValid, clear]);
 
-  const isUnlocked = Boolean(token) && isValid !== false;
+  const isUnlocked = Boolean(token) && isValid === true;
 
   return {
     token,
