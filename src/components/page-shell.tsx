@@ -26,10 +26,10 @@ export default function PageShell({
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {showSiteHeader && <SiteHeader />}
-      <main className="flex-1 w-full mx-auto px-4 md:px-6 py-4">
+      <main className="flex flex-1 flex-col w-full mx-auto px-4 md:px-6 py-4">
         <div
           className={cn(
-            "mx-auto w-full space-y-4",
+            "mx-auto flex w-full flex-1 flex-col space-y-4",
             maxWidthClasses[maxWidth],
             className,
           )}

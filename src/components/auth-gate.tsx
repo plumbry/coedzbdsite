@@ -16,12 +16,12 @@ export default function AuthGate({
   return (
     <div
       className={cn(
-        "flex flex-1 items-center justify-center px-4 py-16",
+        "flex w-full flex-1 items-center justify-center px-4 py-16 min-h-[50vh]",
         className,
       )}
     >
-      <div className="w-full max-w-sm space-y-4 text-center">
-        <div className="space-y-2">
+      <div className="mx-auto w-full max-w-sm space-y-4">
+        <div className="space-y-2 text-center">
           <h1 className="text-2xl font-bold tracking-tight text-balance">
             {title}
           </h1>
@@ -29,7 +29,7 @@ export default function AuthGate({
             <p className="text-sm text-muted-foreground">{description}</p>
           )}
         </div>
-        {children}
+        <div className="w-full text-center [&_form]:text-left">{children}</div>
       </div>
     </div>
   );
