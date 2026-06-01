@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { touchPlayerEventParticipationOnInsert } from "./helpers/playerEventStats";
 
 export const getPlayerEvents = query({
@@ -55,6 +56,100 @@ export const getAllEvents = query({
     );
     
     return transformedResults;
+  },
+});
+
+export const getEventResultSummaries = query({
+  args: {},
+  handler: async (ctx) => {
+    const imports = await ctx.db.query("thirdPartyImports").order("desc").collect();
+    const summaries = new Map<
+      string,
+      {
+        eventName: string;
+        eventDate: string;
+        resultCount: number;
+        importCount: number;
+      }
+    >();
+
+    for (const importData of imports) {
+      const existing = summaries.get(importData.eventName);
+      const eventDate = importData.eventDate || "";
+      if (!existing) {
+        summaries.set(importData.eventName, {
+          eventName: importData.eventName,
+          eventDate,
+          resultCount: importData.playersMatched,
+          importCount: 1,
+        });
+        continue;
+      }
+
+      existing.resultCount += importData.playersMatched;
+      existing.importCount += 1;
+      if (eventDate > existing.eventDate) {
+        existing.eventDate = eventDate;
+      }
+    }
+
+    return Array.from(summaries.values()).sort((a, b) =>
+      b.eventDate.localeCompare(a.eventDate),
+    );
+  },
+});
+
+export const getEventResultsForEvent = query({
+  args: {
+    eventName: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(args.limit ?? 1000, 1000);
+    const results = await ctx.db
+      .query("thirdPartyResults")
+      .withIndex("by_event_name", (q) => q.eq("eventName", args.eventName))
+      .order("desc")
+      .take(limit);
+
+    const matchedResults = results.filter(
+      (result): result is typeof result & { playerId: Id<"players"> } =>
+        result.playerId !== undefined,
+    );
+
+    const importIds = Array.from(new Set(matchedResults.map((result) => result.importId)));
+    const playerIds = Array.from(new Set(matchedResults.map((result) => result.playerId)));
+
+    const imports = await Promise.all(importIds.map(async (id) => [id, await ctx.db.get(id)] as const));
+    const players = await Promise.all(playerIds.map(async (id) => [id, await ctx.db.get(id)] as const));
+
+    const importsById = new Map(imports);
+    const playersById = new Map(players);
+
+    return matchedResults.map((result) => {
+      const importData = importsById.get(result.importId);
+      const player = playersById.get(result.playerId);
+      const kdRatio = result.deaths && result.deaths > 0
+        ? (result.eliminations || 0) / result.deaths
+        : result.eliminations || 0;
+
+      return {
+        _id: result._id,
+        _creationTime: result._creationTime,
+        playerId: result.playerId,
+        playerName: player?.discordUsername || result.discordUsername || result.epicUsername,
+        playerTier: player?.tier,
+        eventName: result.eventName,
+        eventDate: importData?.eventDate || "",
+        placement: result.placement,
+        eliminations: result.eliminations || 0,
+        kdRatio,
+        eventScore: result.points,
+        yuniteLeaderboardUrl: result.leaderboardUrl,
+        importId: result.importId,
+        eventId: importData?.eventId,
+      };
+    });
   },
 });
 
@@ -148,20 +243,18 @@ export const deleteAllEventResultsByName = mutation({
       });
     }
     
-    // Get all thirdPartyResults for this event name
     const results = await ctx.db
       .query("thirdPartyResults")
-      .collect();
-    
-    const matchingResults = results.filter(r => r.eventName === args.eventName);
+      .withIndex("by_event_name", (q) => q.eq("eventName", args.eventName))
+      .take(1000);
     
     // Delete each result
-    for (const result of matchingResults) {
+    for (const result of results) {
       await ctx.db.delete(result._id);
     }
     
     return {
-      deleted: matchingResults.length,
+      deleted: results.length,
     };
   },
 });
@@ -272,21 +365,22 @@ export const updateEventResultsByName = mutation({
       });
     }
     
-    // Get all thirdPartyResults with this event name
     const results = await ctx.db
       .query("thirdPartyResults")
-      .collect();
-    
-    const matchingResults = results.filter(r => r.eventName === args.oldEventName);
+      .withIndex("by_event_name", (q) => q.eq("eventName", args.oldEventName))
+      .take(1000);
     
     // Update each result's event name
     let updated = 0;
     const importIdsSet = new Set<string>();
+
+    for (const result of results) {
+      importIdsSet.add(result.importId);
+    }
     
     if (args.newEventName !== undefined) {
-      for (const result of matchingResults) {
+      for (const result of results) {
         await ctx.db.patch(result._id, { eventName: args.newEventName });
-        importIdsSet.add(result.importId);
         updated++;
       }
     }
@@ -307,6 +401,10 @@ export const updateEventResultsByName = mutation({
       }
     }
     
+    if (updated === 0 && args.newEventDate !== undefined) {
+      updated = results.length;
+    }
+
     return { updated };
   },
 });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Component, useState, type ReactNode } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -10,12 +10,58 @@ import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/
 import { Badge } from "@/components/ui/badge.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible.tsx";
-import { Loader2, Trash2, AlertCircle, ChevronDown, Edit } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
+import { Loader2, Trash2, AlertCircle, ChevronDown, Edit, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
+function formatEventDate(eventDate?: string) {
+  if (!eventDate) return null;
+
+  const date = new Date(eventDate);
+  if (Number.isNaN(date.getTime())) {
+    return eventDate;
+  }
+
+  return format(date, "MMM d, yyyy");
+}
+
+class EventResultsErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <Alert variant="destructive">
+          <XCircle className="h-4 w-4" />
+          <AlertTitle>Event results failed to load</AlertTitle>
+          <AlertDescription>
+            {this.state.error.message || "Refresh the page or check the Convex logs for the failed query."}
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function EventResultsManager() {
+  return (
+    <EventResultsErrorBoundary>
+      <EventResultsManagerContent />
+    </EventResultsErrorBoundary>
+  );
+}
+
+function EventResultsManagerContent() {
   const [deletingResult, setDeletingResult] = useState<Id<"thirdPartyResults"> | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<string | null>(null);
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
@@ -24,24 +70,18 @@ export default function EventResultsManager() {
   const [editEventName, setEditEventName] = useState("");
   const [editEventDate, setEditEventDate] = useState("");
   const [isUpdatingEvent, setIsUpdatingEvent] = useState(false);
-  
-  const allResults = useQuery(api.events.getAllEvents);
-  const players = useQuery(api.players.getPlayers);
+
+  const eventSummaries = useQuery(api.events.getEventResultSummaries);
   const deleteEvent = useMutation(api.events.deleteEvent);
   const deleteAllEventResultsByName = useMutation(api.events.deleteAllEventResultsByName);
   const cleanupDuplicates = useMutation(api.cleanupDuplicates.cleanupAllDuplicates);
   const updateEventResultsByName = useMutation(api.events.updateEventResultsByName);
-  
-  // Create lookup map for player names
-  const playerMap = new Map(
-    players?.map(p => [p._id, { name: p.discordUsername, tier: p.tier }]) || []
-  );
-  
+
   const handleDelete = async (resultId: Id<"thirdPartyResults">, eventName: string) => {
     if (!confirm(`Are you sure you want to delete this individual result for "${eventName}"?`)) {
       return;
     }
-    
+
     setDeletingResult(resultId);
     try {
       await deleteEvent({ eventId: resultId });
@@ -57,13 +97,12 @@ export default function EventResultsManager() {
     if (!confirm(`Are you sure you want to delete ALL ${resultCount} results for "${eventName}"? This cannot be undone.`)) {
       return;
     }
-    
+
     setDeletingEvent(eventName);
     try {
       const result = await deleteAllEventResultsByName({ eventName });
       toast.success(`Deleted ${result.deleted} results for "${eventName}"`);
-      // Collapse the event after deletion
-      setExpandedEvents(prev => {
+      setExpandedEvents((prev) => {
         const next = new Set(prev);
         next.delete(eventName);
         return next;
@@ -76,7 +115,7 @@ export default function EventResultsManager() {
   };
 
   const toggleEvent = (eventName: string) => {
-    setExpandedEvents(prev => {
+    setExpandedEvents((prev) => {
       const next = new Set(prev);
       if (next.has(eventName)) {
         next.delete(eventName);
@@ -91,7 +130,7 @@ export default function EventResultsManager() {
     if (!confirm("This will remove all duplicate event results, keeping only the most recent entry for each player+event. Continue?")) {
       return;
     }
-    
+
     setIsCleaningDuplicates(true);
     try {
       const result = await cleanupDuplicates();
@@ -116,12 +155,12 @@ export default function EventResultsManager() {
 
   const handleUpdateEvent = async () => {
     if (!editingEvent) return;
-    
+
     if (!editEventName.trim()) {
       toast.error("Event name cannot be empty");
       return;
     }
-    
+
     setIsUpdatingEvent(true);
     try {
       const result = await updateEventResultsByName({
@@ -131,8 +170,7 @@ export default function EventResultsManager() {
       });
       toast.success(`Updated ${result.updated} results`);
       setEditingEvent(null);
-      // Collapse and re-expand to refresh
-      setExpandedEvents(prev => {
+      setExpandedEvents((prev) => {
         const next = new Set(prev);
         next.delete(editingEvent);
         next.add(editEventName.trim());
@@ -145,8 +183,8 @@ export default function EventResultsManager() {
       setIsUpdatingEvent(false);
     }
   };
-  
-  if (!allResults || !players) {
+
+  if (!eventSummaries) {
     return (
       <Card>
         <CardContent className="pt-6">
@@ -159,8 +197,8 @@ export default function EventResultsManager() {
       </Card>
     );
   }
-  
-  if (allResults.length === 0) {
+
+  if (eventSummaries.length === 0) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-12 text-center">
@@ -172,29 +210,13 @@ export default function EventResultsManager() {
       </Card>
     );
   }
-  
-  // Group results by event name
-  const eventGroups = new Map<string, typeof allResults>();
-  for (const result of allResults) {
-    if (!eventGroups.has(result.eventName)) {
-      eventGroups.set(result.eventName, []);
-    }
-    eventGroups.get(result.eventName)!.push(result);
-  }
-  
-  // Sort events by most recent date
-  const sortedEvents = Array.from(eventGroups.entries()).sort((a, b) => {
-    const aDate = a[1][0]?.eventDate || "";
-    const bDate = b[1][0]?.eventDate || "";
-    return bDate.localeCompare(aDate);
-  });
-  
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-4">
           <CardDescription>
-            {allResults.length} total results across {eventGroups.size} events
+            {eventSummaries.reduce((sum, event) => sum + event.resultCount, 0)} total results across {eventSummaries.length} events
           </CardDescription>
           <Button
             variant="outline"
@@ -214,16 +236,16 @@ export default function EventResultsManager() {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {sortedEvents.map(([eventName, results]) => {
-          const isExpanded = expandedEvents.has(eventName);
-          const eventDate = results[0]?.eventDate;
-          const isDeleting = deletingEvent === eventName;
-          
+        {eventSummaries.map((event) => {
+          const isExpanded = expandedEvents.has(event.eventName);
+          const isDeleting = deletingEvent === event.eventName;
+          const displayDate = formatEventDate(event.eventDate);
+
           return (
-            <div key={eventName} className="rounded-lg border">
+            <div key={event.eventName} className="rounded-lg border">
               <div className="flex items-center justify-between p-4 bg-muted/30">
                 <button
-                  onClick={() => toggleEvent(eventName)}
+                  onClick={() => toggleEvent(event.eventName)}
                   className="flex items-center gap-2 flex-1 text-left group"
                 >
                   <ChevronDown
@@ -231,10 +253,12 @@ export default function EventResultsManager() {
                   />
                   <div className="flex-1">
                     <div className="font-medium group-hover:text-primary transition-colors">
-                      {eventName}
+                      {event.eventName}
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {eventDate && format(new Date(eventDate), "MMM d, yyyy")} • {results.length} results
+                      {displayDate ? `${displayDate} - ` : ""}
+                      {event.resultCount} results
+                      {event.importCount > 1 ? ` across ${event.importCount} imports` : ""}
                     </div>
                   </div>
                 </button>
@@ -242,7 +266,7 @@ export default function EventResultsManager() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => openEditEventDialog(eventName, eventDate)}
+                    onClick={() => openEditEventDialog(event.eventName, event.eventDate)}
                     title="Edit event details"
                   >
                     <Edit className="h-3.5 w-3.5" />
@@ -250,7 +274,7 @@ export default function EventResultsManager() {
                   <Button
                     size="sm"
                     variant="destructive"
-                    onClick={() => handleDeleteAllForEvent(eventName, results.length)}
+                    onClick={() => handleDeleteAllForEvent(event.eventName, event.resultCount)}
                     disabled={isDeleting}
                   >
                     {isDeleting ? (
@@ -267,81 +291,19 @@ export default function EventResultsManager() {
                   </Button>
                 </div>
               </div>
-              
+
               {isExpanded && (
-                <div className="border-t">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/10">
-                        <TableHead className="text-xs">Player</TableHead>
-                        <TableHead className="text-xs">Placement</TableHead>
-                        <TableHead className="text-xs">Eliminations</TableHead>
-                        <TableHead className="text-xs">Points</TableHead>
-                        <TableHead className="text-xs">K/D Ratio</TableHead>
-                        <TableHead className="text-xs">Import ID</TableHead>
-                        <TableHead className="text-xs w-20"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {results.map((result) => {
-                        const player = playerMap.get(result.playerId);
-                        return (
-                          <TableRow key={result._id}>
-                            <TableCell>
-                              <div className="flex flex-col">
-                                <span className="text-sm font-medium">{player?.name || "Unknown"}</span>
-                                {player?.tier && (
-                                  <Badge variant="secondary" className="text-xs w-fit mt-1">
-                                    {player.tier}
-                                  </Badge>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={result.placement === 1 ? "default" : "outline"} className="text-xs">
-                                #{result.placement}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm">{result.eliminations}</TableCell>
-                            <TableCell className="text-sm font-semibold">{result.eventScore}</TableCell>
-                            <TableCell className="text-sm">{result.kdRatio.toFixed(2)}</TableCell>
-                            <TableCell>
-                              {result.importId ? (
-                                <code className="text-xs text-muted-foreground bg-muted px-1 py-0.5 rounded">
-                                  {result.importId.slice(-6)}
-                                </code>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDelete(result._id, result.eventName)}
-                                disabled={deletingResult === result._id}
-                                title="Delete this individual result"
-                              >
-                                {deletingResult === result._id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                                )}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                <EventResultRows
+                  eventName={event.eventName}
+                  deletingResult={deletingResult}
+                  onDelete={handleDelete}
+                />
               )}
             </div>
           );
         })}
       </CardContent>
-      
-      {/* Edit Event Dialog */}
+
       <Dialog open={!!editingEvent} onOpenChange={(open) => !open && setEditingEvent(null)}>
         <DialogContent size="md">
           <DialogHeader>
@@ -388,5 +350,91 @@ export default function EventResultsManager() {
         </DialogContent>
       </Dialog>
     </Card>
+  );
+}
+
+function EventResultRows({
+  eventName,
+  deletingResult,
+  onDelete,
+}: {
+  eventName: string;
+  deletingResult: Id<"thirdPartyResults"> | null;
+  onDelete: (resultId: Id<"thirdPartyResults">, eventName: string) => Promise<void>;
+}) {
+  const results = useQuery(api.events.getEventResultsForEvent, { eventName, limit: 1000 });
+
+  if (!results) {
+    return (
+      <div className="border-t p-4">
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/10">
+            <TableHead className="text-xs">Player</TableHead>
+            <TableHead className="text-xs">Placement</TableHead>
+            <TableHead className="text-xs">Eliminations</TableHead>
+            <TableHead className="text-xs">Points</TableHead>
+            <TableHead className="text-xs">K/D Ratio</TableHead>
+            <TableHead className="text-xs">Import ID</TableHead>
+            <TableHead className="text-xs w-20"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {results.map((result) => (
+            <TableRow key={result._id}>
+              <TableCell>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">{result.playerName}</span>
+                  {result.playerTier && (
+                    <Badge variant="secondary" className="text-xs w-fit mt-1">
+                      {result.playerTier}
+                    </Badge>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell>
+                <Badge variant={result.placement === 1 ? "default" : "outline"} className="text-xs">
+                  #{result.placement}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-sm">{result.eliminations}</TableCell>
+              <TableCell className="text-sm font-semibold">{result.eventScore}</TableCell>
+              <TableCell className="text-sm">{result.kdRatio.toFixed(2)}</TableCell>
+              <TableCell>
+                <code className="text-xs text-muted-foreground bg-muted px-1 py-0.5 rounded">
+                  {result.importId.slice(-6)}
+                </code>
+              </TableCell>
+              <TableCell>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onDelete(result._id, result.eventName)}
+                  disabled={deletingResult === result._id}
+                  title="Delete this individual result"
+                >
+                  {deletingResult === result._id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                  )}
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

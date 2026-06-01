@@ -354,6 +354,7 @@ export default defineSchema({
   })
     .index("by_player", ["playerId"])
     .index("by_import", ["importId"])
+    .index("by_event_name", ["eventName"])
     .index("by_source", ["source"])
     .index("by_matched", ["importId", "matched"]),
   
