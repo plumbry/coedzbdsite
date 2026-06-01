@@ -992,6 +992,11 @@ export default function ImportThirdParty() {
     return null;
   }
 
+  const isYuniteSource = (source: string) => {
+    const normalized = source.trim().toLowerCase();
+    return normalized === "yunite" || normalized === "yunite api";
+  };
+
   const renderDuplicateWarning = (
     matches:
       | Array<{
@@ -1000,6 +1005,7 @@ export default function ImportThirdParty() {
           eventDate?: string;
           source: string;
           totalPlayers: number;
+          playersUnmatched: number;
           reasons: string[];
         }>
       | undefined,
@@ -1018,15 +1024,54 @@ export default function ImportThirdParty() {
                 behaviour is unchanged.
               </p>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               {matches.map((match) => (
-                <div key={match._id} className="text-xs">
-                  <span className="font-medium">{match.eventName}</span>
-                  {match.eventDate ? ` - ${match.eventDate}` : ""}
-                  <span className="text-amber-800">
-                    {" "}
-                    ({match.source}, {match.totalPlayers} players, {match.reasons.join(", ")})
-                  </span>
+                <div key={match._id} className="text-xs space-y-1">
+                  <div>
+                    <span className="font-medium">{match.eventName}</span>
+                    {match.eventDate ? ` - ${match.eventDate}` : ""}
+                    <span className="text-amber-800">
+                      {" "}
+                      ({match.source}, {match.totalPlayers} players,{" "}
+                      {match.reasons.join(", ")})
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {isYuniteSource(match.source) ? (
+                      <Button
+                        asChild
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-amber-950 underline-offset-2"
+                      >
+                        <Link to={`/admin/yunite/${match._id}`}>View existing import</Link>
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-amber-950 underline-offset-2"
+                        onClick={() => setActiveTab("history")}
+                      >
+                        View in import history
+                      </Button>
+                    )}
+                    {match.playersUnmatched > 0 && (
+                      <Button
+                        asChild
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-amber-950 underline-offset-2"
+                      >
+                        <Link to={`/admin/unmatched/${match._id}`}>
+                          {match.playersUnmatched} unmatched
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1587,9 +1632,12 @@ export default function ImportThirdParty() {
                               {imp.playersMatched} matched
                             </span>
                             {imp.playersUnmatched > 0 && (
-                              <span className="text-xs text-muted-foreground">
+                              <Link
+                                to={`/admin/unmatched/${imp._id}`}
+                                className="text-xs text-primary hover:underline w-fit"
+                              >
                                 {imp.playersUnmatched} unmatched
-                              </span>
+                              </Link>
                             )}
                           </div>
                         </TableCell>

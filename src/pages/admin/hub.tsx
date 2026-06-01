@@ -359,7 +359,27 @@ export default function AdminHubPage() {
                     href="/admin/uploads"
                     tone={importSummary && importSummary.unlinkedImports > 0 ? "attention" : "good"}
                   />
+                  <OperationsCard
+                    title="Unsynced Yunite match data"
+                    value={importSummary?.unsyncedYuniteImports ?? "..."}
+                    description="Yunite imports missing match sync; behaviour unchanged."
+                    href="/admin/uploads"
+                    tone={
+                      importSummary && importSummary.unsyncedYuniteImports > 0
+                        ? "attention"
+                        : "good"
+                    }
+                  />
                 </>
+              )}
+              {isModeratorOrAdmin && eventSummary && eventSummary.withUnsyncedYuniteData > 0 && (
+                <OperationsCard
+                  title="Events with unsynced Yunite"
+                  value={eventSummary.withUnsyncedYuniteData}
+                  description="Linked events with Yunite imports still awaiting match sync."
+                  href="/admin/events-manager"
+                  tone="attention"
+                />
               )}
               {hasEventBanAccess && (
                 <OperationsCard

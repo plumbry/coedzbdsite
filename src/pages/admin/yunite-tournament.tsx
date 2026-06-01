@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -195,19 +195,31 @@ function YuniteTournamentContent() {
         breadcrumbs={[
           { label: "Admin", href: "/admin" },
           { label: "Uploads", href: "/admin/uploads" },
+          ...(tournamentDetails.import.eventId
+            ? [{ label: "Events", href: "/admin/events-manager" }]
+            : []),
           { label: tournamentDetails.import.eventName },
         ]}
         variant="compact"
         actions={
-          <Button
-            onClick={handleSyncMatchData}
-            disabled={isSyncing}
-            variant="outline"
-            size="sm"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
-            {isSyncing ? "Syncing..." : "Sync Match Data"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {tournamentDetails.stats.unmatched > 0 && importId && (
+              <Button asChild variant="outline" size="sm">
+                <Link to={`/admin/unmatched/${importId}`}>
+                  {tournamentDetails.stats.unmatched} unmatched
+                </Link>
+              </Button>
+            )}
+            <Button
+              onClick={handleSyncMatchData}
+              disabled={isSyncing}
+              variant="outline"
+              size="sm"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+              {isSyncing ? "Syncing..." : "Sync Match Data"}
+            </Button>
+          </div>
         }
       />
 

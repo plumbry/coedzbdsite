@@ -1,4 +1,5 @@
 import { Component, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -213,26 +214,37 @@ function EventResultsManagerContent() {
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-4">
+      <CardHeader className="pb-3 space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <CardDescription>
             {eventSummaries.reduce((sum, event) => sum + event.resultCount, 0)} total results across {eventSummaries.length} events
           </CardDescription>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCleanupDuplicates}
-            disabled={isCleaningDuplicates}
-          >
-            {isCleaningDuplicates ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Cleaning...
-              </>
-            ) : (
-              "Clean Duplicates"
-            )}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2">
+              <Link to="/admin">Admin</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2">
+              <Link to="/admin/uploads">Uploads</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2">
+              <Link to="/admin/events-manager">Events</Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCleanupDuplicates}
+              disabled={isCleaningDuplicates}
+            >
+              {isCleaningDuplicates ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cleaning...
+                </>
+              ) : (
+                "Clean Duplicates"
+              )}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
