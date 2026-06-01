@@ -23,7 +23,7 @@ export default function DuoPairsManager() {
   const [isAdding, setIsAdding] = useState(false);
   const [removingPairId, setRemovingPairId] = useState<Id<"eventDuoPairs"> | null>(null);
 
-  const allEvents = useQuery(api.events.management.getAllEvents);
+  const allEvents = useQuery(api.events.management.getAllEvents, {});
   const players = useQuery(api.players.getPlayers);
   const duoPairs = useQuery(
     api.events.duoPairs.getEventDuoPairs,

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel.d.ts";
+import type { QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
 // Count match stats for a player
 export const countPlayerMatchStats = query({
@@ -128,54 +129,123 @@ export const getTournamentDetails = query({
   },
 });
 
+function isYuniteImportSource(source: string, importMethod?: string) {
+  const normalized = source.trim().toLowerCase();
+  return (
+    normalized === "yunite" ||
+    normalized === "yunite api" ||
+    importMethod === "api"
+  );
+}
+
+async function computeImportEliminationTotals(
+  ctx: QueryCtx,
+  importRecord: Pick<Doc<"thirdPartyImports">, "_id" | "totalMatchKills" | "totalPlayers">,
+) {
+  if (importRecord.totalMatchKills !== undefined) {
+    return {
+      totalEliminations: importRecord.totalMatchKills,
+      averageEliminations: 0,
+      totalPlayers: importRecord.totalPlayers,
+    };
+  }
+
+  const results = await ctx.db
+    .query("thirdPartyResults")
+    .withIndex("by_import", (q) => q.eq("importId", importRecord._id))
+    .collect();
+
+  const teamKillsMap = new Map<string, number>();
+  for (const result of results) {
+    const teamId = result.teamId || result.teamName || `unknown-${result.placement}`;
+    if (!teamKillsMap.has(teamId)) {
+      teamKillsMap.set(teamId, result.teamKills || 0);
+    }
+  }
+  const totalEliminations = Array.from(teamKillsMap.values()).reduce(
+    (sum, kills) => sum + kills,
+    0,
+  );
+  const teamCount = new Set(
+    results.map((r) => r.teamId || r.teamName || `unknown-${r.placement}`),
+  ).size;
+
+  return {
+    totalEliminations,
+    averageEliminations: teamCount > 0 ? totalEliminations / teamCount : 0,
+    totalPlayers: results.length,
+  };
+}
+
+// Slim list for admin Yunite dashboard (no per-import result scans when cached).
+export const getYuniteImportSummaries = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = Math.min(args.limit ?? 100, 200);
+    const imports = await ctx.db
+      .query("thirdPartyImports")
+      .order("desc")
+      .take(limit * 2);
+
+    const summaries = [];
+    for (const importRecord of imports) {
+      if (!isYuniteImportSource(importRecord.source, importRecord.importMethod)) {
+        continue;
+      }
+
+      let totalEliminations = importRecord.totalMatchKills ?? 0;
+      if (importRecord.totalMatchKills === undefined) {
+        const computed = await computeImportEliminationTotals(ctx, importRecord);
+        totalEliminations = computed.totalEliminations;
+      }
+
+      summaries.push({
+        _id: importRecord._id,
+        eventName: importRecord.eventName,
+        eventDate: importRecord.eventDate,
+        source: importRecord.source,
+        leaderboardUrl: importRecord.leaderboardUrl,
+        leaderboardId: importRecord.leaderboardId,
+        playersMatched: importRecord.playersMatched,
+        playersUnmatched: importRecord.playersUnmatched,
+        totalPlayers: importRecord.totalPlayers,
+        matchDataSynced: importRecord.matchDataSynced,
+        totalEliminations,
+      });
+
+      if (summaries.length >= limit) break;
+    }
+
+    return summaries;
+  },
+});
+
 // Get all Yunite tournaments with their raw data
 export const getAllYuniteTournaments = query({
   args: {},
   handler: async (ctx) => {
     const imports = await ctx.db
       .query("thirdPartyImports")
-      .filter((q) => q.eq(q.field("source"), "Yunite"))
       .order("desc")
-      .collect();
-    
+      .take(200);
+
+    const yuniteImports = imports.filter((importRecord) =>
+      isYuniteImportSource(importRecord.source, importRecord.importMethod),
+    );
+
     const tournamentsWithStats = [];
-    
-    for (const importRecord of imports) {
-      const results = await ctx.db
-        .query("thirdPartyResults")
-        .withIndex("by_import", (q) => q.eq("importId", importRecord._id))
-        .collect();
-      
-      // Calculate total eliminations
-      // If match data has been synced, use the totalMatchKills (sum from all matches)
-      // Otherwise, fall back to aggregate team kills from leaderboard
-      let totalEliminations: number;
-      if (importRecord.totalMatchKills !== undefined) {
-        totalEliminations = importRecord.totalMatchKills;
-      } else {
-        // Fallback: Calculate from leaderboard data (dedupe by team)
-        const teamKillsMap = new Map<string, number>();
-        for (const result of results) {
-          const teamId = result.teamId || result.teamName || `unknown-${result.placement}`;
-          if (!teamKillsMap.has(teamId)) {
-            teamKillsMap.set(teamId, result.teamKills || 0);
-          }
-        }
-        totalEliminations = Array.from(teamKillsMap.values()).reduce((sum, kills) => sum + kills, 0);
-      }
-      
-      // Calculate average eliminations (per team across all matches)
-      const teamCount = new Set(results.map(r => r.teamId || r.teamName || `unknown-${r.placement}`)).size;
-      const averageEliminations = teamCount > 0 ? totalEliminations / teamCount : 0;
-      
+
+    for (const importRecord of yuniteImports) {
+      const computed = await computeImportEliminationTotals(ctx, importRecord);
+
       tournamentsWithStats.push({
         ...importRecord,
-        totalEliminations,
-        averageEliminations,
-        totalPlayers: results.length,
+        totalEliminations: computed.totalEliminations,
+        averageEliminations: computed.averageEliminations,
+        totalPlayers: computed.totalPlayers,
       });
     }
-    
+
     return tournamentsWithStats;
   },
 });

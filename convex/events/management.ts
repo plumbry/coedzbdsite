@@ -55,36 +55,59 @@ function computeEventStatus(startDate: string, endDate: string): "upcoming" | "o
   }
 }
 
-// Get all events (public)
+// Admin event list — full documents; resolve storage URLs only when needed.
 export const getAllEvents = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    resolveImageUrls: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const resolveImageUrls = args.resolveImageUrls === true;
     const events = await ctx.db
       .query("events")
       .order("desc")
       .collect();
-    
-    // Add counts, image URLs, and compute status
+
     const eventsWithDetails = await Promise.all(
       events.map(async (event) => {
-        let imageUrl = null;
-        if (event.image) {
+        let imageUrl: string | null = null;
+        if (resolveImageUrls && event.image) {
           imageUrl = await ctx.storage.getUrl(event.image);
         }
-        
-        // Compute status based on dates
+
         const computedStatus = computeEventStatus(event.startDate, event.endDate);
-        
+
         return {
           ...event,
-          status: computedStatus, // Override with computed status
+          status: computedStatus,
           imageUrl,
           standardCount: event.standardLeaderboards?.length || 0,
         };
-      })
+      }),
     );
-    
+
     return eventsWithDetails;
+  },
+});
+
+export const getEventForEdit = query({
+  args: { eventId: v.id("events") },
+  handler: async (ctx, args) => {
+    await requireModeratorOrAdmin(ctx);
+
+    const event = await ctx.db.get(args.eventId);
+    if (!event) return null;
+
+    let imageUrl: string | null = null;
+    if (event.image) {
+      imageUrl = await ctx.storage.getUrl(event.image);
+    }
+
+    return {
+      ...event,
+      status: computeEventStatus(event.startDate, event.endDate),
+      imageUrl,
+      standardCount: event.standardLeaderboards?.length || 0,
+    };
   },
 });
 
@@ -95,41 +118,56 @@ export const getOperationsSummary = query({
 
     const events = await ctx.db.query("events").order("desc").take(100);
     const now = Date.now();
-    const eventDetails = await Promise.all(
-      events.map(async (event) => {
-        const leaderboardCount = collectEventLeaderboardUrls(event).length;
-        const linkedImports = await ctx.db
-          .query("thirdPartyImports")
-          .withIndex("by_event", (q) => q.eq("eventId", event._id))
-          .take(20);
-        const unmatchedPlayers = linkedImports.reduce(
-          (total, importRecord) => total + importRecord.playersUnmatched,
-          0,
-        );
-        const unsyncedYuniteImports = linkedImports.filter(
-          (importRecord) =>
-            (importRecord.source === "Yunite" ||
-              importRecord.source === "Yunite API" ||
-              importRecord.importMethod === "api") &&
-            importRecord.matchDataSynced !== true,
-        ).length;
+    const eventIds = new Set(events.map((event) => event._id));
+    const recentImports = await ctx.db
+      .query("thirdPartyImports")
+      .order("desc")
+      .take(400);
 
-        return {
-          _id: event._id,
-          name: event.name,
-          type: event.type,
-          mode: event.mode,
-          status: computeEventStatus(event.startDate, event.endDate),
-          startDate: event.startDate,
-          endDate: event.endDate,
-          needsSetup: event.needsSetup === true,
-          leaderboardCount,
-          linkedImportCount: linkedImports.length,
-          unmatchedPlayers,
-          unsyncedYuniteImports,
-        };
-      }),
-    );
+    const importsByEventId = new Map<
+      Id<"events">,
+      Array<(typeof recentImports)[number]>
+    >();
+    for (const importRecord of recentImports) {
+      if (!importRecord.eventId || !eventIds.has(importRecord.eventId)) {
+        continue;
+      }
+      const existing = importsByEventId.get(importRecord.eventId) ?? [];
+      if (existing.length >= 20) continue;
+      existing.push(importRecord);
+      importsByEventId.set(importRecord.eventId, existing);
+    }
+
+    const eventDetails = events.map((event) => {
+      const leaderboardCount = collectEventLeaderboardUrls(event).length;
+      const linkedImports = importsByEventId.get(event._id) ?? [];
+      const unmatchedPlayers = linkedImports.reduce(
+        (total, importRecord) => total + importRecord.playersUnmatched,
+        0,
+      );
+      const unsyncedYuniteImports = linkedImports.filter(
+        (importRecord) =>
+          (importRecord.source === "Yunite" ||
+            importRecord.source === "Yunite API" ||
+            importRecord.importMethod === "api") &&
+          importRecord.matchDataSynced !== true,
+      ).length;
+
+      return {
+        _id: event._id,
+        name: event.name,
+        type: event.type,
+        mode: event.mode,
+        status: computeEventStatus(event.startDate, event.endDate),
+        startDate: event.startDate,
+        endDate: event.endDate,
+        needsSetup: event.needsSetup === true,
+        leaderboardCount,
+        linkedImportCount: linkedImports.length,
+        unmatchedPlayers,
+        unsyncedYuniteImports,
+      };
+    });
 
     return {
       totalEventsChecked: events.length,

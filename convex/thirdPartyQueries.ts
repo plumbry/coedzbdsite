@@ -208,12 +208,28 @@ export const findPotentialDuplicateImports = query({
       return [];
     }
 
+    const indexedMatches =
+      args.leaderboardId && args.leaderboardId.trim().length > 0
+        ? await ctx.db
+            .query("thirdPartyImports")
+            .withIndex("by_leaderboard_id", (q) =>
+              q.eq("leaderboardId", args.leaderboardId!.trim()),
+            )
+            .take(10)
+        : [];
+
     const recentImports = await ctx.db
       .query("thirdPartyImports")
       .order("desc")
       .take(200);
 
-    return recentImports
+    const seenIds = new Set(indexedMatches.map((importRecord) => importRecord._id));
+    const candidates = [
+      ...indexedMatches,
+      ...recentImports.filter((importRecord) => !seenIds.has(importRecord._id)),
+    ];
+
+    return candidates
       .map((importRecord) => {
         const reasons: string[] = [];
         const importTournamentId =

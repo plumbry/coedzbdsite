@@ -80,7 +80,9 @@ export default function EventManager() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const events = useQuery(api.events.management.getAllEvents);
+  const events = useQuery(api.events.management.getAllEvents, {
+    resolveImageUrls: true,
+  });
   const createEvent = useMutation(api.events.management.createEvent);
   const updateEvent = useMutation(api.events.management.updateEvent);
   const deleteEvent = useMutation(api.events.management.deleteEvent);

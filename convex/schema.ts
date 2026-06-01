@@ -317,7 +317,8 @@ export default defineSchema({
     dataFullyCached: v.optional(v.boolean()), // True if all data (leaderboard + matches) is fully cached
   }).index("by_leaderboard_id", ["leaderboardId"])
     .index("by_event", ["eventId"])
-    .index("by_manual", ["isManualImport"]),
+    .index("by_manual", ["isManualImport"])
+    .index("by_source", ["source"]),
   
   thirdPartyResults: defineTable({
     importId: v.id("thirdPartyImports"),

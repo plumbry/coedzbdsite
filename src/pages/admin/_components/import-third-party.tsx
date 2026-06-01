@@ -104,7 +104,7 @@ export default function ImportThirdParty() {
     {},
     { initialNumItems: 50 }
   );
-  const events = useQuery(api.events.management.getAllEvents);
+  const events = useQuery(api.events.management.getAllEvents, {});
   const csvDuplicateMatches = useQuery(
     api.thirdPartyQueries.findPotentialDuplicateImports,
     isAdmin && activeTab === "csv" && (

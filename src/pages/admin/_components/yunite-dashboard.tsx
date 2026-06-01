@@ -176,7 +176,9 @@ export default function YuniteDashboard({
   showOverview = true
 }: YuniteDashboardProps = {}) {
   const navigate = useNavigate();
-  const tournaments = useQuery(api.yuniteQueries.getAllYuniteTournaments);
+  const tournaments = useQuery(api.yuniteQueries.getYuniteImportSummaries, {
+    limit: 100,
+  });
   const [isSyncingYunite, setIsSyncingYunite] = useState(false);
   const [isClearingData, setIsClearingData] = useState(false);
   const [fetchingMatchData, setFetchingMatchData] = useState<Record<string, boolean>>({});

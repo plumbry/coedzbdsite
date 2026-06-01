@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
+
+type AdminEventsList = FunctionReturnType<typeof api.events.management.getAllEvents>;
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
 import { Label } from "@/components/ui/label.tsx";
@@ -10,8 +13,11 @@ import EventManager from "./_components/event-manager.tsx";
 import DuoSelector from "./_components/duo-selector.tsx";
 import DuoPairManager from "./_components/duo-pair-manager.tsx";
 
-function DuoSelectionSection() {
-  const events = useQuery(api.events.management.getAllEvents);
+function DuoSelectionSection({
+  events,
+}: {
+  events: AdminEventsList | undefined;
+}) {
   const [selectedEventId, setSelectedEventId] = useState<Id<"events"> | null>(null);
   
   const dynamicEvents = events?.filter(e => e.dynamicPairDetection || e.type === "random-squads" || e.type === "random-trios") || [];
@@ -53,8 +59,11 @@ function DuoSelectionSection() {
   );
 }
 
-function SolosMeetsDuosSection() {
-  const events = useQuery(api.events.management.getAllEvents);
+function SolosMeetsDuosSection({
+  events,
+}: {
+  events: AdminEventsList | undefined;
+}) {
   const [selectedEventId, setSelectedEventId] = useState<Id<"events"> | null>(null);
   
   const smdEvents = events?.filter(e => e.type === "solos-meets-duos") || [];
@@ -99,6 +108,8 @@ function SolosMeetsDuosSection() {
 }
 
 export default function EventsManagerPage() {
+  const events = useQuery(api.events.management.getAllEvents, {});
+
   return (
     <AdminPageLayout requireModerator
       title="Events Manager"
@@ -106,8 +117,8 @@ export default function EventsManagerPage() {
       authTitle="Sign in to manage events"
     >
       <EventManager />
-      <SolosMeetsDuosSection />
-      <DuoSelectionSection />
+      <SolosMeetsDuosSection events={events} />
+      <DuoSelectionSection events={events} />
     </AdminPageLayout>
   );
 }
