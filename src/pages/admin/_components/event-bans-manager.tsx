@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.t
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Input } from "@/components/ui/input.tsx";
-import { Search, Ban, Clock, AlertTriangle, TrendingUp, Trash2, CalendarCheck, Undo2 } from "lucide-react";
+import { Search, Ban, Clock, AlertTriangle, TrendingUp, Trash2, CalendarCheck, Undo2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import CreateBanDialog from "./create-ban-dialog.tsx";
@@ -27,25 +27,41 @@ function formatPendingAge(ageMs: number) {
   return formatDistanceToNow(Date.now() - ageMs, { addSuffix: true });
 }
 
-export default function EventBansManager() {
+interface EventBansManagerProps {
+  readOnly?: boolean;
+  viewerToken?: string;
+  onEndViewSession?: () => void;
+}
+
+export default function EventBansManager({
+  readOnly = false,
+  viewerToken,
+  onEndViewSession,
+}: EventBansManagerProps) {
   const { hasEventBanAccess } = useUserRole();
+  const canEdit = !readOnly && hasEventBanAccess;
+  const queryArgs = viewerToken ? { viewerToken } : {};
+
   const [activeTab, setActiveTab] = useState<"active" | "history" | "offenses">("active");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const activeBans = useQuery(api.eventBans.queries.getActiveBans, {});
+  const activeBans = useQuery(api.eventBans.queries.getActiveBans, queryArgs);
   const {
     results: endedBans,
     status: endedBansStatus,
     loadMore: loadMoreEndedBans,
   } = usePaginatedQuery(
     api.eventBans.queries.getEndedBansPaginated,
-    activeTab === "history" ? {} : "skip",
+    activeTab === "history" ? queryArgs : "skip",
     { initialNumItems: 25 },
   );
-  const syncStatus = useQuery(api.eventBans.queries.getSyncStatus, {});
-  const roleSyncVisibility = useQuery(api.eventBans.queries.getRoleSyncVisibility, {});
-  const offenseCounts = useQuery(api.eventBans.queries.getOffenseCounts, {});
-  const eventPassedMeta = useQuery(api.eventBans.queries.getEventPassedMetadata, {});
+  const syncStatus = useQuery(api.eventBans.queries.getSyncStatus, queryArgs);
+  const roleSyncVisibility = useQuery(
+    api.eventBans.queries.getRoleSyncVisibility,
+    readOnly ? "skip" : {},
+  );
+  const offenseCounts = useQuery(api.eventBans.queries.getOffenseCounts, queryArgs);
+  const eventPassedMeta = useQuery(api.eventBans.queries.getEventPassedMetadata, queryArgs);
   const eventPassedMutation = useMutation(api.eventBans.mutations.eventPassed);
   const undoEventPassedMutation = useMutation(api.eventBans.mutations.undoEventPassed);
   const [isEventPassing, setIsEventPassing] = useState(false);
@@ -181,7 +197,25 @@ export default function EventBansManager() {
         description="Synced to the Mod Log Google Sheet"
         icon={Ban}
         actions={
-          hasEventBanAccess ? (
+          readOnly ? (
+            <>
+              <Badge variant="secondary" className="text-xs">
+                View only
+              </Badge>
+              {onEndViewSession && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="cursor-pointer h-8 text-xs sm:text-sm"
+                  onClick={onEndViewSession}
+                >
+                  <Lock className="mr-1 h-3.5 w-3.5" />
+                  End session
+                </Button>
+              )}
+            </>
+          ) : canEdit ? (
             <>
               <CreateBanDialog />
               <Button
@@ -393,7 +427,11 @@ export default function EventBansManager() {
 
       {/* Content */}
       {activeTab === "offenses" ? (
-        <OffenseCountsTable offenses={filteredOffenses} isLoading={offenseCounts === undefined} />
+        <OffenseCountsTable
+          offenses={filteredOffenses}
+          isLoading={offenseCounts === undefined}
+          canDelete={canEdit}
+        />
       ) : (
         <BansTable
           bans={activeTab === "active" ? filteredActive : filteredEnded}
@@ -409,7 +447,7 @@ export default function EventBansManager() {
                 ? "No active event bans"
                 : "No historical bans yet"
           }
-          canDelete={hasEventBanAccess}
+          canDelete={canEdit}
         />
       )}
       {activeTab === "history" && endedBansStatus === "CanLoadMore" && (
@@ -635,6 +673,7 @@ function BansTable({
 function OffenseCountsTable({
   offenses,
   isLoading,
+  canDelete,
 }: {
   offenses: Array<{
     discordId: string;
@@ -645,8 +684,8 @@ function OffenseCountsTable({
     highestMajor: number;
   }>;
   isLoading: boolean;
+  canDelete: boolean;
 }) {
-  const { hasEventBanAccess } = useUserRole();
   const deleteOffenses = useAction(api.eventBans.sync.deletePlayerOffenses);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
@@ -717,7 +756,7 @@ function OffenseCountsTable({
                   <p className="font-medium text-sm truncate">{entry.playerTag}</p>
                   <p className="text-[10px] text-muted-foreground font-mono">{entry.discordId}</p>
                 </div>
-                {hasEventBanAccess && (
+                {canDelete && (
                   <button
                     onClick={() => handleDeleteOffenses(entry.discordId, entry.playerTag)}
                     className="text-destructive hover:text-destructive/80 cursor-pointer shrink-0"
@@ -761,7 +800,7 @@ function OffenseCountsTable({
                 <th className="text-left p-3 font-medium">Major Offenses</th>
                 <th className="text-left p-3 font-medium">Major Stage</th>
                 <th className="text-left p-3 font-medium">Total</th>
-                {hasEventBanAccess && <th className="p-3 w-10"></th>}
+                {canDelete && <th className="p-3 w-10"></th>}
               </tr>
             </thead>
             <tbody>
@@ -794,7 +833,7 @@ function OffenseCountsTable({
                       {entry.minorCount + entry.majorCount}
                     </span>
                   </td>
-                  {hasEventBanAccess && (
+                  {canDelete && (
                     <td className="p-3">
                       <button
                         onClick={() => handleDeleteOffenses(entry.discordId, entry.playerTag)}

@@ -347,13 +347,7 @@ export const updateSheetBansToActive = internalAction({
 export const deleteBan = action({
   args: { banId: v.id("eventBans") },
   handler: async (ctx, args): Promise<{ success: boolean; removedFromSheet: boolean }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "User not logged in",
-        code: "UNAUTHENTICATED",
-      });
-    }
+    await ctx.runQuery(internal.eventBans.viewerAuth.assertStaffWriteAccess, {});
 
     // Get the ban details before deleting (need discordId + messageId to find sheet row)
     const ban = await ctx.runQuery(internal.eventBans.queries.getBanById, { banId: args.banId });
@@ -463,13 +457,7 @@ export const deletePlayerOffenses = action({
     track: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ deleted: number; removedFromSheet: number }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "User not logged in",
-        code: "UNAUTHENTICATED",
-      });
-    }
+    await ctx.runQuery(internal.eventBans.viewerAuth.assertStaffWriteAccess, {});
 
     // Delete from database
     const result = await ctx.runMutation(internal.eventBans.mutations.deletePlayerOffensesInternal, {

@@ -1114,6 +1114,12 @@ export default defineSchema({
     banType: v.string(),
   }),
 
+  // Short-lived tokens for password-gated read-only event bans access
+  eventBansViewerSessions: defineTable({
+    token: v.string(),
+    expiresAt: v.number(),
+  }).index("by_token", ["token"]),
+
   // ─── Scrim Series Leaderboard ───────────────────────────────────────────────
 
   // A scrim series (e.g. "Season 1") with configurable settings

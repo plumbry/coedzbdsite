@@ -74,3 +74,8 @@ export async function requireEventBanAccess(ctx: QueryCtx | MutationCtx) {
 
   return user;
 }
+
+/** Write access for event bans (admin or event_mod only). */
+export async function requireEventBanWriteAccess(ctx: QueryCtx | MutationCtx) {
+  return await requireEventBanAccess(ctx);
+}

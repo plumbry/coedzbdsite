@@ -2,10 +2,12 @@ import { query, internalQuery } from "../_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { requireEventBanAccess } from "../auth_helpers";
+import { requireEventBanReadAccess, viewerTokenArg } from "./viewerAuth";
 
 export const getActiveBans = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx, args) => {
+    await requireEventBanReadAccess(ctx, args.viewerToken);
     const bans = await ctx.db
       .query("eventBans")
       .withIndex("by_status", (q) => q.eq("status", "ACTIVE"))
@@ -31,8 +33,9 @@ export const getActiveBans = query({
 });
 
 export const getEndedBans = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx, args) => {
+    await requireEventBanReadAccess(ctx, args.viewerToken);
     const bans = await ctx.db
       .query("eventBans")
       .withIndex("by_status", (q) => q.eq("status", "ENDED"))
@@ -58,8 +61,9 @@ export const getEndedBans = query({
 });
 
 export const getEndedBansPaginated = query({
-  args: { paginationOpts: paginationOptsValidator },
+  args: { paginationOpts: paginationOptsValidator, viewerToken: viewerTokenArg },
   handler: async (ctx, args) => {
+    await requireEventBanReadAccess(ctx, args.viewerToken);
     const page = await ctx.db
       .query("eventBans")
       .withIndex("by_status", (q) => q.eq("status", "ENDED"))
@@ -81,8 +85,9 @@ export const getEndedBansPaginated = query({
 });
 
 export const getBansByDiscordId = query({
-  args: { discordId: v.string() },
+  args: { discordId: v.string(), viewerToken: viewerTokenArg },
   handler: async (ctx, args) => {
+    await requireEventBanReadAccess(ctx, args.viewerToken);
     return await ctx.db
       .query("eventBans")
       .withIndex("by_discord_id", (q) => q.eq("discordId", args.discordId))
@@ -91,15 +96,17 @@ export const getBansByDiscordId = query({
 });
 
 export const getEventPassedMetadata = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx, args) => {
+    await requireEventBanReadAccess(ctx, args.viewerToken);
     return await ctx.db.query("eventBansMetadata").first();
   },
 });
 
 export const getSyncStatus = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx, args) => {
+    await requireEventBanReadAccess(ctx, args.viewerToken);
     const activeBans = await ctx.db
       .query("eventBans")
       .withIndex("by_status", (q) => q.eq("status", "ACTIVE"))
@@ -210,8 +217,9 @@ export const getRoleSyncVisibility = query({
 
 // Get offense counts per player (how many minor/major offenses each player has)
 export const getOffenseCounts = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx, args) => {
+    await requireEventBanReadAccess(ctx, args.viewerToken);
     const allBans = await ctx.db.query("eventBans").collect();
 
     // Group by discordId and count offenses per track
@@ -275,6 +283,7 @@ export const getOffenseCounts = query({
 export const searchPlayersForBan = query({
   args: { search: v.string() },
   handler: async (ctx, args) => {
+    await requireEventBanAccess(ctx);
     if (!args.search || args.search.length < 2) return [];
     const searchLower = args.search.toLowerCase();
 
@@ -305,6 +314,7 @@ export const searchPlayersForBan = query({
 export const getPlayerOffenseHistory = query({
   args: { discordId: v.string() },
   handler: async (ctx, args) => {
+    await requireEventBanAccess(ctx);
     if (!args.discordId) return { minorCount: 0, majorCount: 0 };
 
     const bans = await ctx.db

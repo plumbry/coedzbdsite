@@ -35,6 +35,7 @@ import type * as discord_tierMismatches from "../discord/tierMismatches.js";
 import type * as eventBans_mutations from "../eventBans/mutations.js";
 import type * as eventBans_queries from "../eventBans/queries.js";
 import type * as eventBans_sync from "../eventBans/sync.js";
+import type * as eventBans_viewerAuth from "../eventBans/viewerAuth.js";
 import type * as events from "../events.js";
 import type * as events_debugTeamConsolidation from "../events/debugTeamConsolidation.js";
 import type * as events_duoPairs from "../events/duoPairs.js";
@@ -151,6 +152,7 @@ declare const fullApi: ApiFromModules<{
   "eventBans/mutations": typeof eventBans_mutations;
   "eventBans/queries": typeof eventBans_queries;
   "eventBans/sync": typeof eventBans_sync;
+  "eventBans/viewerAuth": typeof eventBans_viewerAuth;
   events: typeof events;
   "events/debugTeamConsolidation": typeof events_debugTeamConsolidation;
   "events/duoPairs": typeof events_duoPairs;

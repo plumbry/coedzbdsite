@@ -1,7 +1,7 @@
 import { internalMutation, mutation } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { v, ConvexError } from "convex/values";
-import { getCurrentUser, getDisplayName } from "../auth_helpers";
+import { getCurrentUser, getDisplayName, requireEventBanWriteAccess } from "../auth_helpers";
 
 const banValidator = v.object({
   discordId: v.string(),
@@ -265,7 +265,7 @@ export const createBan = mutation({
     offenseNumber: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const user = await getCurrentUser(ctx);
+    const user = await requireEventBanWriteAccess(ctx);
 
     const today = new Date();
     const todayStr = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
@@ -314,13 +314,8 @@ export const createBan = mutation({
 export const eventPassed = mutation({
   args: { count: v.optional(v.number()) },
   handler: async (ctx, args): Promise<{ decremented: number; ended: number }> => {
+    const user = await requireEventBanWriteAccess(ctx);
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "User not logged in",
-        code: "UNAUTHENTICATED",
-      });
-    }
 
     const count = args.count ?? 1;
 
@@ -364,15 +359,17 @@ export const eventPassed = mutation({
     // Track when event passed was last used
     const nowISO = new Date().toISOString();
     const existingMeta = await ctx.db.query("eventBansMetadata").first();
+    const passedBy =
+      identity?.name ?? identity?.email ?? getDisplayName(user);
     if (existingMeta) {
       await ctx.db.patch(existingMeta._id, {
         lastEventPassedAt: nowISO,
-        lastEventPassedBy: identity.name ?? identity.email ?? "Unknown",
+        lastEventPassedBy: passedBy,
       });
     } else {
       await ctx.db.insert("eventBansMetadata", {
         lastEventPassedAt: nowISO,
-        lastEventPassedBy: identity.name ?? identity.email ?? "Unknown",
+        lastEventPassedBy: passedBy,
       });
     }
 
@@ -390,13 +387,7 @@ export const eventPassed = mutation({
 export const undoEventPassed = mutation({
   args: {},
   handler: async (ctx): Promise<{ incremented: number; reactivated: number }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "User not logged in",
-        code: "UNAUTHENTICATED",
-      });
-    }
+    await requireEventBanWriteAccess(ctx);
 
     const today = new Date();
     const todayStr = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
