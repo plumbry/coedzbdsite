@@ -57,6 +57,7 @@ import type * as inGameEarnings_mutations from "../inGameEarnings/mutations.js";
 import type * as inGameEarnings_osirionApi from "../inGameEarnings/osirionApi.js";
 import type * as inGameEarnings_queries from "../inGameEarnings/queries.js";
 import type * as leaderboardStats from "../leaderboardStats.js";
+import type * as lib_yunite from "../lib/yunite.js";
 import type * as memberManagement from "../memberManagement.js";
 import type * as migrateHasMatchData from "../migrateHasMatchData.js";
 import type * as migrateMembershipStatus from "../migrateMembershipStatus.js";
@@ -170,6 +171,7 @@ declare const fullApi: ApiFromModules<{
   "inGameEarnings/osirionApi": typeof inGameEarnings_osirionApi;
   "inGameEarnings/queries": typeof inGameEarnings_queries;
   leaderboardStats: typeof leaderboardStats;
+  "lib/yunite": typeof lib_yunite;
   memberManagement: typeof memberManagement;
   migrateHasMatchData: typeof migrateHasMatchData;
   migrateMembershipStatus: typeof migrateMembershipStatus;

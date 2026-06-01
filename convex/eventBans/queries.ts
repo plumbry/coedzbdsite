@@ -1,6 +1,7 @@
 import { query, internalQuery } from "../_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
+import { requireEventBanAccess } from "../auth_helpers";
 
 export const getActiveBans = query({
   args: {},
@@ -111,6 +112,85 @@ export const getSyncStatus = query({
       totalBans: activeBans.length + endedBans.length,
       activeBans: activeBans.length,
       endedBans: endedBans.length,
+    };
+  },
+});
+
+export const getRoleSyncVisibility = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireEventBanAccess(ctx);
+
+    const roleSyncBanTypes = new Set([
+      "Minor Event Ban",
+      "Major Event Ban",
+      "Event Ban",
+      "Probation",
+    ]);
+
+    const unsynced = await ctx.db
+      .query("eventBans")
+      .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", false))
+      .collect();
+    const neverSynced = await ctx.db
+      .query("eventBans")
+      .filter((q) => q.eq(q.field("syncedToDiscord"), undefined))
+      .collect();
+    const pendingRoleAdds = [...unsynced, ...neverSynced].filter((ban) =>
+      roleSyncBanTypes.has(ban.banType),
+    );
+
+    const syncedNotRemoved = await ctx.db
+      .query("eventBans")
+      .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", true))
+      .collect();
+    const queuedRemovals = await ctx.db.query("pendingRoleRemovals").collect();
+    const now = Date.now();
+    const twentyEightDaysMs = 28 * 24 * 60 * 60 * 1000;
+
+    const pendingRoleRemovals = syncedNotRemoved.filter((ban) => {
+      if (ban.roleRemovedFromDiscord) return false;
+      if (!roleSyncBanTypes.has(ban.banType)) return false;
+      if (ban.banType !== "Probation" && ban.status === "ENDED") return true;
+
+      if (ban.banType === "Probation") {
+        const parts = ban.startDate.split("/");
+        if (parts.length === 3) {
+          const startTime = parseDate(ban.startDate).getTime();
+          return now - startTime >= twentyEightDaysMs;
+        }
+      }
+
+      return false;
+    });
+
+    return {
+      pendingRoleAdds: pendingRoleAdds.length,
+      pendingRoleRemovals: pendingRoleRemovals.length + queuedRemovals.length,
+      queuedDeletedBanRoleRemovals: queuedRemovals.length,
+      recentPendingAdds: pendingRoleAdds.slice(0, 5).map((ban) => ({
+        _id: ban._id,
+        playerTag: ban.playerTag,
+        discordId: ban.discordId,
+        banType: ban.banType,
+        status: ban.status,
+      })),
+      recentPendingRemovals: [
+        ...pendingRoleRemovals.slice(0, 5).map((ban) => ({
+          _id: ban._id,
+          playerTag: ban.playerTag,
+          discordId: ban.discordId,
+          banType: ban.banType,
+          source: "eventBans" as const,
+        })),
+        ...queuedRemovals.slice(0, 5).map((entry) => ({
+          _id: entry._id,
+          playerTag: null,
+          discordId: entry.discordId,
+          banType: entry.banType,
+          source: "pendingRoleRemovals" as const,
+        })),
+      ].slice(0, 5),
     };
   },
 });

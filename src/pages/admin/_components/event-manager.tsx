@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -14,7 +15,7 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Loader2, Plus, Edit, Trash2, Calendar, Upload, X, FileDown, DollarSign, Lock, RefreshCw } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, Calendar, Upload, X, FileDown, DollarSign, Lock, RefreshCw, ExternalLink, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/use-user-role.ts";
@@ -370,6 +371,50 @@ export default function EventManager() {
         return <Badge>{type}</Badge>;
     }
   };
+
+  const getLeaderboardCount = (event: NonNullable<typeof events>[number]) => {
+    return [
+      event.standardLeaderboards,
+      event.standardLeaderboardsLobby2,
+      event.qualifierLobby1Leaderboards,
+      event.qualifierLobby2Leaderboards,
+      event.finalsLeaderboards,
+      event.apiLeaderboards,
+    ].reduce((total, list) => total + (list?.filter((url) => url.trim()).length || 0), 0);
+  };
+
+  const getReadinessBadges = (event: NonNullable<typeof events>[number]) => {
+    const badges = [];
+    const leaderboardCount = getLeaderboardCount(event);
+
+    if (event.needsSetup) {
+      badges.push(
+        <Badge key="setup" variant="destructive" className="text-[10px] px-1.5 py-0">
+          <AlertCircle className="mr-1 h-3 w-3" />
+          Needs Setup
+        </Badge>,
+      );
+    }
+
+    if (leaderboardCount > 0) {
+      badges.push(
+        <Badge key="leaderboards" variant="outline" className="text-[10px] px-1.5 py-0">
+          <CheckCircle2 className="mr-1 h-3 w-3" />
+          {leaderboardCount} leaderboard{leaderboardCount === 1 ? "" : "s"}
+        </Badge>,
+      );
+    }
+
+    if (event.discordEventId) {
+      badges.push(
+        <Badge key="discord" variant="secondary" className="text-[10px] px-1.5 py-0">
+          Discord
+        </Badge>,
+      );
+    }
+
+    return badges;
+  };
   
   const renderEventTable = (filteredEvents: typeof events) => {
     if (!filteredEvents || filteredEvents.length === 0) {
@@ -391,6 +436,7 @@ export default function EventManager() {
               <TableHead>Dates</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Leaderboards</TableHead>
+              <TableHead>Readiness</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -398,13 +444,8 @@ export default function EventManager() {
             {filteredEvents.map((event) => (
               <TableRow key={event._id}>
                 <TableCell className="font-medium">
-                  <div className="flex items-center gap-1.5">
-                    {event.name}
-                    {event.needsSetup && (
-                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                        Needs Setup
-                      </Badge>
-                    )}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{event.name}</span>
                     {(event.placementEarningsTopN || event.matchWinEarnings || event.duoPlacementEarningsTopN || event.soloPlacementEarningsTopN) && (
                       <span title="Earnings tracking enabled">
                         <DollarSign className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
@@ -428,7 +469,28 @@ export default function EventManager() {
                   )}
                 </TableCell>
                 <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {getReadinessBadges(event).length > 0 ? (
+                      getReadinessBadges(event)
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        Basic details
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
                   <div className="flex items-center gap-1">
+                    <Button size="sm" variant="ghost" asChild title="Open imports">
+                      <Link to="/admin/uploads">
+                        <Upload className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                    <Button size="sm" variant="ghost" asChild title="Open event results">
+                      <Link to="/admin/event-results">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"

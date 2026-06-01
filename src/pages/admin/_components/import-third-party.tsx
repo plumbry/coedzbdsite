@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useMutation, useQuery, useConvex, useAction, usePaginatedQuery } from "convex/react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
-import { Loader2, ExternalLink, FileUp, RefreshCw, Trash2, Edit, Users, Download, Zap, X, Eye, Search, ChevronDown, ChevronRight, CheckSquare, Square, CalendarPlus, Link2 } from "lucide-react";
+import { Loader2, ExternalLink, FileUp, RefreshCw, Trash2, Edit, Users, Download, Zap, X, Eye, Search, ChevronDown, ChevronRight, CheckSquare, Square, CalendarPlus, Link2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/use-user-role.ts";
@@ -105,6 +105,28 @@ export default function ImportThirdParty() {
     { initialNumItems: 50 }
   );
   const events = useQuery(api.events.management.getAllEvents);
+  const csvDuplicateMatches = useQuery(
+    api.thirdPartyQueries.findPotentialDuplicateImports,
+    isAdmin && activeTab === "csv" && (
+      csvEventName.trim() || csvEventDate.trim() || csvLeaderboardUrl.trim()
+    )
+      ? {
+          eventName: csvEventName,
+          eventDate: csvEventDate || undefined,
+          leaderboardUrl: csvLeaderboardUrl || undefined,
+          source: csvSource,
+        }
+      : "skip",
+  );
+  const manualTournamentIds = tournamentIds
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+  const manualDuplicateMatches = useQuery(
+    api.thirdPartyQueries.findPotentialDuplicateImports,
+    isAdmin && activeTab === "yunite" && showManualIds && manualTournamentIds.length > 0
+      ? { tournamentIds: manualTournamentIds, source: "Yunite" }
+      : "skip",
+  );
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
   const [isPopulatingTeamMembers, setIsPopulatingTeamMembers] = useState(false);
   const [populateProgress, setPopulateProgress] = useState({ current: 0, total: 0, failed: 0 });
@@ -344,6 +366,10 @@ export default function ImportThirdParty() {
     setIsFetchingRecent(true);
     try {
       const result = await listRecentTournaments({});
+      if (!result.success) {
+        toast.error(result.error || "Failed to fetch tournaments");
+        return;
+      }
       setRecentTournaments(result.tournaments);
       setSelectedTournamentIds(new Set());
       setHasFetchedRecent(true);
@@ -966,13 +992,81 @@ export default function ImportThirdParty() {
     return null;
   }
 
+  const renderDuplicateWarning = (
+    matches:
+      | Array<{
+          _id: Id<"thirdPartyImports">;
+          eventName: string;
+          eventDate?: string;
+          source: string;
+          totalPlayers: number;
+          reasons: string[];
+        }>
+      | undefined,
+  ) => {
+    if (!matches || matches.length === 0) return null;
+
+    return (
+      <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+          <div className="space-y-2">
+            <div>
+              <p className="text-sm font-medium">Possible duplicate import</p>
+              <p className="text-xs">
+                This is warning-only. Imports are still allowed and existing import
+                behaviour is unchanged.
+              </p>
+            </div>
+            <div className="space-y-1">
+              {matches.map((match) => (
+                <div key={match._id} className="text-xs">
+                  <span className="font-medium">{match.eventName}</span>
+                  {match.eventDate ? ` - ${match.eventDate}` : ""}
+                  <span className="text-amber-800">
+                    {" "}
+                    ({match.source}, {match.totalPlayers} players, {match.reasons.join(", ")})
+                  </span>
+                </div>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 border-amber-300 bg-white/70 text-amber-950 hover:bg-white"
+              onClick={() => setActiveTab("history")}
+            >
+              View history
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm">Import Leaderboard Data</CardTitle>
-        <CardDescription className="text-xs">
-          Pull leaderboards via Yunite API (primary), CSV for third-party events, or view import history
-        </CardDescription>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="text-sm">Import Leaderboard Data</CardTitle>
+            <CardDescription className="text-xs">
+              Pull leaderboards via Yunite API (primary), CSV for third-party events, or view import history
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2">
+              <Link to="/admin">Admin</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2">
+              <Link to="/admin/events-manager">Events</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2">
+              <Link to="/admin/event-results">Results</Link>
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="py-3">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -1179,6 +1273,7 @@ export default function ImportThirdParty() {
                         )}
                       </div>
                     ))}
+                    {renderDuplicateWarning(manualDuplicateMatches)}
                     <Button
                       onClick={handleBulkTournamentImport}
                       disabled={isImportingTournaments || tournamentIds.every(id => !id.trim())}
@@ -1324,6 +1419,8 @@ export default function ImportThirdParty() {
                   </TabsContent>
                 </Tabs>
               </div>
+
+              {renderDuplicateWarning(csvDuplicateMatches)}
               
               <Button
                 onClick={handleCSVImport}

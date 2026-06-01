@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api.js";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import {
@@ -23,9 +25,12 @@ import {
   Zap,
   MessageSquare,
   UserCog,
+  AlertCircle,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 
 type HubLink = {
   title: string;
@@ -69,8 +74,62 @@ function HubSectionGrid({ title, links }: { title: string; links: HubLink[] }) {
   );
 }
 
+function OperationsCard({
+  title,
+  value,
+  description,
+  href,
+  tone = "neutral",
+}: {
+  title: string;
+  value: number | string;
+  description: string;
+  href: string;
+  tone?: "neutral" | "attention" | "good";
+}) {
+  const icon =
+    tone === "attention" ? (
+      <AlertCircle className="h-4 w-4 text-amber-600" />
+    ) : tone === "good" ? (
+      <CheckCircle2 className="h-4 w-4 text-green-600" />
+    ) : (
+      <ListChecks className="h-4 w-4 text-primary" />
+    );
+
+  return (
+    <Link to={href} className="block group">
+      <Card className="h-full py-0 transition-colors group-hover:border-primary/50 cursor-pointer">
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">{title}</p>
+              <p className="text-2xl font-bold">{value}</p>
+              <p className="text-xs text-muted-foreground">{description}</p>
+            </div>
+            <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              {icon}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
 export default function AdminHubPage() {
   const { isAdmin, isModeratorOrAdmin, hasEventBanAccess } = useUserRole();
+  const eventSummary = useQuery(
+    api.events.management.getOperationsSummary,
+    isModeratorOrAdmin ? {} : "skip",
+  );
+  const importSummary = useQuery(
+    api.thirdPartyQueries.getImportOperationsSummary,
+    isAdmin ? {} : "skip",
+  );
+  const banRoleSync = useQuery(
+    api.eventBans.queries.getRoleSyncVisibility,
+    hasEventBanAccess ? {} : "skip",
+  );
 
   const sections: HubSection[] = [
     {
@@ -264,6 +323,65 @@ export default function AdminHubPage() {
       authTitle="Sign in to access the admin panel"
     >
       <div className="space-y-8">
+        {(isModeratorOrAdmin || isAdmin || hasEventBanAccess) && (
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Operations
+              </h2>
+              <Badge variant="outline" className="text-[10px]">
+                Read-only
+              </Badge>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {isModeratorOrAdmin && (
+                <OperationsCard
+                  title="Events needing setup"
+                  value={eventSummary?.needsSetup ?? "..."}
+                  description="Review readiness badges in Events Manager."
+                  href="/admin/events-manager"
+                  tone={eventSummary && eventSummary.needsSetup > 0 ? "attention" : "good"}
+                />
+              )}
+              {isAdmin && (
+                <>
+                  <OperationsCard
+                    title="Unmatched import players"
+                    value={importSummary?.unmatchedPlayers ?? "..."}
+                    description="Resolve matches from Uploads & Imports."
+                    href="/admin/uploads"
+                    tone={importSummary && importSummary.unmatchedPlayers > 0 ? "attention" : "good"}
+                  />
+                  <OperationsCard
+                    title="Unlinked imports"
+                    value={importSummary?.unlinkedImports ?? "..."}
+                    description="Link imports to existing events where useful."
+                    href="/admin/uploads"
+                    tone={importSummary && importSummary.unlinkedImports > 0 ? "attention" : "good"}
+                  />
+                </>
+              )}
+              {hasEventBanAccess && (
+                <OperationsCard
+                  title="Pending Discord role sync"
+                  value={
+                    banRoleSync
+                      ? banRoleSync.pendingRoleAdds + banRoleSync.pendingRoleRemovals
+                      : "..."
+                  }
+                  description="Visibility only; bot sync behaviour is unchanged."
+                  href="/admin/event-bans"
+                  tone={
+                    banRoleSync &&
+                    banRoleSync.pendingRoleAdds + banRoleSync.pendingRoleRemovals > 0
+                      ? "attention"
+                      : "good"
+                  }
+                />
+              )}
+            </div>
+          </section>
+        )}
         {visibleSections.map((section) => (
           <HubSectionGrid key={section.title} title={section.title} links={section.links} />
         ))}

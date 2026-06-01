@@ -2,35 +2,12 @@ import { internalMutation, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
 import { touchPlayerEventParticipationOnInsert } from "./helpers/playerEventStats";
-import type { Id, Doc } from "./_generated/dataModel.d.ts";
-
-// Helper to extract Yunite tournament ID from various URL formats
-// e.g. "https://yunite.xyz/leaderboard/ABC-DEF" → "ABC-DEF"
-// e.g. "yunite.xyz/leaderboard/ABC-DEF" → "ABC-DEF"
-function extractTournamentIdFromUrl(url: string): string | null {
-  const match = url.match(/\/leaderboard\/([^/\s?#]+)/);
-  return match ? match[1] : null;
-}
-
-// Helper to extract tournament ID from a leaderboardId field
-// e.g. "yunite-ABC-DEF" → "ABC-DEF"
-function extractTournamentIdFromLeaderboardId(leaderboardId: string): string | null {
-  if (leaderboardId.startsWith("yunite-")) {
-    return leaderboardId.slice(7);
-  }
-  return null;
-}
-
-// Helper to collect all leaderboard URLs from an event document
-function collectEventLeaderboardUrls(event: Doc<"events">): string[] {
-  const urls: string[] = [];
-  if (event.standardLeaderboards) urls.push(...event.standardLeaderboards);
-  if (event.qualifierLobby1Leaderboards) urls.push(...event.qualifierLobby1Leaderboards);
-  if (event.qualifierLobby2Leaderboards) urls.push(...event.qualifierLobby2Leaderboards);
-  if (event.finalsLeaderboards) urls.push(...event.finalsLeaderboards);
-  if (event.apiLeaderboards) urls.push(...event.apiLeaderboards);
-  return urls.filter(u => u.trim().length > 0);
-}
+import type { Id } from "./_generated/dataModel.d.ts";
+import {
+  collectEventLeaderboardUrls,
+  extractTournamentIdFromLeaderboardId,
+  extractTournamentIdFromUrl,
+} from "./lib/yunite";
 
 // Helper to check existing import
 export const checkExistingImport = internalMutation({
@@ -90,7 +67,9 @@ export const saveImport = internalMutation({
     if (importTournamentId) {
       const allEvents = await ctx.db.query("events").collect();
       for (const event of allEvents) {
-        const eventUrls = collectEventLeaderboardUrls(event);
+        const eventUrls = collectEventLeaderboardUrls(event, {
+          includeStandardLobby2: false,
+        });
         for (const url of eventUrls) {
           const eventTournamentId = extractTournamentIdFromUrl(url);
           if (eventTournamentId && eventTournamentId === importTournamentId) {
@@ -1265,7 +1244,9 @@ export const createImportRecord = mutation({
     if (importTournamentId) {
       const allEvents = await ctx.db.query("events").collect();
       for (const event of allEvents) {
-        const eventUrls = collectEventLeaderboardUrls(event);
+        const eventUrls = collectEventLeaderboardUrls(event, {
+          includeStandardLobby2: false,
+        });
         for (const url of eventUrls) {
           const eventTournamentId = extractTournamentIdFromUrl(url);
           if (eventTournamentId && eventTournamentId === importTournamentId) {

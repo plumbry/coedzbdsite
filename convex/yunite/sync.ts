@@ -1015,6 +1015,7 @@ export const listRecentTournaments = action({
   args: {},
   handler: async (ctx): Promise<{
     success: boolean;
+    error?: string;
     tournaments: Array<{
       id: string;
       name: string;
@@ -1029,10 +1030,18 @@ export const listRecentTournaments = action({
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
 
     if (!yuniteApiKey) {
-      throw new Error("YUNITE_API_KEY environment variable is not set");
+      return {
+        success: false,
+        error: "YUNITE_API_KEY is not set in Convex environment variables.",
+        tournaments: [],
+      };
     }
     if (!yuniteGuildId) {
-      throw new Error("YUNITE_GUILD_ID environment variable is not set");
+      return {
+        success: false,
+        error: "YUNITE_GUILD_ID is not set in Convex environment variables.",
+        tournaments: [],
+      };
     }
 
     const url = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments`;

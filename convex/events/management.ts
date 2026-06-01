@@ -4,24 +4,7 @@ import { requireAdmin, requireModeratorOrAdmin, getDisplayName } from "../auth_h
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel.d.ts";
 import type { MutationCtx } from "../_generated/server";
-
-// Helper to extract Yunite tournament ID from URL
-function extractTournamentIdFromUrl(url: string): string | null {
-  const match = url.match(/\/leaderboard\/([^/\s?#]+)/);
-  return match ? match[1] : null;
-}
-
-// Helper to collect all leaderboard URLs from an event
-function collectEventLeaderboardUrls(event: Doc<"events">): string[] {
-  const urls: string[] = [];
-  if (event.standardLeaderboards) urls.push(...event.standardLeaderboards);
-  if (event.standardLeaderboardsLobby2) urls.push(...event.standardLeaderboardsLobby2);
-  if (event.qualifierLobby1Leaderboards) urls.push(...event.qualifierLobby1Leaderboards);
-  if (event.qualifierLobby2Leaderboards) urls.push(...event.qualifierLobby2Leaderboards);
-  if (event.finalsLeaderboards) urls.push(...event.finalsLeaderboards);
-  if (event.apiLeaderboards) urls.push(...event.apiLeaderboards);
-  return urls.filter(u => u.trim().length > 0);
-}
+import { collectEventLeaderboardUrls, extractTournamentIdFromUrl } from "../lib/yunite";
 
 // Auto-link existing unlinked imports to an event based on matching leaderboard URLs
 async function autoLinkImportsToEvent(
@@ -102,6 +85,65 @@ export const getAllEvents = query({
     );
     
     return eventsWithDetails;
+  },
+});
+
+export const getOperationsSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireModeratorOrAdmin(ctx);
+
+    const events = await ctx.db.query("events").order("desc").take(100);
+    const now = Date.now();
+    const eventDetails = await Promise.all(
+      events.map(async (event) => {
+        const leaderboardCount = collectEventLeaderboardUrls(event).length;
+        const linkedImports = await ctx.db
+          .query("thirdPartyImports")
+          .withIndex("by_event", (q) => q.eq("eventId", event._id))
+          .take(20);
+        const unmatchedPlayers = linkedImports.reduce(
+          (total, importRecord) => total + importRecord.playersUnmatched,
+          0,
+        );
+        const unsyncedYuniteImports = linkedImports.filter(
+          (importRecord) =>
+            (importRecord.source === "Yunite" ||
+              importRecord.source === "Yunite API" ||
+              importRecord.importMethod === "api") &&
+            importRecord.matchDataSynced !== true,
+        ).length;
+
+        return {
+          _id: event._id,
+          name: event.name,
+          type: event.type,
+          mode: event.mode,
+          status: computeEventStatus(event.startDate, event.endDate),
+          startDate: event.startDate,
+          endDate: event.endDate,
+          needsSetup: event.needsSetup === true,
+          leaderboardCount,
+          linkedImportCount: linkedImports.length,
+          unmatchedPlayers,
+          unsyncedYuniteImports,
+        };
+      }),
+    );
+
+    return {
+      totalEventsChecked: events.length,
+      generatedAt: now,
+      needsSetup: eventDetails.filter((event) => event.needsSetup).length,
+      withLinkedImports: eventDetails.filter((event) => event.linkedImportCount > 0)
+        .length,
+      withUnmatchedImports: eventDetails.filter((event) => event.unmatchedPlayers > 0)
+        .length,
+      withUnsyncedYuniteData: eventDetails.filter(
+        (event) => event.unsyncedYuniteImports > 0,
+      ).length,
+      recentEvents: eventDetails.slice(0, 8),
+    };
   },
 });
 

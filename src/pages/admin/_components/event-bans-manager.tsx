@@ -39,6 +39,7 @@ export default function EventBansManager() {
     { initialNumItems: 25 },
   );
   const syncStatus = useQuery(api.eventBans.queries.getSyncStatus, {});
+  const roleSyncVisibility = useQuery(api.eventBans.queries.getRoleSyncVisibility, {});
   const offenseCounts = useQuery(api.eventBans.queries.getOffenseCounts, {});
   const eventPassedMeta = useQuery(api.eventBans.queries.getEventPassedMetadata, {});
   const eventPassedMutation = useMutation(api.eventBans.mutations.eventPassed);
@@ -236,7 +237,7 @@ export default function EventBansManager() {
 
       {/* Stats */}
       {syncStatus && (
-        <div className="grid grid-cols-3 gap-1.5 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-4">
           <Card>
             <CardContent className="p-2 sm:pt-6 sm:p-6">
               <div className="flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3">
@@ -276,8 +277,46 @@ export default function EventBansManager() {
               </div>
             </CardContent>
           </Card>
+          <Card>
+            <CardContent className="p-2 sm:pt-6 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3">
+                <div className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                  <AlertTriangle className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-amber-600" />
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-base sm:text-2xl font-bold">
+                    {roleSyncVisibility
+                      ? roleSyncVisibility.pendingRoleAdds + roleSyncVisibility.pendingRoleRemovals
+                      : "-"}
+                  </p>
+                  <p className="text-[9px] sm:text-xs text-muted-foreground">Role sync</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
+
+      {roleSyncVisibility &&
+        roleSyncVisibility.pendingRoleAdds + roleSyncVisibility.pendingRoleRemovals > 0 && (
+          <Card className="border-amber-300 bg-amber-50">
+            <CardContent className="p-3 text-sm text-amber-950">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+                <div>
+                  <p className="font-medium">Discord role sync pending</p>
+                  <p className="text-xs">
+                    {roleSyncVisibility.pendingRoleAdds} add
+                    {roleSyncVisibility.pendingRoleAdds === 1 ? "" : "s"} and{" "}
+                    {roleSyncVisibility.pendingRoleRemovals} removal
+                    {roleSyncVisibility.pendingRoleRemovals === 1 ? "" : "s"} are waiting
+                    for the existing bot polling flow. No sync behaviour has changed.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
       {/* Tabs & Search */}
       <div className="flex flex-col gap-2 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
