@@ -46,7 +46,6 @@ export default function EventBansPasswordGate({
     <AuthGate
       title="Event Bans"
       description="Enter the view password to see active bans and history. This access is read-only."
-      className="w-full"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-left">
         <div className="space-y-2">
@@ -76,7 +75,7 @@ export default function EventBansPasswordGate({
           <p className="text-xs text-muted-foreground">Event mods and admins</p>
           <SignInButton
             variant="outline"
-            className="w-full cursor-pointer"
+            className="cursor-pointer"
             signInText="Sign in to edit bans"
           />
         </div>

@@ -1,7 +1,7 @@
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import PageShell, { AdminMain, type PageShellMaxWidth } from "@/components/page-shell.tsx";
+import { AdminMain, type PageShellMaxWidth } from "@/components/page-shell.tsx";
 import PageHeader, { type PageHeaderProps } from "@/components/page-header.tsx";
 import AuthGate from "@/components/auth-gate.tsx";
 import RoleGate from "@/components/role-gate.tsx";
@@ -92,17 +92,17 @@ export default function AdminPageLayout({
   return (
     <>
       <Unauthenticated>
-        <PageShell showSiteHeader={showSiteHeader}>
+        <div className="flex flex-1 w-full items-center justify-center px-4 py-12">
           <AuthGate title={authTitle}>
             <SignInButton />
           </AuthGate>
-        </PageShell>
+        </div>
       </Unauthenticated>
 
       <AuthLoading>
-        <PageShell showSiteHeader={showSiteHeader}>
-          <Skeleton className="h-64 w-full" />
-        </PageShell>
+        <div className="flex flex-1 w-full items-center justify-center px-4 py-12">
+          <Skeleton className="h-48 w-full max-w-sm" />
+        </div>
       </AuthLoading>
 
       <Authenticated>
