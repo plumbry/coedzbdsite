@@ -39,8 +39,9 @@ export default function FuzzyMatches() {
       <Card>
         <CardHeader>
           <CardTitle>Potential Matches</CardTitle>
-          <CardDescription>
-            Review and approve suggested matches based on username similarity
+            <CardDescription>
+            Review and approve suggested matches based on username similarity. Imports never
+            auto-link fuzzy matches — only explicit IDs and exact usernames match during import.
           </CardDescription>
         </CardHeader>
         <CardContent>

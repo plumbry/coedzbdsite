@@ -532,7 +532,7 @@ export default function EventManager() {
       const result = await syncDiscordEvents();
       if (result.imported > 0 || result.removed > 0) {
         toast.success(
-          `Discord sync complete: ${result.imported} imported, ${result.skipped} skipped, ${result.removed} removed`,
+          `Discord sync complete: ${result.imported} imported, ${result.updated} updated, ${result.skipped} skipped, ${result.removed} removed`,
         );
       } else {
         toast.info("Discord sync complete: no new events to import");

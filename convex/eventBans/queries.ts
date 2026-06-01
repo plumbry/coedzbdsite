@@ -164,16 +164,27 @@ export const getRoleSyncVisibility = query({
       return false;
     });
 
+    const pendingAddAges = pendingRoleAdds.map((ban) => now - ban._creationTime);
+    const pendingRemovalAges = [
+      ...pendingRoleRemovals.map((ban) => now - ban._creationTime),
+      ...queuedRemovals.map((entry) => now - entry._creationTime),
+    ];
+
     return {
       pendingRoleAdds: pendingRoleAdds.length,
       pendingRoleRemovals: pendingRoleRemovals.length + queuedRemovals.length,
       queuedDeletedBanRoleRemovals: queuedRemovals.length,
+      oldestPendingAddAgeMs:
+        pendingAddAges.length > 0 ? Math.max(...pendingAddAges) : null,
+      oldestPendingRemovalAgeMs:
+        pendingRemovalAges.length > 0 ? Math.max(...pendingRemovalAges) : null,
       recentPendingAdds: pendingRoleAdds.slice(0, 5).map((ban) => ({
         _id: ban._id,
         playerTag: ban.playerTag,
         discordId: ban.discordId,
         banType: ban.banType,
         status: ban.status,
+        pendingAgeMs: now - ban._creationTime,
       })),
       recentPendingRemovals: [
         ...pendingRoleRemovals.slice(0, 5).map((ban) => ({
@@ -182,6 +193,7 @@ export const getRoleSyncVisibility = query({
           discordId: ban.discordId,
           banType: ban.banType,
           source: "eventBans" as const,
+          pendingAgeMs: now - ban._creationTime,
         })),
         ...queuedRemovals.slice(0, 5).map((entry) => ({
           _id: entry._id,
@@ -189,6 +201,7 @@ export const getRoleSyncVisibility = query({
           discordId: entry.discordId,
           banType: entry.banType,
           source: "pendingRoleRemovals" as const,
+          pendingAgeMs: now - entry._creationTime,
         })),
       ].slice(0, 5),
     };

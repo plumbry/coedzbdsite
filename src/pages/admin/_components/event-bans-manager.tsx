@@ -23,6 +23,10 @@ type PendingConfirm = {
   onConfirm: () => Promise<void>;
 } | null;
 
+function formatPendingAge(ageMs: number) {
+  return formatDistanceToNow(Date.now() - ageMs, { addSuffix: true });
+}
+
 export default function EventBansManager() {
   const { hasEventBanAccess } = useUserRole();
   const [activeTab, setActiveTab] = useState<"active" | "history" | "offenses">("active");
@@ -311,6 +315,20 @@ export default function EventBansManager() {
                     {roleSyncVisibility.pendingRoleRemovals} removal
                     {roleSyncVisibility.pendingRoleRemovals === 1 ? "" : "s"} are waiting
                     for the existing bot polling flow. No sync behaviour has changed.
+                    {roleSyncVisibility.oldestPendingAddAgeMs !== null && (
+                      <>
+                        {" "}
+                        Oldest pending add:{" "}
+                        {formatPendingAge(roleSyncVisibility.oldestPendingAddAgeMs)}.
+                      </>
+                    )}
+                    {roleSyncVisibility.oldestPendingRemovalAgeMs !== null && (
+                      <>
+                        {" "}
+                        Oldest pending removal:{" "}
+                        {formatPendingAge(roleSyncVisibility.oldestPendingRemovalAgeMs)}.
+                      </>
+                    )}
                   </p>
                 </div>
               </div>

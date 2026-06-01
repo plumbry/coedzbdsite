@@ -4,6 +4,8 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { extractRawKillEvents } from "./killCreditHelpers";
+import { matchPlayerForImport } from "../lib/playerIdentity";
+import type { PlayerMatchFields } from "../lib/playerIdentity";
 
 interface YuniteTournament {
   id: string;
@@ -73,7 +75,12 @@ export const syncYuniteTournaments = action({
         syncType: "yunite",
         status: "in_progress",
       });
-      
+
+      const playersForMatching: PlayerMatchFields[] = await ctx.runQuery(
+        internal.players.importMatching.listPlayersForImportMatching,
+        {},
+      );
+
       let tournaments: YuniteTournament[] = [];
       
       if (args.tournamentIds && args.tournamentIds.length > 0) {
@@ -304,28 +311,27 @@ export const syncYuniteTournaments = action({
           // Note: Player matching includes ALL players (active and archived) 
           // to ensure historical data stays linked even after archiving
           for (const user of usersToProcess) {
-            let player = null;
-            let matched = false;
-            let epicUsername: string | undefined = user.epicName;
-            
-            // Try to find player by Discord ID first (includes archived players)
-            if (user.discordId) {
-              player = await ctx.runQuery(api.yunite.findPlayerByDiscordId, {
-                discordUserId: user.discordId,
-              });
-              if (player) {
-                matched = true;
-                epicUsername = player.epicUsername || undefined;
-              }
-            }
-            
-            // If not found by Discord ID and we have Epic username, try that (includes archived players)
-            if (!player && user.epicName) {
-              player = await ctx.runQuery(api.yunite.findPlayerByEpicUsername, {
+            const { player: matchedPlayerDoc } = matchPlayerForImport(
+              playersForMatching,
+              {
+                discordId: user.discordId,
+                epicId: user.epicId,
                 epicUsername: user.epicName,
-              });
-              matched = !!player;
-              epicUsername = user.epicName;
+              },
+            );
+
+            const player = matchedPlayerDoc
+              ? await ctx.runQuery(
+                  internal.players.importMatching.getPlayerDocumentById,
+                  { playerId: matchedPlayerDoc._id },
+                )
+              : null;
+
+            const matched = !!player;
+            let epicUsername: string | undefined = user.epicName;
+
+            if (player) {
+              epicUsername = player.epicUsername || user.epicName;
             }
             
             // If matched and we have an epicId from Yunite, update the player's epicId (with history tracking)

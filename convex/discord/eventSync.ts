@@ -17,6 +17,7 @@ interface DiscordScheduledEvent {
 type SyncResult = {
   success: boolean;
   imported: number;
+  updated: number;
   skipped: number;
   removed: number;
   errors: string[];
@@ -55,8 +56,13 @@ async function fetchAndSyncDiscordEvents(ctx: ActionCtx): Promise<SyncResult> {
   );
 
   // Run the internal mutation to process the sync
-  const result: { imported: number; skipped: number; removed: number; errors: string[] } =
-    await ctx.runMutation(internal.discord.eventSyncMutations.processDiscordEventSync, {
+  const result: {
+    imported: number;
+    updated: number;
+    skipped: number;
+    removed: number;
+    errors: string[];
+  } = await ctx.runMutation(internal.discord.eventSyncMutations.processDiscordEventSync, {
       discordEvents: activeEvents.map((e) => ({
         id: e.id,
         name: e.name,

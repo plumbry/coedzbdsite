@@ -15,11 +15,13 @@ export const processDiscordEventSync = internalMutation({
   },
   handler: async (ctx, args): Promise<{
     imported: number;
+    updated: number;
     skipped: number;
     removed: number;
     errors: string[];
   }> => {
     let imported = 0;
+    let updated = 0;
     let skipped = 0;
     let removed = 0;
     const errors: string[] = [];
@@ -53,7 +55,13 @@ export const processDiscordEventSync = internalMutation({
       .then((users) => users.find((u) => u.role === "admin"));
 
     if (!adminUser) {
-      return { imported: 0, skipped: 0, removed, errors: ["No admin user found to attribute events to"] };
+      return {
+        imported: 0,
+        updated: 0,
+        skipped: 0,
+        removed,
+        errors: ["No admin user found to attribute events to"],
+      };
     }
 
     // Import new Discord events
@@ -68,7 +76,46 @@ export const processDiscordEventSync = internalMutation({
           .first();
 
         if (existingByDiscordId) {
-          skipped++;
+          const patch: {
+            name?: string;
+            startDate?: string;
+            endDate?: string;
+            description?: string;
+            status?: "upcoming" | "ongoing" | "completed";
+          } = {};
+
+          if (existingByDiscordId.name !== discordEvent.name) {
+            patch.name = discordEvent.name;
+          }
+          if (existingByDiscordId.startDate !== discordEvent.startTime) {
+            patch.startDate = discordEvent.startTime;
+          }
+          if (existingByDiscordId.endDate !== discordEvent.endTime) {
+            patch.endDate = discordEvent.endTime;
+          }
+          const nextDescription = discordEvent.description ?? undefined;
+          if (existingByDiscordId.description !== nextDescription) {
+            patch.description = nextDescription;
+          }
+
+          const startDate = new Date(discordEvent.startTime);
+          const endDate = new Date(discordEvent.endTime);
+          let status: "upcoming" | "ongoing" | "completed" = "upcoming";
+          if (now > endDate) {
+            status = "completed";
+          } else if (now >= startDate) {
+            status = "ongoing";
+          }
+          if (existingByDiscordId.status !== status) {
+            patch.status = status;
+          }
+
+          if (Object.keys(patch).length > 0) {
+            await ctx.db.patch(existingByDiscordId._id, patch);
+            updated++;
+          } else {
+            skipped++;
+          }
           continue;
         }
 
@@ -118,6 +165,6 @@ export const processDiscordEventSync = internalMutation({
       }
     }
 
-    return { imported, skipped, removed, errors };
+    return { imported, updated, skipped, removed, errors };
   },
 });

@@ -8,6 +8,20 @@ import {
   extractTournamentIdFromLeaderboardId,
   extractTournamentIdFromUrl,
 } from "./lib/yunite";
+import { matchPlayerForImport } from "./lib/playerIdentity";
+import type { Doc } from "./_generated/dataModel.d.ts";
+
+function findPlayerForImportEntry(
+  players: Doc<"players">[],
+  entry: {
+    discordId?: string | null;
+    epicId?: string | null;
+    epicUsername?: string | null;
+    discordUsername?: string | null;
+  },
+) {
+  return matchPlayerForImport(players, entry).player;
+}
 
 // Helper to check existing import
 export const checkExistingImport = internalMutation({
@@ -96,39 +110,18 @@ export const saveImport = internalMutation({
     
     // Process each entry
     for (const entry of args.entries) {
-      // Try to match player
-      let matchedPlayer = null;
-      
-      // PRIORITY 1: Try Discord ID match (most reliable)
-      if (entry.discordId) {
-        const cleanDiscordId = entry.discordId.trim().replace(/['"]/g, '');
-        matchedPlayer = allPlayers.find(
-          p => p.discordUserId && p.discordUserId.trim() === cleanDiscordId
-        );
-      }
-      
-      // PRIORITY 2: Try Epic username match (case-insensitive, with null checks)
-      if (!matchedPlayer && entry.epicUsername) {
-        matchedPlayer = allPlayers.find(
-          p => p.epicUsername && 
-               p.epicUsername.toLowerCase() === entry.epicUsername.toLowerCase()
-        );
-      }
-      
-      // PRIORITY 3: Try Discord username (case-insensitive, with null checks)
-      if (!matchedPlayer && entry.discordUsername) {
-        matchedPlayer = allPlayers.find(
-          p => p.discordUsername && 
-               p.discordUsername.toLowerCase() === entry.discordUsername!.toLowerCase()
-        );
-      }
-      
+      const matchedPlayer = findPlayerForImportEntry(allPlayers, {
+        discordId: entry.discordId,
+        epicUsername: entry.epicUsername,
+        discordUsername: entry.discordUsername,
+      });
+
       if (matchedPlayer) {
         playersMatched++;
       } else {
         playersUnmatched++;
       }
-      
+
       // Save the result
       if (matchedPlayer?._id) {
         await touchPlayerEventParticipationOnInsert(
@@ -256,39 +249,18 @@ export const importFromCSV = mutation({
     
     // Process each entry
     for (const entry of args.entries) {
-      // Try to match player
-      let matchedPlayer = null;
-      
-      // PRIORITY 1: Try Discord ID match (most reliable)
-      if (entry.discordId) {
-        const cleanDiscordId = entry.discordId.trim().replace(/['"]/g, '');
-        matchedPlayer = allPlayers.find(
-          p => p.discordUserId && p.discordUserId.trim() === cleanDiscordId
-        );
-      }
-      
-      // PRIORITY 2: Try Epic username match (case-insensitive, with null checks)
-      if (!matchedPlayer && entry.epicUsername) {
-        matchedPlayer = allPlayers.find(
-          p => p.epicUsername && 
-               p.epicUsername.toLowerCase() === entry.epicUsername.toLowerCase()
-        );
-      }
-      
-      // PRIORITY 3: Try Discord username (case-insensitive, with null checks)
-      if (!matchedPlayer && entry.discordUsername) {
-        matchedPlayer = allPlayers.find(
-          p => p.discordUsername && 
-               p.discordUsername.toLowerCase() === entry.discordUsername!.toLowerCase()
-        );
-      }
-      
+      const matchedPlayer = findPlayerForImportEntry(allPlayers, {
+        discordId: entry.discordId,
+        epicUsername: entry.epicUsername,
+        discordUsername: entry.discordUsername,
+      });
+
       if (matchedPlayer) {
         playersMatched++;
       } else {
         playersUnmatched++;
       }
-      
+
       // Save the result
       if (matchedPlayer?._id) {
         await touchPlayerEventParticipationOnInsert(
@@ -448,32 +420,13 @@ export const rematchImport = mutation({
     
     // Re-match each result
     for (const result of results) {
-      let matchedPlayer = null;
-      
-      // PRIORITY 1: Try Discord ID match (most reliable)
-      if (result.discordId) {
-        const cleanDiscordId = result.discordId.trim().replace(/['"]/g, '');
-        matchedPlayer = allPlayers.find(
-          p => p.discordUserId && p.discordUserId.trim() === cleanDiscordId
-        );
-      }
-      
-      // PRIORITY 2: Try Epic username match (case-insensitive, with null checks)
-      if (!matchedPlayer && result.epicUsername) {
-        matchedPlayer = allPlayers.find(
-          p => p.epicUsername && 
-               p.epicUsername.toLowerCase() === result.epicUsername.toLowerCase()
-        );
-      }
-      
-      // PRIORITY 3: Try Discord username (case-insensitive, with null checks)
-      if (!matchedPlayer && result.discordUsername) {
-        matchedPlayer = allPlayers.find(
-          p => p.discordUsername && 
-               p.discordUsername.toLowerCase() === result.discordUsername!.toLowerCase()
-        );
-      }
-      
+      const matchedPlayer = findPlayerForImportEntry(allPlayers, {
+        discordId: result.discordId,
+        epicId: result.epicId,
+        epicUsername: result.epicUsername,
+        discordUsername: result.discordUsername,
+      });
+
       const wasMatched = result.matched;
       const isNowMatched = !!matchedPlayer;
       
@@ -581,34 +534,14 @@ export const refreshAllImports = mutation({
       // Re-match each result
       for (const result of results) {
         const wasMatched = result.matched;
-        
-        // Try to match player
-        let matchedPlayer = null;
-        
-        // PRIORITY 1: Try Discord ID match (most reliable)
-        if (result.discordId) {
-          const cleanDiscordId = result.discordId.trim().replace(/['"]/g, '');
-          matchedPlayer = allPlayers.find(
-            p => p.discordUserId && p.discordUserId.trim() === cleanDiscordId
-          );
-        }
-        
-        // PRIORITY 2: Try Epic username match (case-insensitive, with null checks)
-        if (!matchedPlayer && result.epicUsername) {
-          matchedPlayer = allPlayers.find(
-            p => p.epicUsername && 
-                 p.epicUsername.toLowerCase() === result.epicUsername.toLowerCase()
-          );
-        }
-        
-        // PRIORITY 3: Try Discord username (case-insensitive, with null checks)
-        if (!matchedPlayer && result.discordUsername) {
-          matchedPlayer = allPlayers.find(
-            p => p.discordUsername && 
-                 p.discordUsername.toLowerCase() === result.discordUsername!.toLowerCase()
-          );
-        }
-        
+
+        const matchedPlayer = findPlayerForImportEntry(allPlayers, {
+          discordId: result.discordId,
+          epicId: result.epicId,
+          epicUsername: result.epicUsername,
+          discordUsername: result.discordUsername,
+        });
+
         // Update the result
         if (matchedPlayer) {
           playersMatched++;
