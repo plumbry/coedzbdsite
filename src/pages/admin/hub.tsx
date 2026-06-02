@@ -211,6 +211,12 @@ export default function AdminHubPage() {
           icon: BarChart3,
         },
         {
+          title: "Audience Insights",
+          description: "Gender, tier, tenure, and events-played breakdowns.",
+          href: "/admin/audience-insights",
+          icon: Users,
+        },
+        {
           title: "Tier Re-Evaluation",
           description: "Automatic tier promotion and demotion suggestions.",
           href: "/admin/tier-re-evaluation",

@@ -17,6 +17,12 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 
 const statsLinks = [
   {
+    title: "Audience Insights",
+    description: "Donut charts for gender, tier split, member tenure, and event activity.",
+    href: "/admin/audience-insights",
+    icon: BarChart3,
+  },
+  {
     title: "Tier Re-Evaluation",
     description: "Review automatic tier promotion and demotion suggestions.",
     href: "/admin/tier-re-evaluation",
