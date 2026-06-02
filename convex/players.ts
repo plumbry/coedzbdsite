@@ -1,5 +1,7 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
 import { internal } from "./_generated/api";
@@ -285,6 +287,119 @@ export const getAllPlayersAdmin = query({
   },
 });
 
+const EVENT_COUNT_BACKFILL_BATCH = 6;
+
+async function syncPlayerEventParticipationStats(
+  ctx: MutationCtx,
+  playerId: Id<"players">,
+) {
+  const player = await ctx.db.get(playerId);
+  if (!player) {
+    return;
+  }
+
+  const eventResults = await ctx.db
+    .query("eventResults")
+    .withIndex("by_player", (q) => q.eq("playerId", playerId))
+    .collect();
+  const thirdPartyResults = await ctx.db
+    .query("thirdPartyResults")
+    .withIndex("by_player", (q) => q.eq("playerId", playerId))
+    .collect();
+
+  const uniqueEventNames = new Set([
+    ...eventResults.map((e) => e.eventName),
+    ...thirdPartyResults.map((e) => e.eventName),
+  ]);
+
+  let lastEventDate: string | undefined;
+  for (const result of eventResults) {
+    if (result.eventDate && (!lastEventDate || result.eventDate > lastEventDate)) {
+      lastEventDate = result.eventDate;
+    }
+  }
+  for (const result of thirdPartyResults) {
+    const importRecord = await ctx.db.get(result.importId);
+    const eventDate = importRecord?.eventDate;
+    if (eventDate && (!lastEventDate || eventDate > lastEventDate)) {
+      lastEventDate = eventDate;
+    }
+  }
+
+  await ctx.db.patch(playerId, {
+    eventsPlayedCount: uniqueEventNames.size,
+    lastEventDate,
+  });
+}
+
+/** How many accepted members already have eventsPlayedCount populated. */
+export const getAcceptedMemberEventCountCoverage = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const members = await ctx.db
+      .query("players")
+      .withIndex("by_membership_status", (q) =>
+        q.eq("currentMembershipStatus", "accepted"),
+      )
+      .collect();
+
+    let withEventCount = 0;
+    let overFiveEvents = 0;
+    for (const member of members) {
+      const count = member.eventsPlayedCount ?? 0;
+      if (member.eventsPlayedCount !== undefined) {
+        withEventCount += 1;
+      }
+      if (count > 5) {
+        overFiveEvents += 1;
+      }
+    }
+
+    return {
+      totalAccepted: members.length,
+      withEventCount,
+      overFiveEvents,
+      needsBackfill: withEventCount < members.length,
+    };
+  },
+});
+
+export const backfillPlayerEventParticipationBatch = internalMutation({
+  args: {
+    playersCursor: v.union(v.string(), v.null()),
+    updated: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query("players").paginate({
+      numItems: EVENT_COUNT_BACKFILL_BATCH,
+      cursor: args.playersCursor,
+    });
+
+    let updated = args.updated;
+    for (const player of page.page) {
+      await syncPlayerEventParticipationStats(ctx, player._id);
+      updated += 1;
+    }
+
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.players.backfillPlayerEventParticipationBatch,
+        {
+          playersCursor: page.continueCursor,
+          updated,
+        },
+      );
+      return { done: false, updated };
+    }
+
+    return { done: true, updated };
+  },
+});
+
+/** Backfill eventsPlayedCount from result tables (batched; safe for all players). */
 export const backfillPlayerEventParticipationStats = mutation({
   args: {
     playerId: v.optional(v.id("players")),
@@ -292,48 +407,18 @@ export const backfillPlayerEventParticipationStats = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
 
-    const players = args.playerId
-      ? [await ctx.db.get(args.playerId)].filter((player) => player !== null)
-      : await ctx.db.query("players").collect();
-
-    let updated = 0;
-    for (const player of players) {
-      const eventResults = await ctx.db
-        .query("eventResults")
-        .withIndex("by_player", (q) => q.eq("playerId", player._id))
-        .collect();
-      const thirdPartyResults = await ctx.db
-        .query("thirdPartyResults")
-        .withIndex("by_player", (q) => q.eq("playerId", player._id))
-        .collect();
-
-      const uniqueEventNames = new Set([
-        ...eventResults.map((e) => e.eventName),
-        ...thirdPartyResults.map((e) => e.eventName),
-      ]);
-
-      let lastEventDate: string | undefined;
-      for (const result of eventResults) {
-        if (result.eventDate && (!lastEventDate || result.eventDate > lastEventDate)) {
-          lastEventDate = result.eventDate;
-        }
-      }
-      for (const result of thirdPartyResults) {
-        const importRecord = await ctx.db.get(result.importId);
-        const eventDate = importRecord?.eventDate;
-        if (eventDate && (!lastEventDate || eventDate > lastEventDate)) {
-          lastEventDate = eventDate;
-        }
-      }
-
-      await ctx.db.patch(player._id, {
-        eventsPlayedCount: uniqueEventNames.size,
-        lastEventDate,
-      });
-      updated++;
+    if (args.playerId) {
+      await syncPlayerEventParticipationStats(ctx, args.playerId);
+      return { updated: 1, started: false, done: true };
     }
 
-    return { updated };
+    await ctx.scheduler.runAfter(
+      0,
+      internal.players.backfillPlayerEventParticipationBatch,
+      { playersCursor: null, updated: 0 },
+    );
+
+    return { updated: 0, started: true, done: false };
   },
 });
 

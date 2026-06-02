@@ -620,7 +620,9 @@ export const backfillPlayerEventParticipationStats = mutation({
 
     return {
       success: true,
-      message: `Player event participation stats backfilled for ${result.updated} players`,
+      message: result.started
+        ? "Player event count backfill started in the background. Wait a few minutes, then refresh Audience Insights."
+        : `Player event participation stats backfilled for ${result.updated} players`,
     };
   },
 });

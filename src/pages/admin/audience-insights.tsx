@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -145,8 +146,12 @@ function DonutCard({
 
 function AudienceInsightsContent() {
   const insights = useQuery(api.audienceInsights.getAudienceInsights);
+  const eventCoverage = useQuery(api.players.getAcceptedMemberEventCountCoverage);
   const rebuildJob = useQuery(api.audienceInsights.getRebuildJobStatus);
   const rebuildCache = useMutation(api.audienceInsights.rebuildAudienceInsightsCache);
+  const backfillEventCounts = useMutation(
+    api.cacheStatus.backfillPlayerEventParticipationStats,
+  );
 
   const isJobRunning = rebuildJob?.status === "running";
   const hasCache = insights !== undefined && insights.totalMembers > 0;
@@ -170,6 +175,21 @@ function AudienceInsightsContent() {
     }
   };
 
+  const runEventCountBackfill = async () => {
+    try {
+      const result = await backfillEventCounts({});
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to start event count backfill",
+      );
+    }
+  };
+
+  const showEventBackfillHint =
+    eventCoverage?.needsBackfill === true ||
+    (hasCache && eventsReady && (eventCoverage?.overFiveEvents ?? 0) === 0);
+
   if (insights === undefined) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -189,9 +209,39 @@ function AudienceInsightsContent() {
       {!hasCache && (
         <Alert>
           <AlertTitle>No cached data yet</AlertTitle>
-          <AlertDescription>
-            Click Refresh stats to build the audience snapshot. For accurate event counts, run
-            the event participation backfill on Data Cache first.
+          <AlertDescription className="space-y-2">
+            <p>Click Refresh stats to build the audience snapshot.</p>
+            <p className="text-sm">
+              Step 1: Backfill event counts (below). Step 2: Refresh stats.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {showEventBackfillHint && (
+        <Alert>
+          <AlertTitle>Event counts need a backfill</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p>
+              The &quot;Played more than 5 events&quot; chart uses each member&apos;s{" "}
+              <strong>events played count</strong> on their player record. Yours are mostly unset
+              {eventCoverage
+                ? ` (${eventCoverage.withEventCount} / ${eventCoverage.totalAccepted} members have a count)`
+                : ""}
+              , so everyone shows as 5 or fewer until you backfill from result history.
+            </p>
+            <ol className="list-decimal list-inside text-sm space-y-1">
+              <li>Click Backfill event counts (runs in the background, a few minutes).</li>
+              <li>When it finishes, click Refresh stats to rebuild the chart cache.</li>
+            </ol>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" onClick={() => void runEventCountBackfill()}>
+                Backfill event counts
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/admin/data-cache-status">Open Data Cache</Link>
+              </Button>
+            </div>
           </AlertDescription>
         </Alert>
       )}
