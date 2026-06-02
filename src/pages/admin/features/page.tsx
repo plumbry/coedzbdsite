@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import ExportOptionsDialog from "../_components/export-options-dialog.tsx";
 import MergePlayersDialog from "../_components/merge-players-dialog.tsx";
+import ImportPlayersDialog from "../../_components/import-players-dialog.tsx";
 import RelinkResultsButton from "../_components/relink-results-button.tsx";
 import GoogleSheetsManager from "../_components/google-sheets-manager.tsx";
 import TierSnapshotTool from "../_components/tier-snapshot-tool.tsx";
@@ -19,8 +20,9 @@ function FeaturesContent() {
 
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+  const [isImportPlayersDialogOpen, setIsImportPlayersDialogOpen] = useState(false);
   const [isSyncingDiscordMembers, setIsSyncingDiscordMembers] = useState(false);
-  const syncDiscordMembers = useAction(api["discord/sync"].syncDiscordMembers);
+  const syncDiscordMembers = useAction(api.discord.sync.syncDiscordMembers);
 
   const handleExportEvaluations = (filters?: { tiers: string[]; statuses: string[] }) => {
     if (!evaluations?.evaluations || evaluations.evaluations.length === 0) {
@@ -137,6 +139,21 @@ function FeaturesContent() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Import Player CSV</CardTitle>
+          <CardDescription className="text-xs">
+            Import player data from a CSV file.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="py-3">
+          <Button size="sm" onClick={() => setIsImportPlayersDialogOpen(true)}>
+            <Users className="mr-2 h-3 w-3" />
+            Import Player CSV
+          </Button>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Card>
           <CardHeader className="pb-2">
@@ -218,6 +235,10 @@ function FeaturesContent() {
       />
 
       <MergePlayersDialog open={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} />
+      <ImportPlayersDialog
+        open={isImportPlayersDialogOpen}
+        onOpenChange={setIsImportPlayersDialogOpen}
+      />
     </div>
   );
 }

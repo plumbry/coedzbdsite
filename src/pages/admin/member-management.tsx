@@ -113,7 +113,7 @@ export default function MemberManagement() {
   const acceptApplication = useMutation(api.memberManagement.acceptApplication);
   const rejectApplication = useMutation(api.memberManagement.rejectApplication);
   const convertToPlayer = useMutation(api.discord.convertToPlayer);
-  const syncDiscordMembers = useAction(api["discord/sync"].syncDiscordMembers);
+  const syncDiscordMembers = useAction(api.discord.sync.syncDiscordMembers);
   const [convertingPlayerId, setConvertingPlayerId] = useState<Id<"players"> | null>(null);
   
   // Redirect non-admins to "Accepted" tab
