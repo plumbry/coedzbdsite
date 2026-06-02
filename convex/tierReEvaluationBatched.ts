@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id, Doc } from "./_generated/dataModel.d.ts";
 import { api } from "./_generated/api";
+import { filterVisibleMembers } from "./helpers/playerAlt";
 
 const BATCH_SIZE = 10; // Process 10 players per batch
 
@@ -74,8 +75,10 @@ export const calculateTierMedians = mutation({
     for (const p of [...activePlayers, ...acceptedMembers]) {
       playerMap.set(p._id, p);
     }
-    const playersWithMatchData = Array.from(playerMap.values()).filter(
-      (p) => p.hasMatchData === true && p.status !== "archived"
+    const playersWithMatchData = filterVisibleMembers(
+      Array.from(playerMap.values()).filter(
+        (p) => p.hasMatchData === true && p.status !== "archived",
+      ),
     );
 
     // Calculate holistic scores for all players using CACHED data only
@@ -195,8 +198,10 @@ export const initializeBatchRebuild = mutation({
     for (const p of [...activePlayers, ...acceptedMembers]) {
       playerMap.set(p._id, p);
     }
-    let eligiblePlayers = Array.from(playerMap.values()).filter(
-      (p) => p.hasMatchData === true && p.status !== "archived"
+    let eligiblePlayers = filterVisibleMembers(
+      Array.from(playerMap.values()).filter(
+        (p) => p.hasMatchData === true && p.status !== "archived",
+      ),
     );
 
     // Filter to only players active in the last 6 weeks if recentOnly is enabled
@@ -246,8 +251,10 @@ export const processBatch = mutation({
     for (const p of [...activePlayers, ...acceptedMembers]) {
       playerMap.set(p._id, p);
     }
-    let eligiblePlayers = Array.from(playerMap.values()).filter(
-      (p) => p.hasMatchData === true && p.status !== "archived"
+    let eligiblePlayers = filterVisibleMembers(
+      Array.from(playerMap.values()).filter(
+        (p) => p.hasMatchData === true && p.status !== "archived",
+      ),
     );
 
     // Filter to only players active in the last 6 weeks if recentOnly is enabled
