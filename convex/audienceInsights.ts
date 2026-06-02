@@ -6,12 +6,21 @@ import {
   mutation,
   query,
 } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireAdmin } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
 const MEMBERS_PER_BATCH = 12;
 const STALE_JOB_MS = 6 * 60 * 60 * 1000;
+const SEGMENT_LIST_PAGE_SIZE = 40;
+const SEGMENT_SCAN_BATCH = 20;
+
+const chartTypeValidator = v.union(
+  v.literal("gender"),
+  v.literal("tier"),
+  v.literal("tenure"),
+  v.literal("events"),
+);
 
 type ChartSegment = {
   label: string;
@@ -152,7 +161,7 @@ function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
 }
 
 async function genderForPlayer(
-  ctx: MutationCtx,
+  ctx: MutationCtx | QueryCtx,
   playerId: Id<"players">,
 ): Promise<number | undefined> {
   const score = await ctx.db
@@ -160,6 +169,85 @@ async function genderForPlayer(
     .withIndex("by_player", (q) => q.eq("playerId", playerId))
     .first();
   return score?.gender;
+}
+
+function tenureBucketToSegmentSlug(
+  bucket: keyof Pick<
+    JobCounters,
+    | "tenureUnder3m"
+    | "tenure3to6m"
+    | "tenure6to12m"
+    | "tenure1to2y"
+    | "tenure2yPlus"
+    | "tenureUnknown"
+  >,
+): string {
+  const map: Record<typeof bucket, string> = {
+    tenureUnder3m: "under3m",
+    tenure3to6m: "3to6m",
+    tenure6to12m: "6to12m",
+    tenure1to2y: "1to2y",
+    tenure2yPlus: "2yplus",
+    tenureUnknown: "unknown",
+  };
+  return map[bucket];
+}
+
+function genderLabel(gender: number | undefined): string {
+  if (gender === 100) return "Male";
+  if (gender === 50) return "Female";
+  return "Unknown";
+}
+
+function isValidSegment(chart: string, segment: string): boolean {
+  if (chart === "gender") {
+    return segment === "male" || segment === "female" || segment === "unknown";
+  }
+  if (chart === "tier") {
+    return ["s", "a", "b", "c", "unassigned"].includes(segment);
+  }
+  if (chart === "tenure") {
+    return ["under3m", "3to6m", "6to12m", "1to2y", "2yplus", "unknown"].includes(
+      segment,
+    );
+  }
+  if (chart === "events") {
+    return segment === "over5" || segment === "fiveOrLess";
+  }
+  return false;
+}
+
+function memberMatchesSegment(
+  chart: string,
+  segment: string,
+  member: AcceptedMember,
+  gender: number | undefined,
+): boolean {
+  switch (chart) {
+    case "gender":
+      if (segment === "male") return gender === 100;
+      if (segment === "female") return gender === 50;
+      return gender !== 100 && gender !== 50;
+    case "tier":
+      if (segment === "s") return member.tier === "S";
+      if (segment === "a") return member.tier === "A";
+      if (segment === "b") return member.tier === "B";
+      if (segment === "c") return member.tier === "C";
+      return member.tier !== "S" && member.tier !== "A" && member.tier !== "B" && member.tier !== "C";
+    case "tenure": {
+      const bucket = tenureBucketForMonths(
+        monthsSinceServerJoin(member.serverJoinDate),
+      );
+      return tenureBucketToSegmentSlug(bucket) === segment;
+    }
+    case "events": {
+      const eventsPlayed = member.eventsPlayedCount ?? 0;
+      if (segment === "over5") return eventsPlayed > 5;
+      return eventsPlayed <= 5;
+    }
+    default:
+      return false;
+  }
 }
 
 async function upsertAudienceInsightsSnapshot(
@@ -252,6 +340,76 @@ export const getAudienceInsights = query({
       eventsReady: cached.eventsReady,
       lastUpdated: cached.lastUpdated,
       needsRebuild: false,
+    };
+  },
+});
+
+/** Paginated member list for a chart segment (admin drill-down page). */
+export const listAudienceInsightMembers = query({
+  args: {
+    chart: chartTypeValidator,
+    segment: v.string(),
+    playersCursor: v.optional(v.union(v.string(), v.null())),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    if (!isValidSegment(args.chart, args.segment)) {
+      throw new ConvexError({
+        message: "Invalid audience insight segment",
+        code: "INVALID_ARGUMENT",
+      });
+    }
+
+    const members: Array<{
+      playerId: Id<"players">;
+      discordUsername: string;
+      epicUsername: string;
+      tier: string | undefined;
+      eventsPlayedCount: number;
+      genderLabel: string;
+      serverJoinDate: string;
+    }> = [];
+
+    let playersCursor: string | null = args.playersCursor ?? null;
+    let scanDone = false;
+
+    while (members.length < SEGMENT_LIST_PAGE_SIZE && !scanDone) {
+      const page = await ctx.db
+        .query("players")
+        .withIndex("by_membership_status", (q) =>
+          q.eq("currentMembershipStatus", "accepted"),
+        )
+        .paginate({
+          numItems: SEGMENT_SCAN_BATCH,
+          cursor: playersCursor,
+        });
+
+      for (const member of page.page) {
+        const gender = await genderForPlayer(ctx, member._id);
+        if (!memberMatchesSegment(args.chart, args.segment, member, gender)) {
+          continue;
+        }
+
+        members.push({
+          playerId: member._id,
+          discordUsername: member.discordUsername,
+          epicUsername: member.epicUsername,
+          tier: member.tier,
+          eventsPlayedCount: member.eventsPlayedCount ?? 0,
+          genderLabel: genderLabel(gender),
+          serverJoinDate: member.serverJoinDate,
+        });
+      }
+
+      scanDone = page.isDone;
+      playersCursor = page.isDone ? null : page.continueCursor;
+    }
+
+    return {
+      members,
+      nextCursor: playersCursor,
+      hasMore: !scanDone,
     };
   },
 });

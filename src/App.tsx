@@ -38,6 +38,7 @@ import EliminationsPage from "./pages/admin/upset-kills-eliminations.tsx";
 import TierImpactPage from "./pages/admin/tier-impact.tsx";
 import StatsPage from "./pages/admin/stats.tsx";
 import AudienceInsightsPage from "./pages/admin/audience-insights.tsx";
+import AudienceInsightsSegmentPage from "./pages/admin/audience-insights-segment.tsx";
 import AdminHubPage from "./pages/admin/hub.tsx";
 import DataMaintenancePage from "./pages/admin/data-maintenance.tsx";
 import InGameEarningsPage from "./pages/admin/in-game-earnings.tsx";
@@ -104,6 +105,10 @@ export default function App() {
             <Route path="upset-kills/eliminations" element={<EliminationsPage />} />
             <Route path="tier-impact" element={<TierImpactPage />} />
             <Route path="stats" element={<StatsPage />} />
+            <Route
+              path="audience-insights/:chart/:segment"
+              element={<AudienceInsightsSegmentPage />}
+            />
             <Route path="audience-insights" element={<AudienceInsightsPage />} />
             <Route path="tier-mismatches" element={<TierMismatchesPage />} />
             <Route path="in-game-earnings" element={<InGameEarningsPage />} />

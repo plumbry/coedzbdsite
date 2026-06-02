@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -11,6 +11,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { Progress } from "@/components/ui/progress.tsx";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import {
+  audienceSegmentPath,
+  labelToSegmentKey,
+  type AudienceChartType,
+} from "@/lib/audience-insights-segments.ts";
 
 type ChartPoint = {
   label: string;
@@ -63,12 +68,20 @@ function DonutCard({
   description,
   data,
   total,
+  chartType,
+  onSegmentClick,
 }: {
   title: string;
   description: string;
   data: ChartPoint[];
   total: number;
+  chartType: AudienceChartType;
+  onSegmentClick: (segmentKey: string) => void;
 }) {
+  const handleLabelClick = (label: string) => {
+    const key = labelToSegmentKey(chartType, label);
+    if (key) onSegmentClick(key);
+  };
   if (data.length === 0) {
     return (
       <Card className="py-0">
@@ -89,7 +102,9 @@ function DonutCard({
     <Card className="py-0">
       <CardHeader className="py-3">
         <CardTitle className="text-base">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <CardDescription>
+          {description} Click a slice or legend item to view members.
+        </CardDescription>
       </CardHeader>
       <CardContent className="pb-4">
         <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
@@ -103,6 +118,21 @@ function DonutCard({
                   innerRadius={62}
                   outerRadius={92}
                   strokeWidth={0}
+                  className="cursor-pointer outline-none"
+                  onClick={(slice) => {
+                    const label =
+                      slice && typeof slice === "object" && "label" in slice
+                        ? String(slice.label)
+                        : slice &&
+                            typeof slice === "object" &&
+                            "payload" in slice &&
+                            slice.payload &&
+                            typeof slice.payload === "object" &&
+                            "label" in slice.payload
+                          ? String(slice.payload.label)
+                          : null;
+                    if (label) handleLabelClick(label);
+                  }}
                 >
                   {data.map((entry) => (
                     <Cell key={entry.label} fill={entry.color} />
@@ -126,16 +156,21 @@ function DonutCard({
           </div>
           <div className="space-y-2">
             {data.map((entry) => (
-              <div key={entry.label} className="flex items-center gap-2 text-sm">
+              <button
+                key={entry.label}
+                type="button"
+                onClick={() => handleLabelClick(entry.label)}
+                className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm hover:bg-muted/60 transition-colors"
+              >
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: entry.color }}
                 />
                 <span className="text-muted-foreground">{entry.label}:</span>
                 <span className="font-medium">
                   {pct(entry.value, total)}% ({entry.value})
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -145,7 +180,12 @@ function DonutCard({
 }
 
 function AudienceInsightsContent() {
+  const navigate = useNavigate();
   const insights = useQuery(api.audienceInsights.getAudienceInsights);
+
+  const openSegment = (chartType: AudienceChartType, segmentKey: string) => {
+    navigate(audienceSegmentPath(chartType, segmentKey));
+  };
   const eventCoverage = useQuery(api.players.getAcceptedMemberEventCountCoverage);
   const rebuildJob = useQuery(api.audienceInsights.getRebuildJobStatus);
   const rebuildCache = useMutation(api.audienceInsights.rebuildAudienceInsightsCache);
@@ -308,12 +348,16 @@ function AudienceInsightsContent() {
           description="Distribution by evaluation gender category."
           data={insights.gender}
           total={insights.totalMembers || 1}
+          chartType="gender"
+          onSegmentClick={(key) => openSegment("gender", key)}
         />
         <DonutCard
           title="Tier Split"
           description="How accepted members are distributed across tiers."
           data={insights.tier}
           total={insights.totalMembers || 1}
+          chartType="tier"
+          onSegmentClick={(key) => openSegment("tier", key)}
         />
       </div>
 
@@ -323,6 +367,8 @@ function AudienceInsightsContent() {
           description="Time in the server since Discord join date."
           data={insights.tenure}
           total={insights.totalMembers || 1}
+          chartType="tenure"
+          onSegmentClick={(key) => openSegment("tenure", key)}
         />
         {!eventsReady ? (
           <Card className="py-0">
@@ -342,6 +388,8 @@ function AudienceInsightsContent() {
             description="Uses each member's events played count."
             data={insights.events}
             total={insights.totalMembers}
+            chartType="events"
+            onSegmentClick={(key) => openSegment("events", key)}
           />
         )}
       </div>
