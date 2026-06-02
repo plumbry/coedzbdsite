@@ -14,6 +14,7 @@ const MEMBERS_PER_BATCH = 12;
 const STALE_JOB_MS = 6 * 60 * 60 * 1000;
 const SEGMENT_LIST_PAGE_SIZE = 40;
 const SEGMENT_SCAN_BATCH = 20;
+const MANUAL_SCORE_SCAN_BATCH = 200;
 
 const chartTypeValidator = v.union(
   v.literal("gender"),
@@ -199,6 +200,12 @@ function genderLabel(gender: number | undefined): string {
   return "Unknown";
 }
 
+function genderFromSegment(segment: string): string {
+  if (segment === "male") return "Male";
+  if (segment === "female") return "Female";
+  return "Unknown";
+}
+
 function isValidSegment(chart: string, segment: string): boolean {
   if (chart === "gender") {
     return segment === "male" || segment === "female" || segment === "unknown";
@@ -248,6 +255,28 @@ function memberMatchesSegment(
     default:
       return false;
   }
+}
+
+async function loadGenderByPlayerForSegment(
+  ctx: QueryCtx,
+): Promise<Map<Id<"players">, number | undefined>> {
+  const genderByPlayer = new Map<Id<"players">, number | undefined>();
+  let cursor: string | null = null;
+  let isDone = false;
+
+  while (!isDone) {
+    const page = await ctx.db.query("manualScores").paginate({
+      numItems: MANUAL_SCORE_SCAN_BATCH,
+      cursor,
+    });
+    for (const score of page.page) {
+      genderByPlayer.set(score.playerId, score.gender);
+    }
+    cursor = page.continueCursor;
+    isDone = page.isDone;
+  }
+
+  return genderByPlayer;
 }
 
 async function upsertAudienceInsightsSnapshot(
@@ -371,6 +400,8 @@ export const listAudienceInsightMembers = query({
       serverJoinDate: string;
     }> = [];
 
+    const genderByPlayer =
+      args.chart === "gender" ? await loadGenderByPlayerForSegment(ctx) : null;
     let playersCursor: string | null = args.playersCursor ?? null;
     let scanDone = false;
 
@@ -386,7 +417,10 @@ export const listAudienceInsightMembers = query({
         });
 
       for (const member of page.page) {
-        const gender = await genderForPlayer(ctx, member._id);
+        const gender =
+          args.chart === "gender"
+            ? genderByPlayer?.get(member._id)
+            : undefined;
         if (!memberMatchesSegment(args.chart, args.segment, member, gender)) {
           continue;
         }
@@ -397,7 +431,10 @@ export const listAudienceInsightMembers = query({
           epicUsername: member.epicUsername,
           tier: member.tier,
           eventsPlayedCount: member.eventsPlayedCount ?? 0,
-          genderLabel: genderLabel(gender),
+          genderLabel:
+            args.chart === "gender"
+              ? genderFromSegment(args.segment)
+              : "—",
           serverJoinDate: member.serverJoinDate,
         });
       }

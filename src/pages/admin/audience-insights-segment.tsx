@@ -17,6 +17,8 @@ import {
   TableRow,
 } from "@/components/ui/table.tsx";
 import { ArrowLeft, ExternalLink, Search } from "lucide-react";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 import {
   audienceSegmentPageTitle,
   isAudienceChartType,
@@ -96,6 +98,10 @@ export default function AudienceInsightsSegmentPage() {
     );
   }, [allMembers, search]);
 
+  const membersPagination = useClientPagination(filtered, {
+    resetDeps: [search, chartType, segmentKey],
+  });
+
   if (!chartType || !isValidSegmentKey(chartType, segmentKey)) {
     return <Navigate to="/admin/audience-insights" replace />;
   }
@@ -151,6 +157,7 @@ export default function AudienceInsightsSegmentPage() {
             No members found in this segment.
           </p>
         ) : (
+          <>
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -164,7 +171,7 @@ export default function AudienceInsightsSegmentPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((member) => {
+                {(membersPagination.pageItems ?? []).map((member) => {
                   const profileUsername = member.epicUsername || member.discordUsername;
                   return (
                     <TableRow key={member.playerId}>
@@ -199,9 +206,19 @@ export default function AudienceInsightsSegmentPage() {
               </TableBody>
             </Table>
           </div>
+          <TablePagination
+            page={membersPagination.page}
+            totalPages={membersPagination.totalPages}
+            totalCount={membersPagination.totalCount}
+            startIndex={membersPagination.startIndex}
+            endIndex={membersPagination.endIndex}
+            onPageChange={membersPagination.setPage}
+            itemLabel="members"
+          />
+          </>
         )}
 
-        {hasMore && !search.trim() && (
+        {hasMore && !search.trim() && membersPagination.page >= membersPagination.totalPages && (
           <div className="flex justify-center">
             <Button
               variant="outline"
