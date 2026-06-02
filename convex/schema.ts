@@ -686,8 +686,26 @@ export default defineSchema({
       }),
     ),
     eventsReady: v.boolean(),
+    segmentMembersIndexed: v.optional(v.boolean()),
     lastUpdated: v.number(),
   }),
+
+  audienceInsightsSegmentMembers: defineTable({
+    chart: v.union(
+      v.literal("gender"),
+      v.literal("tier"),
+      v.literal("tenure"),
+      v.literal("events"),
+    ),
+    segment: v.string(),
+    playerId: v.id("players"),
+    discordUsername: v.string(),
+    epicUsername: v.string(),
+    tier: v.optional(v.string()),
+    eventsPlayedCount: v.number(),
+    genderLabel: v.string(),
+    serverJoinDate: v.string(),
+  }).index("by_chart_segment", ["chart", "segment"]),
 
   audienceInsightsJobs: defineTable({
     status: v.union(

@@ -13,8 +13,7 @@ import type { Doc, Id } from "./_generated/dataModel.d.ts";
 const MEMBERS_PER_BATCH = 12;
 const STALE_JOB_MS = 6 * 60 * 60 * 1000;
 const SEGMENT_LIST_PAGE_SIZE = 40;
-const SEGMENT_SCAN_BATCH = 20;
-const MANUAL_SCORE_SCAN_BATCH = 200;
+const SEGMENT_DELETE_BATCH = 50;
 
 const chartTypeValidator = v.union(
   v.literal("gender"),
@@ -200,12 +199,6 @@ function genderLabel(gender: number | undefined): string {
   return "Unknown";
 }
 
-function genderFromSegment(segment: string): string {
-  if (segment === "male") return "Male";
-  if (segment === "female") return "Female";
-  return "Unknown";
-}
-
 function isValidSegment(chart: string, segment: string): boolean {
   if (chart === "gender") {
     return segment === "male" || segment === "female" || segment === "unknown";
@@ -224,59 +217,56 @@ function isValidSegment(chart: string, segment: string): boolean {
   return false;
 }
 
-function memberMatchesSegment(
-  chart: string,
-  segment: string,
-  member: AcceptedMember,
-  gender: number | undefined,
-): boolean {
-  switch (chart) {
-    case "gender":
-      if (segment === "male") return gender === 100;
-      if (segment === "female") return gender === 50;
-      return gender !== 100 && gender !== 50;
-    case "tier":
-      if (segment === "s") return member.tier === "S";
-      if (segment === "a") return member.tier === "A";
-      if (segment === "b") return member.tier === "B";
-      if (segment === "c") return member.tier === "C";
-      return member.tier !== "S" && member.tier !== "A" && member.tier !== "B" && member.tier !== "C";
-    case "tenure": {
-      const bucket = tenureBucketForMonths(
-        monthsSinceServerJoin(member.serverJoinDate),
-      );
-      return tenureBucketToSegmentSlug(bucket) === segment;
-    }
-    case "events": {
-      const eventsPlayed = member.eventsPlayedCount ?? 0;
-      if (segment === "over5") return eventsPlayed > 5;
-      return eventsPlayed <= 5;
-    }
-    default:
-      return false;
-  }
+function genderSegmentForValue(gender: number | undefined): string {
+  if (gender === 100) return "male";
+  if (gender === 50) return "female";
+  return "unknown";
 }
 
-async function loadGenderByPlayerForSegment(
-  ctx: QueryCtx,
-): Promise<Map<Id<"players">, number | undefined>> {
-  const genderByPlayer = new Map<Id<"players">, number | undefined>();
-  let cursor: string | null = null;
-  let isDone = false;
+function tierSegmentForMember(member: AcceptedMember): string {
+  if (member.tier === "S") return "s";
+  if (member.tier === "A") return "a";
+  if (member.tier === "B") return "b";
+  if (member.tier === "C") return "c";
+  return "unassigned";
+}
 
-  while (!isDone) {
-    const page = await ctx.db.query("manualScores").paginate({
-      numItems: MANUAL_SCORE_SCAN_BATCH,
-      cursor,
+function eventsSegmentForMember(member: AcceptedMember): string {
+  return (member.eventsPlayedCount ?? 0) > 5 ? "over5" : "fiveOrLess";
+}
+
+async function insertSegmentMemberRows(
+  ctx: MutationCtx,
+  member: AcceptedMember,
+  gender: number | undefined,
+) {
+  const base = {
+    playerId: member._id,
+    discordUsername: member.discordUsername,
+    epicUsername: member.epicUsername,
+    tier: member.tier,
+    eventsPlayedCount: member.eventsPlayedCount ?? 0,
+    genderLabel: genderLabel(gender),
+    serverJoinDate: member.serverJoinDate,
+  };
+
+  const tenureBucket = tenureBucketForMonths(
+    monthsSinceServerJoin(member.serverJoinDate),
+  );
+
+  const segmentRows = [
+    { chart: "gender" as const, segment: genderSegmentForValue(gender) },
+    { chart: "tier" as const, segment: tierSegmentForMember(member) },
+    { chart: "tenure" as const, segment: tenureBucketToSegmentSlug(tenureBucket) },
+    { chart: "events" as const, segment: eventsSegmentForMember(member) },
+  ];
+
+  for (const row of segmentRows) {
+    await ctx.db.insert("audienceInsightsSegmentMembers", {
+      ...base,
+      ...row,
     });
-    for (const score of page.page) {
-      genderByPlayer.set(score.playerId, score.gender);
-    }
-    cursor = page.continueCursor;
-    isDone = page.isDone;
   }
-
-  return genderByPlayer;
 }
 
 async function upsertAudienceInsightsSnapshot(
@@ -288,6 +278,7 @@ async function upsertAudienceInsightsSnapshot(
     tenure: ChartSegment[];
     events: ChartSegment[];
     eventsReady: boolean;
+    segmentMembersIndexed: boolean;
     lastUpdated: number;
   },
 ) {
@@ -367,13 +358,14 @@ export const getAudienceInsights = query({
       tenure: cached.tenure,
       events: cached.events,
       eventsReady: cached.eventsReady,
+      segmentMembersIndexed: cached.segmentMembersIndexed === true,
       lastUpdated: cached.lastUpdated,
       needsRebuild: false,
     };
   },
 });
 
-/** Paginated member list for a chart segment (admin drill-down page). */
+/** Paginated member list for a chart segment (reads pre-indexed rows). */
 export const listAudienceInsightMembers = query({
   args: {
     chart: chartTypeValidator,
@@ -390,64 +382,70 @@ export const listAudienceInsightMembers = query({
       });
     }
 
-    const members: Array<{
-      playerId: Id<"players">;
-      discordUsername: string;
-      epicUsername: string;
-      tier: string | undefined;
-      eventsPlayedCount: number;
-      genderLabel: string;
-      serverJoinDate: string;
-    }> = [];
-
-    const genderByPlayer =
-      args.chart === "gender" ? await loadGenderByPlayerForSegment(ctx) : null;
-    let playersCursor: string | null = args.playersCursor ?? null;
-    let scanDone = false;
-
-    while (members.length < SEGMENT_LIST_PAGE_SIZE && !scanDone) {
-      const page = await ctx.db
-        .query("players")
-        .withIndex("by_membership_status", (q) =>
-          q.eq("currentMembershipStatus", "accepted"),
-        )
-        .paginate({
-          numItems: SEGMENT_SCAN_BATCH,
-          cursor: playersCursor,
-        });
-
-      for (const member of page.page) {
-        const gender =
-          args.chart === "gender"
-            ? genderByPlayer?.get(member._id)
-            : undefined;
-        if (!memberMatchesSegment(args.chart, args.segment, member, gender)) {
-          continue;
-        }
-
-        members.push({
-          playerId: member._id,
-          discordUsername: member.discordUsername,
-          epicUsername: member.epicUsername,
-          tier: member.tier,
-          eventsPlayedCount: member.eventsPlayedCount ?? 0,
-          genderLabel:
-            args.chart === "gender"
-              ? genderFromSegment(args.segment)
-              : "—",
-          serverJoinDate: member.serverJoinDate,
-        });
-      }
-
-      scanDone = page.isDone;
-      playersCursor = page.isDone ? null : page.continueCursor;
+    const cached = await ctx.db.query("audienceInsightsSnapshot").first();
+    if (!cached?.segmentMembersIndexed) {
+      return {
+        members: [],
+        nextCursor: null,
+        hasMore: false,
+        needsRefresh: true,
+      };
     }
 
+    const page = await ctx.db
+      .query("audienceInsightsSegmentMembers")
+      .withIndex("by_chart_segment", (q) =>
+        q.eq("chart", args.chart).eq("segment", args.segment),
+      )
+      .paginate({
+        numItems: SEGMENT_LIST_PAGE_SIZE,
+        cursor: args.playersCursor ?? null,
+      });
+
     return {
-      members,
-      nextCursor: playersCursor,
-      hasMore: !scanDone,
+      members: page.page.map((row) => ({
+        playerId: row.playerId,
+        discordUsername: row.discordUsername,
+        epicUsername: row.epicUsername,
+        tier: row.tier,
+        eventsPlayedCount: row.eventsPlayedCount,
+        genderLabel: row.genderLabel,
+        serverJoinDate: row.serverJoinDate,
+      })),
+      nextCursor: page.isDone ? null : page.continueCursor,
+      hasMore: !page.isDone,
+      needsRefresh: false,
     };
+  },
+});
+
+export const clearSegmentMembers = internalMutation({
+  args: {
+    jobId: v.id("audienceInsightsJobs"),
+  },
+  handler: async (ctx, args) => {
+    let cursor: string | null = null;
+    let isDone = false;
+
+    while (!isDone) {
+      const page = await ctx.db.query("audienceInsightsSegmentMembers").paginate({
+        numItems: SEGMENT_DELETE_BATCH,
+        cursor,
+      });
+
+      for (const row of page.page) {
+        await ctx.db.delete(row._id);
+      }
+
+      isDone = page.isDone;
+      cursor = page.continueCursor;
+    }
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.audienceInsights.processRebuildBatch,
+      { jobId: args.jobId },
+    );
   },
 });
 
@@ -514,11 +512,9 @@ export const rebuildAudienceInsightsCache = mutation({
       startedAt: now,
     });
 
-    await ctx.scheduler.runAfter(
-      0,
-      internal.audienceInsights.processRebuildBatch,
-      { jobId },
-    );
+    await ctx.scheduler.runAfter(0, internal.audienceInsights.clearSegmentMembers, {
+      jobId,
+    });
 
     return {
       jobId,
@@ -553,6 +549,7 @@ export const processRebuildBatch = internalMutation({
       for (const member of page.page) {
         const gender = await genderForPlayer(ctx, member._id);
         accumulateMember(counters, member, gender);
+        await insertSegmentMemberRows(ctx, member, gender);
       }
 
       const processedCount = job.processedCount + page.page.length;
@@ -580,6 +577,7 @@ export const processRebuildBatch = internalMutation({
       await upsertAudienceInsightsSnapshot(ctx, {
         ...segments,
         eventsReady: true,
+        segmentMembersIndexed: true,
         lastUpdated: completedAt,
       });
 

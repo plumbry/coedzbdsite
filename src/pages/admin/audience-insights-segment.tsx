@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table.tsx";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { ArrowLeft, ExternalLink, Search } from "lucide-react";
 import { useClientPagination } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
@@ -108,6 +109,7 @@ export default function AudienceInsightsSegmentPage() {
 
   const title = audienceSegmentPageTitle(chartType, segmentKey);
   const isLoadingFirstPage = !initialLoaded && page === undefined;
+  const needsRefresh = page?.needsRefresh === true;
 
   return (
     <AdminPageLayout
@@ -127,6 +129,16 @@ export default function AudienceInsightsSegmentPage() {
       }}
     >
       <div className="space-y-4">
+        {needsRefresh && (
+          <Alert>
+            <AlertTitle>Member list not built yet</AlertTitle>
+            <AlertDescription>
+              Go to Audience Insights and click <strong>Refresh stats</strong> once. That rebuild
+              indexes members for each chart segment so this page can load instantly.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-sm">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -150,7 +162,7 @@ export default function AudienceInsightsSegmentPage() {
           </p>
         </div>
 
-        {isLoadingFirstPage ? (
+        {needsRefresh ? null : isLoadingFirstPage ? (
           <Skeleton className="h-96 w-full" />
         ) : filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground py-12 text-center">
@@ -218,7 +230,10 @@ export default function AudienceInsightsSegmentPage() {
           </>
         )}
 
-        {hasMore && !search.trim() && membersPagination.page >= membersPagination.totalPages && (
+        {!needsRefresh &&
+          hasMore &&
+          !search.trim() &&
+          membersPagination.page >= membersPagination.totalPages && (
           <div className="flex justify-center">
             <Button
               variant="outline"
