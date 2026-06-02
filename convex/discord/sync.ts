@@ -15,6 +15,12 @@ interface DiscordMember {
   };
   nick: string | null;
   joined_at: string;
+  roles?: string[];
+}
+
+interface DiscordRole {
+  id: string;
+  name: string;
 }
 
 type SyncResult = {
@@ -47,6 +53,22 @@ async function fetchAndSyncDiscordMembers(ctx: ActionCtx): Promise<SyncResult> {
       // Fetch members from Discord API
       let allMembers: DiscordMember[] = [];
       let after: string | undefined = undefined;
+      const roleNameById = new Map<string, string>();
+
+      // Fetch guild roles once so member role IDs can be resolved to names.
+      const rolesResponse = await fetch(`https://discord.com/api/v10/guilds/${discordGuildId}/roles`, {
+        headers: {
+          "Authorization": `Bot ${discordBotToken}`,
+        },
+      });
+      if (!rolesResponse.ok) {
+        const errorText = await rolesResponse.text();
+        throw new Error(`Discord roles API error: ${rolesResponse.status} - ${errorText}`);
+      }
+      const guildRoles: DiscordRole[] = await rolesResponse.json();
+      for (const role of guildRoles) {
+        roleNameById.set(role.id, role.name);
+      }
       
       // Discord returns max 1000 members per request, need to paginate
       while (true) {
@@ -104,6 +126,12 @@ async function fetchAndSyncDiscordMembers(ctx: ActionCtx): Promise<SyncResult> {
             discordUserId: member.user.id,
             nickname: member.nick || undefined,
             serverJoinDate: member.joined_at,
+            roles: (member.roles ?? [])
+              .map((roleId) => {
+                const name = roleNameById.get(roleId);
+                return name ? { id: roleId, name } : null;
+              })
+              .filter((role): role is { id: string; name: string } => role !== null),
           };
         });
 

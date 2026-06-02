@@ -982,6 +982,14 @@ export const syncDiscordMembersBatch = internalMutation({
         discordUserId: v.string(),
         nickname: v.optional(v.string()),
         serverJoinDate: v.string(),
+        roles: v.optional(
+          v.array(
+            v.object({
+              id: v.string(),
+              name: v.string(),
+            }),
+          ),
+        ),
       }),
     ),
   },
@@ -989,9 +997,12 @@ export const syncDiscordMembersBatch = internalMutation({
     const allPlayers = await ctx.db.query("players").collect();
     let added = 0;
     let updated = 0;
+    const tierRoleNames = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
 
     for (const member of args.members) {
       const epicUsername = member.nickname || member.discordUsername;
+      const hasTierRole = member.roles?.some((role) => tierRoleNames.includes(role.name)) || false;
+      const normalizedIncomingDiscord = normalizeUsername(member.discordUsername);
       const { existingPlayer, matchConfidence } = await resolveExistingPlayerForSync(
         ctx,
         {
@@ -1002,6 +1013,47 @@ export const syncDiscordMembersBatch = internalMutation({
         allPlayers,
       );
 
+      const autoAcceptPendingApplication = async (playerId: Doc<"players">["_id"]) => {
+        if (!hasTierRole) {
+          return;
+        }
+
+        const pendingApplications = await ctx.db
+          .query("applications")
+          .withIndex("by_status", (q) => q.eq("status", "pending"))
+          .collect();
+
+        const matchingApplication =
+          pendingApplications.find((app) => app.discordId === member.discordUserId) ??
+          pendingApplications.find(
+            (app) => normalizeUsername(app.discordUsername) === normalizedIncomingDiscord,
+          );
+
+        if (!matchingApplication) {
+          return;
+        }
+
+        await ctx.db.patch(matchingApplication._id, {
+          status: "accepted",
+          acceptedAt: Date.now(),
+          autoAcceptedByDiscordSync: true,
+          playerId,
+          processedByName: "System (Discord sync)",
+        });
+
+        await ctx.db.insert("statusEvents", {
+          entityType: "application",
+          entityId: matchingApplication._id,
+          discordId: matchingApplication.discordId || member.discordUserId,
+          discordUsername: matchingApplication.discordUsername,
+          previousStatus: "pending",
+          newStatus: "accepted",
+          action: "auto-accepted-from-discord-sync",
+          reason: "Discord member joined with a tier role",
+          isSystemAction: true,
+        });
+      };
+
       if (existingPlayer) {
         const updateData: {
           discordUsername: string;
@@ -1009,6 +1061,8 @@ export const syncDiscordMembersBatch = internalMutation({
           nickname?: string;
           epicUsername: string;
           serverJoinDate: string;
+          discordRoles?: Array<{ id: string; name: string }>;
+          tier?: string;
           status?: "active";
           currentMembershipStatus?: "accepted";
           matchConfidence?: SyncMatchConfidence;
@@ -1022,6 +1076,17 @@ export const syncDiscordMembersBatch = internalMutation({
           serverJoinDate: member.serverJoinDate,
           hasLeftServer: false,
         };
+
+        if (member.roles) {
+          updateData.discordRoles = member.roles;
+          const discordTierRole = member.roles.find((role) => tierRoleNames.includes(role.name));
+          if (discordTierRole) {
+            const discordTier = discordTierRole.name.replace("Tier ", "");
+            if (existingPlayer.tier !== discordTier) {
+              updateData.tier = discordTier;
+            }
+          }
+        }
 
         if (matchConfidence) {
           updateData.matchConfidence = matchConfidence;
@@ -1038,17 +1103,31 @@ export const syncDiscordMembersBatch = internalMutation({
           updateData.currentMembershipStatus = "accepted";
         }
 
+        if (
+          hasTierRole &&
+          (existingPlayer.status === "discord_member" ||
+            existingPlayer.currentMembershipStatus === "rejected")
+        ) {
+          updateData.status = "active";
+          updateData.currentMembershipStatus = "accepted";
+        }
+
         await ctx.db.patch(existingPlayer._id, updateData);
+        await autoAcceptPendingApplication(existingPlayer._id);
         updated++;
       } else {
-        await ctx.db.insert("players", {
+        const playerId = await ctx.db.insert("players", {
           discordUsername: member.discordUsername,
           discordUserId: member.discordUserId,
           nickname: member.nickname,
           serverJoinDate: member.serverJoinDate,
           epicUsername,
+          discordRoles: member.roles,
+          status: hasTierRole ? "active" : "discord_member",
+          currentMembershipStatus: hasTierRole ? "accepted" : undefined,
           matchConfidence: "exact" as const,
         });
+        await autoAcceptPendingApplication(playerId);
         added++;
       }
     }
