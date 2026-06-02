@@ -1,7 +1,7 @@
 import { useTierEvaluationCache } from "@/hooks/use-tier-evaluation-cache.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Download, Users, Zap, Wrench, ArrowRight } from "lucide-react";
+import { Download, Users, Zap, Wrench, ArrowRight, RefreshCw, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -11,12 +11,16 @@ import MergePlayersDialog from "../_components/merge-players-dialog.tsx";
 import RelinkResultsButton from "../_components/relink-results-button.tsx";
 import GoogleSheetsManager from "../_components/google-sheets-manager.tsx";
 import TierSnapshotTool from "../_components/tier-snapshot-tool.tsx";
+import { useAction } from "convex/react";
+import { api } from "@/convex/_generated/api.js";
 
 function FeaturesContent() {
   const evaluations = useTierEvaluationCache();
 
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+  const [isSyncingDiscordMembers, setIsSyncingDiscordMembers] = useState(false);
+  const syncDiscordMembers = useAction(api["discord/sync"].syncDiscordMembers);
 
   const handleExportEvaluations = (filters?: { tiers: string[]; statuses: string[] }) => {
     if (!evaluations?.evaluations || evaluations.evaluations.length === 0) {
@@ -97,6 +101,20 @@ function FeaturesContent() {
     toast.success(`Exported ${filteredEvaluations.length} evaluations to CSV`);
   };
 
+  const handleSyncDiscordMembers = async () => {
+    setIsSyncingDiscordMembers(true);
+    try {
+      const result = await syncDiscordMembers();
+      toast.success(
+        `Discord sync complete: ${result.totalMembers} members processed, ${result.added} added, ${result.updated} updated, ${result.archived} archived`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to sync Discord members");
+    } finally {
+      setIsSyncingDiscordMembers(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -168,7 +186,27 @@ function FeaturesContent() {
             <RelinkResultsButton />
           </CardContent>
         </Card>
+
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Discord Tools</CardTitle>
+          <CardDescription className="text-xs">
+            Trigger Discord bot utilities for member and role data sync.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="py-3">
+          <Button size="sm" variant="secondary" onClick={handleSyncDiscordMembers} disabled={isSyncingDiscordMembers}>
+            {isSyncingDiscordMembers ? (
+              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-3 w-3" />
+            )}
+            Sync Discord Bot
+          </Button>
+        </CardContent>
+      </Card>
 
       <TierSnapshotTool />
       <GoogleSheetsManager />
