@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "@/convex/_generated/api.js";
@@ -54,6 +56,10 @@ function UpsetKillsContent() {
     },
     { initialNumItems: 25 }
   );
+
+  const killsPagination = useClientPagination(upsetKills, {
+    resetDeps: [killerTierFilter, victimTierFilter],
+  });
   
   // Background job status (reactive - updates automatically as backend processes batches)
   const jobStatus = useQuery(api.yunite.backfillJobManager.getBackfillJobStatus);
@@ -702,7 +708,7 @@ function UpsetKillsContent() {
                   </TableCell>
                 </TableRow>
               ) : (
-                upsetKills.map((kill) => (
+                (killsPagination.pageItems ?? []).map((kill) => (
                   <TableRow 
                     key={kill._id} 
                     className={cn(
@@ -759,11 +765,20 @@ function UpsetKillsContent() {
             </TableBody>
           </Table>
           
-          {/* Load More */}
+          <TablePagination
+            page={killsPagination.page}
+            totalPages={killsPagination.totalPages}
+            totalCount={killsPagination.totalCount}
+            startIndex={killsPagination.startIndex}
+            endIndex={killsPagination.endIndex}
+            onPageChange={killsPagination.setPage}
+            itemLabel="upset kills"
+          />
+
           {queryStatus === "CanLoadMore" && (
             <div className="mt-4 text-center">
               <Button variant="outline" onClick={() => loadMore(25)}>
-                Load More
+                Load more from server
               </Button>
             </div>
           )}

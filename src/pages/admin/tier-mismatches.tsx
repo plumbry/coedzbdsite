@@ -8,10 +8,12 @@ import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Search, AlertTriangle, AlertCircle, ShieldAlert, ArrowUpDown, ExternalLink, ClipboardEdit, FileWarning } from "lucide-react";
+import { Search, AlertTriangle, AlertCircle, ShieldAlert, ArrowUpDown, ExternalLink, ClipboardEdit, FileWarning, VenusAndMars } from "lucide-react";
 import { Link } from "react-router-dom";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import ScorePlayerDialog from "../_components/score-player-dialog.tsx";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 
 type MismatchStatus = "missing_role" | "wrong_role" | "multiple_roles";
 
@@ -53,6 +55,155 @@ function TierBadge({ tier }: { tier: string }) {
   return <Badge variant={variant}>{tier}</Badge>;
 }
 
+function MissingGenderBadge() {
+  return (
+    <Badge variant="outline" className="gap-1 text-amber-700 border-amber-300 dark:text-amber-400 dark:border-amber-700">
+      <VenusAndMars className="h-3 w-3" />
+      No Gender
+    </Badge>
+  );
+}
+
+function MissingGenderSection() {
+  const missingGender = useQuery(api.discord.tierMismatches.getPlayersMissingGender, {});
+  const [search, setSearch] = useState("");
+  const [selectedPlayerId, setSelectedPlayerId] = useState<Id<"players"> | null>(null);
+  const [isScoreDialogOpen, setIsScoreDialogOpen] = useState(false);
+
+  const filtered = useMemo(() => {
+    if (!missingGender) return [];
+    if (!search.trim()) return missingGender;
+    const term = search.toLowerCase();
+    return missingGender.filter(
+      (p) =>
+        p.discordUsername.toLowerCase().includes(term) ||
+        p.epicUsername.toLowerCase().includes(term) ||
+        (p.nickname && p.nickname.toLowerCase().includes(term)),
+    );
+  }, [missingGender, search]);
+
+  const pagination = useClientPagination(filtered, { resetDeps: [search] });
+
+  if (missingGender === undefined) {
+    return <Skeleton className="h-64 w-full" />;
+  }
+
+  if (missingGender.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <VenusAndMars className="h-5 w-5 text-amber-500" />
+          <CardTitle>Missing Gender</CardTitle>
+        </div>
+        <CardDescription>
+          Active and accepted players whose evaluation does not have gender set to male or female.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by username or epic..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Badge variant="secondary" className="whitespace-nowrap">
+            {missingGender.length} player{missingGender.length !== 1 ? "s" : ""}
+          </Badge>
+        </div>
+
+        <div className="rounded-md border overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Player</TableHead>
+                <TableHead>Epic</TableHead>
+                <TableHead>Tier</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(pagination.pageItems ?? []).map((p) => (
+                <TableRow key={p.playerId} className="bg-amber-50/50 dark:bg-amber-950/10">
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Link
+                        to={`/player/${p.discordUsername}`}
+                        className="hover:underline text-primary"
+                      >
+                        {p.nickname || p.discordUsername}
+                      </Link>
+                      <MissingGenderBadge />
+                      {p.nickname && (
+                        <span className="text-xs text-muted-foreground">
+                          ({p.discordUsername})
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>{p.epicUsername}</TableCell>
+                  <TableCell>
+                    {p.tier ? <TierBadge tier={p.tier} /> : (
+                      <span className="text-muted-foreground text-sm">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="cursor-pointer"
+                        onClick={() => {
+                          setSelectedPlayerId(p.playerId as Id<"players">);
+                          setIsScoreDialogOpen(true);
+                        }}
+                      >
+                        <ClipboardEdit className="h-3.5 w-3.5 mr-1" />
+                        Evaluate
+                      </Button>
+                      <Link to={`/player/${p.discordUsername}`}>
+                        <Button variant="ghost" size="sm" className="cursor-pointer">
+                          <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                          View
+                        </Button>
+                      </Link>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <TablePagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalCount={pagination.totalCount}
+          startIndex={pagination.startIndex}
+          endIndex={pagination.endIndex}
+          onPageChange={pagination.setPage}
+          itemLabel="players missing gender"
+        />
+      </CardContent>
+
+      {selectedPlayerId && (
+        <ScorePlayerDialog
+          open={isScoreDialogOpen}
+          onOpenChange={setIsScoreDialogOpen}
+          playerId={selectedPlayerId}
+        />
+      )}
+    </Card>
+  );
+}
+
 function IncompleteEvaluationsSection() {
   const incomplete = useQuery(api.discord.tierMismatches.getIncompleteEvaluations, {});
   const [search, setSearch] = useState("");
@@ -70,6 +221,8 @@ function IncompleteEvaluationsSection() {
         (p.nickname && p.nickname.toLowerCase().includes(term)),
     );
   }, [incomplete, search]);
+
+  const incompletePagination = useClientPagination(filtered, { resetDeps: [search] });
 
   if (incomplete === undefined) {
     return <Skeleton className="h-64 w-full" />;
@@ -120,7 +273,7 @@ function IncompleteEvaluationsSection() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p) => (
+              {(incompletePagination.pageItems ?? []).map((p) => (
                 <TableRow key={p.playerId} className="bg-amber-50/50 dark:bg-amber-950/10">
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-1.5">
@@ -196,9 +349,15 @@ function IncompleteEvaluationsSection() {
           </Table>
         </div>
 
-        <div className="text-xs text-muted-foreground">
-          Showing {filtered.length} of {incomplete.length} incomplete evaluations
-        </div>
+        <TablePagination
+          page={incompletePagination.page}
+          totalPages={incompletePagination.totalPages}
+          totalCount={incompletePagination.totalCount}
+          startIndex={incompletePagination.startIndex}
+          endIndex={incompletePagination.endIndex}
+          onPageChange={incompletePagination.setPage}
+          itemLabel="incomplete evaluations"
+        />
       </CardContent>
 
       {selectedPlayerId && (
@@ -274,6 +433,10 @@ function TierMismatchesInner() {
 
     return result;
   }, [mismatches, filterType, filterTier, search, sortField, sortDirection]);
+
+  const mismatchesPagination = useClientPagination(filteredMismatches, {
+    resetDeps: [filterType, filterTier, search, sortField, sortDirection],
+  });
 
   // Summary counts
   const counts = useMemo(() => {
@@ -438,7 +601,7 @@ function TierMismatchesInner() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredMismatches.map((m) => (
+                  {(mismatchesPagination.pageItems ?? []).map((m) => (
                     <TableRow
                       key={m.playerId}
                       className={
@@ -450,13 +613,16 @@ function TierMismatchesInner() {
                       }
                     >
                       <TableCell>
-                        <Badge
-                          variant={getMismatchBadgeVariant(m.mismatchStatus)}
-                          className="gap-1"
-                        >
-                          {getMismatchIcon(m.mismatchStatus)}
-                          {getMismatchLabel(m.mismatchStatus)}
-                        </Badge>
+                        <div className="flex flex-wrap gap-1">
+                          <Badge
+                            variant={getMismatchBadgeVariant(m.mismatchStatus)}
+                            className="gap-1"
+                          >
+                            {getMismatchIcon(m.mismatchStatus)}
+                            {getMismatchLabel(m.mismatchStatus)}
+                          </Badge>
+                          {m.missingGender && <MissingGenderBadge />}
+                        </div>
                       </TableCell>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-1.5">
@@ -519,11 +685,20 @@ function TierMismatchesInner() {
             </div>
           )}
 
-          <div className="text-xs text-muted-foreground">
-            Showing {filteredMismatches.length} of {mismatches.length} mismatches
-          </div>
+          <TablePagination
+            page={mismatchesPagination.page}
+            totalPages={mismatchesPagination.totalPages}
+            totalCount={mismatchesPagination.totalCount}
+            startIndex={mismatchesPagination.startIndex}
+            endIndex={mismatchesPagination.endIndex}
+            onPageChange={mismatchesPagination.setPage}
+            itemLabel="mismatches"
+          />
         </CardContent>
       </Card>
+
+      {/* Missing gender section */}
+      <MissingGenderSection />
 
       {/* Incomplete evaluations section */}
       <IncompleteEvaluationsSection />
@@ -544,7 +719,7 @@ export default function TierMismatchesPage() {
   return (
     <AdminPageLayout requireAdmin
       title="Tier Mismatches"
-      description="Players whose website tier doesn't match their Discord tier role"
+      description="Discord tier role mismatches, missing gender, and incomplete evaluations"
       authTitle="Sign in to view tier mismatches"
     >
       <TierMismatchesInner />

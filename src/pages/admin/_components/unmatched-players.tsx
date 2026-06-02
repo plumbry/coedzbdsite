@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -35,6 +37,23 @@ function UnmatchedPlayersContent() {
     linkingResultId && playerSearch.length >= 2 ? { search: playerSearch } : "skip",
   );
   const manuallyLinkPlayer = useMutation(api.thirdPartyMutations.manuallyLinkPlayer);
+
+  const filteredUnmatched = useMemo(() => {
+    if (!unmatchedPlayers) return [];
+    if (!searchQuery) return unmatchedPlayers;
+    const query = searchQuery.toLowerCase();
+    return unmatchedPlayers.filter((result) =>
+      result.epicUsername.toLowerCase().includes(query) ||
+      result.epicId?.toLowerCase().includes(query) ||
+      result.discordUsername?.toLowerCase().includes(query) ||
+      result.discordId?.includes(query) ||
+      result.teamName?.toLowerCase().includes(query)
+    );
+  }, [unmatchedPlayers, searchQuery]);
+
+  const unmatchedPagination = useClientPagination(filteredUnmatched, {
+    resetDeps: [searchQuery],
+  });
   
   const openLinkDialog = (resultId: Id<"thirdPartyResults">) => {
     setLinkingResultId(resultId);
@@ -70,18 +89,6 @@ function UnmatchedPlayersContent() {
       </div>
     );
   }
-  
-  const filteredUnmatched = unmatchedPlayers.filter((result) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      result.epicUsername.toLowerCase().includes(query) ||
-      result.epicId?.toLowerCase().includes(query) ||
-      result.discordUsername?.toLowerCase().includes(query) ||
-      result.discordId?.includes(query) ||
-      result.teamName?.toLowerCase().includes(query)
-    );
-  });
   
   const currentResult = linkingResultId 
     ? unmatchedPlayers.find((r) => r._id === linkingResultId)
@@ -138,7 +145,7 @@ function UnmatchedPlayersContent() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUnmatched.map((result) => (
+                  {(unmatchedPagination.pageItems ?? []).map((result) => (
                     <TableRow key={result._id}>
                       <TableCell className="font-medium">
                         {result.epicUsername}
@@ -187,6 +194,15 @@ function UnmatchedPlayersContent() {
               </Table>
             </div>
           )}
+          <TablePagination
+            page={unmatchedPagination.page}
+            totalPages={unmatchedPagination.totalPages}
+            totalCount={unmatchedPagination.totalCount}
+            startIndex={unmatchedPagination.startIndex}
+            endIndex={unmatchedPagination.endIndex}
+            onPageChange={unmatchedPagination.setPage}
+            itemLabel="unmatched players"
+          />
         </CardContent>
       </Card>
       

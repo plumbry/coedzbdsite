@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -301,6 +303,22 @@ export default function MemberManagement() {
   const sortedFormerMembers = formerMembers 
     ? filterData(sortData(formerMembers, formerSort.field, formerSort.direction), formerSearch)
     : [];
+
+  const applicationsPagination = useClientPagination(pendingApplications ?? undefined, {
+    resetDeps: [activeTab],
+  });
+  const acceptedPagination = useClientPagination(sortedAcceptedMembers, {
+    resetDeps: [acceptedSearch, acceptedSort, activeTab],
+  });
+  const discordPagination = useClientPagination(sortedDiscordMembers, {
+    resetDeps: [discordSearch, discordSort, activeTab],
+  });
+  const rejectedPagination = useClientPagination(sortedRejectedMembers, {
+    resetDeps: [rejectedSearch, rejectedSort, activeTab],
+  });
+  const formerPagination = useClientPagination(sortedFormerMembers, {
+    resetDeps: [formerSearch, formerSort, activeTab],
+  });
   
   if (isRoleLoading) {
     return (
@@ -370,7 +388,7 @@ export default function MemberManagement() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {pendingApplications.map((app) => (
+                    {(applicationsPagination.pageItems ?? []).map((app) => (
                       <Card key={app._id} className="border-2">
                         <CardHeader className="pb-3">
                           <div className="flex items-start justify-between">
@@ -472,6 +490,15 @@ export default function MemberManagement() {
                         </CardContent>
                       </Card>
                     ))}
+                    <TablePagination
+                      page={applicationsPagination.page}
+                      totalPages={applicationsPagination.totalPages}
+                      totalCount={applicationsPagination.totalCount}
+                      startIndex={applicationsPagination.startIndex}
+                      endIndex={applicationsPagination.endIndex}
+                      onPageChange={applicationsPagination.setPage}
+                      itemLabel="applications"
+                    />
                   </div>
                 )}
               </CardContent>
@@ -545,7 +572,7 @@ export default function MemberManagement() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortedAcceptedMembers.map((member) => (
+                        {(acceptedPagination.pageItems ?? []).map((member) => (
                           <TableRow key={member._id} className="h-10">
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
@@ -646,7 +673,7 @@ export default function MemberManagement() {
                     </div>
                     {/* Mobile list */}
                     <div className="md:hidden divide-y">
-                      {sortedAcceptedMembers.map((member) => (
+                      {(acceptedPagination.pageItems ?? []).map((member) => (
                         <div key={member._id} className="py-2 flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
@@ -689,6 +716,15 @@ export default function MemberManagement() {
                         </div>
                       ))}
                     </div>
+                    <TablePagination
+                      page={acceptedPagination.page}
+                      totalPages={acceptedPagination.totalPages}
+                      totalCount={acceptedPagination.totalCount}
+                      startIndex={acceptedPagination.startIndex}
+                      endIndex={acceptedPagination.endIndex}
+                      onPageChange={acceptedPagination.setPage}
+                      itemLabel="members"
+                    />
                   </div>
                 )}
               </CardContent>
@@ -782,7 +818,7 @@ export default function MemberManagement() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortedDiscordMembers.map((member) => (
+                        {(discordPagination.pageItems ?? []).map((member) => (
                           <TableRow key={member._id} className="h-10">
                             <TableCell className="font-medium">
                               <Link 
@@ -859,7 +895,7 @@ export default function MemberManagement() {
                     </div>
                     {/* Mobile list */}
                     <div className="md:hidden divide-y">
-                      {sortedDiscordMembers.map((member) => (
+                      {(discordPagination.pageItems ?? []).map((member) => (
                         <div key={member._id} className="py-2 flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <Link 
@@ -894,6 +930,15 @@ export default function MemberManagement() {
                         </div>
                       ))}
                     </div>
+                    <TablePagination
+                      page={discordPagination.page}
+                      totalPages={discordPagination.totalPages}
+                      totalCount={discordPagination.totalCount}
+                      startIndex={discordPagination.startIndex}
+                      endIndex={discordPagination.endIndex}
+                      onPageChange={discordPagination.setPage}
+                      itemLabel="members"
+                    />
                   </div>
                 )}
               </CardContent>
@@ -956,7 +1001,7 @@ export default function MemberManagement() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortedRejectedMembers.map((member) => (
+                        {(rejectedPagination.pageItems ?? []).map((member) => (
                           <TableRow key={member._id} className="h-10">
                             <TableCell className="font-medium">
                               <Link 
@@ -1004,7 +1049,7 @@ export default function MemberManagement() {
                     </div>
                     {/* Mobile list */}
                     <div className="md:hidden divide-y">
-                      {sortedRejectedMembers.map((member) => (
+                      {(rejectedPagination.pageItems ?? []).map((member) => (
                         <div key={member._id} className="py-2 flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <Link 
@@ -1030,6 +1075,15 @@ export default function MemberManagement() {
                         </div>
                       ))}
                     </div>
+                    <TablePagination
+                      page={rejectedPagination.page}
+                      totalPages={rejectedPagination.totalPages}
+                      totalCount={rejectedPagination.totalCount}
+                      startIndex={rejectedPagination.startIndex}
+                      endIndex={rejectedPagination.endIndex}
+                      onPageChange={rejectedPagination.setPage}
+                      itemLabel="applications"
+                    />
                   </div>
                 )}
               </CardContent>
@@ -1096,7 +1150,7 @@ export default function MemberManagement() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortedFormerMembers.map((member) => (
+                        {(formerPagination.pageItems ?? []).map((member) => (
                           <TableRow 
                             key={member._id}
                             className={`h-10 ${member.hasLeftServer ? "bg-red-50 dark:bg-red-950/20" : ""}`}
@@ -1157,7 +1211,7 @@ export default function MemberManagement() {
                     </div>
                     {/* Mobile list */}
                     <div className="md:hidden divide-y">
-                      {sortedFormerMembers.map((member) => (
+                      {(formerPagination.pageItems ?? []).map((member) => (
                         <div key={member._id} className={`py-2 flex items-center justify-between gap-2 ${member.hasLeftServer ? "bg-red-50 dark:bg-red-950/20 -mx-3 px-3 rounded" : ""}`}>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
@@ -1191,6 +1245,15 @@ export default function MemberManagement() {
                         </div>
                       ))}
                     </div>
+                    <TablePagination
+                      page={formerPagination.page}
+                      totalPages={formerPagination.totalPages}
+                      totalCount={formerPagination.totalCount}
+                      startIndex={formerPagination.startIndex}
+                      endIndex={formerPagination.endIndex}
+                      onPageChange={formerPagination.setPage}
+                      itemLabel="members"
+                    />
                   </div>
                 )}
               </CardContent>

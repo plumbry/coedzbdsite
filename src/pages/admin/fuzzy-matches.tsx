@@ -9,9 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { Sparkles, Link as LinkIcon } from "lucide-react";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 
 export default function FuzzyMatches() {
   const matches = useQuery(api.discord.findMatches.findPotentialMatches, {});
+  const matchesPagination = useClientPagination(matches?.matches, {
+    resetDeps: [matches?.totalMatches],
+  });
   const manualMatch = useMutation(api.discord.manualMatchToPlayer);
 
   const handleMatch = async (discordMemberId: Id<"players">, targetPlayerId: Id<"players">, discordName: string, playerName: string) => {
@@ -81,6 +86,7 @@ export default function FuzzyMatches() {
                   <p className="text-sm">All Discord members are either already matched or have no similar player profiles.</p>
                 </div>
               ) : (
+                <>
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
@@ -93,7 +99,7 @@ export default function FuzzyMatches() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {matches.matches.map((match, index) => (
+                      {(matchesPagination.pageItems ?? []).map((match, index) => (
                         <TableRow key={index}>
                           <TableCell>
                             <div>
@@ -145,6 +151,16 @@ export default function FuzzyMatches() {
                     </TableBody>
                   </Table>
                 </div>
+                <TablePagination
+                  page={matchesPagination.page}
+                  totalPages={matchesPagination.totalPages}
+                  totalCount={matchesPagination.totalCount}
+                  startIndex={matchesPagination.startIndex}
+                  endIndex={matchesPagination.endIndex}
+                  onPageChange={matchesPagination.setPage}
+                  itemLabel="matches"
+                />
+                </>
               )}
             </>
           )}

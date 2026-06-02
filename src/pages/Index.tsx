@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -90,6 +92,11 @@ export default function Index() {
       direction: prev.field === field && prev.direction === "asc" ? "desc" : "asc",
     }));
   };
+
+  const membersPagination = useClientPagination(sortedMembers, {
+    resetDeps: [search, genderFilter, tierFilter, statusFilter, sort],
+  });
+  const displayedMembers = membersPagination.pageItems ?? [];
   
   if (acceptedMembers === undefined) {
     return (
@@ -172,6 +179,7 @@ export default function Index() {
         </CardHeader>
         <CardContent className="px-0 pb-0">
           {sortedMembers && sortedMembers.length > 0 ? (
+            <>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -218,7 +226,7 @@ export default function Index() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedMembers.map((member) => (
+                  {displayedMembers.map((member) => (
                     <TableRow key={member._id}>
                       <TableCell>
                         {isModeratorOrAdmin ? (
@@ -267,6 +275,18 @@ export default function Index() {
                 </TableBody>
               </Table>
             </div>
+            <div className="px-4 pb-4">
+              <TablePagination
+                page={membersPagination.page}
+                totalPages={membersPagination.totalPages}
+                totalCount={membersPagination.totalCount}
+                startIndex={membersPagination.startIndex}
+                endIndex={membersPagination.endIndex}
+                onPageChange={membersPagination.setPage}
+                itemLabel="members"
+              />
+            </div>
+            </>
           ) : (
             <div className="p-4">
               <Empty>

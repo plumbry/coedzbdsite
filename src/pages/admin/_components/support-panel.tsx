@@ -19,6 +19,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog.tsx";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 
 type TicketView = "active" | "archived";
 
@@ -41,6 +43,7 @@ export default function SupportPanel() {
   const deleteTicket = useMutation(api.support.deleteTicket);
 
   const tickets = view === "active" ? activeTickets : archivedTickets;
+  const ticketsPagination = useClientPagination(tickets ?? undefined, { resetDeps: [view] });
   
   const handleArchive = async (ticketId: Id<"supportTickets">) => {
     try {
@@ -127,7 +130,7 @@ export default function SupportPanel() {
             </Empty>
           ) : (
             <div className="space-y-3">
-              {tickets.map((ticket) => (
+              {(ticketsPagination.pageItems ?? []).map((ticket) => (
                 <Card key={ticket._id} className="border-2">
                   <CardContent className="pt-6">
                     <div className="space-y-3">
@@ -172,6 +175,15 @@ export default function SupportPanel() {
                   </CardContent>
                 </Card>
               ))}
+              <TablePagination
+                page={ticketsPagination.page}
+                totalPages={ticketsPagination.totalPages}
+                totalCount={ticketsPagination.totalCount}
+                startIndex={ticketsPagination.startIndex}
+                endIndex={ticketsPagination.endIndex}
+                onPageChange={ticketsPagination.setPage}
+                itemLabel="tickets"
+              />
             </div>
           )}
           {view === "archived" && archivedStatus === "CanLoadMore" && (

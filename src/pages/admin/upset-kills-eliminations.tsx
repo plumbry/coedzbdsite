@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "@/convex/_generated/api.js";
@@ -91,6 +93,10 @@ function EliminationsContent() {
     },
     { initialNumItems: 25 }
   );
+
+  const eliminationsPagination = useClientPagination(eliminations, {
+    resetDeps: [killerTierFilter, victimTierFilter, killStateFilter],
+  });
 
   const openPlayerKills = (playerId: Id<"players"> | undefined) => {
     if (playerId) {
@@ -223,7 +229,7 @@ function EliminationsContent() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  eliminations.map((kill) => (
+                  (eliminationsPagination.pageItems ?? []).map((kill) => (
                     <TableRow
                       key={kill._id}
                       className={cn(
@@ -288,11 +294,20 @@ function EliminationsContent() {
             </Table>
           </div>
 
-          {/* Load More */}
+          <TablePagination
+            page={eliminationsPagination.page}
+            totalPages={eliminationsPagination.totalPages}
+            totalCount={eliminationsPagination.totalCount}
+            startIndex={eliminationsPagination.startIndex}
+            endIndex={eliminationsPagination.endIndex}
+            onPageChange={eliminationsPagination.setPage}
+            itemLabel="eliminations"
+          />
+
           {queryStatus === "CanLoadMore" && (
             <div className="mt-6 text-center">
               <Button variant="secondary" onClick={() => loadMore(50)}>
-                Load More
+                Load more from server
               </Button>
             </div>
           )}

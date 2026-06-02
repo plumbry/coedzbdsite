@@ -9,9 +9,12 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
 import { Users, Shield, Eye, UserCog, Calendar } from "lucide-react";
 import { toast } from "sonner";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 
 export default function UserManagement() {
   const users = useQuery(api.users.getAllUsers, {});
+  const usersPagination = useClientPagination(users, {});
   const currentUser = useQuery(api.users.getCurrentUser);
   const updateUserRole = useMutation(api.users.updateUserRole);
 
@@ -55,6 +58,7 @@ export default function UserManagement() {
             </EmptyHeader>
           </Empty>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow>
@@ -65,7 +69,7 @@ export default function UserManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => {
+              {(usersPagination.pageItems ?? []).map((user) => {
                 const isCurrentUser = user._id === currentUser?._id;
                 const role = user.role || "viewer";
                 
@@ -139,6 +143,16 @@ export default function UserManagement() {
               })}
             </TableBody>
           </Table>
+          <TablePagination
+            page={usersPagination.page}
+            totalPages={usersPagination.totalPages}
+            totalCount={usersPagination.totalCount}
+            startIndex={usersPagination.startIndex}
+            endIndex={usersPagination.endIndex}
+            onPageChange={usersPagination.setPage}
+            itemLabel="users"
+          />
+          </>
         )}
       </CardContent>
     </Card>

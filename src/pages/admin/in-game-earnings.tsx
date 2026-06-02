@@ -8,6 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Progress } from "@/components/ui/progress.tsx";
 import { RefreshCw, DollarSign, AlertCircle, CheckCircle2, Trophy, Clock, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty.tsx";
@@ -87,6 +89,7 @@ function InGameEarningsContent() {
     {},
     { initialNumItems: 50 },
   );
+  const earningsPagination = useClientPagination(earningsPage);
   const earningsSummary = useQuery(api.inGameEarnings.queries.getInGameEarningsSummary);
   const flaggedEarnings = useQuery(api.inGameEarnings.queries.getFlaggedInGameEarnings);
   const newEarningsCount = useQuery(api.inGameEarnings.queries.getNewEarningsCount);
@@ -273,7 +276,7 @@ function InGameEarningsContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {earningsPage.map((earning) => (
+                {(earningsPagination.pageItems ?? []).map((earning) => (
                   <TableRow
                     key={earning._id}
                     className={earning.hasNewEarnings ? "bg-yellow-50 dark:bg-yellow-950/20" : ""}
@@ -341,10 +344,19 @@ function InGameEarningsContent() {
                 ))}
               </TableBody>
             </Table>
+            <TablePagination
+              page={earningsPagination.page}
+              totalPages={earningsPagination.totalPages}
+              totalCount={earningsPagination.totalCount}
+              startIndex={earningsPagination.startIndex}
+              endIndex={earningsPagination.endIndex}
+              onPageChange={earningsPagination.setPage}
+              itemLabel="earnings records"
+            />
             {earningsStatus === "CanLoadMore" && (
               <div className="flex justify-center pt-4">
                 <Button variant="outline" size="sm" onClick={() => loadMoreEarnings(50)}>
-                  Load more
+                  Load more from server
                 </Button>
               </div>
             )}

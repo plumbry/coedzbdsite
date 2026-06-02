@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Trophy, ArrowRight } from "lucide-react";
 import PageShell from "@/components/page-shell.tsx";
 import PageHeader from "@/components/page-header.tsx";
+import PaginatedGrid from "@/components/paginated-grid.tsx";
 
 export default function ScrimSeriesLandingPage() {
   const allSeries = useQuery(api.scrimSeries.queries.listSeries, {});
@@ -46,8 +47,12 @@ export default function ScrimSeriesLandingPage() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {allSeries.map((series) => {
+        <PaginatedGrid
+          items={allSeries}
+          className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+          itemLabel="series"
+        >
+          {(series) => {
             const totalGames = series.gamesPerSession.reduce(
               (a: number, b: number) => a + b,
               0
@@ -80,8 +85,8 @@ export default function ScrimSeriesLandingPage() {
                 </Card>
               </Link>
             );
-          })}
-        </div>
+          }}
+        </PaginatedGrid>
       )}
     </PageShell>
   );

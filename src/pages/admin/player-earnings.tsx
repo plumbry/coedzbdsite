@@ -11,12 +11,15 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 
 function PlayerEarningsContent() {
   const navigate = useNavigate();
   const [isRecalculating, setIsRecalculating] = useState(false);
   
   const playersWithEarnings = useQuery(api.playerEarnings.getAllPlayersWithEarnings);
+  const earningsPagination = useClientPagination(playersWithEarnings);
   const recalculateAll = useMutation(api.playerEarnings.recalculateAllEarnings);
 
   const handleRecalculate = async () => {
@@ -122,7 +125,7 @@ function PlayerEarningsContent() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {playersWithEarnings.map((player) => (
+                  {(earningsPagination.pageItems ?? []).map((player) => (
                     <TableRow
                       key={player.playerId}
                       className={player.epicUsername !== "unknown" ? "cursor-pointer hover:bg-muted/50" : ""}
@@ -175,6 +178,15 @@ function PlayerEarningsContent() {
               </Table>
             </div>
           )}
+          <TablePagination
+            page={earningsPagination.page}
+            totalPages={earningsPagination.totalPages}
+            totalCount={earningsPagination.totalCount}
+            startIndex={earningsPagination.startIndex}
+            endIndex={earningsPagination.endIndex}
+            onPageChange={earningsPagination.setPage}
+            itemLabel="players"
+          />
         </CardContent>
       </Card>
 

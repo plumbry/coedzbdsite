@@ -2,6 +2,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import PaginatedGrid from "@/components/paginated-grid.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import {
   Empty,
@@ -140,8 +141,12 @@ function ScrimsLandingPageInner() {
 
         {/* Event cards */}
         {events !== undefined && events.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {events.map((event) => {
+          <PaginatedGrid
+            items={events}
+            className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+            itemLabel="events"
+          >
+            {(event) => {
               const hasPairings = event.pairings && event.pairings.length > 0;
               const gamesGenerated = event.pairings?.length ?? 0;
               const soloCount = event.solos?.length ?? 0;
@@ -219,8 +224,8 @@ function ScrimsLandingPageInner() {
                   </Card>
                 </Link>
               );
-            })}
-          </div>
+            }}
+          </PaginatedGrid>
         )}
 
       {/* Create Event Dialog */}

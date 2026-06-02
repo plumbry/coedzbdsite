@@ -19,12 +19,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { toast } from "sonner";
 import { ConvexError } from "convex/values";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 
 type SortColumn = "discord" | "discordId" | "epic" | "tier" | "roles";
 type SortDirection = "asc" | "desc";
 type CategoryFilter = "all" | "active" | "inactive";
-
-const PAGE_SIZE = 50;
 
 export default function DiscordMembers() {
   const players = useQuery(api.players.getDiscordMembersAdmin, {});
@@ -39,7 +39,6 @@ export default function DiscordMembers() {
   const [convertingPlayer, setConvertingPlayer] = useState<{ id: Id<"players">; name: string } | null>(null);
   const [isConverting, setIsConverting] = useState(false);
   const [isBackfilling, setIsBackfilling] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const backfillEpicUsernames = useMutation(api.discord.backfillEpicUsernamesFromDiscord);
   const convertToPlayer = useMutation(api.discord.convertToPlayer);
 
@@ -84,6 +83,82 @@ export default function DiscordMembers() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [players]);
 
+  const filteredPlayers = useMemo(() => {
+    if (!players) return [];
+
+    const botSyncedPlayers = players.filter((p) =>
+      p.discordRoles && p.discordRoles.length > 0 &&
+      p.status !== "archived" && p.status !== "rejected"
+    );
+
+    const activePlayers = botSyncedPlayers.filter((p) => hasTierRole(p.discordRoles));
+    const inactivePlayers = botSyncedPlayers.filter((p) => !hasTierRole(p.discordRoles));
+
+    let result = botSyncedPlayers;
+    if (categoryFilter === "active") {
+      result = activePlayers;
+    } else if (categoryFilter === "inactive") {
+      result = inactivePlayers;
+    }
+
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((p) =>
+        (p.discordUsername?.toLowerCase().includes(query) || false) ||
+        (p.epicUsername?.toLowerCase().includes(query) || false) ||
+        (p.discordUserId?.toLowerCase().includes(query) || false)
+      );
+    }
+
+    if (selectedRoles.size > 0) {
+      result = result.filter((p) =>
+        p.discordRoles?.some((role) => selectedRoles.has(role.name))
+      );
+    }
+
+    return [...result].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortColumn) {
+        case "discord":
+          comparison = (a.discordUsername || "").localeCompare(b.discordUsername || "");
+          break;
+        case "discordId":
+          comparison = (a.discordUserId || "").localeCompare(b.discordUserId || "");
+          break;
+        case "epic":
+          comparison = (a.epicUsername || "").localeCompare(b.epicUsername || "");
+          break;
+        case "tier": {
+          const tierOrder: Record<string, number> = { S: 5, A: 4, B: 3, C: 2, D: 1 };
+          const tierA = a.tier ? (tierOrder[a.tier] || 0) : 0;
+          const tierB = b.tier ? (tierOrder[b.tier] || 0) : 0;
+          comparison = tierA - tierB;
+          break;
+        }
+        case "roles":
+          comparison = (a.discordRoles?.length || 0) - (b.discordRoles?.length || 0);
+          break;
+        default:
+          return 0;
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [players, categoryFilter, searchQuery, selectedRoles, sortColumn, sortDirection]);
+
+  const membersPagination = useClientPagination(filteredPlayers, {
+    resetDeps: [searchQuery, categoryFilter, sortColumn, sortDirection, selectedRoles],
+  });
+  const paginatedPlayers = membersPagination.pageItems ?? [];
+
+  const botSyncedPlayers = players?.filter((p) =>
+    p.discordRoles && p.discordRoles.length > 0 &&
+    p.status !== "archived" && p.status !== "rejected"
+  ) ?? [];
+  const activePlayers = botSyncedPlayers.filter((p) => hasTierRole(p.discordRoles));
+  const inactivePlayers = botSyncedPlayers.filter((p) => !hasTierRole(p.discordRoles));
+
   if (players === undefined) {
     return (
       <Card>
@@ -94,79 +169,6 @@ export default function DiscordMembers() {
     );
   }
 
-  // Only show players synced by Discord bot, exclude archived and rejected
-  const botSyncedPlayers = players.filter((p) =>
-    p.discordRoles && p.discordRoles.length > 0 &&
-    p.status !== "archived" && p.status !== "rejected"
-  );
-
-  // Split into Active (has tier role) and Inactive (no tier role)
-  const activePlayers = botSyncedPlayers.filter((p) => hasTierRole(p.discordRoles));
-  const inactivePlayers = botSyncedPlayers.filter((p) => !hasTierRole(p.discordRoles));
-
-  // Apply category filter
-  let filteredPlayers = botSyncedPlayers;
-  if (categoryFilter === "active") {
-    filteredPlayers = activePlayers;
-  } else if (categoryFilter === "inactive") {
-    filteredPlayers = inactivePlayers;
-  }
-
-  // Filter by search
-  if (searchQuery) {
-    const query = searchQuery.toLowerCase();
-    filteredPlayers = filteredPlayers.filter((p) =>
-      (p.discordUsername?.toLowerCase().includes(query) || false) ||
-      (p.epicUsername?.toLowerCase().includes(query) || false) ||
-      (p.discordUserId?.toLowerCase().includes(query) || false)
-    );
-  }
-
-  // Filter by selected roles
-  if (selectedRoles.size > 0) {
-    filteredPlayers = filteredPlayers.filter((p) =>
-      p.discordRoles?.some(role => selectedRoles.has(role.name))
-    );
-  }
-
-  // Sort players
-  filteredPlayers = [...filteredPlayers].sort((a, b) => {
-    let comparison = 0;
-
-    switch (sortColumn) {
-      case "discord":
-        comparison = (a.discordUsername || "").localeCompare(b.discordUsername || "");
-        break;
-      case "discordId":
-        comparison = (a.discordUserId || "").localeCompare(b.discordUserId || "");
-        break;
-      case "epic":
-        comparison = (a.epicUsername || "").localeCompare(b.epicUsername || "");
-        break;
-      case "tier": {
-        const tierOrder: Record<string, number> = { S: 5, A: 4, B: 3, C: 2, D: 1 };
-        const tierA = a.tier ? (tierOrder[a.tier] || 0) : 0;
-        const tierB = b.tier ? (tierOrder[b.tier] || 0) : 0;
-        comparison = tierA - tierB;
-        break;
-      }
-      case "roles":
-        comparison = (a.discordRoles?.length || 0) - (b.discordRoles?.length || 0);
-        break;
-      default:
-        return 0;
-    }
-
-    return sortDirection === "asc" ? comparison : -comparison;
-  });
-
-  // Pagination
-  const totalFilteredCount = filteredPlayers.length;
-  const totalPages = Math.max(1, Math.ceil(totalFilteredCount / PAGE_SIZE));
-  const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * PAGE_SIZE;
-  const paginatedPlayers = filteredPlayers.slice(startIndex, startIndex + PAGE_SIZE);
-
   const toggleRoleFilter = (roleName: string) => {
     const newSet = new Set(selectedRoles);
     if (newSet.has(roleName)) {
@@ -175,7 +177,7 @@ export default function DiscordMembers() {
       newSet.add(roleName);
     }
     setSelectedRoles(newSet);
-    setCurrentPage(1);
+    membersPagination.resetPage();
   };
 
   const handleBackfillEpicUsernames = async () => {
@@ -309,7 +311,7 @@ export default function DiscordMembers() {
               <Input
                 placeholder="Search by Discord username, Epic username, or Discord ID..."
                 value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => { setSearchQuery(e.target.value); membersPagination.resetPage(); }}
                 className="flex-1"
               />
             </div>
@@ -321,7 +323,7 @@ export default function DiscordMembers() {
                 <Button
                   variant={categoryFilter === "all" ? "default" : "secondary"}
                   size="sm"
-                  onClick={() => { setCategoryFilter("all"); setCurrentPage(1); }}
+                  onClick={() => { setCategoryFilter("all"); membersPagination.resetPage(); }}
                   className="h-8"
                 >
                   All ({botSyncedPlayers.length})
@@ -329,7 +331,7 @@ export default function DiscordMembers() {
                 <Button
                   variant={categoryFilter === "active" ? "default" : "secondary"}
                   size="sm"
-                  onClick={() => { setCategoryFilter("active"); setCurrentPage(1); }}
+                  onClick={() => { setCategoryFilter("active"); membersPagination.resetPage(); }}
                   className="h-8"
                 >
                   Active ({activePlayers.length})
@@ -337,7 +339,7 @@ export default function DiscordMembers() {
                 <Button
                   variant={categoryFilter === "inactive" ? "default" : "secondary"}
                   size="sm"
-                  onClick={() => { setCategoryFilter("inactive"); setCurrentPage(1); }}
+                  onClick={() => { setCategoryFilter("inactive"); membersPagination.resetPage(); }}
                   className="h-8"
                 >
                   Inactive ({inactivePlayers.length})
@@ -594,36 +596,15 @@ export default function DiscordMembers() {
             </div>
           )}
 
-          <div className="text-sm text-muted-foreground">
-            {totalFilteredCount > 0
-              ? `Showing ${startIndex + 1}–${Math.min(startIndex + PAGE_SIZE, totalFilteredCount)} of ${totalFilteredCount} Discord bot synced members`
-              : "No members match your filters"}
-          </div>
-
-          {/* Pagination controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={safePage <= 1}
-                onClick={() => setCurrentPage(safePage - 1)}
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Page {safePage} of {totalPages}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={safePage >= totalPages}
-                onClick={() => setCurrentPage(safePage + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          )}
+          <TablePagination
+            page={membersPagination.page}
+            totalPages={membersPagination.totalPages}
+            totalCount={membersPagination.totalCount}
+            startIndex={membersPagination.startIndex}
+            endIndex={membersPagination.endIndex}
+            onPageChange={membersPagination.setPage}
+            itemLabel="Discord bot synced members"
+          />
         </CardContent>
       </Card>
 

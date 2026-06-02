@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useAction, useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -14,6 +14,8 @@ import CreateBanDialog from "./create-ban-dialog.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import ConfirmDialog from "@/components/confirm-dialog.tsx";
 import { formatDistanceToNow } from "date-fns";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 
 type PendingConfirm = {
   title: string;
@@ -500,6 +502,7 @@ function BansTable({
   const deleteBanAction = useAction(api.eventBans.sync.deleteBan);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
+  const bansPagination = useClientPagination(bans);
 
   const handleDelete = (ban: { _id: string; playerTag: string }) => {
     setPendingConfirm({
@@ -551,7 +554,7 @@ function BansTable({
     <>
       {/* Mobile card view */}
       <div className="sm:hidden space-y-3">
-        {bans.map((ban) => (
+        {(bansPagination.pageItems ?? []).map((ban) => (
           <Card key={ban._id}>
             <CardContent className="p-3 space-y-2">
               <div className="flex items-start justify-between gap-2">
@@ -607,7 +610,7 @@ function BansTable({
                 </tr>
               </thead>
               <tbody>
-                {bans.map((ban) => (
+                {(bansPagination.pageItems ?? []).map((ban) => (
                   <tr key={ban._id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="p-3">
                       <div>
@@ -654,6 +657,16 @@ function BansTable({
           </div>
         </CardContent>
       </Card>
+
+      <TablePagination
+        page={bansPagination.page}
+        totalPages={bansPagination.totalPages}
+        totalCount={bansPagination.totalCount}
+        startIndex={bansPagination.startIndex}
+        endIndex={bansPagination.endIndex}
+        onPageChange={bansPagination.setPage}
+        itemLabel="bans"
+      />
 
       <ConfirmDialog
         open={pendingConfirm !== null}
@@ -708,6 +721,16 @@ function OffenseCountsTable({
       },
     });
   };
+
+  const sorted = useMemo(
+    () =>
+      [...offenses].sort(
+        (a, b) => b.minorCount + b.majorCount - (a.minorCount + a.majorCount),
+      ),
+    [offenses],
+  );
+  const offensesPagination = useClientPagination(sorted);
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -732,11 +755,6 @@ function OffenseCountsTable({
     );
   }
 
-  // Sort by total offenses descending
-  const sorted = [...offenses].sort(
-    (a, b) => (b.minorCount + b.majorCount) - (a.minorCount + a.majorCount)
-  );
-
   return (
     <>
     <Card>
@@ -749,7 +767,7 @@ function OffenseCountsTable({
       <CardContent className="p-0">
         {/* Mobile card view */}
         <div className="sm:hidden divide-y">
-          {sorted.map((entry) => (
+          {(offensesPagination.pageItems ?? []).map((entry) => (
             <div key={entry.discordId} className="p-3 space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -804,7 +822,7 @@ function OffenseCountsTable({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((entry) => (
+              {(offensesPagination.pageItems ?? []).map((entry) => (
                 <tr key={entry.discordId} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="p-3">
                     <div>
@@ -851,6 +869,16 @@ function OffenseCountsTable({
         </div>
       </CardContent>
     </Card>
+
+    <TablePagination
+      page={offensesPagination.page}
+      totalPages={offensesPagination.totalPages}
+      totalCount={offensesPagination.totalCount}
+      startIndex={offensesPagination.startIndex}
+      endIndex={offensesPagination.endIndex}
+      onPageChange={offensesPagination.setPage}
+      itemLabel="players"
+    />
 
     <ConfirmDialog
       open={pendingConfirm !== null}

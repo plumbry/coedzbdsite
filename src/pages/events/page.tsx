@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import PageShell from "@/components/page-shell.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import PageToolbar from "@/components/page-toolbar.tsx";
+import PaginatedGrid from "@/components/paginated-grid.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
@@ -240,63 +241,81 @@ export default function EventsPage() {
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Calendar /></EmptyMedia><EmptyTitle>No upcoming events</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="scrim">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Calendar /></EmptyMedia><EmptyTitle>No upcoming scrims</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="minicup">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Calendar /></EmptyMedia><EmptyTitle>No upcoming mini cups</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="season">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Calendar /></EmptyMedia><EmptyTitle>No upcoming seasons</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="mini-season">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Calendar /></EmptyMedia><EmptyTitle>No upcoming mini seasons</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="random">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Calendar /></EmptyMedia><EmptyTitle>No upcoming random events</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="solos-meets-duos">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Calendar /></EmptyMedia><EmptyTitle>No upcoming SMD events</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="scrim-series">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Calendar /></EmptyMedia><EmptyTitle>No upcoming scrim series</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="showdown">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Calendar /></EmptyMedia><EmptyTitle>No upcoming showdowns</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
           </Tabs>
@@ -319,63 +338,81 @@ export default function EventsPage() {
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No ongoing events</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="scrim">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No ongoing scrims</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="minicup">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No ongoing mini cups</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="season">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No ongoing seasons</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="mini-season">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No ongoing mini seasons</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="random">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No ongoing random events</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="solos-meets-duos">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No ongoing SMD events</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="scrim-series">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No ongoing scrim series</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="showdown">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No ongoing showdowns</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
           </Tabs>
@@ -398,63 +435,81 @@ export default function EventsPage() {
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No past events</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="scrim">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No past scrims</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="minicup">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No past mini cups</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="season">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No past seasons</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="mini-season">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No past mini seasons</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="random">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No past random events</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="solos-meets-duos">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No past SMD events</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="scrim-series">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No past scrim series</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
             <TabsContent value="showdown">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No past showdowns</EmptyTitle></EmptyHeader></Empty>
               ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{filteredEvents.map((event) => <EventCard key={event._id} event={event} />)}</div>
+                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
+                  {(event) => <EventCard key={event._id} event={event} />}
+                </PaginatedGrid>
               )}
             </TabsContent>
           </Tabs>

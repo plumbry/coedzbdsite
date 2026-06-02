@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -20,6 +20,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import ICSImportDialog from "./ics-import-dialog.tsx";
+import { DEFAULT_PAGE_SIZE } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 
 export default function EventManager() {
   const { isAdmin } = useUserRole();
@@ -28,6 +30,11 @@ export default function EventManager() {
   const [deletingEvent, setDeletingEvent] = useState<Id<"events"> | null>(null);
   const [isICSImportOpen, setIsICSImportOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "scrim" | "minicup" | "season" | "mini-season" | "random-squads" | "random-trios" | "solos-meets-duos" | "scrim-series" | "showdown">("all");
+  const [eventsTablePage, setEventsTablePage] = useState(1);
+
+  useEffect(() => {
+    setEventsTablePage(1);
+  }, [typeFilter]);
   
   // Form state
   const [name, setName] = useState("");
@@ -426,8 +433,16 @@ export default function EventManager() {
         </p>
       );
     }
+
+    const totalCount = filteredEvents.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
+    const safePage = Math.min(eventsTablePage, totalPages);
+    const startIndex = (safePage - 1) * DEFAULT_PAGE_SIZE;
+    const pageEvents = filteredEvents.slice(startIndex, startIndex + DEFAULT_PAGE_SIZE);
+    const endIndex = Math.min(startIndex + DEFAULT_PAGE_SIZE, totalCount);
     
     return (
+      <>
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -443,7 +458,7 @@ export default function EventManager() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredEvents.map((event) => (
+            {pageEvents.map((event) => (
               <TableRow key={event._id}>
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-1.5 min-w-0">
@@ -523,6 +538,16 @@ export default function EventManager() {
           </TableBody>
         </Table>
       </div>
+      <TablePagination
+        page={safePage}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        startIndex={startIndex}
+        endIndex={endIndex}
+        onPageChange={setEventsTablePage}
+        itemLabel="events"
+      />
+      </>
     );
   };
 

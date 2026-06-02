@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 import { usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -179,6 +181,10 @@ export default function AuditLogView() {
     return groupLogs(filtered);
   }, [logs, filterCategory]);
 
+  const logsPagination = useClientPagination(groupedLogs, {
+    resetDeps: [filterCategory],
+  });
+
   const toggleGroup = (groupId: string) => {
     setExpandedGroups(prev => {
       const next = new Set(prev);
@@ -253,7 +259,7 @@ export default function AuditLogView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groupedLogs.map((group) => {
+                {(logsPagination.pageItems ?? []).map((group) => {
                   const isExpanded = expandedGroups.has(group.id);
                   const isGrouped = group.count > 1;
                   
@@ -343,10 +349,19 @@ export default function AuditLogView() {
             </Table>
           </div>
         )}
+        <TablePagination
+          page={logsPagination.page}
+          totalPages={logsPagination.totalPages}
+          totalCount={logsPagination.totalCount}
+          startIndex={logsPagination.startIndex}
+          endIndex={logsPagination.endIndex}
+          onPageChange={logsPagination.setPage}
+          itemLabel="log groups"
+        />
         {status === "CanLoadMore" && (
           <div className="flex justify-center pt-2">
             <Button variant="outline" size="sm" onClick={() => loadMore(50)}>
-              Load more
+              Load more from server
             </Button>
           </div>
         )}

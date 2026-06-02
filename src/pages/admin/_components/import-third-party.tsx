@@ -1,4 +1,6 @@
 import { useState, useRef } from "react";
+import { useClientPagination } from "@/hooks/use-client-pagination.ts";
+import TablePagination from "@/components/table-pagination.tsx";
 import { useMutation, useQuery, useConvex, useAction, usePaginatedQuery } from "convex/react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/convex/_generated/api.js";
@@ -104,6 +106,7 @@ export default function ImportThirdParty() {
     {},
     { initialNumItems: 50 }
   );
+  const importHistoryPagination = useClientPagination(importHistory);
   const events = useQuery(api.events.management.getAllEvents, {});
   const csvDuplicateMatches = useQuery(
     api.thirdPartyQueries.findPotentialDuplicateImports,
@@ -1617,7 +1620,7 @@ export default function ImportThirdParty() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {importHistory.map((imp) => (
+                    {(importHistoryPagination.pageItems ?? []).map((imp) => (
                       <TableRow key={imp._id}>
                         <TableCell className="font-medium">{imp.eventName}</TableCell>
                         <TableCell>
@@ -1837,6 +1840,15 @@ export default function ImportThirdParty() {
                   </TableBody>
                 </Table>
               </div>
+              <TablePagination
+                page={importHistoryPagination.page}
+                totalPages={importHistoryPagination.totalPages}
+                totalCount={importHistoryPagination.totalCount}
+                startIndex={importHistoryPagination.startIndex}
+                endIndex={importHistoryPagination.endIndex}
+                onPageChange={importHistoryPagination.setPage}
+                itemLabel="imports"
+              />
               {importHistoryStatus === "CanLoadMore" && (
                 <div className="flex justify-center pt-4">
                   <Button
@@ -1845,7 +1857,7 @@ export default function ImportThirdParty() {
                     onClick={() => loadMoreImports(50)}
                     className="cursor-pointer"
                   >
-                    Load More
+                    Load more from server
                   </Button>
                 </div>
               )}
