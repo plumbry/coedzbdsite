@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -108,24 +109,35 @@ function DonutCard({
 }
 
 function AudienceInsightsContent() {
+  const cleanupStarted = useRef(false);
   const insights = useQuery(api.audienceInsights.getAudienceInsights);
   const rebuildJob = useQuery(api.audienceInsights.getRebuildJobStatus);
+  const cleanupJobs = useMutation(api.audienceInsights.cleanupAudienceInsightsRebuildJobs);
   const rebuildCache = useMutation(api.audienceInsights.rebuildAudienceInsightsCache);
+
+  useEffect(() => {
+    if (cleanupStarted.current) return;
+    cleanupStarted.current = true;
+    void cleanupJobs({}).catch(() => {
+      cleanupStarted.current = false;
+    });
+  }, [cleanupJobs]);
 
   const isJobRunning = rebuildJob?.status === "running";
   const hasCache = insights !== undefined && insights.totalMembers > 0;
   const eventsReady = insights?.eventsReady === true;
   const progressPercent =
     rebuildJob && rebuildJob.totalCount > 0
-      ? Math.round((rebuildJob.processedCount / rebuildJob.totalCount) * 100)
-      : 0;
+      ? Math.min(
+          100,
+          Math.round((rebuildJob.processedCount / rebuildJob.totalCount) * 100),
+        )
+      : undefined;
 
   const runRebuild = async () => {
     try {
       const result = await rebuildCache({});
-      toast.success(
-        `Rebuild started for ${result.totalMembers} members. Charts update as batches finish.`,
-      );
+      toast.success("Rebuild started. Charts update when the job finishes.");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to start audience insights rebuild",
@@ -154,7 +166,8 @@ function AudienceInsightsContent() {
           <AlertTitle>No cached data yet</AlertTitle>
           <AlertDescription>
             This page reads from a saved cache so it loads instantly. Click Refresh stats once
-            to build the cache; after that, loads only read cached data until you refresh again.
+            to build the cache. For accurate event counts, run the event participation backfill on
+            Data Cache first, then refresh here.
           </AlertDescription>
         </Alert>
       )}
@@ -164,10 +177,18 @@ function AudienceInsightsContent() {
           <AlertTitle>Refreshing event statistics</AlertTitle>
           <AlertDescription className="space-y-2">
             <p>
-              Gender, tier, and tenure are already cached. Event counts are updating in the
-              background ({rebuildJob.processedCount} / {rebuildJob.totalCount} members).
+              Rebuilding audience stats in the background
+              {rebuildJob.totalCount > 0
+                ? ` (${rebuildJob.processedCount} / ${rebuildJob.totalCount} members)`
+                : rebuildJob.processedCount > 0
+                  ? ` (${rebuildJob.processedCount} members processed)`
+                  : "…"}
             </p>
-            <Progress value={progressPercent} className="h-2" />
+            {progressPercent !== undefined ? (
+              <Progress value={progressPercent} className="h-2" />
+            ) : (
+              <Progress value={undefined} className="h-2" />
+            )}
           </AlertDescription>
         </Alert>
       )}
@@ -249,7 +270,7 @@ function AudienceInsightsContent() {
         ) : (
           <DonutCard
             title="Played More Than 5 Events"
-            description="Distinct events with a recorded result for that member."
+            description="Uses each member's events played count (backfill on Data Cache if needed)."
             data={insights.events}
             total={insights.totalMembers}
           />

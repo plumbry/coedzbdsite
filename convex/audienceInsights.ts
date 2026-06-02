@@ -6,12 +6,12 @@ import {
   mutation,
   query,
 } from "./_generated/server";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { requireAdmin } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
-const BATCH_SIZE = 8;
-const MANUAL_SCORES_PAGE_SIZE = 200;
+const MEMBERS_PER_BATCH = 12;
+const STALE_JOB_MS = 6 * 60 * 60 * 1000;
 
 type ChartSegment = {
   label: string;
@@ -20,6 +20,44 @@ type ChartSegment = {
 };
 
 type AcceptedMember = Doc<"players">;
+
+type JobCounters = {
+  male: number;
+  female: number;
+  genderUnknown: number;
+  tierS: number;
+  tierA: number;
+  tierB: number;
+  tierC: number;
+  tierOther: number;
+  tenureUnder3m: number;
+  tenure3to6m: number;
+  tenure6to12m: number;
+  tenure1to2y: number;
+  tenure2yPlus: number;
+  tenureUnknown: number;
+  eventsOverFive: number;
+  eventsFiveOrLess: number;
+};
+
+const EMPTY_COUNTERS: JobCounters = {
+  male: 0,
+  female: 0,
+  genderUnknown: 0,
+  tierS: 0,
+  tierA: 0,
+  tierB: 0,
+  tierC: 0,
+  tierOther: 0,
+  tenureUnder3m: 0,
+  tenure3to6m: 0,
+  tenure6to12m: 0,
+  tenure1to2y: 0,
+  tenure2yPlus: 0,
+  tenureUnknown: 0,
+  eventsOverFive: 0,
+  eventsFiveOrLess: 0,
+};
 
 function monthsSinceServerJoin(serverJoinDate: string): number | null {
   const joined = new Date(serverJoinDate);
@@ -34,150 +72,94 @@ function monthsSinceServerJoin(serverJoinDate: string): number | null {
   return Math.max(0, months + dayAdjust);
 }
 
-function tenureBucketForMonths(months: number | null): string {
-  if (months === null) return "unknown";
-  if (months < 3) return "under3m";
-  if (months < 6) return "3to6m";
-  if (months < 12) return "6to12m";
-  if (months < 24) return "1to2y";
-  return "2yPlus";
+function tenureBucketForMonths(months: number | null): keyof Pick<
+  JobCounters,
+  | "tenureUnder3m"
+  | "tenure3to6m"
+  | "tenure6to12m"
+  | "tenure1to2y"
+  | "tenure2yPlus"
+  | "tenureUnknown"
+> {
+  if (months === null) return "tenureUnknown";
+  if (months < 3) return "tenureUnder3m";
+  if (months < 6) return "tenure3to6m";
+  if (months < 12) return "tenure6to12m";
+  if (months < 24) return "tenure1to2y";
+  return "tenure2yPlus";
 }
 
-async function countDistinctEventsForPlayer(
-  ctx: MutationCtx,
-  playerId: Id<"players">,
-): Promise<number> {
-  const [eventResults, thirdPartyResults] = await Promise.all([
-    ctx.db
-      .query("eventResults")
-      .withIndex("by_player", (q) => q.eq("playerId", playerId))
-      .collect(),
-    ctx.db
-      .query("thirdPartyResults")
-      .withIndex("by_player", (q) => q.eq("playerId", playerId))
-      .collect(),
-  ]);
-
-  return new Set([
-    ...eventResults.map((r) => r.eventName),
-    ...thirdPartyResults.map((r) => r.eventName),
-  ]).size;
-}
-
-function buildAudienceInsights(
-  members: AcceptedMember[],
-  genderByPlayer: Map<Id<"players">, number | undefined>,
-  eventsPlayedByPlayer: Map<Id<"players">, number>,
+function accumulateMember(
+  counters: JobCounters,
+  member: AcceptedMember,
+  gender: number | undefined,
 ) {
-  let male = 0;
-  let female = 0;
-  let genderUnknown = 0;
-  let tierS = 0;
-  let tierA = 0;
-  let tierB = 0;
-  let tierC = 0;
-  let tierOther = 0;
-  let eventsOverFive = 0;
-  let eventsFiveOrLess = 0;
-  const tenureCounts: Record<string, number> = {
-    under3m: 0,
-    "3to6m": 0,
-    "6to12m": 0,
-    "1to2y": 0,
-    "2yPlus": 0,
-    unknown: 0,
-  };
+  if (gender === 100) counters.male += 1;
+  else if (gender === 50) counters.female += 1;
+  else counters.genderUnknown += 1;
 
-  for (const member of members) {
-    const gender = genderByPlayer.get(member._id);
-    if (gender === 100) male += 1;
-    else if (gender === 50) female += 1;
-    else genderUnknown += 1;
+  if (member.tier === "S") counters.tierS += 1;
+  else if (member.tier === "A") counters.tierA += 1;
+  else if (member.tier === "B") counters.tierB += 1;
+  else if (member.tier === "C") counters.tierC += 1;
+  else counters.tierOther += 1;
 
-    if (member.tier === "S") tierS += 1;
-    else if (member.tier === "A") tierA += 1;
-    else if (member.tier === "B") tierB += 1;
-    else if (member.tier === "C") tierC += 1;
-    else tierOther += 1;
+  const eventsPlayed = member.eventsPlayedCount ?? 0;
+  if (eventsPlayed > 5) counters.eventsOverFive += 1;
+  else counters.eventsFiveOrLess += 1;
 
-    const eventsPlayed = eventsPlayedByPlayer.get(member._id) ?? 0;
-    if (eventsPlayed > 5) eventsOverFive += 1;
-    else eventsFiveOrLess += 1;
+  const tenureKey = tenureBucketForMonths(
+    monthsSinceServerJoin(member.serverJoinDate),
+  );
+  counters[tenureKey] += 1;
+}
 
-    const tenureKey = tenureBucketForMonths(
-      monthsSinceServerJoin(member.serverJoinDate),
-    );
-    tenureCounts[tenureKey] += 1;
-  }
-
+function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
   const filterPositive = (segments: ChartSegment[]) =>
     segments.filter((s) => s.value > 0);
 
-  const tenureLabels: Record<string, { label: string; color: string }> = {
-    under3m: { label: "Under 3 months", color: "#4f46e5" },
-    "3to6m": { label: "3–6 months", color: "#22c55e" },
-    "6to12m": { label: "6–12 months", color: "#f59e0b" },
-    "1to2y": { label: "1–2 years", color: "#ef4444" },
-    "2yPlus": { label: "2+ years", color: "#8b5cf6" },
-    unknown: { label: "Unknown", color: "#6b7280" },
-  };
-
   return {
-    totalMembers: members.length,
+    totalMembers,
     gender: filterPositive([
-      { label: "Male", value: male, color: "#4f46e5" },
-      { label: "Female", value: female, color: "#22c55e" },
-      { label: "Unknown", value: genderUnknown, color: "#ef4444" },
+      { label: "Male", value: counters.male, color: "#4f46e5" },
+      { label: "Female", value: counters.female, color: "#22c55e" },
+      { label: "Unknown", value: counters.genderUnknown, color: "#ef4444" },
     ]),
     tier: filterPositive([
-      { label: "Tier S", value: tierS, color: "#ef4444" },
-      { label: "Tier A", value: tierA, color: "#f59e0b" },
-      { label: "Tier B", value: tierB, color: "#3b82f6" },
-      { label: "Tier C", value: tierC, color: "#22c55e" },
-      { label: "Unassigned", value: tierOther, color: "#6b7280" },
+      { label: "Tier S", value: counters.tierS, color: "#ef4444" },
+      { label: "Tier A", value: counters.tierA, color: "#f59e0b" },
+      { label: "Tier B", value: counters.tierB, color: "#3b82f6" },
+      { label: "Tier C", value: counters.tierC, color: "#22c55e" },
+      { label: "Unassigned", value: counters.tierOther, color: "#6b7280" },
     ]),
-    tenure: filterPositive(
-      Object.entries(tenureLabels).map(([key, meta]) => ({
-        label: meta.label,
-        value: tenureCounts[key] ?? 0,
-        color: meta.color,
-      })),
-    ),
+    tenure: filterPositive([
+      { label: "Under 3 months", value: counters.tenureUnder3m, color: "#4f46e5" },
+      { label: "3–6 months", value: counters.tenure3to6m, color: "#22c55e" },
+      { label: "6–12 months", value: counters.tenure6to12m, color: "#f59e0b" },
+      { label: "1–2 years", value: counters.tenure1to2y, color: "#ef4444" },
+      { label: "2+ years", value: counters.tenure2yPlus, color: "#8b5cf6" },
+      { label: "Unknown", value: counters.tenureUnknown, color: "#6b7280" },
+    ]),
     events: [
-      { label: "> 5 Events", value: eventsOverFive, color: "#4f46e5" },
-      { label: "5 or fewer events", value: eventsFiveOrLess, color: "#16a34a" },
+      { label: "> 5 Events", value: counters.eventsOverFive, color: "#4f46e5" },
+      {
+        label: "5 or fewer events",
+        value: counters.eventsFiveOrLess,
+        color: "#16a34a",
+      },
     ],
   };
 }
 
-async function loadAcceptedMembersWithGender(ctx: QueryCtx | MutationCtx) {
-  const members = await ctx.db
-    .query("players")
-    .withIndex("by_membership_status", (q) =>
-      q.eq("currentMembershipStatus", "accepted"),
-    )
-    .collect();
-
-  const memberIds = new Set(members.map((member) => member._id));
-  const genderByPlayer = new Map<Id<"players">, number | undefined>();
-
-  let cursor: string | null = null;
-  let isDone = false;
-  while (!isDone) {
-    const page = await ctx.db.query("manualScores").paginate({
-      numItems: MANUAL_SCORES_PAGE_SIZE,
-      cursor,
-    });
-    for (const score of page.page) {
-      if (memberIds.has(score.playerId)) {
-        genderByPlayer.set(score.playerId, score.gender);
-      }
-    }
-    isDone = page.isDone;
-    cursor = page.continueCursor;
-  }
-
-  return { members, genderByPlayer };
+async function genderForPlayer(
+  ctx: MutationCtx,
+  playerId: Id<"players">,
+): Promise<number | undefined> {
+  const score = await ctx.db
+    .query("manualScores")
+    .withIndex("by_player", (q) => q.eq("playerId", playerId))
+    .first();
+  return score?.gender;
 }
 
 async function upsertAudienceInsightsCache(
@@ -200,6 +182,49 @@ async function upsertAudienceInsightsCache(
   }
 }
 
+function countersFromJob(job: Doc<"audienceInsightsRebuildJobs">): JobCounters {
+  return {
+    male: job.male,
+    female: job.female,
+    genderUnknown: job.genderUnknown,
+    tierS: job.tierS,
+    tierA: job.tierA,
+    tierB: job.tierB,
+    tierC: job.tierC,
+    tierOther: job.tierOther,
+    tenureUnder3m: job.tenureUnder3m,
+    tenure3to6m: job.tenure3to6m,
+    tenure6to12m: job.tenure6to12m,
+    tenure1to2y: job.tenure1to2y,
+    tenure2yPlus: job.tenure2yPlus,
+    tenureUnknown: job.tenureUnknown,
+    eventsOverFive: job.eventsOverFive,
+    eventsFiveOrLess: job.eventsFiveOrLess,
+  };
+}
+
+async function failStaleRunningJobs(ctx: MutationCtx) {
+  const running = await ctx.db
+    .query("audienceInsightsRebuildJobs")
+    .withIndex("by_status", (q) => q.eq("status", "running"))
+    .collect();
+
+  const now = Date.now();
+  for (const job of running) {
+    const isLegacy = (job.memberIds?.length ?? 0) > 0;
+    const isStale = now - job.startedAt > STALE_JOB_MS;
+    if (isLegacy || isStale) {
+      await ctx.db.patch(job._id, {
+        status: "failed",
+        errorMessage: isLegacy
+          ? "Outdated rebuild format — click Refresh stats again."
+          : "Rebuild timed out — click Refresh stats again.",
+        completedAt: now,
+      });
+    }
+  }
+}
+
 /** Read-only: returns cached data only (never scans result tables). */
 export const getAudienceInsights = query({
   args: {},
@@ -208,14 +233,13 @@ export const getAudienceInsights = query({
 
     const cached = await ctx.db.query("audienceInsightsCache").first();
     if (cached) {
-      const eventsReady = cached.eventsReady === true;
       return {
         totalMembers: cached.totalMembers,
         gender: cached.gender,
         tier: cached.tier,
         tenure: cached.tenure,
         events: cached.events,
-        eventsReady,
+        eventsReady: cached.eventsReady === true,
         lastUpdated: cached.lastUpdated,
         needsRebuild: false,
       };
@@ -251,11 +275,19 @@ export const getRebuildJobStatus = query({
     return {
       status: job.status,
       processedCount: job.processedCount,
-      totalCount: job.memberIds.length,
-      eventsOverFive: job.eventsOverFive,
-      eventsFiveOrLess: job.eventsFiveOrLess,
+      totalCount: job.totalCount,
       startedAt: job.startedAt,
     };
+  },
+});
+
+/** Clears stuck legacy rebuild jobs so status queries stay fast. */
+export const cleanupAudienceInsightsRebuildJobs = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    await failStaleRunningJobs(ctx);
+    return { ok: true };
   },
 });
 
@@ -264,6 +296,8 @@ export const rebuildAudienceInsightsCache = mutation({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
+
+    await failStaleRunningJobs(ctx);
 
     const running = await ctx.db
       .query("audienceInsightsRebuildJobs")
@@ -277,47 +311,24 @@ export const rebuildAudienceInsightsCache = mutation({
       });
     }
 
-    const { members, genderByPlayer } = await loadAcceptedMembersWithGender(ctx);
-    const placeholderEvents = new Map<Id<"players">, number>();
-    for (const member of members) {
-      placeholderEvents.set(member._id, 0);
-    }
-
-    const baseInsights = buildAudienceInsights(
-      members,
-      genderByPlayer,
-      placeholderEvents,
-    );
     const now = Date.now();
-
-    await upsertAudienceInsightsCache(ctx, {
-      ...baseInsights,
-      events: [
-        { label: "> 5 Events", value: 0, color: "#4f46e5" },
-        { label: "5 or fewer events", value: members.length, color: "#16a34a" },
-      ],
-      eventsReady: false,
-      lastUpdated: now,
-    });
-
     const jobId = await ctx.db.insert("audienceInsightsRebuildJobs", {
       status: "running",
-      memberIds: members.map((m) => m._id),
+      totalCount: 0,
       processedCount: 0,
-      eventsOverFive: 0,
-      eventsFiveOrLess: 0,
+      playersCursor: null,
+      ...EMPTY_COUNTERS,
       startedAt: now,
     });
 
     await ctx.scheduler.runAfter(
       0,
       internal.audienceInsights.processRebuildBatch,
-      { jobId, startIndex: 0 },
+      { jobId },
     );
 
     return {
       jobId,
-      totalMembers: members.length,
       started: true,
     };
   },
@@ -326,7 +337,6 @@ export const rebuildAudienceInsightsCache = mutation({
 export const processRebuildBatch = internalMutation({
   args: {
     jobId: v.id("audienceInsightsRebuildJobs"),
-    startIndex: v.number(),
   },
   handler: async (ctx, args) => {
     const job = await ctx.db.get(args.jobId);
@@ -334,70 +344,67 @@ export const processRebuildBatch = internalMutation({
       return;
     }
 
-    const batchIds = job.memberIds.slice(
-      args.startIndex,
-      args.startIndex + BATCH_SIZE,
-    );
+    if ((job.memberIds?.length ?? 0) > 0) {
+      await ctx.db.patch(args.jobId, {
+        status: "failed",
+        errorMessage: "Outdated rebuild job — click Refresh stats again.",
+        completedAt: Date.now(),
+      });
+      return;
+    }
 
-    let eventsOverFive = job.eventsOverFive;
-    let eventsFiveOrLess = job.eventsFiveOrLess;
+    const counters = countersFromJob(job);
 
     try {
-      for (const playerId of batchIds) {
-        const distinctEvents = await countDistinctEventsForPlayer(ctx, playerId);
-        if (distinctEvents > 5) {
-          eventsOverFive += 1;
-        } else {
-          eventsFiveOrLess += 1;
-        }
+      const page = await ctx.db
+        .query("players")
+        .withIndex("by_membership_status", (q) =>
+          q.eq("currentMembershipStatus", "accepted"),
+        )
+        .paginate({
+          numItems: MEMBERS_PER_BATCH,
+          cursor: job.playersCursor,
+        });
 
-        const player = await ctx.db.get(playerId);
-        if (player && player.eventsPlayedCount !== distinctEvents) {
-          await ctx.db.patch(playerId, { eventsPlayedCount: distinctEvents });
-        }
+      for (const member of page.page) {
+        const gender = await genderForPlayer(ctx, member._id);
+        accumulateMember(counters, member, gender);
       }
 
-      const processedCount = args.startIndex + batchIds.length;
-      const nextIndex = args.startIndex + BATCH_SIZE;
+      const processedCount = job.processedCount + page.page.length;
 
-      if (nextIndex < job.memberIds.length) {
+      if (!page.isDone) {
         await ctx.db.patch(args.jobId, {
           processedCount,
-          eventsOverFive,
-          eventsFiveOrLess,
+          totalCount: Math.max(job.totalCount, processedCount),
+          playersCursor: page.continueCursor,
+          ...counters,
         });
 
         await ctx.scheduler.runAfter(
           0,
           internal.audienceInsights.processRebuildBatch,
-          { jobId: args.jobId, startIndex: nextIndex },
+          { jobId: args.jobId },
         );
         return;
       }
 
-      const cached = await ctx.db.query("audienceInsightsCache").first();
       const completedAt = Date.now();
+      const totalMembers = processedCount;
+      const segments = segmentsFromCounters(counters, totalMembers);
 
-      if (cached) {
-        await ctx.db.patch(cached._id, {
-          events: [
-            { label: "> 5 Events", value: eventsOverFive, color: "#4f46e5" },
-            {
-              label: "5 or fewer events",
-              value: eventsFiveOrLess,
-              color: "#16a34a",
-            },
-          ],
-          eventsReady: true,
-          lastUpdated: completedAt,
-        });
-      }
+      await upsertAudienceInsightsCache(ctx, {
+        ...segments,
+        eventsReady: true,
+        lastUpdated: completedAt,
+      });
 
       await ctx.db.patch(args.jobId, {
         status: "completed",
-        processedCount: job.memberIds.length,
-        eventsOverFive,
-        eventsFiveOrLess,
+        totalCount: totalMembers,
+        processedCount: totalMembers,
+        playersCursor: null,
+        ...counters,
         completedAt,
       });
     } catch (error) {
