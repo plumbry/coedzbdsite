@@ -479,14 +479,13 @@ export default function AdminSidebar() {
                     />
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="right">Staff Sign In</TooltipContent>
+                <TooltipContent side="right">Sign In</TooltipContent>
               </Tooltip>
             ) : (
               <SignInButton
                 variant="default"
                 size="sm"
                 className="w-full"
-                signInText="Staff Sign In"
                 showIcon={true}
               />
             )}

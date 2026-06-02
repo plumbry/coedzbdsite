@@ -90,6 +90,7 @@ export const updateCurrentUser = mutation({
     }
 
     const profilePatch = buildProfilePatch(identity);
+    const discordUserId = getDiscordUserIdFromIdentity(identity);
 
     const existingUser = await ctx.db
       .query("users")
@@ -99,55 +100,52 @@ export const updateCurrentUser = mutation({
       .unique();
 
     if (existingUser) {
-      await ctx.db.patch(existingUser._id, profilePatch);
+      await ctx.db.patch(existingUser._id, {
+        ...profilePatch,
+        ...(discordUserId ? { discordUserId } : {}),
+      });
       return existingUser._id;
     }
 
-    const discordUserId = getDiscordUserIdFromIdentity(identity);
-    if (!discordUserId) {
-      throw new ConvexError({
-        message:
-          "Account not linked. Your Discord id was not found in the sign-in token. Contact an admin.",
-        code: "FORBIDDEN",
-      });
+    if (discordUserId) {
+      const discordMatches = await findUsersByDiscordId(ctx, discordUserId);
+      if (discordMatches.length > 1) {
+        throw new ConvexError({
+          message: "Account linking error: duplicate Discord id in database. Contact an admin.",
+          code: "INTERNAL",
+        });
+      }
+
+      if (discordMatches.length === 1) {
+        const matchedUser = discordMatches[0];
+        const role = matchedUser.role ?? "viewer";
+        await ctx.db.patch(matchedUser._id, {
+          tokenIdentifier: identity.tokenIdentifier,
+          discordUserId,
+          ...profilePatch,
+          ...(matchedUser.role ? {} : { role: "viewer" as const }),
+        });
+
+        await logAudit(ctx, {
+          userId: matchedUser._id,
+          userName: getDisplayName({ ...matchedUser, ...profilePatch }),
+          action: "user_account_linked",
+          entityType: "user",
+          entityId: matchedUser._id,
+          details: `User signed in and linked Discord account (${profilePatch.email || profilePatch.name || discordUserId})`,
+          newValue: role,
+        });
+
+        return matchedUser._id;
+      }
     }
 
-    const discordMatches = await findUsersByDiscordId(ctx, discordUserId);
-    if (discordMatches.length > 1) {
-      throw new ConvexError({
-        message: "Account linking error: duplicate Discord id in database. Contact an admin.",
-        code: "INTERNAL",
-      });
-    }
-
-    if (discordMatches.length === 1) {
-      const matchedUser = discordMatches[0];
-      const role = matchedUser.role ?? "viewer";
-      await ctx.db.patch(matchedUser._id, {
-        tokenIdentifier: identity.tokenIdentifier,
-        ...profilePatch,
-        ...(matchedUser.role ? {} : { role: "viewer" as const }),
-      });
-
-      await logAudit(ctx, {
-        userId: matchedUser._id,
-        userName: getDisplayName({ ...matchedUser, ...profilePatch }),
-        action: "user_account_linked",
-        entityType: "user",
-        entityId: matchedUser._id,
-        details: `Staff member signed in and linked Discord account (${profilePatch.email || profilePatch.name || discordUserId})`,
-        newValue: role,
-      });
-
-      return matchedUser._id;
-    }
-
-    // New staff: auto-create as viewer (Clerk Restricted sign-up controls who can register).
+    // Open sign-up: any authenticated user is created as viewer.
     const userId = await ctx.db.insert("users", {
       tokenIdentifier: identity.tokenIdentifier,
-      discordUserId,
       role: "viewer",
       ...profilePatch,
+      ...(discordUserId ? { discordUserId } : {}),
     });
 
     await logAudit(ctx, {
@@ -157,7 +155,7 @@ export const updateCurrentUser = mutation({
       action: "user_signed_up",
       entityType: "user",
       entityId: userId,
-      details: `New staff member signed up (${profilePatch.email || profilePatch.name || discordUserId})`,
+      details: `New user signed up (${profilePatch.email || profilePatch.name || identity.tokenIdentifier})`,
       newValue: "viewer",
     });
 

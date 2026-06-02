@@ -23,8 +23,9 @@ function NavLink({ to, children, className }: { to: string; children: React.Reac
 }
 
 export default function SiteHeader() {
-  const { isModeratorOrAdmin, isLoading } = useUserRole();
+  const { user, isModeratorOrAdmin, isLoading } = useUserRole();
   const { signout } = useAuth();
+  const isSignedIn = !!user;
 
   return (
     <header className="border-b bg-background">
@@ -52,7 +53,7 @@ export default function SiteHeader() {
           <p className="hidden lg:block text-xs text-muted-foreground mr-2">
             use code <span className="font-semibold text-foreground">'coedzbd'</span> #ad
           </p>
-          {isModeratorOrAdmin ? (
+          {isSignedIn ? (
             <>
               <EditUsernameDialog />
               <Button
@@ -71,7 +72,6 @@ export default function SiteHeader() {
                 variant="ghost"
                 size="sm"
                 className="text-sm"
-                signInText="Staff Sign In"
                 showIcon={false}
               />
             )

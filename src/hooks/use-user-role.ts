@@ -12,7 +12,7 @@ export function useUserRole() {
     isEventMod: user?.role === "event_mod",
     isModeratorOrAdmin: user?.role === "admin" || user?.role === "event_mod",
     hasEventBanAccess: user?.role === "admin" || user?.role === "event_mod",
-    isViewer: user?.role === "viewer",
+    isViewer: !user?.role || user.role === "viewer",
     isLoading: isAuthenticated && user === undefined,
   };
 }
