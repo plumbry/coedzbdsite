@@ -317,7 +317,7 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
 
       toast.success(
         linkedPlayerId
-          ? "Application submitted and linked to existing member"
+          ? "Application submitted — prior membership archived, awaiting acceptance"
           : "Application submitted with evaluation",
       );
       resetForm();
@@ -428,7 +428,7 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
               {beenMemberBefore && (
                 <div className="space-y-3 rounded-lg border p-3 bg-muted/50">
                   <p className="text-xs text-muted-foreground">
-                    Search for their existing record. New Discord and Epic details above will update that member when you submit.
+                    Search for their existing record. Their prior membership is saved to application history, new details are merged, and they stay pending until you accept.
                   </p>
                   <Input
                     placeholder="Search by Discord or Epic username..."

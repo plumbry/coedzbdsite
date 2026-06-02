@@ -73,7 +73,7 @@ export const submitApplication = mutation({
     
     // Use empty string for discordId — will be linked automatically in the future
     let discordId = "";
-    let linkedPlayerId: Id<"players"> | undefined;
+    let evaluationPlayerId: Id<"players"> | undefined;
     let isPreviouslyApplied = false;
     let isPreviouslyAccepted = false;
     let isFormerMember = false;
@@ -87,7 +87,6 @@ export const submitApplication = mutation({
         });
       }
 
-      linkedPlayerId = existingPlayer._id;
       discordId = existingPlayer.discordUserId ?? "";
 
       const priorApplications = await ctx.db
@@ -95,7 +94,7 @@ export const submitApplication = mutation({
         .withIndex("by_player_id", (q) => q.eq("playerId", existingPlayer._id))
         .collect();
 
-      isPreviouslyApplied = priorApplications.length > 0;
+      isPreviouslyApplied = true;
       isPreviouslyAccepted =
         existingPlayer.currentMembershipStatus === "accepted" ||
         existingPlayer.currentMembershipStatus === "former" ||
@@ -112,10 +111,69 @@ export const submitApplication = mutation({
         });
       }
 
+      const membershipStatus = existingPlayer.currentMembershipStatus;
+      const hadActiveMembership =
+        membershipStatus === "accepted" || membershipStatus === "former";
+
+      if (hadActiveMembership || membershipStatus === "rejected") {
+        const priorAccepted = priorApplications
+          .filter((app) => app.status === "accepted")
+          .sort(
+            (a, b) =>
+              (b.acceptedAt ?? b._creationTime) -
+              (a.acceptedAt ?? a._creationTime),
+          )[0];
+
+        let historicalAcceptedAt = priorAccepted?.acceptedAt;
+        if (!historicalAcceptedAt && hadActiveMembership) {
+          const parsed = Date.parse(existingPlayer.serverJoinDate);
+          historicalAcceptedAt = Number.isNaN(parsed) ? Date.now() : parsed;
+        }
+
+        const historicalStatus =
+          membershipStatus === "rejected" ? "rejected" : "accepted";
+
+        const historicalApplicationId = await ctx.db.insert("applications", {
+          discordUsername: existingPlayer.discordUsername,
+          discordId,
+          fortniteProfileLink: `https://fortnitetracker.com/profile/all/${encodeURIComponent(existingPlayer.epicUsername)}`,
+          status: historicalStatus,
+          isPreviouslyApplied: priorApplications.length > 0,
+          isPreviouslyAccepted: isPreviouslyAccepted,
+          isFormerMember: membershipStatus === "former",
+          playerId: existingPlayer._id,
+          acceptedAt:
+            historicalStatus === "accepted" ? historicalAcceptedAt : undefined,
+          rejectedAt:
+            historicalStatus === "rejected" ? Date.now() : undefined,
+          rejectionReason:
+            historicalStatus === "rejected"
+              ? existingPlayer.rejectionReason
+              : undefined,
+          notes: "Prior membership record (re-application)",
+        });
+
+        await ctx.db.insert("statusEvents", {
+          entityType: "application",
+          entityId: historicalApplicationId,
+          discordId,
+          discordUsername: existingPlayer.discordUsername,
+          newStatus: historicalStatus,
+          action: "archived-membership-to-application",
+          reason: "Returning member re-application",
+          isSystemAction: true,
+        });
+      }
+
+      // Merge new details; keep off accepted list until the new application is accepted
       await ctx.db.patch(existingPlayer._id, {
         discordUsername: args.discordUsername,
         epicUsername: args.epicUsername,
+        currentMembershipStatus: "rejected",
+        status: "rejected",
       });
+
+      evaluationPlayerId = existingPlayer._id;
     }
     
     // Check for existing pending application by discord username
@@ -132,16 +190,15 @@ export const submitApplication = mutation({
       });
     }
     
-    // Create application
     const applicationId = await ctx.db.insert("applications", {
       discordUsername: args.discordUsername,
       discordId,
       fortniteProfileLink,
       status: "pending",
-      isPreviouslyApplied: linkedPlayerId ? true : isPreviouslyApplied,
+      isPreviouslyApplied,
       isPreviouslyAccepted,
       isFormerMember,
-      playerId: linkedPlayerId,
+      playerId: evaluationPlayerId,
     });
     
     // Log status event
@@ -293,7 +350,13 @@ export const deleteApplication = mutation({
     }
     
     // If player exists and application was never accepted, delete the player record too
-    if (application.playerId && application.status === "pending") {
+    // (skip for returning members — their player record must be preserved)
+    if (
+      application.playerId &&
+      application.status === "pending" &&
+      !application.isPreviouslyAccepted &&
+      !application.isFormerMember
+    ) {
       await ctx.db.delete(application.playerId);
       
       // Also delete any evaluation scores
