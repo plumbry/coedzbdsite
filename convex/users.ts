@@ -122,20 +122,46 @@ export const updateCurrentUser = mutation({
 
     if (discordMatches.length === 1) {
       const matchedUser = discordMatches[0];
+      const role = matchedUser.role ?? "viewer";
       await ctx.db.patch(matchedUser._id, {
         tokenIdentifier: identity.tokenIdentifier,
         ...profilePatch,
+        ...(matchedUser.role ? {} : { role: "viewer" as const }),
       });
+
+      await logAudit(ctx, {
+        userId: matchedUser._id,
+        userName: getDisplayName({ ...matchedUser, ...profilePatch }),
+        action: "user_account_linked",
+        entityType: "user",
+        entityId: matchedUser._id,
+        details: `Staff member signed in and linked Discord account (${profilePatch.email || profilePatch.name || discordUserId})`,
+        newValue: role,
+      });
+
       return matchedUser._id;
     }
 
     // New staff: auto-create as viewer (Clerk Restricted sign-up controls who can register).
-    return await ctx.db.insert("users", {
+    const userId = await ctx.db.insert("users", {
       tokenIdentifier: identity.tokenIdentifier,
       discordUserId,
       role: "viewer",
       ...profilePatch,
     });
+
+    await logAudit(ctx, {
+      userId,
+      userName:
+        profilePatch.name || profilePatch.email || profilePatch.discordUsername || "Unknown",
+      action: "user_signed_up",
+      entityType: "user",
+      entityId: userId,
+      details: `New staff member signed up (${profilePatch.email || profilePatch.name || discordUserId})`,
+      newValue: "viewer",
+    });
+
+    return userId;
   },
 });
 
