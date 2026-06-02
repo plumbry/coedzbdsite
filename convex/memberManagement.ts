@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query, internalQuery, internalMutation } from "./_generated/server";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
+import {
+  loadFemaleVerificationLookup,
+  enrichPlayerWithFemaleVerification,
+} from "./helpers/femaleVerification";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
@@ -593,6 +597,8 @@ export const getAcceptedMembers = query({
       .order("desc")
       .collect();
 
+    const verificationLookup = await loadFemaleVerificationLookup(ctx);
+
     const enriched = await Promise.all(
       players.map(async (player) => {
         const score = await ctx.db
@@ -607,8 +613,13 @@ export const getAcceptedMembers = query({
           .first();
 
         return {
-          ...player,
-          gender: score?.gender,
+          ...enrichPlayerWithFemaleVerification(
+            {
+              ...player,
+              gender: score?.gender,
+            },
+            verificationLookup,
+          ),
           isActive: player.isRecentlyActive ?? false,
           autoAcceptedByDiscordSync: latestApplication?.autoAcceptedByDiscordSync ?? false,
         };
@@ -629,12 +640,19 @@ export const getPublicMemberDirectory = query({
       .order("desc")
       .collect();
 
+    const verificationLookup = await loadFemaleVerificationLookup(ctx);
+
     return await Promise.all(
       players.map(async (player) => {
         const score = await ctx.db
           .query("manualScores")
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .first();
+
+        const verification = enrichPlayerWithFemaleVerification(
+          player,
+          verificationLookup,
+        );
 
         return {
           _id: player._id,
@@ -645,6 +663,7 @@ export const getPublicMemberDirectory = query({
           avatarUrl: player.avatarUrl,
           totalScore: player.totalScore,
           gender: score?.gender,
+          femaleVerified: verification.femaleVerified,
           isActive: player.isRecentlyActive ?? false,
         };
       }),

@@ -1,4 +1,6 @@
 import { query } from "../_generated/server";
+import type { QueryCtx } from "../_generated/server";
+import type { Doc } from "../_generated/dataModel";
 
 // Tier role names expected in Discord
 const TIER_ROLE_NAMES = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
@@ -23,6 +25,49 @@ const SCORE_FIELDS = [
 
 type MismatchStatus = "missing_role" | "wrong_role" | "multiple_roles";
 
+function hasGenderValue(gender: number | undefined | null): boolean {
+  return gender === 50 || gender === 100;
+}
+
+async function getReviewablePlayers(ctx: QueryCtx): Promise<Doc<"players">[]> {
+  const activePlayers = await ctx.db
+    .query("players")
+    .withIndex("by_status", (q) => q.eq("status", "active"))
+    .collect();
+
+  const acceptedMembers = await ctx.db
+    .query("players")
+    .withIndex("by_membership_status", (q) =>
+      q.eq("currentMembershipStatus", "accepted"),
+    )
+    .collect();
+
+  const playerMap = new Map<string, Doc<"players">>();
+  for (const p of [...activePlayers, ...acceptedMembers]) {
+    playerMap.set(p._id, p);
+  }
+
+  return [...playerMap.values()].filter(
+    (p) => p.status !== "archived" && p.status !== "rejected",
+  );
+}
+
+async function requireAdminOrMod(ctx: QueryCtx): Promise<Doc<"users"> | null> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) return null;
+
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+    .unique();
+
+  if (!user || (user.role !== "admin" && user.role !== "event_mod")) {
+    return null;
+  }
+
+  return user;
+}
+
 type TierMismatch = {
   playerId: string;
   discordUsername: string;
@@ -35,6 +80,17 @@ type TierMismatch = {
   currentMembershipStatus: string | undefined;
   status: string | undefined;
   isFemale: boolean;
+  missingGender: boolean;
+};
+
+type MissingGenderPlayer = {
+  playerId: string;
+  discordUsername: string;
+  discordUserId: string;
+  epicUsername: string;
+  nickname: string | undefined;
+  tier: string | undefined;
+  isFemale: boolean;
 };
 
 /**
@@ -44,45 +100,13 @@ type TierMismatch = {
 export const getTierMismatches = query({
   args: {},
   handler: async (ctx): Promise<TierMismatch[]> => {
-    // Check auth - admin or moderator only
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-
-    if (!user || (user.role !== "admin" && user.role !== "event_mod")) {
-      return [];
-    }
-
-    // Get all active/accepted players with a tier
-    const activePlayers = await ctx.db
-      .query("players")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .collect();
-
-    const acceptedMembers = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) =>
-        q.eq("currentMembershipStatus", "accepted"),
-      )
-      .collect();
-
-    // Combine and deduplicate
-    const playerMap = new Map<string, (typeof activePlayers)[0]>();
-    for (const p of [...activePlayers, ...acceptedMembers]) {
-      playerMap.set(p._id, p);
-    }
+    if (!(await requireAdminOrMod(ctx))) return [];
 
     const mismatches: TierMismatch[] = [];
 
-    for (const player of playerMap.values()) {
+    for (const player of await getReviewablePlayers(ctx)) {
       // Skip players without a website tier
       if (!player.tier) continue;
-      // Skip archived/rejected
-      if (player.status === "archived" || player.status === "rejected") continue;
 
       const discordTierRoles = (player.discordRoles ?? [])
         .filter((role) => TIER_ROLE_NAMES.includes(role.name))
@@ -99,12 +123,12 @@ export const getTierMismatches = query({
       }
 
       if (mismatchStatus) {
-        // Look up manualScore to determine if player is female (gender = 50)
         const score = await ctx.db
           .query("manualScores")
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .first();
         const isFemale = score?.gender === 50;
+        const missingGender = !hasGenderValue(score?.gender);
 
         mismatches.push({
           playerId: player._id,
@@ -118,6 +142,7 @@ export const getTierMismatches = query({
           currentMembershipStatus: player.currentMembershipStatus,
           status: player.status,
           isFemale,
+          missingGender,
         });
       }
     }
@@ -134,6 +159,43 @@ export const getTierMismatches = query({
     );
 
     return mismatches;
+  },
+});
+
+/**
+ * Returns active/accepted players whose evaluation has no gender set (not male or female).
+ */
+export const getPlayersMissingGender = query({
+  args: {},
+  handler: async (ctx): Promise<MissingGenderPlayer[]> => {
+    if (!(await requireAdminOrMod(ctx))) return [];
+
+    const missing: MissingGenderPlayer[] = [];
+
+    for (const player of await getReviewablePlayers(ctx)) {
+      const score = await ctx.db
+        .query("manualScores")
+        .withIndex("by_player", (q) => q.eq("playerId", player._id))
+        .first();
+
+      if (hasGenderValue(score?.gender)) continue;
+
+      missing.push({
+        playerId: player._id,
+        discordUsername: player.discordUsername,
+        discordUserId: player.discordUserId,
+        epicUsername: player.epicUsername,
+        nickname: player.nickname,
+        tier: player.tier,
+        isFemale: false,
+      });
+    }
+
+    missing.sort((a, b) =>
+      (a.discordUsername ?? "").localeCompare(b.discordUsername ?? ""),
+    );
+
+    return missing;
   },
 });
 
@@ -175,17 +237,7 @@ const FIELD_LABELS: Record<string, string> = {
 export const getIncompleteEvaluations = query({
   args: {},
   handler: async (ctx): Promise<IncompleteEvaluation[]> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-
-    if (!user || (user.role !== "admin" && user.role !== "event_mod")) {
-      return [];
-    }
+    if (!(await requireAdminOrMod(ctx))) return [];
 
     const allScores = await ctx.db.query("manualScores").collect();
     const incomplete: IncompleteEvaluation[] = [];

@@ -1163,6 +1163,16 @@ export default defineSchema({
     lastUpdated: v.number(),
   }),
 
+  // Female verifications synced from Mod Log "Girl Role" sheet
+  girlRoleVerifications: defineTable({
+    discordUserId: v.optional(v.string()),
+    discordUsername: v.optional(v.string()),
+    verificationMethod: v.optional(v.string()),
+    syncedAt: v.number(),
+  })
+    .index("by_discord_user_id", ["discordUserId"])
+    .index("by_discord_username", ["discordUsername"]),
+
   // Metadata for event bans feature (single-document table)
   eventBansMetadata: defineTable({
     lastEventPassedAt: v.string(), // ISO 8601 UTC timestamp of last "Event Passed" usage

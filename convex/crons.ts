@@ -31,6 +31,13 @@ crons.daily(
   internal.eventBans.sync.syncEventBansInternal,
 );
 
+// Sync Girl Role verifications from Mod Log daily
+crons.daily(
+  "sync girl role verifications",
+  { hourUTC: 7, minuteUTC: 15 },
+  internal.girlRole.sync.syncGirlRoleInternal,
+);
+
 // Sync Discord members daily
 crons.daily(
   "sync discord members",

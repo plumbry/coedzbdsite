@@ -3,6 +3,10 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
+import {
+  loadFemaleVerificationLookup,
+  enrichPlayerWithFemaleVerification,
+} from "./helpers/femaleVerification";
 import { logAudit } from "./helpers/audit";
 import { internal } from "./_generated/api";
 
@@ -17,6 +21,8 @@ export const getPlayers = query({
       .order("desc")
       .collect();
 
+    const verificationLookup = await loadFemaleVerificationLookup(ctx);
+
     const enrichedPlayers = await Promise.all(
       activePlayers.map(async (player) => {
         const score = await ctx.db
@@ -24,12 +30,13 @@ export const getPlayers = query({
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .first();
 
-        return {
-          ...player,
-          femaleVerified: score?.femaleVerified ?? false,
-          verificationMethod: score?.verificationMethod,
-          gender: score?.gender,
-        };
+        return enrichPlayerWithFemaleVerification(
+          {
+            ...player,
+            gender: score?.gender,
+          },
+          verificationLookup,
+        );
       }),
     );
 
@@ -79,18 +86,20 @@ export const getPlayerProfile = query({
       return null;
     }
     
-    // Enrich with female verification status and gender
     const score = await ctx.db
       .query("manualScores")
       .withIndex("by_player", (q) => q.eq("playerId", player._id))
       .first();
-    
-    return {
-      ...player,
-      femaleVerified: score?.femaleVerified ?? false,
-      verificationMethod: score?.verificationMethod,
-      gender: score?.gender,
-    };
+
+    const verificationLookup = await loadFemaleVerificationLookup(ctx);
+
+    return enrichPlayerWithFemaleVerification(
+      {
+        ...player,
+        gender: score?.gender,
+      },
+      verificationLookup,
+    );
   },
 });
 
@@ -106,6 +115,8 @@ export const getArchivedPlayers = query({
       .order("desc")
       .collect();
 
+    const verificationLookup = await loadFemaleVerificationLookup(ctx);
+
     const enrichedPlayers = await Promise.all(
       archivedPlayers.map(async (player) => {
         const score = await ctx.db
@@ -113,12 +124,13 @@ export const getArchivedPlayers = query({
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .first();
 
-        return {
-          ...player,
-          femaleVerified: score?.femaleVerified ?? false,
-          verificationMethod: score?.verificationMethod,
-          gender: score?.gender,
-        };
+        return enrichPlayerWithFemaleVerification(
+          {
+            ...player,
+            gender: score?.gender,
+          },
+          verificationLookup,
+        );
       }),
     );
 
@@ -140,6 +152,8 @@ export const getRejectedPlayers = query({
       .order("desc")
       .collect();
 
+    const verificationLookup = await loadFemaleVerificationLookup(ctx);
+
     const enrichedPlayers = await Promise.all(
       rejectedPlayers.map(async (player) => {
         const score = await ctx.db
@@ -147,12 +161,13 @@ export const getRejectedPlayers = query({
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .first();
 
-        return {
-          ...player,
-          femaleVerified: score?.femaleVerified ?? false,
-          verificationMethod: score?.verificationMethod,
-          gender: score?.gender,
-        };
+        return enrichPlayerWithFemaleVerification(
+          {
+            ...player,
+            gender: score?.gender,
+          },
+          verificationLookup,
+        );
       }),
     );
 
@@ -252,7 +267,8 @@ export const getAllPlayersAdmin = query({
       }
     }
     
-    // Enrich with female verification status, gender, duplicate info, and event count
+    const verificationLookup = await loadFemaleVerificationLookup(ctx);
+
     const enrichedPlayers = await Promise.all(
       allPlayers.map(async (player) => {
         const score = await ctx.db
@@ -271,10 +287,13 @@ export const getAllPlayersAdmin = query({
           : 0;
         
         return {
-          ...player,
-          femaleVerified: score?.femaleVerified ?? false,
-          verificationMethod: score?.verificationMethod,
-          gender: score?.gender,
+          ...enrichPlayerWithFemaleVerification(
+            {
+              ...player,
+              gender: score?.gender,
+            },
+            verificationLookup,
+          ),
           duplicateEpicCount: duplicateEpicCount > 1 ? duplicateEpicCount : 0,
           duplicateDiscordCount: duplicateDiscordCount > 1 ? duplicateDiscordCount : 0,
           duplicateDiscordIdCount: duplicateDiscordIdCount > 1 ? duplicateDiscordIdCount : 0,
