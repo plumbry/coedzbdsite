@@ -304,6 +304,7 @@ export const acceptApplication = mutation({
     await ctx.db.patch(args.applicationId, {
       status: "accepted",
       acceptedAt: Date.now(),
+      autoAcceptedByDiscordSync: false,
       playerId,
       processedBy: user._id,
       processedByName: getDisplayName(user),
@@ -506,10 +507,17 @@ export const getAcceptedMembers = query({
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
           .first();
 
+        const latestApplication = await ctx.db
+          .query("applications")
+          .withIndex("by_player_id", (q) => q.eq("playerId", player._id))
+          .order("desc")
+          .first();
+
         return {
           ...player,
           gender: score?.gender,
           isActive: player.isRecentlyActive ?? false,
+          autoAcceptedByDiscordSync: latestApplication?.autoAcceptedByDiscordSync ?? false,
         };
       }),
     );

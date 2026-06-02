@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import { UserCheck, UserX, UserMinus, Loader2, ExternalLink, AlertTriangle, Edit, Award, ArrowUpDown, Search, Trash2, ShieldAlert, Plus } from "lucide-react";
+import { UserCheck, UserX, UserMinus, Loader2, ExternalLink, AlertTriangle, Edit, Award, ArrowUpDown, Search, Trash2, ShieldAlert, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Link, useSearchParams, useParams, useNavigate } from "react-router-dom";
@@ -71,6 +71,7 @@ export default function MemberManagement() {
   const [applicationToDelete, setApplicationToDelete] = useState<Id<"applications"> | null>(null);
   const [playerDeleteConfirmOpen, setPlayerDeleteConfirmOpen] = useState(false);
   const [playerToDelete, setPlayerToDelete] = useState<Id<"players"> | null>(null);
+  const [isSyncingDiscordMembers, setIsSyncingDiscordMembers] = useState(false);
   
   // Search state
   const [acceptedSearch, setAcceptedSearch] = useState("");
@@ -112,6 +113,7 @@ export default function MemberManagement() {
   const acceptApplication = useMutation(api.memberManagement.acceptApplication);
   const rejectApplication = useMutation(api.memberManagement.rejectApplication);
   const convertToPlayer = useMutation(api.discord.convertToPlayer);
+  const syncDiscordMembers = useAction(api["discord/sync"].syncDiscordMembers);
   const [convertingPlayerId, setConvertingPlayerId] = useState<Id<"players"> | null>(null);
   
   // Redirect non-admins to "Accepted" tab
@@ -189,6 +191,20 @@ export default function MemberManagement() {
       setPlayerToDelete(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete player");
+    }
+  };
+
+  const handleSyncDiscordMembers = async () => {
+    setIsSyncingDiscordMembers(true);
+    try {
+      const result = await syncDiscordMembers();
+      toast.success(
+        `Discord sync complete: ${result.totalMembers} members processed, ${result.added} added, ${result.updated} updated, ${result.archived} archived`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to sync Discord members");
+    } finally {
+      setIsSyncingDiscordMembers(false);
     }
   };
   
@@ -303,6 +319,18 @@ export default function MemberManagement() {
       description="Manage member applications and status"
       authTitle="Sign in to access member management"
       showSidebar={!!isModeratorOrAdmin}
+      header={{
+        actions: isAdmin ? (
+          <Button size="sm" variant="secondary" onClick={handleSyncDiscordMembers} disabled={isSyncingDiscordMembers}>
+            {isSyncingDiscordMembers ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            Sync Discord
+          </Button>
+        ) : undefined,
+      }}
     >
       <Tabs value={activeTab} onValueChange={handleTabChange}>
           <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
@@ -520,12 +548,19 @@ export default function MemberManagement() {
                         {sortedAcceptedMembers.map((member) => (
                           <TableRow key={member._id} className="h-10">
                             <TableCell className="font-medium">
-                              <Link 
-                                to={`/player/${member.discordUsername}`}
-                                className="hover:underline text-primary"
-                              >
-                                {member.discordUsername}
-                              </Link>
+                              <div className="flex items-center gap-2">
+                                <Link 
+                                  to={`/player/${member.discordUsername}`}
+                                  className="hover:underline text-primary"
+                                >
+                                  {member.discordUsername}
+                                </Link>
+                                {member.autoAcceptedByDiscordSync && (
+                                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                    Auto-accepted by Discord sync
+                                  </Badge>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="font-mono text-sm">{member.discordUserId}</TableCell>
                             <TableCell>{member.epicUsername}</TableCell>
@@ -614,12 +649,17 @@ export default function MemberManagement() {
                       {sortedAcceptedMembers.map((member) => (
                         <div key={member._id} className="py-2 flex items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <Link 
-                              to={`/player/${member.discordUsername}`}
-                              className="hover:underline text-primary text-sm font-medium truncate block"
-                            >
-                              {member.discordUsername}
-                            </Link>
+                            <div className="flex items-center gap-1.5">
+                              <Link 
+                                to={`/player/${member.discordUsername}`}
+                                className="hover:underline text-primary text-sm font-medium truncate block"
+                              >
+                                {member.discordUsername}
+                              </Link>
+                              {member.autoAcceptedByDiscordSync && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Auto</Badge>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                               <span className="truncate">{member.epicUsername}</span>
                               {member.tier && (

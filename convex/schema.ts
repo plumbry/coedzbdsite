@@ -217,6 +217,7 @@ export default defineSchema({
     // Final decision
     rejectionReason: v.optional(v.string()),
     acceptedAt: v.optional(v.number()),
+    autoAcceptedByDiscordSync: v.optional(v.boolean()),
     rejectedAt: v.optional(v.number()),
     // Linked player record (created on acceptance)
     playerId: v.optional(v.id("players")),
@@ -225,7 +226,8 @@ export default defineSchema({
     processedByName: v.optional(v.string()),
   })
     .index("by_discord_id", ["discordId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_player_id", ["playerId"]),
   
   // Status change audit log
   statusEvents: defineTable({
