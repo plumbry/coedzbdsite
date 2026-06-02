@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -7,16 +7,19 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
-import { Users, Shield, Eye, UserCog, Calendar } from "lucide-react";
+import { Users, Shield, Eye, UserCog, Calendar, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useClientPagination } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
+import { useState } from "react";
 
 export default function UserManagement() {
   const users = useQuery(api.users.getAllUsers, {});
   const usersPagination = useClientPagination(users, {});
   const currentUser = useQuery(api.users.getCurrentUser);
   const updateUserRole = useMutation(api.users.updateUserRole);
+  const syncUsersFromClerk = useAction(api.userProvisioning.syncUsersFromClerk);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   if (users === undefined || currentUser === undefined) {
     return <Skeleton className="h-48 w-full" />;
@@ -35,6 +38,22 @@ export default function UserManagement() {
     }
   };
 
+  const handleSyncFromClerk = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await syncUsersFromClerk({});
+      toast.success(
+        `Synced ${result.clerkTotal} Clerk users (${result.created} new, ${result.updated} updated)`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to sync users from Clerk",
+      );
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const adminUsers = users.filter((u) => u.role === "admin");
   const eventModUsers = users.filter((u) => u.role === "event_mod");
   const viewerUsers = users.filter((u) => !u.role || u.role === "viewer");
@@ -42,9 +61,20 @@ export default function UserManagement() {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardDescription>
-          {adminUsers.length} admin{adminUsers.length !== 1 ? "s" : ""}, {eventModUsers.length} mod{eventModUsers.length !== 1 ? "s" : ""}, {viewerUsers.length} viewer{viewerUsers.length !== 1 ? "s" : ""}
-        </CardDescription>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardDescription>
+            {adminUsers.length} admin{adminUsers.length !== 1 ? "s" : ""}, {eventModUsers.length} mod{eventModUsers.length !== 1 ? "s" : ""}, {viewerUsers.length} viewer{viewerUsers.length !== 1 ? "s" : ""}
+          </CardDescription>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleSyncFromClerk}
+            disabled={isSyncing}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+            Sync from Clerk
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {users.length === 0 ? (

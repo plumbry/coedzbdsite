@@ -1,32 +1,12 @@
 import { ConvexError, v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
-import {
-  buildProfilePatch,
-  getDiscordUserIdFromIdentity,
-  isValidDiscordSnowflake,
-} from "./auth_discord";
+import { isValidDiscordSnowflake } from "./auth_discord";
 import { requireAdmin } from "./auth_helpers";
 import { getDisplayName } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
-import type { Doc, Id } from "./_generated/dataModel";
-
-/** Legacy Hercules rows awaiting a first Clerk Discord login. */
-function isUnlinkedMigrationUser(user: Doc<"users">): boolean {
-  return user.tokenIdentifier.startsWith("https://hercules.app|");
-}
-
-async function findUsersByDiscordId(
-  ctx: MutationCtx,
-  discordUserId: string,
-): Promise<Doc<"users">[]> {
-  const match = await ctx.db
-    .query("users")
-    .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", discordUserId))
-    .collect();
-
-  return match;
-}
+import type { Id } from "./_generated/dataModel";
+import { provisionFromIdentity } from "./userProvisioning";
 
 async function assertDiscordUserIdAvailable(
   ctx: MutationCtx,
@@ -95,92 +75,7 @@ export const updateCurrentUser = mutation({
       });
     }
 
-    const profilePatch = buildProfilePatch(identity);
-    const discordUserId = getDiscordUserIdFromIdentity(identity);
-
-    const existingUser = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier),
-      )
-      .unique();
-
-    if (existingUser) {
-      await ctx.db.patch(existingUser._id, {
-        ...profilePatch,
-        ...(discordUserId ? { discordUserId } : {}),
-      });
-      return existingUser._id;
-    }
-
-    if (discordUserId) {
-      const discordMatches = await findUsersByDiscordId(ctx, discordUserId);
-      const unlinkedMatches = discordMatches.filter(isUnlinkedMigrationUser);
-
-      if (discordMatches.length > 1 && unlinkedMatches.length !== 1) {
-        throw new ConvexError({
-          message: "Account linking error: duplicate Discord id in database. Contact an admin.",
-          code: "INTERNAL",
-        });
-      }
-
-      const migrationUser =
-        unlinkedMatches.length === 1
-          ? unlinkedMatches[0]
-          : discordMatches.length === 1 && isUnlinkedMigrationUser(discordMatches[0])
-            ? discordMatches[0]
-            : null;
-
-      if (migrationUser) {
-        const role = migrationUser.role ?? "viewer";
-        await ctx.db.patch(migrationUser._id, {
-          tokenIdentifier: identity.tokenIdentifier,
-          discordUserId,
-          ...profilePatch,
-          ...(migrationUser.role ? {} : { role: "viewer" as const }),
-        });
-
-        await logAudit(ctx, {
-          userId: migrationUser._id,
-          userName: getDisplayName({ ...migrationUser, ...profilePatch }),
-          action: "user_account_linked",
-          entityType: "user",
-          entityId: migrationUser._id,
-          details: `User signed in and linked Discord account (${profilePatch.email || profilePatch.name || discordUserId})`,
-          newValue: role,
-        });
-
-        return migrationUser._id;
-      }
-    }
-
-    // Open sign-up: any authenticated user gets their own viewer row.
-    // Skip discordUserId when it already belongs to an active (linked) account.
-    const linkedDiscordOwner =
-      discordUserId &&
-      (await findUsersByDiscordId(ctx, discordUserId)).find(
-        (user) => !isUnlinkedMigrationUser(user),
-      );
-
-    const userId = await ctx.db.insert("users", {
-      tokenIdentifier: identity.tokenIdentifier,
-      role: "viewer",
-      ...profilePatch,
-      ...(discordUserId && !linkedDiscordOwner ? { discordUserId } : {}),
-    });
-
-    await logAudit(ctx, {
-      userId,
-      userName:
-        profilePatch.name || profilePatch.email || profilePatch.discordUsername || "Unknown",
-      action: "user_signed_up",
-      entityType: "user",
-      entityId: userId,
-      details: `New user signed up (${profilePatch.email || profilePatch.name || identity.tokenIdentifier})`,
-      newValue: "viewer",
-    });
-
-    return userId;
+    return await provisionFromIdentity(ctx, identity);
   },
 });
 

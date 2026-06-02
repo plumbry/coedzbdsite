@@ -578,5 +578,189 @@ http.route({
   }),
 });
 
+// Clerk webhook: provision Convex user rows when Clerk accounts are created or sign in
+http.route({
+  path: "/api/clerk/webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const secret = process.env.CLERK_WEBHOOK_SECRET;
+    if (!secret) {
+      return new Response(
+        JSON.stringify({ error: "CLERK_WEBHOOK_SECRET not configured" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const payload = await request.text();
+    const msgId = request.headers.get("svix-id");
+    const msgTimestamp = request.headers.get("svix-timestamp");
+    const msgSignature = request.headers.get("svix-signature");
+
+    if (!msgId || !msgTimestamp || !msgSignature) {
+      return new Response(
+        JSON.stringify({ error: "Missing Svix headers" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const verified = await verifyClerkWebhook(payload, secret, msgId, msgTimestamp, msgSignature);
+    if (!verified) {
+      return new Response(
+        JSON.stringify({ error: "Invalid webhook signature" }),
+        { status: 401, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    try {
+      const event = JSON.parse(payload) as {
+        type: string;
+        data: {
+          id?: string;
+          user_id?: string;
+          username?: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+          email_addresses?: Array<{ email_address?: string }>;
+          external_accounts?: Array<{
+            provider?: string;
+            provider_user_id?: string;
+            username?: string;
+          }>;
+        };
+      };
+
+      if (event.type !== "user.created" && event.type !== "session.created") {
+        return new Response(JSON.stringify({ ok: true, ignored: event.type }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const clerkUserId =
+        event.type === "session.created" ? event.data.user_id : event.data.id;
+
+      if (!clerkUserId) {
+        return new Response(
+          JSON.stringify({ error: "Missing Clerk user id in webhook payload" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      const primaryEmail = event.data.email_addresses?.[0]?.email_address;
+      const fullName = [event.data.first_name, event.data.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      const discordAccount = event.data.external_accounts?.find(
+        (account) =>
+          account.provider === "oauth_discord" || account.provider === "discord",
+      );
+
+      await ctx.runMutation(internal.userProvisioning.provisionFromClerkData, {
+        clerkUserId,
+        name: fullName || event.data.username || undefined,
+        email: primaryEmail || undefined,
+        username: event.data.username || undefined,
+        discordUserId:
+          discordAccount?.provider_user_id &&
+          /^\d{17,20}$/.test(discordAccount.provider_user_id)
+            ? discordAccount.provider_user_id
+            : undefined,
+        discordUsername: discordAccount?.username || undefined,
+      });
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Clerk webhook error:", error);
+      return new Response(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : "Webhook handler failed",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }),
+});
+
+async function verifyClerkWebhook(
+  payload: string,
+  secret: string,
+  msgId: string,
+  msgTimestamp: string,
+  msgSignature: string,
+): Promise<boolean> {
+  const timestampSeconds = Number(msgTimestamp);
+  if (!Number.isFinite(timestampSeconds)) {
+    return false;
+  }
+
+  const ageSeconds = Math.abs(Date.now() / 1000 - timestampSeconds);
+  if (ageSeconds > 300) {
+    return false;
+  }
+
+  const secretBytes = decodeSvixSecret(secret);
+  if (!secretBytes) {
+    return false;
+  }
+
+  const signedContent = `${msgId}.${msgTimestamp}.${payload}`;
+  const keyMaterial = Uint8Array.from(secretBytes);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyMaterial,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(signedContent),
+  );
+  const expected = new Uint8Array(signature);
+  const expectedB64 = btoa(String.fromCharCode(...expected));
+
+  for (const versionedSignature of msgSignature.split(" ")) {
+    const [version, value] = versionedSignature.split(",");
+    if (version !== "v1" || !value) {
+      continue;
+    }
+    if (timingSafeEqual(value, expectedB64)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function decodeSvixSecret(secret: string): Uint8Array | null {
+  const encoded = secret.startsWith("whsec_") ? secret.slice(6) : secret;
+  try {
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 // REQUIRED: Export HttpRouter as default from convex/http.ts
 export default http;

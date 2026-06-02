@@ -21,7 +21,8 @@ function useAuthForConvex() {
           template: "convex",
           skipCache: forceRefreshToken,
         });
-      } catch {
+      } catch (error) {
+        console.error("Failed to fetch Convex JWT from Clerk:", error);
         return null;
       }
     },

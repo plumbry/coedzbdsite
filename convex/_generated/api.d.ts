@@ -101,6 +101,7 @@ import type * as tierReEvaluationBatched from "../tierReEvaluationBatched.js";
 import type * as tierSnapshot from "../tierSnapshot.js";
 import type * as topFiveCache from "../topFiveCache.js";
 import type * as upsetKills from "../upsetKills.js";
+import type * as userProvisioning from "../userProvisioning.js";
 import type * as users from "../users.js";
 import type * as wrapped from "../wrapped.js";
 import type * as wrappedStats from "../wrappedStats.js";
@@ -225,6 +226,7 @@ declare const fullApi: ApiFromModules<{
   tierSnapshot: typeof tierSnapshot;
   topFiveCache: typeof topFiveCache;
   upsetKills: typeof upsetKills;
+  userProvisioning: typeof userProvisioning;
   users: typeof users;
   wrapped: typeof wrapped;
   wrappedStats: typeof wrappedStats;
