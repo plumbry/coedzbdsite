@@ -9,6 +9,7 @@
  */
 
 import type * as aggregateStats from "../aggregateStats.js";
+import type * as audienceInsights from "../audienceInsights.js";
 import type * as audit from "../audit.js";
 import type * as auth_discord from "../auth_discord.js";
 import type * as auth_helpers from "../auth_helpers.js";
@@ -126,6 +127,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   aggregateStats: typeof aggregateStats;
+  audienceInsights: typeof audienceInsights;
   audit: typeof audit;
   auth_discord: typeof auth_discord;
   auth_helpers: typeof auth_helpers;

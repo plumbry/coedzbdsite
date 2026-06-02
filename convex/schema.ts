@@ -654,6 +654,40 @@ export default defineSchema({
     lastUpdated: v.number(),
   }),
 
+  // Cached audience insights donuts (admin audience-insights page)
+  audienceInsightsCache: defineTable({
+    totalMembers: v.number(),
+    gender: v.array(
+      v.object({
+        label: v.string(),
+        value: v.number(),
+        color: v.string(),
+      }),
+    ),
+    tier: v.array(
+      v.object({
+        label: v.string(),
+        value: v.number(),
+        color: v.string(),
+      }),
+    ),
+    tenure: v.array(
+      v.object({
+        label: v.string(),
+        value: v.number(),
+        color: v.string(),
+      }),
+    ),
+    events: v.array(
+      v.object({
+        label: v.string(),
+        value: v.number(),
+        color: v.string(),
+      }),
+    ),
+    lastUpdated: v.number(),
+  }),
+
   // Cached per-import leaderboard analytics (leaderboard-stats admin page)
   leaderboardStatsCache: defineTable({
     stats: v.array(

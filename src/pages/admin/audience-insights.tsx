@@ -1,9 +1,14 @@
+import { useEffect, useRef, useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { Button } from "@/components/ui/button.tsx";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
+import { RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 type ChartPoint = {
   label: string;
@@ -87,7 +92,33 @@ function DonutCard({
 }
 
 function AudienceInsightsContent() {
-  const insights = useQuery(api.memberManagement.getAudienceInsights);
+  const insights = useQuery(api.audienceInsights.getAudienceInsights);
+  const rebuildCache = useMutation(api.audienceInsights.rebuildAudienceInsightsCache);
+  const [isRebuilding, setIsRebuilding] = useState(false);
+  const autoRebuildStarted = useRef(false);
+
+  const runRebuild = async () => {
+    setIsRebuilding(true);
+    try {
+      const result = await rebuildCache({});
+      toast.success(
+        `Audience insights updated for ${result.playersUpdated} members`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to rebuild audience insights",
+      );
+    } finally {
+      setIsRebuilding(false);
+    }
+  };
+
+  useEffect(() => {
+    if (insights === undefined || insights === null) return;
+    if (!insights.needsRebuild || autoRebuildStarted.current) return;
+    autoRebuildStarted.current = true;
+    void runRebuild();
+  }, [insights]);
 
   if (insights === undefined) {
     return (
@@ -99,15 +130,41 @@ function AudienceInsightsContent() {
     );
   }
 
+  const cacheLabel = insights.lastUpdated
+    ? `Last updated ${new Date(insights.lastUpdated).toLocaleString()}`
+    : null;
+
   return (
     <div className="space-y-4">
+      {insights.needsRebuild && (
+        <Alert>
+          <AlertTitle>Building event statistics</AlertTitle>
+          <AlertDescription>
+            Gender, tier, and tenure load immediately. Event counts are computed in the
+            background because scanning all results in one request times out.
+            {isRebuilding ? " This may take a minute…" : ""}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
-            Audience split based on accepted members ({insights.totalMembers} total). Tenure uses
-            Discord server join date. Event activity counts distinct events from manual and imported
-            results (not the cached player field).
+            Audience split based on accepted members ({insights.totalMembers} total). Tenure
+            uses Discord server join date. Event activity counts distinct events per member
+            from result records.
+            {cacheLabel ? ` ${cacheLabel}.` : ""}
           </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void runRebuild()}
+            disabled={isRebuilding}
+            className="shrink-0"
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRebuilding ? "animate-spin" : ""}`} />
+            {isRebuilding ? "Rebuilding…" : "Refresh stats"}
+          </Button>
         </CardContent>
       </Card>
 
@@ -133,12 +190,24 @@ function AudienceInsightsContent() {
           data={insights.tenure}
           total={insights.totalMembers}
         />
-        <DonutCard
-          title="Played More Than 5 Events"
-          description="Distinct events with a recorded result for that member."
-          data={insights.events}
-          total={insights.totalMembers}
-        />
+        {insights.needsRebuild ? (
+          <Card className="py-0">
+            <CardHeader className="py-3">
+              <CardTitle className="text-base">Played More Than 5 Events</CardTitle>
+              <CardDescription>Computing from event results…</CardDescription>
+            </CardHeader>
+            <CardContent className="pb-4">
+              <Skeleton className="h-56 w-full" />
+            </CardContent>
+          </Card>
+        ) : (
+          <DonutCard
+            title="Played More Than 5 Events"
+            description="Distinct events with a recorded result for that member."
+            data={insights.events}
+            total={insights.totalMembers}
+          />
+        )}
       </div>
     </div>
   );
