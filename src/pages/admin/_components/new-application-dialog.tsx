@@ -152,39 +152,35 @@ type NewApplicationDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-type PlayerScoreRecord = {
-  thirdPartyExperience: number;
-  thirdPartyPerformance: number;
-  inGameTourneyPerformance: number;
-  officialEarnings: number;
-  rankedPerformance: number;
-  hoursPlayed: number;
-  notorietyTeammates: number;
-  age: number;
-  gender: number;
-  ability: number;
-  region: number;
-  gameSense: number;
+function scoreRecordToState(score: {
+  thirdPartyExperience?: number;
+  thirdPartyPerformance?: number;
+  inGameTourneyPerformance?: number;
+  officialEarnings?: number;
+  rankedPerformance?: number;
+  hoursPlayed?: number;
+  notorietyTeammates?: number;
+  age?: number;
+  gender?: number;
+  ability?: number;
+  region?: number;
+  gameSense?: number;
   seasonPerformance?: number;
   modifiers?: number;
-  femaleVerified?: boolean;
-  verificationMethod?: string;
-};
-
-function scoreRecordToState(score: PlayerScoreRecord): ScoreState {
+}): ScoreState {
   return {
-    thirdPartyExperience: score.thirdPartyExperience,
-    thirdPartyPerformance: score.thirdPartyPerformance,
-    inGameTourneyPerformance: score.inGameTourneyPerformance,
-    officialEarnings: score.officialEarnings,
-    rankedPerformance: score.rankedPerformance,
-    hoursPlayed: score.hoursPlayed,
-    notorietyTeammates: score.notorietyTeammates,
-    age: score.age,
-    gender: score.gender,
-    ability: score.ability,
-    region: score.region,
-    gameSense: score.gameSense,
+    thirdPartyExperience: score.thirdPartyExperience ?? 0,
+    thirdPartyPerformance: score.thirdPartyPerformance ?? 0,
+    inGameTourneyPerformance: score.inGameTourneyPerformance ?? 0,
+    officialEarnings: score.officialEarnings ?? 0,
+    rankedPerformance: score.rankedPerformance ?? 0,
+    hoursPlayed: score.hoursPlayed ?? 0,
+    notorietyTeammates: score.notorietyTeammates ?? 0,
+    age: score.age ?? 0,
+    gender: score.gender ?? 0,
+    ability: score.ability ?? 0,
+    region: score.region ?? 0,
+    gameSense: score.gameSense ?? 0,
     seasonPerformance: score.seasonPerformance ?? 0,
     modifiers: score.modifiers ?? 0,
   };
