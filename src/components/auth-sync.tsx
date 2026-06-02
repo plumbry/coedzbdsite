@@ -1,6 +1,6 @@
 import { api } from "@/convex/_generated/api.js";
-import { useConvexAuth, useMutation } from "convex/react";
-import { useEffect } from "react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 const MAX_SYNC_ATTEMPTS = 4;
@@ -36,10 +36,25 @@ function wait(ms: number): Promise<void> {
  */
 export function AuthSync() {
   const { isAuthenticated } = useConvexAuth();
+  const currentUser = useQuery(
+    api.users.getCurrentUser,
+    isAuthenticated ? undefined : "skip",
+  );
   const updateCurrentUser = useMutation(api.users.updateCurrentUser);
+  const syncedThisSession = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
+      syncedThisSession.current = false;
+      return;
+    }
+
+    if (currentUser === undefined) {
+      return;
+    }
+
+    const needsSync = currentUser === null || !syncedThisSession.current;
+    if (!needsSync) {
       return;
     }
 
@@ -53,6 +68,7 @@ export function AuthSync() {
 
         try {
           await updateCurrentUser();
+          syncedThisSession.current = true;
           return;
         } catch (err) {
           if (cancelled) {
@@ -77,7 +93,7 @@ export function AuthSync() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, updateCurrentUser]);
+  }, [isAuthenticated, currentUser, updateCurrentUser]);
 
   return null;
 }

@@ -11,6 +11,11 @@ import { getDisplayName } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
 import type { Doc, Id } from "./_generated/dataModel";
 
+/** Legacy Hercules rows awaiting a first Clerk Discord login. */
+function isUnlinkedMigrationUser(user: Doc<"users">): boolean {
+  return user.tokenIdentifier.startsWith("https://hercules.app|");
+}
+
 async function findUsersByDiscordId(
   ctx: MutationCtx,
   discordUserId: string,
@@ -74,7 +79,8 @@ export const getAllUsers = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    return await ctx.db.query("users").collect();
+    const users = await ctx.db.query("users").collect();
+    return users.sort((a, b) => b._creationTime - a._creationTime);
   },
 });
 
@@ -109,43 +115,58 @@ export const updateCurrentUser = mutation({
 
     if (discordUserId) {
       const discordMatches = await findUsersByDiscordId(ctx, discordUserId);
-      if (discordMatches.length > 1) {
+      const unlinkedMatches = discordMatches.filter(isUnlinkedMigrationUser);
+
+      if (discordMatches.length > 1 && unlinkedMatches.length !== 1) {
         throw new ConvexError({
           message: "Account linking error: duplicate Discord id in database. Contact an admin.",
           code: "INTERNAL",
         });
       }
 
-      if (discordMatches.length === 1) {
-        const matchedUser = discordMatches[0];
-        const role = matchedUser.role ?? "viewer";
-        await ctx.db.patch(matchedUser._id, {
+      const migrationUser =
+        unlinkedMatches.length === 1
+          ? unlinkedMatches[0]
+          : discordMatches.length === 1 && isUnlinkedMigrationUser(discordMatches[0])
+            ? discordMatches[0]
+            : null;
+
+      if (migrationUser) {
+        const role = migrationUser.role ?? "viewer";
+        await ctx.db.patch(migrationUser._id, {
           tokenIdentifier: identity.tokenIdentifier,
           discordUserId,
           ...profilePatch,
-          ...(matchedUser.role ? {} : { role: "viewer" as const }),
+          ...(migrationUser.role ? {} : { role: "viewer" as const }),
         });
 
         await logAudit(ctx, {
-          userId: matchedUser._id,
-          userName: getDisplayName({ ...matchedUser, ...profilePatch }),
+          userId: migrationUser._id,
+          userName: getDisplayName({ ...migrationUser, ...profilePatch }),
           action: "user_account_linked",
           entityType: "user",
-          entityId: matchedUser._id,
+          entityId: migrationUser._id,
           details: `User signed in and linked Discord account (${profilePatch.email || profilePatch.name || discordUserId})`,
           newValue: role,
         });
 
-        return matchedUser._id;
+        return migrationUser._id;
       }
     }
 
-    // Open sign-up: any authenticated user is created as viewer.
+    // Open sign-up: any authenticated user gets their own viewer row.
+    // Skip discordUserId when it already belongs to an active (linked) account.
+    const linkedDiscordOwner =
+      discordUserId &&
+      (await findUsersByDiscordId(ctx, discordUserId)).find(
+        (user) => !isUnlinkedMigrationUser(user),
+      );
+
     const userId = await ctx.db.insert("users", {
       tokenIdentifier: identity.tokenIdentifier,
       role: "viewer",
       ...profilePatch,
-      ...(discordUserId ? { discordUserId } : {}),
+      ...(discordUserId && !linkedDiscordOwner ? { discordUserId } : {}),
     });
 
     await logAudit(ctx, {

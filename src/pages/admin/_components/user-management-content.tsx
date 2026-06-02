@@ -63,6 +63,7 @@ export default function UserManagement() {
             <TableHeader>
               <TableRow>
                 <TableHead>User</TableHead>
+                <TableHead>Username</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -82,6 +83,9 @@ export default function UserManagement() {
                           You
                         </Badge>
                       )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {user.username || "—"}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {user.email || "—"}
