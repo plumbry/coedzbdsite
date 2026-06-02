@@ -1,4 +1,4 @@
-import { Component, useEffect, useRef, useState, type ReactNode } from "react";
+import { Component, type ReactNode } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -144,30 +144,9 @@ function DonutCard({
 }
 
 function AudienceInsightsContent() {
-  const cleanupStarted = useRef(false);
-  const [cleanupDone, setCleanupDone] = useState(false);
-  const cleanupJobs = useMutation(api.audienceInsights.cleanupAudienceInsightsRebuildJobs);
-  const insights = useQuery(
-    api.audienceInsights.getAudienceInsights,
-    cleanupDone ? {} : "skip",
-  );
-  const rebuildJob = useQuery(
-    api.audienceInsights.getRebuildJobStatus,
-    cleanupDone ? {} : "skip",
-  );
+  const insights = useQuery(api.audienceInsights.getAudienceInsights);
+  const rebuildJob = useQuery(api.audienceInsights.getRebuildJobStatus);
   const rebuildCache = useMutation(api.audienceInsights.rebuildAudienceInsightsCache);
-
-  useEffect(() => {
-    if (cleanupStarted.current) return;
-    cleanupStarted.current = true;
-    void cleanupJobs({})
-      .catch(() => {
-        /* Schema repair may already be applied; still allow queries. */
-      })
-      .finally(() => {
-        setCleanupDone(true);
-      });
-  }, [cleanupJobs]);
 
   const isJobRunning = rebuildJob?.status === "running";
   const hasCache = insights !== undefined && insights.totalMembers > 0;
@@ -191,7 +170,7 @@ function AudienceInsightsContent() {
     }
   };
 
-  if (!cleanupDone || insights === undefined) {
+  if (insights === undefined) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -211,9 +190,8 @@ function AudienceInsightsContent() {
         <Alert>
           <AlertTitle>No cached data yet</AlertTitle>
           <AlertDescription>
-            This page reads from a saved cache so it loads instantly. Click Refresh stats once
-            to build the cache. For accurate event counts, run the event participation backfill on
-            Data Cache first, then refresh here.
+            Click Refresh stats to build the audience snapshot. For accurate event counts, run
+            the event participation backfill on Data Cache first.
           </AlertDescription>
         </Alert>
       )}
@@ -256,13 +234,9 @@ function AudienceInsightsContent() {
             {hasCache ? (
               <>
                 Audience split for {insights.totalMembers} accepted members. {cacheLabel}.
-                Loads use cached data only — nothing is recalculated on each visit.
               </>
             ) : (
-              <>
-                Click Refresh stats to build the cache. After the first run, this page loads from
-                that cache until you refresh again.
-              </>
+              <>Click Refresh stats to build the snapshot.</>
             )}
           </p>
           <Button
@@ -305,9 +279,7 @@ function AudienceInsightsContent() {
             <CardHeader className="py-3">
               <CardTitle className="text-base">Played More Than 5 Events</CardTitle>
               <CardDescription>
-                {isJobRunning
-                  ? "Updating…"
-                  : "Refresh stats to compute from member event counts."}
+                {isJobRunning ? "Updating…" : "Refresh stats after Data Cache backfill."}
               </CardDescription>
             </CardHeader>
             <CardContent className="pb-4">
@@ -317,7 +289,7 @@ function AudienceInsightsContent() {
         ) : (
           <DonutCard
             title="Played More Than 5 Events"
-            description="Uses each member's events played count (backfill on Data Cache if needed)."
+            description="Uses each member's events played count."
             data={insights.events}
             total={insights.totalMembers}
           />

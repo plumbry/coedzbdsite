@@ -162,7 +162,7 @@ async function genderForPlayer(
   return score?.gender;
 }
 
-async function upsertAudienceInsightsCache(
+async function upsertAudienceInsightsSnapshot(
   ctx: MutationCtx,
   payload: {
     totalMembers: number;
@@ -174,125 +174,84 @@ async function upsertAudienceInsightsCache(
     lastUpdated: number;
   },
 ) {
-  const existing = await ctx.db.query("audienceInsightsCache").first();
+  const existing = await ctx.db.query("audienceInsightsSnapshot").first();
   if (existing) {
     await ctx.db.replace(existing._id, payload);
   } else {
-    await ctx.db.insert("audienceInsightsCache", payload);
+    await ctx.db.insert("audienceInsightsSnapshot", payload);
   }
 }
 
-function countersFromJob(job: Doc<"audienceInsightsRebuildJobs">): JobCounters {
+function countersFromJob(job: Doc<"audienceInsightsJobs">): JobCounters {
   return {
-    male: job.male ?? 0,
-    female: job.female ?? 0,
-    genderUnknown: job.genderUnknown ?? 0,
-    tierS: job.tierS ?? 0,
-    tierA: job.tierA ?? 0,
-    tierB: job.tierB ?? 0,
-    tierC: job.tierC ?? 0,
-    tierOther: job.tierOther ?? 0,
-    tenureUnder3m: job.tenureUnder3m ?? 0,
-    tenure3to6m: job.tenure3to6m ?? 0,
-    tenure6to12m: job.tenure6to12m ?? 0,
-    tenure1to2y: job.tenure1to2y ?? 0,
-    tenure2yPlus: job.tenure2yPlus ?? 0,
-    tenureUnknown: job.tenureUnknown ?? 0,
-    eventsOverFive: job.eventsOverFive ?? 0,
-    eventsFiveOrLess: job.eventsFiveOrLess ?? 0,
+    male: job.male,
+    female: job.female,
+    genderUnknown: job.genderUnknown,
+    tierS: job.tierS,
+    tierA: job.tierA,
+    tierB: job.tierB,
+    tierC: job.tierC,
+    tierOther: job.tierOther,
+    tenureUnder3m: job.tenureUnder3m,
+    tenure3to6m: job.tenure3to6m,
+    tenure6to12m: job.tenure6to12m,
+    tenure1to2y: job.tenure1to2y,
+    tenure2yPlus: job.tenure2yPlus,
+    tenureUnknown: job.tenureUnknown,
+    eventsOverFive: job.eventsOverFive,
+    eventsFiveOrLess: job.eventsFiveOrLess,
   };
 }
 
-function isLegacyRebuildJob(job: Doc<"audienceInsightsRebuildJobs">) {
-  return (job.memberIds?.length ?? 0) > 0;
-}
+async function failStaleRunningJobs(ctx: MutationCtx) {
+  const running = await ctx.db
+    .query("audienceInsightsJobs")
+    .withIndex("by_status", (q) => q.eq("status", "running"))
+    .collect();
 
-function shouldRemoveRebuildJob(
-  job: Doc<"audienceInsightsRebuildJobs">,
-  now: number,
-) {
-  if (isLegacyRebuildJob(job)) {
-    return true;
-  }
-  if (job.status === "running" && now - job.startedAt > STALE_JOB_MS) {
-    return true;
-  }
-  return false;
-}
-
-/** Deletes broken or legacy rebuild jobs (avoids patching huge legacy rows). */
-async function purgeInvalidRebuildJobs(ctx: MutationCtx) {
   const now = Date.now();
-  let cursor: string | null = null;
-  let deleted = 0;
-
-  while (true) {
-    const page = await ctx.db.query("audienceInsightsRebuildJobs").paginate({
-      numItems: 5,
-      cursor,
-    });
-
-    for (const job of page.page) {
-      if (shouldRemoveRebuildJob(job, now)) {
-        await ctx.db.delete(job._id);
-        deleted += 1;
-      }
+  for (const job of running) {
+    if (now - job.startedAt > STALE_JOB_MS) {
+      await ctx.db.patch(job._id, {
+        status: "failed",
+        errorMessage: "Rebuild timed out — click Refresh stats again.",
+        completedAt: now,
+      });
     }
-
-    if (page.isDone) {
-      break;
-    }
-    cursor = page.continueCursor;
   }
-
-  return deleted;
 }
 
-async function repairAudienceInsightsCache(ctx: MutationCtx) {
-  const cached = await ctx.db.query("audienceInsightsCache").first();
-  if (!cached) {
-    return false;
-  }
+const emptyInsights = {
+  totalMembers: 0,
+  gender: [] as ChartSegment[],
+  tier: [] as ChartSegment[],
+  tenure: [] as ChartSegment[],
+  events: [] as ChartSegment[],
+  eventsReady: false,
+  lastUpdated: undefined as number | undefined,
+  needsRebuild: true,
+};
 
-  if (cached.eventsReady === undefined) {
-    await ctx.db.patch(cached._id, {
-      eventsReady: true,
-    });
-    return true;
-  }
-
-  return false;
-}
-
-/** Read-only: returns cached data only (never scans result tables). */
+/** Read-only: returns cached snapshot only (never scans result tables). */
 export const getAudienceInsights = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
 
-    const cached = await ctx.db.query("audienceInsightsCache").first();
-    if (cached) {
-      return {
-        totalMembers: cached.totalMembers,
-        gender: cached.gender ?? [],
-        tier: cached.tier ?? [],
-        tenure: cached.tenure ?? [],
-        events: cached.events ?? [],
-        eventsReady: cached.eventsReady === true,
-        lastUpdated: cached.lastUpdated,
-        needsRebuild: false,
-      };
+    const cached = await ctx.db.query("audienceInsightsSnapshot").first();
+    if (!cached) {
+      return emptyInsights;
     }
 
     return {
-      totalMembers: 0,
-      gender: [] as ChartSegment[],
-      tier: [] as ChartSegment[],
-      tenure: [] as ChartSegment[],
-      events: [] as ChartSegment[],
-      eventsReady: false,
-      lastUpdated: undefined,
-      needsRebuild: true,
+      totalMembers: cached.totalMembers,
+      gender: cached.gender,
+      tier: cached.tier,
+      tenure: cached.tenure,
+      events: cached.events,
+      eventsReady: cached.eventsReady,
+      lastUpdated: cached.lastUpdated,
+      needsRebuild: false,
     };
   },
 });
@@ -303,31 +262,30 @@ export const getRebuildJobStatus = query({
     await requireAdmin(ctx);
 
     const job = await ctx.db
-      .query("audienceInsightsRebuildJobs")
+      .query("audienceInsightsJobs")
       .withIndex("by_status", (q) => q.eq("status", "running"))
       .first();
 
-    if (!job || isLegacyRebuildJob(job)) {
+    if (!job) {
       return null;
     }
 
     return {
       status: job.status,
       processedCount: job.processedCount,
-      totalCount: job.totalCount ?? 0,
+      totalCount: job.totalCount,
       startedAt: job.startedAt,
     };
   },
 });
 
-/** Clears stuck legacy rebuild jobs so status queries stay fast. */
+/** No-op kept for older clients; legacy tables are no longer read. */
 export const cleanupAudienceInsightsRebuildJobs = mutation({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    const deletedJobs = await purgeInvalidRebuildJobs(ctx);
-    const cacheRepaired = await repairAudienceInsightsCache(ctx);
-    return { deletedJobs, cacheRepaired };
+    await failStaleRunningJobs(ctx);
+    return { deletedJobs: 0, cacheRepaired: false };
   },
 });
 
@@ -337,14 +295,14 @@ export const rebuildAudienceInsightsCache = mutation({
   handler: async (ctx) => {
     await requireAdmin(ctx);
 
-    await purgeInvalidRebuildJobs(ctx);
+    await failStaleRunningJobs(ctx);
 
     const running = await ctx.db
-      .query("audienceInsightsRebuildJobs")
+      .query("audienceInsightsJobs")
       .withIndex("by_status", (q) => q.eq("status", "running"))
       .first();
 
-    if (running && !isLegacyRebuildJob(running)) {
+    if (running) {
       throw new ConvexError({
         message: "An audience insights rebuild is already running",
         code: "CONFLICT",
@@ -352,7 +310,7 @@ export const rebuildAudienceInsightsCache = mutation({
     }
 
     const now = Date.now();
-    const jobId = await ctx.db.insert("audienceInsightsRebuildJobs", {
+    const jobId = await ctx.db.insert("audienceInsightsJobs", {
       status: "running",
       totalCount: 0,
       processedCount: 0,
@@ -376,16 +334,11 @@ export const rebuildAudienceInsightsCache = mutation({
 
 export const processRebuildBatch = internalMutation({
   args: {
-    jobId: v.id("audienceInsightsRebuildJobs"),
+    jobId: v.id("audienceInsightsJobs"),
   },
   handler: async (ctx, args) => {
     const job = await ctx.db.get(args.jobId);
     if (!job || job.status !== "running") {
-      return;
-    }
-
-    if (isLegacyRebuildJob(job)) {
-      await ctx.db.delete(args.jobId);
       return;
     }
 
@@ -399,7 +352,7 @@ export const processRebuildBatch = internalMutation({
         )
         .paginate({
           numItems: MEMBERS_PER_BATCH,
-          cursor: job.playersCursor ?? null,
+          cursor: job.playersCursor,
         });
 
       for (const member of page.page) {
@@ -412,7 +365,7 @@ export const processRebuildBatch = internalMutation({
       if (!page.isDone) {
         await ctx.db.patch(args.jobId, {
           processedCount,
-          totalCount: Math.max(job.totalCount ?? 0, processedCount),
+          totalCount: Math.max(job.totalCount, processedCount),
           playersCursor: page.continueCursor,
           ...counters,
         });
@@ -429,7 +382,7 @@ export const processRebuildBatch = internalMutation({
       const totalMembers = processedCount;
       const segments = segmentsFromCounters(counters, totalMembers);
 
-      await upsertAudienceInsightsCache(ctx, {
+      await upsertAudienceInsightsSnapshot(ctx, {
         ...segments,
         eventsReady: true,
         lastUpdated: completedAt,
