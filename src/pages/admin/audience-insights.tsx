@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -16,6 +16,41 @@ type ChartPoint = {
   value: number;
   color: string;
 };
+
+class AudienceInsightsErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <Alert variant="destructive">
+          <AlertTitle>Could not load audience insights</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>{this.state.error.message}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                this.setState({ error: null });
+                window.location.reload();
+              }}
+            >
+              Reload page
+            </Button>
+          </AlertDescription>
+        </Alert>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function pct(part: number, total: number): number {
   if (total === 0) return 0;
@@ -110,17 +145,28 @@ function DonutCard({
 
 function AudienceInsightsContent() {
   const cleanupStarted = useRef(false);
-  const insights = useQuery(api.audienceInsights.getAudienceInsights);
-  const rebuildJob = useQuery(api.audienceInsights.getRebuildJobStatus);
+  const [cleanupDone, setCleanupDone] = useState(false);
   const cleanupJobs = useMutation(api.audienceInsights.cleanupAudienceInsightsRebuildJobs);
+  const insights = useQuery(
+    api.audienceInsights.getAudienceInsights,
+    cleanupDone ? {} : "skip",
+  );
+  const rebuildJob = useQuery(
+    api.audienceInsights.getRebuildJobStatus,
+    cleanupDone ? {} : "skip",
+  );
   const rebuildCache = useMutation(api.audienceInsights.rebuildAudienceInsightsCache);
 
   useEffect(() => {
     if (cleanupStarted.current) return;
     cleanupStarted.current = true;
-    void cleanupJobs({}).catch(() => {
-      cleanupStarted.current = false;
-    });
+    void cleanupJobs({})
+      .catch(() => {
+        /* Schema repair may already be applied; still allow queries. */
+      })
+      .finally(() => {
+        setCleanupDone(true);
+      });
   }, [cleanupJobs]);
 
   const isJobRunning = rebuildJob?.status === "running";
@@ -132,11 +178,11 @@ function AudienceInsightsContent() {
           100,
           Math.round((rebuildJob.processedCount / rebuildJob.totalCount) * 100),
         )
-      : undefined;
+      : null;
 
   const runRebuild = async () => {
     try {
-      const result = await rebuildCache({});
+      await rebuildCache({});
       toast.success("Rebuild started. Charts update when the job finishes.");
     } catch (error) {
       toast.error(
@@ -145,7 +191,7 @@ function AudienceInsightsContent() {
     }
   };
 
-  if (insights === undefined) {
+  if (!cleanupDone || insights === undefined) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -174,20 +220,22 @@ function AudienceInsightsContent() {
 
       {isJobRunning && rebuildJob && (
         <Alert>
-          <AlertTitle>Refreshing event statistics</AlertTitle>
+          <AlertTitle>Refreshing audience statistics</AlertTitle>
           <AlertDescription className="space-y-2">
             <p>
-              Rebuilding audience stats in the background
+              Rebuilding in the background
               {rebuildJob.totalCount > 0
                 ? ` (${rebuildJob.processedCount} / ${rebuildJob.totalCount} members)`
                 : rebuildJob.processedCount > 0
                   ? ` (${rebuildJob.processedCount} members processed)`
                   : "…"}
             </p>
-            {progressPercent !== undefined ? (
+            {progressPercent !== null ? (
               <Progress value={progressPercent} className="h-2" />
             ) : (
-              <Progress value={undefined} className="h-2" />
+              <div className="h-2 w-full overflow-hidden rounded-full bg-primary/20">
+                <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
+              </div>
             )}
           </AlertDescription>
         </Alert>
@@ -197,8 +245,7 @@ function AudienceInsightsContent() {
         <Alert>
           <AlertTitle>Event chart needs a refresh</AlertTitle>
           <AlertDescription>
-            Gender, tier, and tenure are cached. Click Refresh stats to compute event counts from
-            result records.
+            Gender, tier, and tenure are cached. Click Refresh stats to rebuild all charts.
           </AlertDescription>
         </Alert>
       )}
@@ -259,8 +306,8 @@ function AudienceInsightsContent() {
               <CardTitle className="text-base">Played More Than 5 Events</CardTitle>
               <CardDescription>
                 {isJobRunning
-                  ? "Updating from event results…"
-                  : "Refresh stats to compute from event results."}
+                  ? "Updating…"
+                  : "Refresh stats to compute from member event counts."}
               </CardDescription>
             </CardHeader>
             <CardContent className="pb-4">
@@ -288,7 +335,9 @@ export default function AudienceInsightsPage() {
       description="Cached audience overview — refresh when you want updated numbers."
       authTitle="Sign in to view audience insights"
     >
-      <AudienceInsightsContent />
+      <AudienceInsightsErrorBoundary>
+        <AudienceInsightsContent />
+      </AudienceInsightsErrorBoundary>
     </AdminPageLayout>
   );
 }
