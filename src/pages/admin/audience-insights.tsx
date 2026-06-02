@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -15,35 +14,6 @@ type ChartPoint = {
 function pct(part: number, total: number): number {
   if (total === 0) return 0;
   return Math.round((part / total) * 100);
-}
-
-const TENURE_BUCKETS = [
-  { key: "under3m", label: "Under 3 months", color: "#4f46e5" },
-  { key: "3to6m", label: "3–6 months", color: "#22c55e" },
-  { key: "6to12m", label: "6–12 months", color: "#f59e0b" },
-  { key: "1to2y", label: "1–2 years", color: "#ef4444" },
-  { key: "2yPlus", label: "2+ years", color: "#8b5cf6" },
-  { key: "unknown", label: "Unknown", color: "#6b7280" },
-] as const;
-
-function monthsSinceJoin(serverJoinDate: string): number | null {
-  const joined = new Date(serverJoinDate);
-  if (Number.isNaN(joined.getTime())) return null;
-  const now = new Date();
-  const months =
-    (now.getFullYear() - joined.getFullYear()) * 12 +
-    (now.getMonth() - joined.getMonth());
-  const dayAdjust = now.getDate() < joined.getDate() ? -1 : 0;
-  return Math.max(0, months + dayAdjust);
-}
-
-function tenureBucketKey(months: number | null): (typeof TENURE_BUCKETS)[number]["key"] {
-  if (months === null) return "unknown";
-  if (months < 3) return "under3m";
-  if (months < 6) return "3to6m";
-  if (months < 12) return "6to12m";
-  if (months < 24) return "1to2y";
-  return "2yPlus";
 }
 
 function DonutCard({
@@ -117,74 +87,9 @@ function DonutCard({
 }
 
 function AudienceInsightsContent() {
-  const members = useQuery(api.memberManagement.getAcceptedMembers);
+  const insights = useQuery(api.memberManagement.getAudienceInsights);
 
-  const chartData = useMemo(() => {
-    if (!members) return null;
-
-    let male = 0;
-    let female = 0;
-    let genderUnknown = 0;
-
-    let tierS = 0;
-    let tierA = 0;
-    let tierB = 0;
-    let tierC = 0;
-    let tierOther = 0;
-
-    let eventsOverFive = 0;
-    let eventsFiveOrLess = 0;
-
-    const tenureCounts = Object.fromEntries(
-      TENURE_BUCKETS.map((bucket) => [bucket.key, 0]),
-    ) as Record<(typeof TENURE_BUCKETS)[number]["key"], number>;
-
-    for (const member of members) {
-      if (member.gender === 100) male += 1;
-      else if (member.gender === 50) female += 1;
-      else genderUnknown += 1;
-
-      if (member.tier === "S") tierS += 1;
-      else if (member.tier === "A") tierA += 1;
-      else if (member.tier === "B") tierB += 1;
-      else if (member.tier === "C") tierC += 1;
-      else tierOther += 1;
-
-      const eventsPlayedCount = member.eventsPlayedCount ?? 0;
-      if (eventsPlayedCount > 5) eventsOverFive += 1;
-      else eventsFiveOrLess += 1;
-
-      const bucket = tenureBucketKey(monthsSinceJoin(member.serverJoinDate));
-      tenureCounts[bucket] += 1;
-    }
-
-    return {
-      totalMembers: members.length,
-      gender: [
-        { label: "Male", value: male, color: "#4f46e5" },
-        { label: "Female", value: female, color: "#22c55e" },
-        { label: "Unknown", value: genderUnknown, color: "#ef4444" },
-      ].filter((item) => item.value > 0),
-      tier: [
-        { label: "Tier S", value: tierS, color: "#ef4444" },
-        { label: "Tier A", value: tierA, color: "#f59e0b" },
-        { label: "Tier B", value: tierB, color: "#3b82f6" },
-        { label: "Tier C", value: tierC, color: "#22c55e" },
-        { label: "Unassigned", value: tierOther, color: "#6b7280" },
-      ].filter((item) => item.value > 0),
-      events: [
-        { label: "> 5 Events", value: eventsOverFive, color: "#4f46e5" },
-        { label: "<= 5 Events", value: eventsFiveOrLess, color: "#16a34a" },
-      ],
-      tenure: TENURE_BUCKETS.map((bucket) => ({
-        label: bucket.label,
-        value: tenureCounts[bucket.key],
-        color: bucket.color,
-      })).filter((item) => item.value > 0),
-    };
-  }, [members]);
-
-  if (members === undefined || !chartData) {
+  if (insights === undefined) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -199,8 +104,9 @@ function AudienceInsightsContent() {
       <Card>
         <CardContent className="pt-6">
           <p className="text-sm text-muted-foreground">
-            Audience split based on accepted members ({chartData.totalMembers} total). Tenure uses
-            Discord server join date. Event activity uses cached event counts (more than 5 events).
+            Audience split based on accepted members ({insights.totalMembers} total). Tenure uses
+            Discord server join date. Event activity counts distinct events from manual and imported
+            results (not the cached player field).
           </p>
         </CardContent>
       </Card>
@@ -209,14 +115,14 @@ function AudienceInsightsContent() {
         <DonutCard
           title="Gender Split"
           description="Distribution by evaluation gender category."
-          data={chartData.gender}
-          total={chartData.totalMembers}
+          data={insights.gender}
+          total={insights.totalMembers}
         />
         <DonutCard
           title="Tier Split"
           description="How accepted members are distributed across tiers."
-          data={chartData.tier}
-          total={chartData.totalMembers}
+          data={insights.tier}
+          total={insights.totalMembers}
         />
       </div>
 
@@ -224,14 +130,14 @@ function AudienceInsightsContent() {
         <DonutCard
           title="How Long Have They Been a Member?"
           description="Time in the server since Discord join date."
-          data={chartData.tenure}
-          total={chartData.totalMembers}
+          data={insights.tenure}
+          total={insights.totalMembers}
         />
         <DonutCard
           title="Played More Than 5 Events"
-          description="Experience split by total number of events played."
-          data={chartData.events}
-          total={chartData.totalMembers}
+          description="Distinct events with a recorded result for that member."
+          data={insights.events}
+          total={insights.totalMembers}
         />
       </div>
     </div>

@@ -5,11 +5,59 @@ import type { Id } from "./_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
 
+// Search players to link a returning member's application (accepted, former, rejected)
+export const searchPlayersForApplicationLink = query({
+  args: {
+    search: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const needle = args.search.trim().toLowerCase();
+    const maxResults = Math.min(args.limit ?? 50, 50);
+    if (needle.length < 2) {
+      return [];
+    }
+
+    const players = await ctx.db.query("players").order("desc").collect();
+
+    return players
+      .filter((player) => {
+        const status = player.currentMembershipStatus;
+        if (
+          status !== "accepted" &&
+          status !== "former" &&
+          status !== "rejected"
+        ) {
+          return false;
+        }
+        const epic = player.epicUsername.toLowerCase();
+        const discord = player.discordUsername.toLowerCase();
+        const discordId = player.discordUserId?.toLowerCase() ?? "";
+        return (
+          epic.includes(needle) ||
+          discord.includes(needle) ||
+          discordId.includes(needle)
+        );
+      })
+      .slice(0, maxResults)
+      .map((player) => ({
+        _id: player._id,
+        epicUsername: player.epicUsername,
+        discordUsername: player.discordUsername,
+        currentMembershipStatus: player.currentMembershipStatus,
+        tier: player.tier,
+      }));
+  },
+});
+
 // Submit new application
 export const submitApplication = mutation({
   args: {
     discordUsername: v.string(),
     epicUsername: v.string(),
+    existingPlayerId: v.optional(v.id("players")),
   },
   handler: async (ctx, args): Promise<Id<"applications">> => {
     await requireAdmin(ctx);
@@ -17,7 +65,51 @@ export const submitApplication = mutation({
     const fortniteProfileLink = `https://fortnitetracker.com/profile/all/${encodeURIComponent(args.epicUsername)}`;
     
     // Use empty string for discordId — will be linked automatically in the future
-    const discordId = "";
+    let discordId = "";
+    let linkedPlayerId: Id<"players"> | undefined;
+    let isPreviouslyApplied = false;
+    let isPreviouslyAccepted = false;
+    let isFormerMember = false;
+
+    if (args.existingPlayerId) {
+      const existingPlayer = await ctx.db.get(args.existingPlayerId);
+      if (!existingPlayer) {
+        throw new ConvexError({
+          message: "Selected member not found",
+          code: "NOT_FOUND",
+        });
+      }
+
+      linkedPlayerId = existingPlayer._id;
+      discordId = existingPlayer.discordUserId ?? "";
+
+      const priorApplications = await ctx.db
+        .query("applications")
+        .withIndex("by_player_id", (q) => q.eq("playerId", existingPlayer._id))
+        .collect();
+
+      isPreviouslyApplied = priorApplications.length > 0;
+      isPreviouslyAccepted =
+        existingPlayer.currentMembershipStatus === "accepted" ||
+        existingPlayer.currentMembershipStatus === "former" ||
+        priorApplications.some((app) => app.status === "accepted");
+      isFormerMember = existingPlayer.currentMembershipStatus === "former";
+
+      const pendingForPlayer = priorApplications.find(
+        (app) => app.status === "pending",
+      );
+      if (pendingForPlayer) {
+        throw new ConvexError({
+          message: "This member already has a pending application",
+          code: "CONFLICT",
+        });
+      }
+
+      await ctx.db.patch(existingPlayer._id, {
+        discordUsername: args.discordUsername,
+        epicUsername: args.epicUsername,
+      });
+    }
     
     // Check for existing pending application by discord username
     const existingPending = await ctx.db
@@ -39,9 +131,10 @@ export const submitApplication = mutation({
       discordId,
       fortniteProfileLink,
       status: "pending",
-      isPreviouslyApplied: false,
-      isPreviouslyAccepted: false,
-      isFormerMember: false,
+      isPreviouslyApplied: linkedPlayerId ? true : isPreviouslyApplied,
+      isPreviouslyAccepted,
+      isFormerMember,
+      playerId: linkedPlayerId,
     });
     
     // Log status event
@@ -523,6 +616,154 @@ export const getAcceptedMembers = query({
     );
 
     return enriched;
+  },
+});
+
+type AudienceChartSegment = {
+  label: string;
+  value: number;
+  color: string;
+};
+
+function monthsSinceServerJoin(serverJoinDate: string): number | null {
+  const joined = new Date(serverJoinDate);
+  if (Number.isNaN(joined.getTime())) {
+    return null;
+  }
+  const now = new Date();
+  const months =
+    (now.getFullYear() - joined.getFullYear()) * 12 +
+    (now.getMonth() - joined.getMonth());
+  const dayAdjust = now.getDate() < joined.getDate() ? -1 : 0;
+  return Math.max(0, months + dayAdjust);
+}
+
+function tenureBucketForMonths(months: number | null): string {
+  if (months === null) return "unknown";
+  if (months < 3) return "under3m";
+  if (months < 6) return "3to6m";
+  if (months < 12) return "6to12m";
+  if (months < 24) return "1to2y";
+  return "2yPlus";
+}
+
+/** Admin audience donuts — event counts from result rows, not denormalized cache. */
+export const getAudienceInsights = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const members = await ctx.db
+      .query("players")
+      .withIndex("by_membership_status", (q) =>
+        q.eq("currentMembershipStatus", "accepted"),
+      )
+      .collect();
+
+    const memberIds = new Set(members.map((m) => m._id));
+    const uniqueEventsByPlayer = new Map<Id<"players">, Set<string>>();
+    for (const member of members) {
+      uniqueEventsByPlayer.set(member._id, new Set());
+    }
+
+    const eventResults = await ctx.db.query("eventResults").collect();
+    for (const result of eventResults) {
+      if (memberIds.has(result.playerId)) {
+        uniqueEventsByPlayer.get(result.playerId)!.add(result.eventName);
+      }
+    }
+
+    const thirdPartyResults = await ctx.db.query("thirdPartyResults").collect();
+    for (const result of thirdPartyResults) {
+      if (result.playerId && memberIds.has(result.playerId)) {
+        uniqueEventsByPlayer.get(result.playerId)!.add(result.eventName);
+      }
+    }
+
+    let male = 0;
+    let female = 0;
+    let genderUnknown = 0;
+    let tierS = 0;
+    let tierA = 0;
+    let tierB = 0;
+    let tierC = 0;
+    let tierOther = 0;
+    let eventsOverFive = 0;
+    let eventsFiveOrLess = 0;
+    const tenureCounts: Record<string, number> = {
+      under3m: 0,
+      "3to6m": 0,
+      "6to12m": 0,
+      "1to2y": 0,
+      "2yPlus": 0,
+      unknown: 0,
+    };
+
+    for (const member of members) {
+      const score = await ctx.db
+        .query("manualScores")
+        .withIndex("by_player", (q) => q.eq("playerId", member._id))
+        .first();
+
+      const gender = score?.gender;
+      if (gender === 100) male += 1;
+      else if (gender === 50) female += 1;
+      else genderUnknown += 1;
+
+      if (member.tier === "S") tierS += 1;
+      else if (member.tier === "A") tierA += 1;
+      else if (member.tier === "B") tierB += 1;
+      else if (member.tier === "C") tierC += 1;
+      else tierOther += 1;
+
+      const eventsPlayed = uniqueEventsByPlayer.get(member._id)!.size;
+      if (eventsPlayed > 5) eventsOverFive += 1;
+      else eventsFiveOrLess += 1;
+
+      const tenureKey = tenureBucketForMonths(
+        monthsSinceServerJoin(member.serverJoinDate),
+      );
+      tenureCounts[tenureKey] += 1;
+    }
+
+    const filterPositive = (segments: AudienceChartSegment[]) =>
+      segments.filter((s) => s.value > 0);
+
+    const tenureLabels: Record<string, { label: string; color: string }> = {
+      under3m: { label: "Under 3 months", color: "#4f46e5" },
+      "3to6m": { label: "3–6 months", color: "#22c55e" },
+      "6to12m": { label: "6–12 months", color: "#f59e0b" },
+      "1to2y": { label: "1–2 years", color: "#ef4444" },
+      "2yPlus": { label: "2+ years", color: "#8b5cf6" },
+      unknown: { label: "Unknown", color: "#6b7280" },
+    };
+
+    return {
+      totalMembers: members.length,
+      gender: filterPositive([
+        { label: "Male", value: male, color: "#4f46e5" },
+        { label: "Female", value: female, color: "#22c55e" },
+        { label: "Unknown", value: genderUnknown, color: "#ef4444" },
+      ]),
+      tier: filterPositive([
+        { label: "Tier S", value: tierS, color: "#ef4444" },
+        { label: "Tier A", value: tierA, color: "#f59e0b" },
+        { label: "Tier B", value: tierB, color: "#3b82f6" },
+        { label: "Tier C", value: tierC, color: "#22c55e" },
+        { label: "Unassigned", value: tierOther, color: "#6b7280" },
+      ]),
+      tenure: filterPositive(
+        Object.entries(tenureLabels).map(([key, meta]) => ({
+          label: meta.label,
+          value: tenureCounts[key] ?? 0,
+          color: meta.color,
+        })),
+      ),
+      events: [
+        { label: "> 5 Events", value: eventsOverFive, color: "#4f46e5" },
+        { label: "5 or fewer events", value: eventsFiveOrLess, color: "#16a34a" },
+      ],
+    };
   },
 });
 

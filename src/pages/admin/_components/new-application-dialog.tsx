@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { useMutation } from "convex/react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
+import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
@@ -8,7 +9,9 @@ import { Label } from "@/components/ui/label.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
-import { Loader2, ArrowRight, ArrowLeft } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area.tsx";
+import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { Loader2, ArrowRight, ArrowLeft, Users } from "lucide-react";
 import { toast } from "sonner";
 
 type ScoreState = {
@@ -149,10 +152,57 @@ type NewApplicationDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+type PlayerScoreRecord = {
+  thirdPartyExperience: number;
+  thirdPartyPerformance: number;
+  inGameTourneyPerformance: number;
+  officialEarnings: number;
+  rankedPerformance: number;
+  hoursPlayed: number;
+  notorietyTeammates: number;
+  age: number;
+  gender: number;
+  ability: number;
+  region: number;
+  gameSense: number;
+  seasonPerformance?: number;
+  modifiers?: number;
+  femaleVerified?: boolean;
+  verificationMethod?: string;
+};
+
+function scoreRecordToState(score: PlayerScoreRecord): ScoreState {
+  return {
+    thirdPartyExperience: score.thirdPartyExperience,
+    thirdPartyPerformance: score.thirdPartyPerformance,
+    inGameTourneyPerformance: score.inGameTourneyPerformance,
+    officialEarnings: score.officialEarnings,
+    rankedPerformance: score.rankedPerformance,
+    hoursPlayed: score.hoursPlayed,
+    notorietyTeammates: score.notorietyTeammates,
+    age: score.age,
+    gender: score.gender,
+    ability: score.ability,
+    region: score.region,
+    gameSense: score.gameSense,
+    seasonPerformance: score.seasonPerformance ?? 0,
+    modifiers: score.modifiers ?? 0,
+  };
+}
+
+const MEMBERSHIP_STATUS_LABEL: Record<string, string> = {
+  accepted: "Accepted",
+  former: "Former",
+  rejected: "Rejected",
+};
+
 export default function NewApplicationDialog({ open, onOpenChange }: NewApplicationDialogProps) {
   const [step, setStep] = useState<"info" | "evaluation">("info");
   const [discordUsername, setDiscordUsername] = useState("");
   const [epicUsername, setEpicUsername] = useState("");
+  const [beenMemberBefore, setBeenMemberBefore] = useState(false);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [linkedPlayerId, setLinkedPlayerId] = useState<Id<"players"> | null>(null);
   const [scores, setScores] = useState<ScoreState>(INITIAL_SCORES);
   const [femaleVerified, setFemaleVerified] = useState(false);
   const [verificationMethod, setVerificationMethod] = useState<"ID" | "FACECAM" | "TRUSTED SERVER" | "">("");
@@ -162,13 +212,53 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
   const createPlayerForApplication = useMutation(api.memberManagement.createPlayerForApplication);
   const createOrUpdateScore = useMutation(api.scores.createOrUpdateScore);
 
+  const memberSearchResults = useQuery(
+    api.memberManagement.searchPlayersForApplicationLink,
+    open && beenMemberBefore && memberSearch.length >= 2
+      ? { search: memberSearch }
+      : "skip",
+  );
+
+  const linkedPlayerScore = useQuery(
+    api.scores.getPlayerScore,
+    open && linkedPlayerId ? { playerId: linkedPlayerId } : "skip",
+  );
+
+  const prefilledPlayerIdRef = useRef<Id<"players"> | null>(null);
+
+  useEffect(() => {
+    if (step !== "evaluation" || !linkedPlayerId || linkedPlayerScore === undefined) {
+      return;
+    }
+    if (prefilledPlayerIdRef.current === linkedPlayerId) {
+      return;
+    }
+    prefilledPlayerIdRef.current = linkedPlayerId;
+    if (linkedPlayerScore) {
+      setScores(scoreRecordToState(linkedPlayerScore));
+      setFemaleVerified(linkedPlayerScore.femaleVerified ?? false);
+      setVerificationMethod(
+        (linkedPlayerScore.verificationMethod as "ID" | "FACECAM" | "TRUSTED SERVER") ?? "",
+      );
+    }
+  }, [step, linkedPlayerId, linkedPlayerScore]);
+
   const totalScore = Object.values(scores).reduce<number>((sum, score) => sum + (typeof score === "number" ? score : 0), 0);
   const tier = calculateTier(totalScore);
+
+  const selectedLinkedPlayer = useMemo(
+    () => memberSearchResults?.find((p) => p._id === linkedPlayerId) ?? null,
+    [memberSearchResults, linkedPlayerId],
+  );
 
   const resetForm = () => {
     setStep("info");
     setDiscordUsername("");
     setEpicUsername("");
+    setBeenMemberBefore(false);
+    setMemberSearch("");
+    setLinkedPlayerId(null);
+    prefilledPlayerIdRef.current = null;
     setScores(INITIAL_SCORES);
     setFemaleVerified(false);
     setVerificationMethod("");
@@ -186,6 +276,15 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
       toast.error("Both fields are required");
       return;
     }
+    if (beenMemberBefore && !linkedPlayerId) {
+      toast.error("Select the existing member to link this application to");
+      return;
+    }
+    if (!linkedPlayerId) {
+      setScores(INITIAL_SCORES);
+      setFemaleVerified(false);
+      setVerificationMethod("");
+    }
     setStep("evaluation");
   };
 
@@ -196,6 +295,7 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
       const applicationId = await submitApplication({
         discordUsername: discordUsername.trim(),
         epicUsername: epicUsername.trim(),
+        existingPlayerId: linkedPlayerId ?? undefined,
       });
 
       // Step 2: Create a player record for evaluation
@@ -225,7 +325,11 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
         });
       }
 
-      toast.success("Application submitted with evaluation");
+      toast.success(
+        linkedPlayerId
+          ? "Application submitted and linked to existing member"
+          : "Application submitted with evaluation",
+      );
       resetForm();
       onOpenChange(false);
     } catch (error) {
@@ -264,7 +368,7 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent size={step === "evaluation" ? "lg" : "sm"}>
+      <DialogContent size={step === "evaluation" ? "lg" : beenMemberBefore ? "md" : "sm"}>
         <DialogHeader>
           <DialogTitle>
             {step === "info" ? "New Application" : "Evaluation Scores"}
@@ -272,7 +376,9 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
           <DialogDescription>
             {step === "info"
               ? "Enter the applicant's details"
-              : `Evaluate ${discordUsername} - Rate each category from 0-100`}
+              : linkedPlayerId
+                ? `Re-evaluate ${discordUsername} (linked to existing member) — Rate each category from 0-100`
+                : `Evaluate ${discordUsername} - Rate each category from 0-100`}
           </DialogDescription>
         </DialogHeader>
 
@@ -310,6 +416,86 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
                   </p>
                 )}
               </div>
+
+              <div className="flex items-center space-x-2 pt-2 border-t">
+                <Checkbox
+                  id="been-member-before"
+                  checked={beenMemberBefore}
+                  onCheckedChange={(checked) => {
+                    const isChecked = checked === true;
+                    setBeenMemberBefore(isChecked);
+                    if (!isChecked) {
+                      setMemberSearch("");
+                      setLinkedPlayerId(null);
+                    }
+                  }}
+                />
+                <Label htmlFor="been-member-before" className="text-sm font-medium cursor-pointer">
+                  Been a member before?
+                </Label>
+              </div>
+
+              {beenMemberBefore && (
+                <div className="space-y-3 rounded-lg border p-3 bg-muted/50">
+                  <p className="text-xs text-muted-foreground">
+                    Search for their existing record. New Discord and Epic details above will update that member when you submit.
+                  </p>
+                  <Input
+                    placeholder="Search by Discord or Epic username..."
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                  />
+                  {memberSearch.length > 0 && memberSearch.length < 2 && (
+                    <p className="text-xs text-muted-foreground">Type at least 2 characters to search</p>
+                  )}
+                  {memberSearch.length >= 2 && memberSearchResults === undefined && (
+                    <Skeleton className="h-32 w-full" />
+                  )}
+                  {memberSearch.length >= 2 && memberSearchResults?.length === 0 && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      No matching members found
+                    </p>
+                  )}
+                  {memberSearchResults && memberSearchResults.length > 0 && (
+                    <ScrollArea className="h-40 rounded-md border bg-background">
+                      <div className="p-1 space-y-1">
+                        {memberSearchResults.map((player) => (
+                          <button
+                            key={player._id}
+                            type="button"
+                            onClick={() => setLinkedPlayerId(player._id)}
+                            className={`w-full p-2 rounded-md border text-left text-sm transition-colors ${
+                              linkedPlayerId === player._id
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "hover:bg-muted"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium">{player.epicUsername}</span>
+                              <span className="opacity-80">({player.discordUsername})</span>
+                              {player.tier && (
+                                <Badge variant="outline" className="text-xs">
+                                  Tier {player.tier}
+                                </Badge>
+                              )}
+                              <Badge variant="secondary" className="text-xs">
+                                {MEMBERSHIP_STATUS_LABEL[player.currentMembershipStatus ?? ""] ??
+                                  player.currentMembershipStatus}
+                              </Badge>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
+                  {linkedPlayerId && selectedLinkedPlayer && (
+                    <p className="text-xs text-primary">
+                      Linked to {selectedLinkedPlayer.epicUsername} — existing evaluation will pre-fill on the next step.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="secondary" onClick={() => handleClose(false)}>
