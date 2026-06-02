@@ -1,7 +1,17 @@
-import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
+import { ConvexError } from "convex/values";
+import { internal } from "./_generated/api";
+import {
+  internalMutation,
+  mutation,
+  query,
+} from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireAdmin } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
+
+const BATCH_SIZE = 8;
+const MANUAL_SCORES_PAGE_SIZE = 200;
 
 type ChartSegment = {
   label: string;
@@ -148,16 +158,49 @@ async function loadAcceptedMembersWithGender(ctx: QueryCtx | MutationCtx) {
     )
     .collect();
 
-  const scores = await ctx.db.query("manualScores").collect();
+  const memberIds = new Set(members.map((member) => member._id));
   const genderByPlayer = new Map<Id<"players">, number | undefined>();
-  for (const score of scores) {
-    genderByPlayer.set(score.playerId, score.gender);
+
+  let cursor: string | null = null;
+  let isDone = false;
+  while (!isDone) {
+    const page = await ctx.db.query("manualScores").paginate({
+      numItems: MANUAL_SCORES_PAGE_SIZE,
+      cursor,
+    });
+    for (const score of page.page) {
+      if (memberIds.has(score.playerId)) {
+        genderByPlayer.set(score.playerId, score.gender);
+      }
+    }
+    isDone = page.isDone;
+    cursor = page.continueCursor;
   }
 
   return { members, genderByPlayer };
 }
 
-/** Fast read from cache; gender/tier/tenure can render before event cache exists. */
+async function upsertAudienceInsightsCache(
+  ctx: MutationCtx,
+  payload: {
+    totalMembers: number;
+    gender: ChartSegment[];
+    tier: ChartSegment[];
+    tenure: ChartSegment[];
+    events: ChartSegment[];
+    eventsReady: boolean;
+    lastUpdated: number;
+  },
+) {
+  const existing = await ctx.db.query("audienceInsightsCache").first();
+  if (existing) {
+    await ctx.db.replace(existing._id, payload);
+  } else {
+    await ctx.db.insert("audienceInsightsCache", payload);
+  }
+}
+
+/** Read-only: returns cached data only (never scans result tables). */
 export const getAudienceInsights = query({
   args: {},
   handler: async (ctx) => {
@@ -165,71 +208,205 @@ export const getAudienceInsights = query({
 
     const cached = await ctx.db.query("audienceInsightsCache").first();
     if (cached) {
+      const eventsReady = cached.eventsReady === true;
       return {
         totalMembers: cached.totalMembers,
         gender: cached.gender,
         tier: cached.tier,
         tenure: cached.tenure,
         events: cached.events,
+        eventsReady,
         lastUpdated: cached.lastUpdated,
         needsRebuild: false,
       };
     }
 
-    const { members, genderByPlayer } = await loadAcceptedMembersWithGender(ctx);
-    const eventsPlayedByPlayer = new Map<Id<"players">, number>();
-    for (const member of members) {
-      eventsPlayedByPlayer.set(member._id, member.eventsPlayedCount ?? 0);
-    }
-
-    const partial = buildAudienceInsights(members, genderByPlayer, eventsPlayedByPlayer);
-
     return {
-      ...partial,
+      totalMembers: 0,
+      gender: [] as ChartSegment[],
+      tier: [] as ChartSegment[],
+      tenure: [] as ChartSegment[],
+      events: [] as ChartSegment[],
+      eventsReady: false,
       lastUpdated: undefined,
       needsRebuild: true,
     };
   },
 });
 
-/** Rebuilds cache using per-player indexes (safe for mutations, not queries). */
+export const getRebuildJobStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const job = await ctx.db
+      .query("audienceInsightsRebuildJobs")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .first();
+
+    if (!job) {
+      return null;
+    }
+
+    return {
+      status: job.status,
+      processedCount: job.processedCount,
+      totalCount: job.memberIds.length,
+      eventsOverFive: job.eventsOverFive,
+      eventsFiveOrLess: job.eventsFiveOrLess,
+      startedAt: job.startedAt,
+    };
+  },
+});
+
+/** Starts a batched background rebuild; returns immediately. */
 export const rebuildAudienceInsightsCache = mutation({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
 
-    const { members, genderByPlayer } = await loadAcceptedMembersWithGender(ctx);
-    const eventsPlayedByPlayer = new Map<Id<"players">, number>();
+    const running = await ctx.db
+      .query("audienceInsightsRebuildJobs")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .first();
 
-    for (const member of members) {
-      const distinctEvents = await countDistinctEventsForPlayer(ctx, member._id);
-      eventsPlayedByPlayer.set(member._id, distinctEvents);
-
-      if (member.eventsPlayedCount !== distinctEvents) {
-        await ctx.db.patch(member._id, { eventsPlayedCount: distinctEvents });
-      }
+    if (running) {
+      throw new ConvexError({
+        message: "An audience insights rebuild is already running",
+        code: "CONFLICT",
+      });
     }
 
-    const insights = buildAudienceInsights(
+    const { members, genderByPlayer } = await loadAcceptedMembersWithGender(ctx);
+    const placeholderEvents = new Map<Id<"players">, number>();
+    for (const member of members) {
+      placeholderEvents.set(member._id, 0);
+    }
+
+    const baseInsights = buildAudienceInsights(
       members,
       genderByPlayer,
-      eventsPlayedByPlayer,
+      placeholderEvents,
     );
-    const lastUpdated = Date.now();
+    const now = Date.now();
 
-    const existing = await ctx.db.query("audienceInsightsCache").first();
-    const payload = { ...insights, lastUpdated };
+    await upsertAudienceInsightsCache(ctx, {
+      ...baseInsights,
+      events: [
+        { label: "> 5 Events", value: 0, color: "#4f46e5" },
+        { label: "5 or fewer events", value: members.length, color: "#16a34a" },
+      ],
+      eventsReady: false,
+      lastUpdated: now,
+    });
 
-    if (existing) {
-      await ctx.db.replace(existing._id, payload);
-    } else {
-      await ctx.db.insert("audienceInsightsCache", payload);
-    }
+    const jobId = await ctx.db.insert("audienceInsightsRebuildJobs", {
+      status: "running",
+      memberIds: members.map((m) => m._id),
+      processedCount: 0,
+      eventsOverFive: 0,
+      eventsFiveOrLess: 0,
+      startedAt: now,
+    });
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.audienceInsights.processRebuildBatch,
+      { jobId, startIndex: 0 },
+    );
 
     return {
-      ...insights,
-      lastUpdated,
-      playersUpdated: members.length,
+      jobId,
+      totalMembers: members.length,
+      started: true,
     };
+  },
+});
+
+export const processRebuildBatch = internalMutation({
+  args: {
+    jobId: v.id("audienceInsightsRebuildJobs"),
+    startIndex: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.status !== "running") {
+      return;
+    }
+
+    const batchIds = job.memberIds.slice(
+      args.startIndex,
+      args.startIndex + BATCH_SIZE,
+    );
+
+    let eventsOverFive = job.eventsOverFive;
+    let eventsFiveOrLess = job.eventsFiveOrLess;
+
+    try {
+      for (const playerId of batchIds) {
+        const distinctEvents = await countDistinctEventsForPlayer(ctx, playerId);
+        if (distinctEvents > 5) {
+          eventsOverFive += 1;
+        } else {
+          eventsFiveOrLess += 1;
+        }
+
+        const player = await ctx.db.get(playerId);
+        if (player && player.eventsPlayedCount !== distinctEvents) {
+          await ctx.db.patch(playerId, { eventsPlayedCount: distinctEvents });
+        }
+      }
+
+      const processedCount = args.startIndex + batchIds.length;
+      const nextIndex = args.startIndex + BATCH_SIZE;
+
+      if (nextIndex < job.memberIds.length) {
+        await ctx.db.patch(args.jobId, {
+          processedCount,
+          eventsOverFive,
+          eventsFiveOrLess,
+        });
+
+        await ctx.scheduler.runAfter(
+          0,
+          internal.audienceInsights.processRebuildBatch,
+          { jobId: args.jobId, startIndex: nextIndex },
+        );
+        return;
+      }
+
+      const cached = await ctx.db.query("audienceInsightsCache").first();
+      const completedAt = Date.now();
+
+      if (cached) {
+        await ctx.db.patch(cached._id, {
+          events: [
+            { label: "> 5 Events", value: eventsOverFive, color: "#4f46e5" },
+            {
+              label: "5 or fewer events",
+              value: eventsFiveOrLess,
+              color: "#16a34a",
+            },
+          ],
+          eventsReady: true,
+          lastUpdated: completedAt,
+        });
+      }
+
+      await ctx.db.patch(args.jobId, {
+        status: "completed",
+        processedCount: job.memberIds.length,
+        eventsOverFive,
+        eventsFiveOrLess,
+        completedAt,
+      });
+    } catch (error) {
+      await ctx.db.patch(args.jobId, {
+        status: "failed",
+        errorMessage:
+          error instanceof Error ? error.message : "Unknown rebuild error",
+        completedAt: Date.now(),
+      });
+    }
   },
 });

@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -7,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
+import { Progress } from "@/components/ui/progress.tsx";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +32,22 @@ function DonutCard({
   data: ChartPoint[];
   total: number;
 }) {
+  if (data.length === 0) {
+    return (
+      <Card className="py-0">
+        <CardHeader className="py-3">
+          <CardTitle className="text-base">{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </CardHeader>
+        <CardContent className="pb-4">
+          <p className="text-sm text-muted-foreground py-8 text-center">
+            No data yet. Use Refresh stats to build the cache.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="py-0">
       <CardHeader className="py-3">
@@ -93,32 +109,29 @@ function DonutCard({
 
 function AudienceInsightsContent() {
   const insights = useQuery(api.audienceInsights.getAudienceInsights);
+  const rebuildJob = useQuery(api.audienceInsights.getRebuildJobStatus);
   const rebuildCache = useMutation(api.audienceInsights.rebuildAudienceInsightsCache);
-  const [isRebuilding, setIsRebuilding] = useState(false);
-  const autoRebuildStarted = useRef(false);
+
+  const isJobRunning = rebuildJob?.status === "running";
+  const hasCache = insights !== undefined && insights.totalMembers > 0;
+  const eventsReady = insights?.eventsReady === true;
+  const progressPercent =
+    rebuildJob && rebuildJob.totalCount > 0
+      ? Math.round((rebuildJob.processedCount / rebuildJob.totalCount) * 100)
+      : 0;
 
   const runRebuild = async () => {
-    setIsRebuilding(true);
     try {
       const result = await rebuildCache({});
       toast.success(
-        `Audience insights updated for ${result.playersUpdated} members`,
+        `Rebuild started for ${result.totalMembers} members. Charts update as batches finish.`,
       );
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to rebuild audience insights",
+        error instanceof Error ? error.message : "Failed to start audience insights rebuild",
       );
-    } finally {
-      setIsRebuilding(false);
     }
   };
-
-  useEffect(() => {
-    if (insights === undefined || insights === null) return;
-    if (!insights.needsRebuild || autoRebuildStarted.current) return;
-    autoRebuildStarted.current = true;
-    void runRebuild();
-  }, [insights]);
 
   if (insights === undefined) {
     return (
@@ -131,18 +144,40 @@ function AudienceInsightsContent() {
   }
 
   const cacheLabel = insights.lastUpdated
-    ? `Last updated ${new Date(insights.lastUpdated).toLocaleString()}`
-    : null;
+    ? `Cached ${new Date(insights.lastUpdated).toLocaleString()}`
+    : "Not cached yet";
 
   return (
     <div className="space-y-4">
-      {insights.needsRebuild && (
+      {!hasCache && (
         <Alert>
-          <AlertTitle>Building event statistics</AlertTitle>
+          <AlertTitle>No cached data yet</AlertTitle>
           <AlertDescription>
-            Gender, tier, and tenure load immediately. Event counts are computed in the
-            background because scanning all results in one request times out.
-            {isRebuilding ? " This may take a minute…" : ""}
+            This page reads from a saved cache so it loads instantly. Click Refresh stats once
+            to build the cache; after that, loads only read cached data until you refresh again.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isJobRunning && rebuildJob && (
+        <Alert>
+          <AlertTitle>Refreshing event statistics</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>
+              Gender, tier, and tenure are already cached. Event counts are updating in the
+              background ({rebuildJob.processedCount} / {rebuildJob.totalCount} members).
+            </p>
+            <Progress value={progressPercent} className="h-2" />
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!eventsReady && hasCache && !isJobRunning && (
+        <Alert>
+          <AlertTitle>Event chart needs a refresh</AlertTitle>
+          <AlertDescription>
+            Gender, tier, and tenure are cached. Click Refresh stats to compute event counts from
+            result records.
           </AlertDescription>
         </Alert>
       )}
@@ -150,20 +185,27 @@ function AudienceInsightsContent() {
       <Card>
         <CardContent className="pt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
-            Audience split based on accepted members ({insights.totalMembers} total). Tenure
-            uses Discord server join date. Event activity counts distinct events per member
-            from result records.
-            {cacheLabel ? ` ${cacheLabel}.` : ""}
+            {hasCache ? (
+              <>
+                Audience split for {insights.totalMembers} accepted members. {cacheLabel}.
+                Loads use cached data only — nothing is recalculated on each visit.
+              </>
+            ) : (
+              <>
+                Click Refresh stats to build the cache. After the first run, this page loads from
+                that cache until you refresh again.
+              </>
+            )}
           </p>
           <Button
             variant="outline"
             size="sm"
             onClick={() => void runRebuild()}
-            disabled={isRebuilding}
+            disabled={isJobRunning}
             className="shrink-0"
           >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRebuilding ? "animate-spin" : ""}`} />
-            {isRebuilding ? "Rebuilding…" : "Refresh stats"}
+            <RefreshCw className={`mr-2 h-4 w-4 ${isJobRunning ? "animate-spin" : ""}`} />
+            {isJobRunning ? "Refreshing…" : "Refresh stats"}
           </Button>
         </CardContent>
       </Card>
@@ -173,13 +215,13 @@ function AudienceInsightsContent() {
           title="Gender Split"
           description="Distribution by evaluation gender category."
           data={insights.gender}
-          total={insights.totalMembers}
+          total={insights.totalMembers || 1}
         />
         <DonutCard
           title="Tier Split"
           description="How accepted members are distributed across tiers."
           data={insights.tier}
-          total={insights.totalMembers}
+          total={insights.totalMembers || 1}
         />
       </div>
 
@@ -188,13 +230,17 @@ function AudienceInsightsContent() {
           title="How Long Have They Been a Member?"
           description="Time in the server since Discord join date."
           data={insights.tenure}
-          total={insights.totalMembers}
+          total={insights.totalMembers || 1}
         />
-        {insights.needsRebuild ? (
+        {!eventsReady ? (
           <Card className="py-0">
             <CardHeader className="py-3">
               <CardTitle className="text-base">Played More Than 5 Events</CardTitle>
-              <CardDescription>Computing from event results…</CardDescription>
+              <CardDescription>
+                {isJobRunning
+                  ? "Updating from event results…"
+                  : "Refresh stats to compute from event results."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="pb-4">
               <Skeleton className="h-56 w-full" />
@@ -218,7 +264,7 @@ export default function AudienceInsightsPage() {
     <AdminPageLayout
       requireAdmin
       title="Audience Insights"
-      description="Quick audience overview for gender, tier, tenure, and event activity."
+      description="Cached audience overview — refresh when you want updated numbers."
       authTitle="Sign in to view audience insights"
     >
       <AudienceInsightsContent />

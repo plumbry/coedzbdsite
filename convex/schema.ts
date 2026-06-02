@@ -685,8 +685,24 @@ export default defineSchema({
         color: v.string(),
       }),
     ),
+    eventsReady: v.boolean(),
     lastUpdated: v.number(),
   }),
+
+  audienceInsightsRebuildJobs: defineTable({
+    status: v.union(
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+    ),
+    memberIds: v.array(v.id("players")),
+    processedCount: v.number(),
+    eventsOverFive: v.number(),
+    eventsFiveOrLess: v.number(),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+  }).index("by_status", ["status"]),
 
   // Cached per-import leaderboard analytics (leaderboard-stats admin page)
   leaderboardStatsCache: defineTable({
