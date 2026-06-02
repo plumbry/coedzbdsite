@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
 import { UserCheck, UserX, UserMinus, Loader2, ExternalLink, AlertTriangle, Edit, Award, ArrowUpDown, Search, Trash2, ShieldAlert, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { ConvexError } from "convex/values";
 import { format } from "date-fns";
 import { Link, useSearchParams, useParams, useNavigate } from "react-router-dom";
 import { useUserRole } from "@/hooks/use-user-role.ts";
@@ -225,7 +226,15 @@ export default function MemberManagement() {
         `Girl Role sync complete: ${result.count} verification${result.count === 1 ? "" : "s"} loaded from Mod Log`,
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to sync Girl Role verifications");
+      const message =
+        error instanceof ConvexError
+          ? (typeof error.data === "object" && error.data !== null && "message" in error.data
+              ? String((error.data as { message: string }).message)
+              : String(error.data))
+          : error instanceof Error
+            ? error.message
+            : "Failed to sync Girl Role verifications";
+      toast.error(message);
     } finally {
       setIsSyncingGirlRole(false);
     }

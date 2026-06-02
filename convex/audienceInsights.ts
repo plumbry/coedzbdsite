@@ -7,6 +7,7 @@ import {
   query,
 } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { isVisibleInMemberLists } from "./helpers/playerAlt";
 import { requireAdmin } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
@@ -547,6 +548,7 @@ export const processRebuildBatch = internalMutation({
         });
 
       for (const member of page.page) {
+        if (!isVisibleInMemberLists(member)) continue;
         const gender = await genderForPlayer(ctx, member._id);
         accumulateMember(counters, member, gender);
         await insertSegmentMemberRows(ctx, member, gender);

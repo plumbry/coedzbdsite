@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
+import { filterVisibleMembers } from "./helpers/playerAlt";
 import type { MutationCtx } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
@@ -985,10 +986,12 @@ export const searchPlayersByName = query({
     if (!args.search || args.search.length < 2) return [];
     const searchLower = args.search.toLowerCase();
     // Only scan active players (much smaller set)
-    const players = await ctx.db
-      .query("players")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .collect();
+    const players = filterVisibleMembers(
+      await ctx.db
+        .query("players")
+        .withIndex("by_status", (q) => q.eq("status", "active"))
+        .collect(),
+    );
     return players
       .filter((p) => {
         const dn = p.discordUsername?.toLowerCase() || "";

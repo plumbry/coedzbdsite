@@ -12,6 +12,7 @@ import ImportPlayersDialog from "../../_components/import-players-dialog.tsx";
 import RelinkResultsButton from "../_components/relink-results-button.tsx";
 import GoogleSheetsManager from "../_components/google-sheets-manager.tsx";
 import TierSnapshotTool from "../_components/tier-snapshot-tool.tsx";
+import AltAccountsTool from "../_components/alt-accounts-tool.tsx";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 
@@ -224,6 +225,8 @@ function FeaturesContent() {
           </Button>
         </CardContent>
       </Card>
+
+      <AltAccountsTool />
 
       <TierSnapshotTool />
       <GoogleSheetsManager />

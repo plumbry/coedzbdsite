@@ -8,6 +8,7 @@ import {
 import type { Id } from "./_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
+import { filterVisibleMembers } from "./helpers/playerAlt";
 
 // Search players to link a returning member's application (accepted, former, rejected)
 export const searchPlayersForApplicationLink = query({
@@ -24,7 +25,9 @@ export const searchPlayersForApplicationLink = query({
       return [];
     }
 
-    const players = await ctx.db.query("players").order("desc").collect();
+    const players = filterVisibleMembers(
+      await ctx.db.query("players").order("desc").collect(),
+    );
 
     return players
       .filter((player) => {
@@ -591,11 +594,15 @@ export const createPlayerForApplication = mutation({
 export const getAcceptedMembers = query({
   args: {},
   handler: async (ctx) => {
-    const players = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
-      .order("desc")
-      .collect();
+    const players = filterVisibleMembers(
+      await ctx.db
+        .query("players")
+        .withIndex("by_membership_status", (q) =>
+          q.eq("currentMembershipStatus", "accepted"),
+        )
+        .order("desc")
+        .collect(),
+    );
 
     const verificationLookup = await loadFemaleVerificationLookup(ctx);
 
@@ -634,11 +641,15 @@ export const getAcceptedMembers = query({
 export const getPublicMemberDirectory = query({
   args: {},
   handler: async (ctx) => {
-    const players = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
-      .order("desc")
-      .collect();
+    const players = filterVisibleMembers(
+      await ctx.db
+        .query("players")
+        .withIndex("by_membership_status", (q) =>
+          q.eq("currentMembershipStatus", "accepted"),
+        )
+        .order("desc")
+        .collect(),
+    );
 
     const verificationLookup = await loadFemaleVerificationLookup(ctx);
 

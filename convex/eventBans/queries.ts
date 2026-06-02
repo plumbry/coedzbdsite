@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { requireEventBanAccess } from "../auth_helpers";
 import { requireEventBanReadAccess, viewerTokenArg } from "./viewerAuth";
+import { filterVisibleMembers } from "../helpers/playerAlt";
 
 export const getActiveBans = query({
   args: { viewerToken: viewerTokenArg },
@@ -287,10 +288,12 @@ export const searchPlayersForBan = query({
     if (!args.search || args.search.length < 2) return [];
     const searchLower = args.search.toLowerCase();
 
-    const players = await ctx.db
-      .query("players")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .collect();
+    const players = filterVisibleMembers(
+      await ctx.db
+        .query("players")
+        .withIndex("by_status", (q) => q.eq("status", "active"))
+        .collect(),
+    );
 
     return players
       .filter((p) => {

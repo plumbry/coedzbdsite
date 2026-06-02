@@ -9,6 +9,11 @@ import {
 } from "./helpers/femaleVerification";
 import { logAudit } from "./helpers/audit";
 import { internal } from "./_generated/api";
+import {
+  filterVisibleMembers,
+  isAltAccount,
+  isVisibleInMemberLists,
+} from "./helpers/playerAlt";
 
 export const getPlayers = query({
   args: {},
@@ -24,7 +29,7 @@ export const getPlayers = query({
     const verificationLookup = await loadFemaleVerificationLookup(ctx);
 
     const enrichedPlayers = await Promise.all(
-      activePlayers.map(async (player) => {
+      filterVisibleMembers(activePlayers).map(async (player) => {
         const score = await ctx.db
           .query("manualScores")
           .withIndex("by_player", (q) => q.eq("playerId", player._id))
@@ -63,7 +68,7 @@ export const getPlayerByUsername = query({
       .first();
     
     if (byDiscord) {
-      return byDiscord;
+      return isVisibleInMemberLists(byDiscord) ? byDiscord : null;
     }
     
     // Try to find by Epic username (case insensitive)
@@ -72,7 +77,8 @@ export const getPlayerByUsername = query({
       .withIndex("by_epic_username", (q) => q.eq("epicUsername", args.username))
       .first();
     
-    return byEpic || null;
+    if (!byEpic) return null;
+    return isVisibleInMemberLists(byEpic) ? byEpic : null;
   },
 });
 
@@ -82,7 +88,7 @@ export const getPlayerProfile = query({
   handler: async (ctx, args) => {
     const player = await ctx.db.get(args.id);
     
-    if (!player) {
+    if (!player || isAltAccount(player)) {
       return null;
     }
     
@@ -202,12 +208,14 @@ export const getPlayersForSimulation = query({
     }
 
     // Only get accepted members with minimal fields - no enrichment queries
-    const acceptedPlayers = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) =>
-        q.eq("currentMembershipStatus", "accepted")
-      )
-      .collect();
+    const acceptedPlayers = filterVisibleMembers(
+      await ctx.db
+        .query("players")
+        .withIndex("by_membership_status", (q) =>
+          q.eq("currentMembershipStatus", "accepted"),
+        )
+        .collect(),
+    );
 
     return acceptedPlayers.map((p) => ({
       _id: p._id,
@@ -476,13 +484,15 @@ export const searchPlayersForLinking = query({
       return [];
     }
 
-    const players = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) =>
-        q.eq("currentMembershipStatus", "accepted"),
-      )
-      .order("desc")
-      .collect();
+    const players = filterVisibleMembers(
+      await ctx.db
+        .query("players")
+        .withIndex("by_membership_status", (q) =>
+          q.eq("currentMembershipStatus", "accepted"),
+        )
+        .order("desc")
+        .collect(),
+    );
 
     return players
       .filter((player) => {
@@ -510,10 +520,9 @@ export const getDiscordMembersAdmin = query({
   handler: async (ctx) => {
     await requireAdmin(ctx);
 
-    const allPlayers = await ctx.db
-      .query("players")
-      .order("desc")
-      .collect();
+    const allPlayers = filterVisibleMembers(
+      await ctx.db.query("players").order("desc").collect(),
+    );
 
     // Return only the fields the Discord Members page needs
     return allPlayers.map((player) => ({

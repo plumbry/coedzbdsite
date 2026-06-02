@@ -33,7 +33,7 @@ async function getGoogleSheetsClient() {
   const auth = new JWT({
     email: serviceAccountKey.client_email,
     key: serviceAccountKey.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 
   return sheets({ version: "v4", auth });

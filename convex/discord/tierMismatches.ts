@@ -1,6 +1,7 @@
 import { query } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
+import { filterVisibleMembers } from "../helpers/playerAlt";
 
 // Tier role names expected in Discord
 const TIER_ROLE_NAMES = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
@@ -47,8 +48,10 @@ async function getReviewablePlayers(ctx: QueryCtx): Promise<Doc<"players">[]> {
     playerMap.set(p._id, p);
   }
 
-  return [...playerMap.values()].filter(
-    (p) => p.status !== "archived" && p.status !== "rejected",
+  return filterVisibleMembers(
+    [...playerMap.values()].filter(
+      (p) => p.status !== "archived" && p.status !== "rejected",
+    ),
   );
 }
 

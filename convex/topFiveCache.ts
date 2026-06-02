@@ -3,6 +3,7 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { internal } from "./_generated/api";
+import { filterVisibleMembers } from "./helpers/playerAlt";
 
 // Helper function to calculate top-5 data for a single player
 async function calculatePlayerTopFiveData(
@@ -418,9 +419,11 @@ export const rebuildAllTopFiveCaches = internalMutation({
       playerMap.set(p._id, p);
     }
     
-    // Filter for valid Discord IDs and exclude archived
-    const activePlayers = Array.from(playerMap.values()).filter(p => 
-      p.status !== "archived" && isValidDiscordId(p.discordUserId)
+    // Filter for valid Discord IDs and exclude archived / alt accounts
+    const activePlayers = filterVisibleMembers(
+      Array.from(playerMap.values()).filter(
+        (p) => p.status !== "archived" && isValidDiscordId(p.discordUserId),
+      ),
     );
     
     console.log(`[Top-5 Cache] Scheduling cache rebuild for ${activePlayers.length} active players`);
@@ -488,9 +491,11 @@ export const triggerCacheRebuild = mutation({
       playerMap.set(p._id, p);
     }
     
-    // Filter for valid Discord IDs and exclude archived, AND needs cache update
-    const allActivePlayers = Array.from(playerMap.values()).filter(p => 
-      p.status !== "archived" && isValidDiscordId(p.discordUserId)
+    // Filter for valid Discord IDs and exclude archived / alt accounts
+    const allActivePlayers = filterVisibleMembers(
+      Array.from(playerMap.values()).filter(
+        (p) => p.status !== "archived" && isValidDiscordId(p.discordUserId),
+      ),
     );
     
     // Find players that need cache updates (either no cache or stale)
@@ -585,9 +590,11 @@ export const getTopFiveCacheStatus = query({
       playerMap.set(p._id, p);
     }
     
-    // Filter for valid Discord IDs and exclude archived
-    const activePlayers = Array.from(playerMap.values()).filter(p => 
-      p.status !== "archived" && isValidDiscordId(p.discordUserId)
+    // Filter for valid Discord IDs and exclude archived / alt accounts
+    const activePlayers = filterVisibleMembers(
+      Array.from(playerMap.values()).filter(
+        (p) => p.status !== "archived" && isValidDiscordId(p.discordUserId),
+      ),
     );
     
     const totalPlayers = activePlayers.length;

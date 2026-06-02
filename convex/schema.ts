@@ -73,6 +73,8 @@ export default defineSchema({
       v.literal("rejected"),
       v.literal("former")
     )),
+    // Alternate account — hidden from member directory and profiles (Features panel)
+    isAlt: v.optional(v.boolean()),
     // Admin-only comments
     adminComments: v.optional(v.string()),
     // Rejection reason (when status is rejected)
@@ -158,7 +160,8 @@ export default defineSchema({
     .index("by_discord_user_id", ["discordUserId"])
     .index("by_epic_username", ["epicUsername"])
     .index("by_status", ["status"])
-    .index("by_membership_status", ["currentMembershipStatus"]),
+    .index("by_membership_status", ["currentMembershipStatus"])
+    .index("by_is_alt", ["isAlt"]),
   
   manualScores: defineTable({
     playerId: v.id("players"),
