@@ -25,6 +25,7 @@ import EditMemberStatusDialog from "../_components/edit-member-status-dialog.tsx
 import NewApplicationDialog from "./_components/new-application-dialog.tsx";
 import EditApplicationDialog from "./_components/edit-application-dialog.tsx";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import FemaleVerifiedBadge from "@/components/female-verified-badge.tsx";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 
 export default function MemberManagement() {
@@ -74,6 +75,7 @@ export default function MemberManagement() {
   const [playerDeleteConfirmOpen, setPlayerDeleteConfirmOpen] = useState(false);
   const [playerToDelete, setPlayerToDelete] = useState<Id<"players"> | null>(null);
   const [isSyncingDiscordMembers, setIsSyncingDiscordMembers] = useState(false);
+  const [isSyncingGirlRole, setIsSyncingGirlRole] = useState(false);
   
   // Search state
   const [acceptedSearch, setAcceptedSearch] = useState("");
@@ -116,6 +118,11 @@ export default function MemberManagement() {
   const rejectApplication = useMutation(api.memberManagement.rejectApplication);
   const convertToPlayer = useMutation(api.discord.convertToPlayer);
   const syncDiscordMembers = useAction(api.discord.sync.syncDiscordMembers);
+  const syncGirlRole = useAction(api.girlRole.sync.syncGirlRole);
+  const girlRoleSyncStatus = useQuery(
+    api.girlRole.queries.getVerificationCount,
+    isModeratorOrAdmin ? {} : "skip",
+  );
   const [convertingPlayerId, setConvertingPlayerId] = useState<Id<"players"> | null>(null);
   
   // Redirect non-admins to "Accepted" tab
@@ -207,6 +214,20 @@ export default function MemberManagement() {
       toast.error(error instanceof Error ? error.message : "Failed to sync Discord members");
     } finally {
       setIsSyncingDiscordMembers(false);
+    }
+  };
+
+  const handleSyncGirlRole = async () => {
+    setIsSyncingGirlRole(true);
+    try {
+      const result = await syncGirlRole();
+      toast.success(
+        `Girl Role sync complete: ${result.count} verification${result.count === 1 ? "" : "s"} loaded from Mod Log`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to sync Girl Role verifications");
+    } finally {
+      setIsSyncingGirlRole(false);
     }
   };
   
@@ -338,15 +359,47 @@ export default function MemberManagement() {
       authTitle="Sign in to access member management"
       showSidebar={!!isModeratorOrAdmin}
       header={{
-        actions: isAdmin ? (
-          <Button size="sm" variant="secondary" onClick={handleSyncDiscordMembers} disabled={isSyncingDiscordMembers}>
-            {isSyncingDiscordMembers ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+        actions: isModeratorOrAdmin ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleSyncGirlRole}
+              disabled={isSyncingGirlRole || isSyncingDiscordMembers}
+              title={
+                girlRoleSyncStatus?.lastSyncedAt
+                  ? `${girlRoleSyncStatus.count} verifications · last synced ${format(new Date(girlRoleSyncStatus.lastSyncedAt), "MMM d, yyyy h:mm a")}`
+                  : "Sync female verifications from Mod Log Girl Role sheet"
+              }
+            >
+              {isSyncingGirlRole ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              Sync Girl Role
+              {girlRoleSyncStatus && girlRoleSyncStatus.count > 0 && !isSyncingGirlRole && (
+                <Badge variant="outline" className="ml-1.5 px-1.5 py-0 text-[10px] font-normal">
+                  {girlRoleSyncStatus.count}
+                </Badge>
+              )}
+            </Button>
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleSyncDiscordMembers}
+                disabled={isSyncingDiscordMembers || isSyncingGirlRole}
+              >
+                {isSyncingDiscordMembers ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Sync Discord
+              </Button>
             )}
-            Sync Discord
-          </Button>
+          </div>
         ) : undefined,
       }}
     >
@@ -582,6 +635,9 @@ export default function MemberManagement() {
                                 >
                                   {member.discordUsername}
                                 </Link>
+                                {member.femaleVerified && (
+                                  <FemaleVerifiedBadge compact />
+                                )}
                                 {member.autoAcceptedByDiscordSync && (
                                   <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                                     Auto-accepted by Discord sync
@@ -683,6 +739,9 @@ export default function MemberManagement() {
                               >
                                 {member.discordUsername}
                               </Link>
+                              {member.femaleVerified && (
+                                <FemaleVerifiedBadge compact />
+                              )}
                               {member.autoAcceptedByDiscordSync && (
                                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Auto</Badge>
                               )}
@@ -821,12 +880,17 @@ export default function MemberManagement() {
                         {(discordPagination.pageItems ?? []).map((member) => (
                           <TableRow key={member._id} className="h-10">
                             <TableCell className="font-medium">
-                              <Link 
-                                to={`/player/${member.discordUsername}`}
-                                className="hover:underline text-primary"
-                              >
-                                {member.discordUsername}
-                              </Link>
+                              <div className="flex items-center gap-2">
+                                <Link 
+                                  to={`/player/${member.discordUsername}`}
+                                  className="hover:underline text-primary"
+                                >
+                                  {member.discordUsername}
+                                </Link>
+                                {member.femaleVerified && (
+                                  <FemaleVerifiedBadge compact />
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="font-mono text-sm">{member.discordUserId}</TableCell>
                             <TableCell>{member.epicUsername}</TableCell>
@@ -898,12 +962,17 @@ export default function MemberManagement() {
                       {(discordPagination.pageItems ?? []).map((member) => (
                         <div key={member._id} className="py-2 flex items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <Link 
-                              to={`/player/${member.discordUsername}`}
-                              className="hover:underline text-primary text-sm font-medium truncate block"
-                            >
-                              {member.discordUsername}
-                            </Link>
+                            <div className="flex items-center gap-1.5">
+                              <Link 
+                                to={`/player/${member.discordUsername}`}
+                                className="hover:underline text-primary text-sm font-medium truncate block"
+                              >
+                                {member.discordUsername}
+                              </Link>
+                              {member.femaleVerified && (
+                                <FemaleVerifiedBadge compact />
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                               <span className="truncate">{member.epicUsername}</span>
                               {member.tier && (
@@ -1004,12 +1073,17 @@ export default function MemberManagement() {
                         {(rejectedPagination.pageItems ?? []).map((member) => (
                           <TableRow key={member._id} className="h-10">
                             <TableCell className="font-medium">
-                              <Link 
-                                to={`/player/${member.discordUsername}`}
-                                className="hover:underline text-primary"
-                              >
-                                {member.discordUsername}
-                              </Link>
+                              <div className="flex items-center gap-2">
+                                <Link 
+                                  to={`/player/${member.discordUsername}`}
+                                  className="hover:underline text-primary"
+                                >
+                                  {member.discordUsername}
+                                </Link>
+                                {member.femaleVerified && (
+                                  <FemaleVerifiedBadge compact />
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="font-mono text-sm">{member.discordUserId}</TableCell>
                             <TableCell className="max-w-md truncate">
@@ -1052,12 +1126,17 @@ export default function MemberManagement() {
                       {(rejectedPagination.pageItems ?? []).map((member) => (
                         <div key={member._id} className="py-2 flex items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <Link 
-                              to={`/player/${member.discordUsername}`}
-                              className="hover:underline text-primary text-sm font-medium truncate block"
-                            >
-                              {member.discordUsername}
-                            </Link>
+                            <div className="flex items-center gap-1.5">
+                              <Link 
+                                to={`/player/${member.discordUsername}`}
+                                className="hover:underline text-primary text-sm font-medium truncate block"
+                              >
+                                {member.discordUsername}
+                              </Link>
+                              {member.femaleVerified && (
+                                <FemaleVerifiedBadge compact />
+                              )}
+                            </div>
                             <p className="text-xs text-muted-foreground mt-0.5 truncate">
                               {member.rejectionReason || "No reason provided"}
                             </p>
@@ -1163,6 +1242,9 @@ export default function MemberManagement() {
                                 >
                                   {member.discordUsername}
                                 </Link>
+                                {member.femaleVerified && (
+                                  <FemaleVerifiedBadge compact />
+                                )}
                                 {member.hasLeftServer && (
                                   <Badge variant="destructive" className="text-xs">
                                     Auto-Archived
@@ -1221,6 +1303,9 @@ export default function MemberManagement() {
                               >
                                 {member.discordUsername}
                               </Link>
+                              {member.femaleVerified && (
+                                <FemaleVerifiedBadge compact />
+                              )}
                               {member.hasLeftServer && (
                                 <Badge variant="destructive" className="text-xs px-1.5 py-0">Left</Badge>
                               )}

@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 import PageShell from "@/components/page-shell.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import PageToolbar from "@/components/page-toolbar.tsx";
+import FemaleVerifiedBadge from "@/components/female-verified-badge.tsx";
 import SearchInput from "@/components/search-input.tsx";
 import StatCard from "@/components/stat-card.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
@@ -229,18 +230,23 @@ export default function Index() {
                   {displayedMembers.map((member) => (
                     <TableRow key={member._id}>
                       <TableCell>
-                        {isModeratorOrAdmin ? (
-                          <Link 
-                            to={`/player/${member.discordUsername}`}
-                            className="hover:underline font-medium cursor-pointer"
-                          >
-                            {member.nickname || member.discordUsername}
-                          </Link>
-                        ) : (
-                          <span className="font-medium">
-                            {member.nickname || member.discordUsername}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {isModeratorOrAdmin ? (
+                            <Link 
+                              to={`/player/${member.discordUsername}`}
+                              className="hover:underline font-medium cursor-pointer"
+                            >
+                              {member.nickname || member.discordUsername}
+                            </Link>
+                          ) : (
+                            <span className="font-medium">
+                              {member.nickname || member.discordUsername}
+                            </span>
+                          )}
+                          {member.femaleVerified && (
+                            <FemaleVerifiedBadge compact />
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {member.epicUsername || "—"}

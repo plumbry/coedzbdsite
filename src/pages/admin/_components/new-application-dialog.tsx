@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { ScrollArea } from "@/components/ui/scroll-area.tsx";
+import GirlRoleVerificationStatus from "@/components/girl-role-verification-status.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Loader2, ArrowRight, ArrowLeft, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -200,8 +201,6 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
   const [memberSearch, setMemberSearch] = useState("");
   const [linkedPlayerId, setLinkedPlayerId] = useState<Id<"players"> | null>(null);
   const [scores, setScores] = useState<ScoreState>(INITIAL_SCORES);
-  const [femaleVerified, setFemaleVerified] = useState(false);
-  const [verificationMethod, setVerificationMethod] = useState<"ID" | "FACECAM" | "TRUSTED SERVER" | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const submitApplication = useMutation(api.memberManagement.submitApplication);
@@ -220,6 +219,11 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
     open && linkedPlayerId ? { playerId: linkedPlayerId } : "skip",
   );
 
+  const linkedPlayerProfile = useQuery(
+    api.players.getPlayerProfile,
+    open && linkedPlayerId ? { id: linkedPlayerId } : "skip",
+  );
+
   const prefilledPlayerIdRef = useRef<Id<"players"> | null>(null);
 
   useEffect(() => {
@@ -232,10 +236,6 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
     prefilledPlayerIdRef.current = linkedPlayerId;
     if (linkedPlayerScore) {
       setScores(scoreRecordToState(linkedPlayerScore));
-      setFemaleVerified(linkedPlayerScore.femaleVerified ?? false);
-      setVerificationMethod(
-        (linkedPlayerScore.verificationMethod as "ID" | "FACECAM" | "TRUSTED SERVER") ?? "",
-      );
     }
   }, [step, linkedPlayerId, linkedPlayerScore]);
 
@@ -256,8 +256,6 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
     setLinkedPlayerId(null);
     prefilledPlayerIdRef.current = null;
     setScores(INITIAL_SCORES);
-    setFemaleVerified(false);
-    setVerificationMethod("");
   };
 
   const handleClose = (isOpen: boolean) => {
@@ -278,8 +276,6 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
     }
     if (!linkedPlayerId) {
       setScores(INITIAL_SCORES);
-      setFemaleVerified(false);
-      setVerificationMethod("");
     }
     setStep("evaluation");
   };
@@ -316,8 +312,6 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
           gameSense: typeof scores.gameSense === "number" ? scores.gameSense : 0,
           seasonPerformance: typeof scores.seasonPerformance === "number" ? scores.seasonPerformance : 0,
           modifiers: typeof scores.modifiers === "number" ? scores.modifiers : 0,
-          femaleVerified: scores.gender === 50 && femaleVerified ? femaleVerified : undefined,
-          verificationMethod: scores.gender === 50 && femaleVerified && verificationMethod ? verificationMethod as "ID" | "FACECAM" | "TRUSTED SERVER" : undefined,
         });
       }
 
@@ -517,11 +511,7 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
                     size="sm"
                     variant={tier === t ? "default" : "secondary"}
                     className="cursor-pointer min-w-[48px]"
-                    onClick={() => {
-                      setScores(TIER_PRESETS[t]);
-                      setFemaleVerified(false);
-                      setVerificationMethod("");
-                    }}
+                    onClick={() => setScores(TIER_PRESETS[t])}
                   >
                     {t} Tier
                   </Button>
@@ -539,10 +529,6 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
                         value={scores.gender === 100 ? "100" : scores.gender === 50 ? "50" : ""}
                         onValueChange={(value) => {
                           setScores({ ...scores, gender: parseInt(value) });
-                          if (parseInt(value) !== 50) {
-                            setFemaleVerified(false);
-                            setVerificationMethod("");
-                          }
                         }}
                       >
                         <SelectTrigger>
@@ -570,43 +556,13 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
                 ))}
               </div>
 
-              {/* Female Verification Section */}
               {scores.gender === 50 && (
-                <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="new-femaleVerified"
-                      checked={femaleVerified}
-                      onCheckedChange={(checked) => {
-                        setFemaleVerified(checked as boolean);
-                        if (!checked) setVerificationMethod("");
-                      }}
-                    />
-                    <Label htmlFor="new-femaleVerified" className="text-sm font-medium cursor-pointer">
-                      Female Verified?
-                    </Label>
-                  </div>
-                  {femaleVerified && (
-                    <div className="space-y-2">
-                      <Label htmlFor="new-verificationMethod" className="text-sm font-medium">
-                        Verification Method
-                      </Label>
-                      <Select
-                        value={verificationMethod}
-                        onValueChange={(value) => setVerificationMethod(value as "ID" | "FACECAM" | "TRUSTED SERVER")}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select method..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ID">ID</SelectItem>
-                          <SelectItem value="FACECAM">FACECAM</SelectItem>
-                          <SelectItem value="TRUSTED SERVER">TRUSTED SERVER</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
+                <GirlRoleVerificationStatus
+                  femaleVerified={linkedPlayerProfile?.femaleVerified ?? false}
+                  verificationMethod={linkedPlayerProfile?.verificationMethod}
+                  loading={!!linkedPlayerId && linkedPlayerProfile === undefined}
+                  noPlayerHint={!linkedPlayerId}
+                />
               )}
 
               {/* Score Summary */}

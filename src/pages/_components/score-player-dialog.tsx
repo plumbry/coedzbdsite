@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import { Checkbox } from "@/components/ui/checkbox.tsx";
+import GirlRoleVerificationStatus from "@/components/girl-role-verification-status.tsx";
 import { toast } from "sonner";
 
 interface ScorePlayerDialogProps {
@@ -112,7 +112,7 @@ const TIER_PRESETS: Record<"S" | "A" | "B" | "C", ScoreState> = {
 
 export default function ScorePlayerDialog({ open, onOpenChange, playerId }: ScorePlayerDialogProps) {
   const player = useQuery(
-    api.players.getPlayerById,
+    api.players.getPlayerProfile,
     open ? { id: playerId } : "skip",
   );
   const existingScore = useQuery(
@@ -121,8 +121,6 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
   );
   const createOrUpdateScore = useMutation(api.scores.createOrUpdateScore);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [femaleVerified, setFemaleVerified] = useState(false);
-  const [verificationMethod, setVerificationMethod] = useState<"ID" | "FACECAM" | "TRUSTED SERVER" | "">("");
   
   const [scores, setScores] = useState<ScoreState>({
     thirdPartyExperience: "",
@@ -158,8 +156,6 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
         gameSense: existingScore.gameSense ?? "",
         modifiers: existingScore.modifiers ?? "",
       });
-      setFemaleVerified(existingScore.femaleVerified ?? false);
-      setVerificationMethod(existingScore.verificationMethod ?? "");
     }
   }, [existingScore]);
   
@@ -188,8 +184,6 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
         gameSense: typeof scores.gameSense === "number" ? scores.gameSense : 0,
         seasonPerformance: 0,
         modifiers: typeof scores.modifiers === "number" ? scores.modifiers : 0,
-        femaleVerified: scores.gender === 50 && femaleVerified ? femaleVerified : undefined,
-        verificationMethod: scores.gender === 50 && femaleVerified && verificationMethod ? verificationMethod as "ID" | "FACECAM" | "TRUSTED SERVER" : undefined,
       });
       
       toast.success("Player evaluation saved successfully!");
@@ -278,11 +272,7 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
                 size="sm"
                 variant={tier === t ? "default" : "secondary"}
                 className="cursor-pointer min-w-[48px]"
-                onClick={() => {
-                  setScores(TIER_PRESETS[t]);
-                  setFemaleVerified(false);
-                  setVerificationMethod("");
-                }}
+                onClick={() => setScores(TIER_PRESETS[t])}
               >
                 {t} Tier
               </Button>
@@ -300,11 +290,6 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
                     value={scores.gender === 100 ? "100" : scores.gender === 50 ? "50" : ""}
                     onValueChange={(value) => {
                       setScores({ ...scores, gender: parseInt(value) });
-                      // Reset female verification if switching away from 50
-                      if (parseInt(value) !== 50) {
-                        setFemaleVerified(false);
-                        setVerificationMethod("");
-                      }
                     }}
                   >
                     <SelectTrigger>
@@ -370,46 +355,12 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
             ))}
           </div>
           
-          {/* Female Verification Section */}
           {scores.gender === 50 && (
-            <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="femaleVerified"
-                  checked={femaleVerified}
-                  onCheckedChange={(checked) => {
-                    setFemaleVerified(checked as boolean);
-                    if (!checked) {
-                      setVerificationMethod("");
-                    }
-                  }}
-                />
-                <Label htmlFor="femaleVerified" className="text-sm font-medium cursor-pointer">
-                  Female Verified?
-                </Label>
-              </div>
-              
-              {femaleVerified && (
-                <div className="space-y-2">
-                  <Label htmlFor="verificationMethod" className="text-sm font-medium">
-                    Verification Method
-                  </Label>
-                  <Select
-                    value={verificationMethod}
-                    onValueChange={(value) => setVerificationMethod(value as "ID" | "FACECAM" | "TRUSTED SERVER")}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select method..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ID">ID</SelectItem>
-                      <SelectItem value="FACECAM">FACECAM</SelectItem>
-                      <SelectItem value="TRUSTED SERVER">TRUSTED SERVER</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
+            <GirlRoleVerificationStatus
+              femaleVerified={player?.femaleVerified ?? false}
+              verificationMethod={player?.verificationMethod}
+              loading={player === undefined}
+            />
           )}
           
           {/* Score Summary */}

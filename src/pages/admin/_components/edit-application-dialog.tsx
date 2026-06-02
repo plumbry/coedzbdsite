@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Loader2, ArrowRight, ArrowLeft } from "lucide-react";
+import GirlRoleVerificationStatus from "@/components/girl-role-verification-status.tsx";
 import { toast } from "sonner";
 
 type ScoreState = {
@@ -162,8 +162,6 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
   const [epicUsername, setEpicUsername] = useState("");
   const [discordId, setDiscordId] = useState("");
   const [scores, setScores] = useState<ScoreState>(INITIAL_SCORES);
-  const [femaleVerified, setFemaleVerified] = useState(false);
-  const [verificationMethod, setVerificationMethod] = useState<"ID" | "FACECAM" | "TRUSTED SERVER" | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scoresLoaded, setScoresLoaded] = useState(false);
 
@@ -175,6 +173,11 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
   const existingScore = useQuery(
     api.scores.getPlayerScore,
     application?.playerId ? { playerId: application.playerId } : "skip"
+  );
+
+  const playerProfile = useQuery(
+    api.players.getPlayerProfile,
+    application?.playerId ? { id: application.playerId } : "skip",
   );
 
   // Initialize form with application data
@@ -207,18 +210,10 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
         seasonPerformance: existingScore.seasonPerformance ?? 0,
         modifiers: existingScore.modifiers ?? 0,
       });
-      if (existingScore.femaleVerified) {
-        setFemaleVerified(true);
-      }
-      if (existingScore.verificationMethod) {
-        setVerificationMethod(existingScore.verificationMethod as "ID" | "FACECAM" | "TRUSTED SERVER");
-      }
       setScoresLoaded(true);
     } else if ((existingScore === null || existingScore === undefined) && !scoresLoaded && application) {
       // Reset to initial scores when no existing score found or query is skipped (no playerId)
       setScores(INITIAL_SCORES);
-      setFemaleVerified(false);
-      setVerificationMethod("");
       setScoresLoaded(true);
     }
   }, [existingScore, scoresLoaded, application]);
@@ -278,8 +273,6 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
           gameSense: typeof scores.gameSense === "number" ? scores.gameSense : 0,
           seasonPerformance: typeof scores.seasonPerformance === "number" ? scores.seasonPerformance : 0,
           modifiers: typeof scores.modifiers === "number" ? scores.modifiers : 0,
-          femaleVerified: scores.gender === 50 && femaleVerified ? femaleVerified : undefined,
-          verificationMethod: scores.gender === 50 && femaleVerified && verificationMethod ? verificationMethod as "ID" | "FACECAM" | "TRUSTED SERVER" : undefined,
         });
       }
 
@@ -433,11 +426,7 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
                     size="sm"
                     variant={tier === t ? "default" : "secondary"}
                     className="cursor-pointer min-w-[48px]"
-                    onClick={() => {
-                      setScores(TIER_PRESETS[t]);
-                      setFemaleVerified(false);
-                      setVerificationMethod("");
-                    }}
+                    onClick={() => setScores(TIER_PRESETS[t])}
                   >
                     {t} Tier
                   </Button>
@@ -455,10 +444,6 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
                         value={scores.gender === 100 ? "100" : scores.gender === 50 ? "50" : ""}
                         onValueChange={(value) => {
                           setScores({ ...scores, gender: parseInt(value) });
-                          if (parseInt(value) !== 50) {
-                            setFemaleVerified(false);
-                            setVerificationMethod("");
-                          }
                         }}
                       >
                         <SelectTrigger>
@@ -486,43 +471,13 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
                 ))}
               </div>
 
-              {/* Female Verification Section */}
               {scores.gender === 50 && (
-                <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="edit-femaleVerified"
-                      checked={femaleVerified}
-                      onCheckedChange={(checked) => {
-                        setFemaleVerified(checked as boolean);
-                        if (!checked) setVerificationMethod("");
-                      }}
-                    />
-                    <Label htmlFor="edit-femaleVerified" className="text-sm font-medium cursor-pointer">
-                      Female Verified?
-                    </Label>
-                  </div>
-                  {femaleVerified && (
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-verificationMethod" className="text-sm font-medium">
-                        Verification Method
-                      </Label>
-                      <Select
-                        value={verificationMethod}
-                        onValueChange={(value) => setVerificationMethod(value as "ID" | "FACECAM" | "TRUSTED SERVER")}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select method..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ID">ID</SelectItem>
-                          <SelectItem value="FACECAM">FACECAM</SelectItem>
-                          <SelectItem value="TRUSTED SERVER">TRUSTED SERVER</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
+                <GirlRoleVerificationStatus
+                  femaleVerified={playerProfile?.femaleVerified ?? false}
+                  verificationMethod={playerProfile?.verificationMethod}
+                  loading={!!application?.playerId && playerProfile === undefined}
+                  noPlayerHint={!application?.playerId}
+                />
               )}
 
               {/* Score Summary */}

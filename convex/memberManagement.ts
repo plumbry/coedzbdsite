@@ -743,7 +743,10 @@ export const getRejectedMembers = query({
       .order("desc")
       .collect();
 
-    return rejectedPlayers;
+    const verificationLookup = await loadFemaleVerificationLookup(ctx);
+    return rejectedPlayers.map((player) =>
+      enrichPlayerWithFemaleVerification(player, verificationLookup),
+    );
   },
 });
 
@@ -751,11 +754,16 @@ export const getRejectedMembers = query({
 export const getFormerMembers = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
+    const formerPlayers = await ctx.db
       .query("players")
       .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "former"))
       .order("desc")
       .collect();
+
+    const verificationLookup = await loadFemaleVerificationLookup(ctx);
+    return formerPlayers.map((player) =>
+      enrichPlayerWithFemaleVerification(player, verificationLookup),
+    );
   },
 });
 
@@ -764,12 +772,17 @@ export const getDiscordMembers = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    
-    return await ctx.db
+
+    const discordPlayers = await ctx.db
       .query("players")
       .withIndex("by_status", (q) => q.eq("status", "discord_member"))
       .order("desc")
       .collect();
+
+    const verificationLookup = await loadFemaleVerificationLookup(ctx);
+    return discordPlayers.map((player) =>
+      enrichPlayerWithFemaleVerification(player, verificationLookup),
+    );
   },
 });
 

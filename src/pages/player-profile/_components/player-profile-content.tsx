@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
-import { Trophy, ExternalLink, Activity, Gamepad2, Edit, RefreshCw } from "lucide-react";
+import { ExternalLink, Activity, Gamepad2, Edit, RefreshCw } from "lucide-react";
+import FemaleVerifiedBadge from "@/components/female-verified-badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { toast } from "sonner";
@@ -95,13 +96,14 @@ export default function PlayerProfileContent({ playerId }: PlayerProfileContentP
                   </Badge>
                 )}
                 {player.femaleVerified && (
-                  <Badge variant="secondary" className="text-sm font-semibold px-3 py-1 flex items-center gap-1">
-                    <Trophy className="h-3 w-3" />
-                    Female Verified
+                  <div className="flex items-center gap-2">
+                    <FemaleVerifiedBadge />
                     {player.verificationMethod && (
-                      <span className="ml-1 text-xs opacity-75">({player.verificationMethod})</span>
+                      <Badge variant="outline" className="text-xs">
+                        {player.verificationMethod}
+                      </Badge>
                     )}
-                  </Badge>
+                  </div>
                 )}
               </div>
               {player.nickname && (
