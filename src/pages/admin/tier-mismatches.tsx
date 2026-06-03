@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Search, AlertTriangle, AlertCircle, ShieldAlert, ArrowUpDown, ExternalLink, ClipboardEdit, FileWarning, VenusAndMars } from "lucide-react";
+import { Search, AlertTriangle, AlertCircle, ShieldAlert, ArrowUpDown, ExternalLink, ClipboardEdit, FileWarning, VenusAndMars, Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import ScorePlayerDialog from "../_components/score-player-dialog.tsx";
@@ -60,6 +60,19 @@ function MissingGenderBadge() {
     <Badge variant="outline" className="gap-1 text-amber-700 border-amber-300 dark:text-amber-400 dark:border-amber-700">
       <VenusAndMars className="h-3 w-3" />
       No Gender
+    </Badge>
+  );
+}
+
+function SheetFemaleMismatchBadge() {
+  return (
+    <Badge
+      variant="outline"
+      className="gap-1 text-pink-700 border-pink-300 dark:text-pink-400 dark:border-pink-700"
+      title="Verified on Mod Log Girl Role sheet but evaluation gender is not female"
+    >
+      <Trophy className="h-3 w-3" />
+      Sheet F, not site
     </Badge>
   );
 }
@@ -141,6 +154,7 @@ function MissingGenderSection() {
                         {p.nickname || p.discordUsername}
                       </Link>
                       <MissingGenderBadge />
+                      {p.sheetFemaleNotOnSite && <SheetFemaleMismatchBadge />}
                       {p.nickname && (
                         <span className="text-xs text-muted-foreground">
                           ({p.discordUsername})
@@ -284,10 +298,11 @@ function IncompleteEvaluationsSection() {
                         {p.nickname || p.discordUsername}
                       </Link>
                       {p.isFemale && (
-                        <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-pink-100 dark:bg-pink-950 text-pink-600 dark:text-pink-400 text-[10px] font-bold shrink-0" title="Female">
+                        <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-pink-100 dark:bg-pink-950 text-pink-600 dark:text-pink-400 text-[10px] font-bold shrink-0" title="Female on site">
                           F
                         </span>
                       )}
+                      {p.sheetFemaleNotOnSite && <SheetFemaleMismatchBadge />}
                       {p.nickname && (
                         <span className="text-xs text-muted-foreground">
                           ({p.discordUsername})
@@ -622,6 +637,7 @@ function TierMismatchesInner() {
                             {getMismatchLabel(m.mismatchStatus)}
                           </Badge>
                           {m.missingGender && <MissingGenderBadge />}
+                          {m.sheetFemaleNotOnSite && <SheetFemaleMismatchBadge />}
                         </div>
                       </TableCell>
                   <TableCell className="font-medium">
@@ -719,7 +735,7 @@ export default function TierMismatchesPage() {
   return (
     <AdminPageLayout requireAdmin
       title="Tier Mismatches"
-      description="Discord tier role mismatches, missing gender, and incomplete evaluations"
+      description="Discord tier role mismatches, gender gaps, sheet vs site female verification, and incomplete evaluations"
       authTitle="Sign in to view tier mismatches"
     >
       <TierMismatchesInner />

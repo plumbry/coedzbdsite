@@ -2,6 +2,10 @@ import { query } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
 import { filterVisibleMembers } from "../helpers/playerAlt";
+import {
+  getPlayerFemaleVerification,
+  loadFemaleVerificationLookup,
+} from "../helpers/femaleVerification";
 
 // Tier role names expected in Discord
 const TIER_ROLE_NAMES = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
@@ -84,6 +88,8 @@ type TierMismatch = {
   status: string | undefined;
   isFemale: boolean;
   missingGender: boolean;
+  femaleVerified: boolean;
+  sheetFemaleNotOnSite: boolean;
 };
 
 type MissingGenderPlayer = {
@@ -94,6 +100,8 @@ type MissingGenderPlayer = {
   nickname: string | undefined;
   tier: string | undefined;
   isFemale: boolean;
+  femaleVerified: boolean;
+  sheetFemaleNotOnSite: boolean;
 };
 
 /**
@@ -106,6 +114,7 @@ export const getTierMismatches = query({
     if (!(await requireAdminOrMod(ctx))) return [];
 
     const mismatches: TierMismatch[] = [];
+    const femaleLookup = await loadFemaleVerificationLookup(ctx);
 
     for (const player of await getReviewablePlayers(ctx)) {
       // Skip players without a website tier
@@ -132,6 +141,8 @@ export const getTierMismatches = query({
           .first();
         const isFemale = score?.gender === 50;
         const missingGender = !hasGenderValue(score?.gender);
+        const { femaleVerified } = getPlayerFemaleVerification(player, femaleLookup);
+        const sheetFemaleNotOnSite = femaleVerified && !isFemale;
 
         mismatches.push({
           playerId: player._id,
@@ -146,6 +157,8 @@ export const getTierMismatches = query({
           status: player.status,
           isFemale,
           missingGender,
+          femaleVerified,
+          sheetFemaleNotOnSite,
         });
       }
     }
@@ -174,6 +187,7 @@ export const getPlayersMissingGender = query({
     if (!(await requireAdminOrMod(ctx))) return [];
 
     const missing: MissingGenderPlayer[] = [];
+    const femaleLookup = await loadFemaleVerificationLookup(ctx);
 
     for (const player of await getReviewablePlayers(ctx)) {
       const score = await ctx.db
@@ -183,6 +197,9 @@ export const getPlayersMissingGender = query({
 
       if (hasGenderValue(score?.gender)) continue;
 
+      const isFemale = score?.gender === 50;
+      const { femaleVerified } = getPlayerFemaleVerification(player, femaleLookup);
+
       missing.push({
         playerId: player._id,
         discordUsername: player.discordUsername,
@@ -190,7 +207,9 @@ export const getPlayersMissingGender = query({
         epicUsername: player.epicUsername,
         nickname: player.nickname,
         tier: player.tier,
-        isFemale: false,
+        isFemale,
+        femaleVerified,
+        sheetFemaleNotOnSite: femaleVerified && !isFemale,
       });
     }
 
@@ -214,6 +233,8 @@ type IncompleteEvaluation = {
   filledCount: number;
   totalFields: number;
   isFemale: boolean;
+  femaleVerified: boolean;
+  sheetFemaleNotOnSite: boolean;
 };
 
 // Human-readable labels for score fields
@@ -244,6 +265,7 @@ export const getIncompleteEvaluations = query({
 
     const allScores = await ctx.db.query("manualScores").collect();
     const incomplete: IncompleteEvaluation[] = [];
+    const femaleLookup = await loadFemaleVerificationLookup(ctx);
 
     for (const score of allScores) {
       const missingFields: string[] = [];
@@ -261,6 +283,9 @@ export const getIncompleteEvaluations = query({
       // Skip archived/rejected
       if (player.status === "archived" || player.status === "rejected") continue;
 
+      const isFemale = score.gender === 50;
+      const { femaleVerified } = getPlayerFemaleVerification(player, femaleLookup);
+
       incomplete.push({
         playerId: player._id,
         discordUsername: player.discordUsername,
@@ -272,7 +297,9 @@ export const getIncompleteEvaluations = query({
         missingFields,
         filledCount: SCORE_FIELDS.length - missingFields.length,
         totalFields: SCORE_FIELDS.length,
-        isFemale: score.gender === 50,
+        isFemale,
+        femaleVerified,
+        sheetFemaleNotOnSite: femaleVerified && !isFemale,
       });
     }
 
