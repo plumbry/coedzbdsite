@@ -14,11 +14,28 @@ const TIER_ROLE_NAMES = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
 /** Yunite verified — required to surface "missing tier role" mismatches */
 const YUNITE_VERIFIED_ROLE_ID = "1371623256855154818";
 
+/** Woman verified — female-scored players need this before missing tier role is flagged */
+const WOMAN_VERIFIED_ROLE_NAME = "Woman Verified";
+
 function hasDiscordRole(
   roles: { id: string; name: string }[] | undefined,
   roleId: string,
 ): boolean {
   return (roles ?? []).some((role) => role.id === roleId);
+}
+
+function hasDiscordRoleNamed(
+  roles: { id: string; name: string }[] | undefined,
+  roleName: string,
+): boolean {
+  const normalized = roleName.toLowerCase();
+  return (roles ?? []).some((role) => role.name.toLowerCase() === normalized);
+}
+
+function hasWomanVerifiedRole(
+  roles: { id: string; name: string }[] | undefined,
+): boolean {
+  return hasDiscordRoleNamed(roles, WOMAN_VERIFIED_ROLE_NAME);
 }
 
 // All score fields that should be filled in a complete evaluation
@@ -136,10 +153,17 @@ export const getTierMismatches = query({
         .map((role) => role.name.replace("Tier ", ""));
 
       let mismatchStatus: MismatchStatus | null = null;
+      let score: Awaited<ReturnType<typeof getManualScoreForPlayer>> | null = null;
 
       if (discordTierRoles.length === 0) {
         if (hasDiscordRole(player.discordRoles, YUNITE_VERIFIED_ROLE_ID)) {
-          mismatchStatus = "missing_role";
+          score = await getManualScoreForPlayer(ctx, player._id);
+          const isFemale = score?.gender === 50;
+          const lacksWomanVerified =
+            isFemale && !hasWomanVerifiedRole(player.discordRoles);
+          if (!lacksWomanVerified) {
+            mismatchStatus = "missing_role";
+          }
         }
       } else if (discordTierRoles.length > 1) {
         mismatchStatus = "multiple_roles";
@@ -148,7 +172,9 @@ export const getTierMismatches = query({
       }
 
       if (mismatchStatus) {
-        const score = await getManualScoreForPlayer(ctx, player._id);
+        if (!score) {
+          score = await getManualScoreForPlayer(ctx, player._id);
+        }
         const isFemale = score?.gender === 50;
         const missingGender = !hasGenderValue(score?.gender);
         const { femaleVerified } = getPlayerFemaleVerification(player, femaleLookup);
