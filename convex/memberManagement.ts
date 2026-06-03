@@ -1220,7 +1220,7 @@ export const lookupDiscordId = query({
         ? {
             _id: staffUser._id,
             username: staffUser.username,
-            displayName: staffUser.displayName,
+            displayName: getDisplayName(staffUser),
           }
         : null,
       applications: applications.slice(0, 5).map((app) => ({

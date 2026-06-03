@@ -94,7 +94,7 @@ function SidebarNavLink({
 }: NavItem & { active: boolean; collapsed: boolean }) {
   const button = (
     <Button
-      variant={active ? "secondary" : "ghost"}
+      variant={active ? "default" : "ghost"}
       size={collapsed ? "icon" : "sm"}
       className={cn(
         collapsed ? "h-9 w-9 shrink-0" : "w-full min-w-0 justify-start",

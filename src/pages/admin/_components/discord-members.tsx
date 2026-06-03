@@ -324,7 +324,7 @@ export default function DiscordMembers() {
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Category:</span>
                 <Button
-                  variant={categoryFilter === "all" ? "default" : "secondary"}
+                  variant={categoryFilter === "all" ? "default" : "outline"}
                   size="sm"
                   onClick={() => { setCategoryFilter("all"); membersPagination.resetPage(); }}
                   className="h-8"
@@ -332,7 +332,7 @@ export default function DiscordMembers() {
                   All ({botSyncedPlayers.length})
                 </Button>
                 <Button
-                  variant={categoryFilter === "active" ? "default" : "secondary"}
+                  variant={categoryFilter === "active" ? "default" : "outline"}
                   size="sm"
                   onClick={() => { setCategoryFilter("active"); membersPagination.resetPage(); }}
                   className="h-8"
@@ -340,7 +340,7 @@ export default function DiscordMembers() {
                   Active ({activePlayers.length})
                 </Button>
                 <Button
-                  variant={categoryFilter === "inactive" ? "default" : "secondary"}
+                  variant={categoryFilter === "inactive" ? "default" : "outline"}
                   size="sm"
                   onClick={() => { setCategoryFilter("inactive"); membersPagination.resetPage(); }}
                   className="h-8"
@@ -644,7 +644,7 @@ export default function DiscordMembers() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setConvertingPlayer(null)} disabled={isConverting}>
+            <Button variant="outline" onClick={() => setConvertingPlayer(null)} disabled={isConverting}>
               Cancel
             </Button>
             <Button onClick={handleConvertToPlayer} disabled={isConverting}>

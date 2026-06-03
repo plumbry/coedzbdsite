@@ -496,7 +496,7 @@ export default function ScrimEventPage() {
             {isUnlocked && (
               <Button
                 size="sm"
-                variant={streamerMode ? "default" : "secondary"}
+                variant={streamerMode ? "default" : "outline"}
                 className="cursor-pointer shrink-0 gap-1.5"
                 onClick={() => {
                   setStreamerMode(!streamerMode);
@@ -978,7 +978,7 @@ export default function ScrimEventPage() {
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" className="cursor-pointer" onClick={() => setShowEditDialog(false)}>
+            <Button variant="outline" className="cursor-pointer" onClick={() => setShowEditDialog(false)}>
               Cancel
             </Button>
             <Button

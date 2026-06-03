@@ -261,7 +261,7 @@ function ScrimsLandingPageInner() {
                 </p>
               </div>
               <DialogFooter>
-                <Button variant="secondary" className="cursor-pointer" onClick={handleCloseDialog}>
+                <Button variant="outline" className="cursor-pointer" onClick={handleCloseDialog}>
                   Done
                 </Button>
               </DialogFooter>
@@ -315,7 +315,7 @@ function ScrimsLandingPageInner() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="secondary" className="cursor-pointer" onClick={handleCloseDialog}>
+                <Button variant="outline" className="cursor-pointer" onClick={handleCloseDialog}>
                   Cancel
                 </Button>
                 <Button className="cursor-pointer" onClick={handleCreate} disabled={creating}>

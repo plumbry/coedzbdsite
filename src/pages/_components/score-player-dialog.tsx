@@ -300,7 +300,7 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
                 key={t}
                 type="button"
                 size="sm"
-                variant={tier === t ? "default" : "secondary"}
+                variant={tier === t ? "default" : "outline"}
                 className="cursor-pointer min-w-[48px]"
                 onClick={() => setScores(TIER_PRESETS[t])}
               >
@@ -418,7 +418,7 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
         <div className="flex justify-end gap-3 border-t pt-4 mt-4">
           <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
           >

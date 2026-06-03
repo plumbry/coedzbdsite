@@ -397,7 +397,7 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
               </div>
             </div>
             <DialogFooter className="flex justify-between sm:justify-between">
-              <Button variant="secondary" onClick={handleClose}>
+              <Button variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
               <div className="flex gap-2">
@@ -424,7 +424,7 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
                   <Button
                     key={t}
                     size="sm"
-                    variant={tier === t ? "default" : "secondary"}
+                    variant={tier === t ? "default" : "outline"}
                     className="cursor-pointer min-w-[48px]"
                     onClick={() => setScores(TIER_PRESETS[t])}
                   >
@@ -500,12 +500,12 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
             </DialogBody>
 
             <div className="flex justify-between border-t pt-4 mt-4">
-              <Button variant="secondary" onClick={() => setStep("info")} className="cursor-pointer">
+              <Button variant="outline" onClick={() => setStep("info")} className="cursor-pointer">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
               </Button>
               <div className="flex gap-2">
-                <Button variant="secondary" onClick={handleClose}>
+                <Button variant="outline" onClick={handleClose}>
                   Cancel
                 </Button>
                 <Button onClick={handleSubmit} disabled={isSubmitting} className="cursor-pointer">

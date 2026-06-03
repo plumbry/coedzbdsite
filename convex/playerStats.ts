@@ -251,7 +251,7 @@ async function formatPlayerAllEvents(
         eliminations: event.eliminations || 0,
         kdRatio: undefined,
         eventScore: event.points,
-        source: (isYunite ? "yunite" : "csv") as const,
+        source: isYunite ? ("yunite" as const) : ("csv" as const),
         leaderboardUrl,
         yuniteLeaderboardUrl: undefined,
         teammateName: teammateNames.length > 0 ? teammateNames.join(", ") : undefined,

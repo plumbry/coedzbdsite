@@ -167,7 +167,7 @@ export default function AddEventDialog({ open, onOpenChange, playerId }: AddEven
           <div className="flex justify-end gap-3 pt-4">
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isSubmitting}
             >

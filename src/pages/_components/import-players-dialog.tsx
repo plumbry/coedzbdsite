@@ -512,7 +512,7 @@ export default function ImportPlayersDialog({ open, onOpenChange }: ImportPlayer
           <div className="flex justify-end gap-3">
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               onClick={handleClose}
               disabled={isProcessing}
             >

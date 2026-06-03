@@ -488,7 +488,7 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
               )}
             </div>
             <DialogFooter>
-              <Button variant="secondary" onClick={() => handleClose(false)}>
+              <Button variant="outline" onClick={() => handleClose(false)}>
                 Cancel
               </Button>
               <Button onClick={handleNext} className="cursor-pointer">
@@ -509,7 +509,7 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
                   <Button
                     key={t}
                     size="sm"
-                    variant={tier === t ? "default" : "secondary"}
+                    variant={tier === t ? "default" : "outline"}
                     className="cursor-pointer min-w-[48px]"
                     onClick={() => setScores(TIER_PRESETS[t])}
                   >
@@ -585,12 +585,12 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
             </DialogBody>
 
             <div className="flex justify-between border-t pt-4 mt-4">
-              <Button variant="secondary" onClick={() => setStep("info")} className="cursor-pointer">
+              <Button variant="outline" onClick={() => setStep("info")} className="cursor-pointer">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
               </Button>
               <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => handleClose(false)}>
+                <Button variant="outline" onClick={() => handleClose(false)}>
                   Cancel
                 </Button>
                 <Button onClick={handleSubmit} disabled={isSubmitting} className="cursor-pointer">
