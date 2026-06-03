@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireAdmin } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
+import { getManualScoreForPlayer } from "./helpers/manualScores";
 
 // Calculate tier based on total score
 function calculateTier(totalScore: number): string {
@@ -17,11 +18,8 @@ export const getPlayerScore = query({
     // Only admins can view detailed scores
     await requireAdmin(ctx);
     
-    const score = await ctx.db
-      .query("manualScores")
-      .withIndex("by_player", (q) => q.eq("playerId", args.playerId))
-      .first();
-    
+    const score = await getManualScoreForPlayer(ctx, args.playerId);
+
     if (!score) return null;
     
     // Default modifiers and seasonPerformance to 0 if not set
@@ -192,11 +190,7 @@ export const createOrUpdateScore = mutation({
     const playerName = player.discordUsername || "Unknown Player";
     const previousTier = player.tier;
     
-    // Check if score already exists
-    const existingScore = await ctx.db
-      .query("manualScores")
-      .withIndex("by_player", (q) => q.eq("playerId", args.playerId))
-      .first();
+    const existingScore = await getManualScoreForPlayer(ctx, args.playerId);
     
     const isUpdate = !!existingScore;
     

@@ -408,7 +408,7 @@ function MissingRoleSection() {
   const filteredMismatches = useMemo(() => {
     if (!mismatches) return [];
 
-    let result = [...mismatches];
+    let result = mismatches.filter((m) => m.mismatchStatus === "missing_role");
 
     // Filter by website tier
     if (filterTier !== "all") {
@@ -678,7 +678,7 @@ function TierMismatchesInner() {
   const incomplete = useQuery(api.discord.tierMismatches.getIncompleteEvaluations, {});
   const missingGender = useQuery(api.discord.tierMismatches.getPlayersMissingGender, {});
 
-  const roleCount = mismatches?.length;
+  const roleCount = mismatches?.filter((m) => m.mismatchStatus === "missing_role").length;
   const evalCount = incomplete?.length;
   const genderCount = missingGender?.length;
 

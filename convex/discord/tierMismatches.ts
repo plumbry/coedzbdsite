@@ -6,9 +6,20 @@ import {
   getPlayerFemaleVerification,
   loadFemaleVerificationLookup,
 } from "../helpers/femaleVerification";
+import { getManualScoreForPlayer } from "../helpers/manualScores";
 
 // Tier role names expected in Discord
 const TIER_ROLE_NAMES = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
+
+/** Yunite verified — required to surface "missing tier role" mismatches */
+const YUNITE_VERIFIED_ROLE_ID = "1371623256855154818";
+
+function hasDiscordRole(
+  roles: { id: string; name: string }[] | undefined,
+  roleId: string,
+): boolean {
+  return (roles ?? []).some((role) => role.id === roleId);
+}
 
 // All score fields that should be filled in a complete evaluation
 const SCORE_FIELDS = [
@@ -127,7 +138,9 @@ export const getTierMismatches = query({
       let mismatchStatus: MismatchStatus | null = null;
 
       if (discordTierRoles.length === 0) {
-        mismatchStatus = "missing_role";
+        if (hasDiscordRole(player.discordRoles, YUNITE_VERIFIED_ROLE_ID)) {
+          mismatchStatus = "missing_role";
+        }
       } else if (discordTierRoles.length > 1) {
         mismatchStatus = "multiple_roles";
       } else if (discordTierRoles[0] !== player.tier) {
@@ -135,10 +148,7 @@ export const getTierMismatches = query({
       }
 
       if (mismatchStatus) {
-        const score = await ctx.db
-          .query("manualScores")
-          .withIndex("by_player", (q) => q.eq("playerId", player._id))
-          .first();
+        const score = await getManualScoreForPlayer(ctx, player._id);
         const isFemale = score?.gender === 50;
         const missingGender = !hasGenderValue(score?.gender);
         const { femaleVerified } = getPlayerFemaleVerification(player, femaleLookup);
@@ -190,10 +200,7 @@ export const getPlayersMissingGender = query({
     const femaleLookup = await loadFemaleVerificationLookup(ctx);
 
     for (const player of await getReviewablePlayers(ctx)) {
-      const score = await ctx.db
-        .query("manualScores")
-        .withIndex("by_player", (q) => q.eq("playerId", player._id))
-        .first();
+      const score = await getManualScoreForPlayer(ctx, player._id);
 
       if (hasGenderValue(score?.gender)) continue;
 

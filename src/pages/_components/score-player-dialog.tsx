@@ -87,7 +87,8 @@ function scoreRecordToState(score: {
     hoursPlayed: score.hoursPlayed ?? "",
     notorietyTeammates: score.notorietyTeammates ?? "",
     age: score.age ?? "",
-    gender: score.gender ?? "",
+    gender:
+      score.gender === 50 || score.gender === 100 ? score.gender : "",
     ability: score.ability ?? 100,
     region: score.region ?? 100,
     gameSense: score.gameSense ?? "",
@@ -170,24 +171,15 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
   const createOrUpdateScore = useMutation(api.scores.createOrUpdateScore);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scores, setScores] = useState<ScoreState>(INITIAL_SCORES);
-  const [scoresLoaded, setScoresLoaded] = useState(false);
 
   useEffect(() => {
-    if (!open) {
-      setScoresLoaded(false);
-      return;
-    }
-    setScores(INITIAL_SCORES);
-    setScoresLoaded(false);
-  }, [open, playerId]);
-
-  useEffect(() => {
-    if (!open || scoresLoaded || existingScore === undefined) {
+    if (!open || existingScore === undefined) {
       return;
     }
     setScores(existingScore ? scoreRecordToState(existingScore) : INITIAL_SCORES);
-    setScoresLoaded(true);
-  }, [open, playerId, existingScore, scoresLoaded]);
+  }, [open, playerId, existingScore]);
+
+  const isLoadingScores = open && existingScore === undefined;
   
   const currentPlayer = player;
   const totalScore = Object.values(scores).reduce((sum, score) => sum + (typeof score === "number" ? score : 0), 0);
@@ -292,6 +284,14 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
         
         <DialogBody className="flex-1 min-h-0">
         <form onSubmit={handleSubmit} className="space-y-6 pr-2">
+          {isLoadingScores && (
+            <p className="text-sm text-muted-foreground">Loading evaluation…</p>
+          )}
+          {!isLoadingScores && existingScore === null && player?.tier && (
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              No saved evaluation categories for this player yet. Their tier ({player.tier}) may have been set outside the evaluation form.
+            </p>
+          )}
           {/* Tier preset auto-fill buttons */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground mr-1">Auto-fill:</span>
@@ -309,7 +309,9 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
             ))}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div
+            className={`grid gap-4 md:grid-cols-2 lg:grid-cols-3 ${isLoadingScores ? "opacity-50 pointer-events-none" : ""}`}
+          >
             {categories.map(({ key, label }) => (
               <div key={key} className="space-y-2">
                 <Label htmlFor={key} className="text-sm font-medium">
@@ -422,7 +424,7 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
           >
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
+          <Button onClick={handleSubmit} disabled={isSubmitting || isLoadingScores}>
             {isSubmitting ? "Saving..." : "Save Evaluation"}
           </Button>
         </div>
