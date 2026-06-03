@@ -21,7 +21,7 @@ export async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
     .withIndex("by_token", (q) =>
       q.eq("tokenIdentifier", identity.tokenIdentifier),
     )
-    .unique();
+    .first();
 
   if (!user) {
     throw new ConvexError({

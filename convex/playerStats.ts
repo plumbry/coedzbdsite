@@ -180,6 +180,30 @@ async function formatPlayerAllEvents(
     { nickname?: string; discordUsername: string; epicUsername: string }
   >();
 
+  if (player) {
+    const teammateEpics = new Set<string>();
+    for (const event of thirdPartyResults) {
+      for (const teammateEpic of event.teamMembers ?? []) {
+        if (teammateEpic !== player.epicUsername) {
+          teammateEpics.add(teammateEpic);
+        }
+      }
+    }
+    for (const teammateEpic of teammateEpics) {
+      const teammate = await ctx.db
+        .query("players")
+        .withIndex("by_epic_username", (q) => q.eq("epicUsername", teammateEpic))
+        .first();
+      if (teammate) {
+        playerLookupCache.set(teammateEpic, {
+          nickname: teammate.nickname,
+          discordUsername: teammate.discordUsername,
+          epicUsername: teammate.epicUsername,
+        });
+      }
+    }
+  }
+
   const formattedThirdPartyResults = await Promise.all(
     thirdPartyResults.map(async (event) => {
       const importData = importCache.get(event.importId as string);
@@ -211,30 +235,12 @@ async function formatPlayerAllEvents(
         for (const teammateEpic of event.teamMembers) {
           if (teammateEpic === player.epicUsername) continue;
 
-          if (playerLookupCache.has(teammateEpic)) {
-            const cached = playerLookupCache.get(teammateEpic)!;
-            teammateNames.push(
-              cached.nickname || cached.discordUsername || cached.epicUsername,
-            );
-          } else {
-            const teammate = await ctx.db
-              .query("players")
-              .withIndex("by_epic_username", (q) => q.eq("epicUsername", teammateEpic))
-              .first();
-
-            if (teammate) {
-              playerLookupCache.set(teammateEpic, {
-                nickname: teammate.nickname,
-                discordUsername: teammate.discordUsername,
-                epicUsername: teammate.epicUsername,
-              });
-              teammateNames.push(
-                teammate.nickname || teammate.discordUsername || teammate.epicUsername,
-              );
-            } else {
-              teammateNames.push(teammateEpic);
-            }
-          }
+          const cached = playerLookupCache.get(teammateEpic);
+          teammateNames.push(
+            cached
+              ? cached.nickname || cached.discordUsername || cached.epicUsername
+              : teammateEpic,
+          );
         }
       }
 

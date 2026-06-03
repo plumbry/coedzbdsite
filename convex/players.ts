@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
 import {
@@ -16,6 +16,7 @@ import {
 } from "./helpers/playerAlt";
 import { playerMatchesSearchTerm } from "./helpers/playerDiscordId";
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
+import { matchPlayerForImport } from "./lib/playerIdentity";
 
 export const getPlayers = query({
   args: {},
@@ -59,30 +60,58 @@ export const getPlayerById = query({
   },
 });
 
+async function findPlayerByUsername(ctx: QueryCtx, username: string) {
+  const trimmed = username.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const byDiscord = await ctx.db
+    .query("players")
+    .withIndex("by_discord_username", (q) => q.eq("discordUsername", trimmed))
+    .first();
+
+  if (byDiscord && isVisibleInMemberLists(byDiscord)) {
+    return byDiscord;
+  }
+
+  const byEpic = await ctx.db
+    .query("players")
+    .withIndex("by_epic_username", (q) => q.eq("epicUsername", trimmed))
+    .first();
+
+  if (byEpic && isVisibleInMemberLists(byEpic)) {
+    return byEpic;
+  }
+
+  // Case-insensitive fallback when URL casing differs from stored usernames
+  for (const status of ["accepted", "former"] as const) {
+    const members = filterVisibleMembers(
+      await ctx.db
+        .query("players")
+        .withIndex("by_membership_status", (q) =>
+          q.eq("currentMembershipStatus", status),
+        )
+        .collect(),
+    );
+    const { player } = matchPlayerForImport(members, {
+      discordUsername: trimmed,
+      epicUsername: trimmed,
+    });
+    if (player) {
+      return await ctx.db.get(player._id);
+    }
+  }
+
+  return null;
+}
+
 // Get player by username (Discord or Epic)
 export const getPlayerByUsername = query({
   args: { username: v.string() },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
-
-    // Try to find by Discord username first (case insensitive)
-    const byDiscord = await ctx.db
-      .query("players")
-      .withIndex("by_discord_username", (q) => q.eq("discordUsername", args.username))
-      .first();
-    
-    if (byDiscord) {
-      return isVisibleInMemberLists(byDiscord) ? byDiscord : null;
-    }
-    
-    // Try to find by Epic username (case insensitive)
-    const byEpic = await ctx.db
-      .query("players")
-      .withIndex("by_epic_username", (q) => q.eq("epicUsername", args.username))
-      .first();
-    
-    if (!byEpic) return null;
-    return isVisibleInMemberLists(byEpic) ? byEpic : null;
+    return await findPlayerByUsername(ctx, args.username);
   },
 });
 

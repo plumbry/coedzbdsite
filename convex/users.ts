@@ -39,7 +39,7 @@ export const getCurrentUser = query({
       .withIndex("by_token", (q) =>
         q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
-      .unique();
+      .first();
 
     return user;
   },

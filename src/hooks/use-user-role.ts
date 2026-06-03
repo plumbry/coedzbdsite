@@ -6,9 +6,9 @@ export function useUserRole() {
   const user = useQuery(api.users.getCurrentUser, !isAuthenticated ? "skip" : undefined);
 
   return {
-    user,
+    user: isAuthenticated ? user : null,
     isAuthenticated,
-    isAdmin: user?.role === "admin",
+    isAdmin: isAuthenticated && user?.role === "admin",
     isEventMod: user?.role === "event_mod",
     isModeratorOrAdmin: user?.role === "admin" || user?.role === "event_mod",
     hasEventBanAccess: user?.role === "admin" || user?.role === "event_mod",

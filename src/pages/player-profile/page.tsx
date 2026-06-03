@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useQuery, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Lock } from "lucide-react";
@@ -10,11 +10,16 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 
 export default function PlayerProfile() {
-  const { username } = useParams<{ username: string }>();
+  const { username: rawUsername } = useParams<{ username: string }>();
+  const username = rawUsername
+    ? decodeURIComponent(rawUsername).trim()
+    : undefined;
+  const { isAuthenticated } = useConvexAuth();
   const { isAdmin, isLoading: roleLoading } = useUserRole();
+  const canLoadProfile = isAuthenticated && isAdmin && !!username;
   const player = useQuery(
     api.players.getPlayerByUsername,
-    isAdmin && username ? { username } : "skip",
+    canLoadProfile ? { username } : "skip",
   );
   
   return (
