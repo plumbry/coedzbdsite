@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Search, AlertTriangle, AlertCircle, ShieldAlert, ArrowUpDown, ExternalLink, ClipboardEdit, FileWarning, VenusAndMars, Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import ScorePlayerDialog from "../_components/score-player-dialog.tsx";
 import { useClientPagination } from "@/hooks/use-client-pagination.ts";
@@ -102,21 +103,18 @@ function MissingGenderSection() {
   }
 
   if (missingGender.length === 0) {
-    return null;
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        No players missing gender. All active evaluations have male or female set.
+      </div>
+    );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <VenusAndMars className="h-5 w-5 text-amber-500" />
-          <CardTitle>Missing Gender</CardTitle>
-        </div>
-        <CardDescription>
-          Active and accepted players whose evaluation does not have gender set to male or female.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Active and accepted players whose evaluation does not have gender set to male or female.
+      </p>
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -205,7 +203,6 @@ function MissingGenderSection() {
           onPageChange={pagination.setPage}
           itemLabel="players missing gender"
         />
-      </CardContent>
 
       {selectedPlayerId && (
         <ScorePlayerDialog
@@ -214,7 +211,7 @@ function MissingGenderSection() {
           playerId={selectedPlayerId}
         />
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -243,22 +240,19 @@ function IncompleteEvaluationsSection() {
   }
 
   if (incomplete.length === 0) {
-    return null;
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        No incomplete evaluations. All scored players have every evaluation field filled.
+      </div>
+    );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <FileWarning className="h-5 w-5 text-amber-500" />
-          <CardTitle>Incomplete Evaluations</CardTitle>
-        </div>
-        <CardDescription>
-          Players who have an evaluation but are missing one or more score fields.
-          These players may have inaccurate tier placements.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Players who have an evaluation but are missing one or more score fields.
+        These players may have inaccurate tier placements.
+      </p>
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -373,7 +367,6 @@ function IncompleteEvaluationsSection() {
           onPageChange={incompletePagination.setPage}
           itemLabel="incomplete evaluations"
         />
-      </CardContent>
 
       {selectedPlayerId && (
         <ScorePlayerDialog
@@ -382,11 +375,11 @@ function IncompleteEvaluationsSection() {
           playerId={selectedPlayerId}
         />
       )}
-    </Card>
+    </div>
   );
 }
 
-function TierMismatchesInner() {
+function MissingRoleSection() {
   const mismatches = useQuery(api.discord.tierMismatches.getTierMismatches, {});
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<MismatchStatus | "all">("all");
@@ -480,6 +473,10 @@ function TierMismatchesInner() {
 
   return (
     <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Discord tier roles that do not match the player&apos;s website tier, based on cached role data from the last sync.
+      </p>
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card
@@ -531,12 +528,7 @@ function TierMismatchesInner() {
 
       {/* Filters and table */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardDescription>
-            Based on cached Discord role data from the last sync.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-6">
           {/* Filters row */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -713,13 +705,6 @@ function TierMismatchesInner() {
         </CardContent>
       </Card>
 
-      {/* Missing gender section */}
-      <MissingGenderSection />
-
-      {/* Incomplete evaluations section */}
-      <IncompleteEvaluationsSection />
-
-      {/* Score evaluation dialog */}
       {selectedPlayerId && (
         <ScorePlayerDialog
           open={isScoreDialogOpen}
@@ -728,6 +713,74 @@ function TierMismatchesInner() {
         />
       )}
     </div>
+  );
+}
+
+function TabCountBadge({ count }: { count: number | undefined }) {
+  if (count === undefined) {
+    return <Skeleton className="ml-1.5 h-5 w-8 inline-block align-middle" />;
+  }
+  return (
+    <Badge variant="secondary" className="ml-1.5 h-5 min-w-5 px-1.5 text-xs">
+      {count}
+    </Badge>
+  );
+}
+
+function TierMismatchesInner() {
+  const mismatches = useQuery(api.discord.tierMismatches.getTierMismatches, {});
+  const incomplete = useQuery(api.discord.tierMismatches.getIncompleteEvaluations, {});
+  const missingGender = useQuery(api.discord.tierMismatches.getPlayersMissingGender, {});
+
+  const roleCount = mismatches?.length;
+  const evalCount = incomplete?.length;
+  const genderCount = missingGender?.length;
+
+  const isLoading =
+    mismatches === undefined || incomplete === undefined || missingGender === undefined;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-full max-w-lg" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-96 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <Tabs defaultValue="missing_role" className="space-y-4">
+      <TabsList className="grid w-full grid-cols-3 h-auto">
+        <TabsTrigger value="missing_role" className="cursor-pointer gap-1 py-2">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          Missing Role
+          <TabCountBadge count={roleCount} />
+        </TabsTrigger>
+        <TabsTrigger value="missing_eval" className="cursor-pointer gap-1 py-2">
+          <FileWarning className="h-3.5 w-3.5 shrink-0" />
+          Missing Eval
+          <TabCountBadge count={evalCount} />
+        </TabsTrigger>
+        <TabsTrigger value="missing_gender" className="cursor-pointer gap-1 py-2">
+          <VenusAndMars className="h-3.5 w-3.5 shrink-0" />
+          Missing Gender
+          <TabCountBadge count={genderCount} />
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="missing_role" className="mt-4">
+        <MissingRoleSection />
+      </TabsContent>
+
+      <TabsContent value="missing_eval" className="mt-4">
+        <IncompleteEvaluationsSection />
+      </TabsContent>
+
+      <TabsContent value="missing_gender" className="mt-4">
+        <MissingGenderSection />
+      </TabsContent>
+    </Tabs>
   );
 }
 
