@@ -206,8 +206,12 @@ function MissingGenderSection() {
 
       {selectedPlayerId && (
         <ScorePlayerDialog
+          key={selectedPlayerId}
           open={isScoreDialogOpen}
-          onOpenChange={setIsScoreDialogOpen}
+          onOpenChange={(open) => {
+            setIsScoreDialogOpen(open);
+            if (!open) setSelectedPlayerId(null);
+          }}
           playerId={selectedPlayerId}
         />
       )}
@@ -370,8 +374,12 @@ function IncompleteEvaluationsSection() {
 
       {selectedPlayerId && (
         <ScorePlayerDialog
+          key={selectedPlayerId}
           open={isScoreDialogOpen}
-          onOpenChange={setIsScoreDialogOpen}
+          onOpenChange={(open) => {
+            setIsScoreDialogOpen(open);
+            if (!open) setSelectedPlayerId(null);
+          }}
           playerId={selectedPlayerId}
         />
       )}
@@ -641,8 +649,12 @@ function MissingRoleSection() {
 
       {selectedPlayerId && (
         <ScorePlayerDialog
+          key={selectedPlayerId}
           open={isScoreDialogOpen}
-          onOpenChange={setIsScoreDialogOpen}
+          onOpenChange={(open) => {
+            setIsScoreDialogOpen(open);
+            if (!open) setSelectedPlayerId(null);
+          }}
           playerId={selectedPlayerId}
         />
       )}

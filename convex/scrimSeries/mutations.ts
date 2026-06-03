@@ -527,6 +527,73 @@ export const addPenaltyWithDedup = mutation({
   },
 });
 
+// Delete a Yunite import and revert its scores/penalties for that session
+export const deleteImportLog = mutation({
+  args: { importLogId: v.id("scrimSeriesImportLog") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
+    }
+
+    const importLog = await ctx.db.get(args.importLogId);
+    if (!importLog) {
+      throw new ConvexError({ message: "Import not found", code: "NOT_FOUND" });
+    }
+
+    const sessionIndex = importLog.sessionNumber - 1;
+    const penaltyPrefix = `${importLog.tournamentId}|${importLog.sessionNumber}|`;
+
+    const importLogs = await ctx.db
+      .query("scrimSeriesImportLog")
+      .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
+      .collect();
+
+    const hasOtherImportForSession = importLogs.some(
+      (entry) => entry._id !== args.importLogId && entry.sessionNumber === importLog.sessionNumber
+    );
+
+    const penalties = await ctx.db
+      .query("scrimSeriesPenalties")
+      .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
+      .collect();
+
+    let penaltiesDeleted = 0;
+    for (const penalty of penalties) {
+      if (penalty.dedupKey?.startsWith(penaltyPrefix)) {
+        await ctx.db.delete(penalty._id);
+        penaltiesDeleted++;
+      }
+    }
+
+    let scoresDeleted = 0;
+    if (!hasOtherImportForSession) {
+      const scores = await ctx.db
+        .query("scrimSeriesScores")
+        .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
+        .collect();
+
+      for (const score of scores) {
+        if (score.sessionIndex === sessionIndex) {
+          await ctx.db.delete(score._id);
+          scoresDeleted++;
+        }
+      }
+    }
+
+    await ctx.db.delete(args.importLogId);
+
+    return {
+      success: true,
+      sessionNumber: importLog.sessionNumber,
+      tournamentId: importLog.tournamentId,
+      scoresDeleted,
+      penaltiesDeleted,
+      scoresKept: hasOtherImportForSession,
+    };
+  },
+});
+
 // Log a Yunite import for the import history
 export const logImport = mutation({
   args: {

@@ -47,6 +47,54 @@ function getTierColor(tier: string): "default" | "secondary" | "destructive" {
 }
 
 // Preset score values per category for each tier
+const INITIAL_SCORES: ScoreState = {
+  thirdPartyExperience: "",
+  thirdPartyPerformance: "",
+  inGameTourneyPerformance: "",
+  officialEarnings: 0,
+  rankedPerformance: "",
+  hoursPlayed: "",
+  notorietyTeammates: "",
+  age: "",
+  gender: "",
+  ability: 100,
+  region: 100,
+  gameSense: "",
+  modifiers: "",
+};
+
+function scoreRecordToState(score: {
+  thirdPartyExperience?: number;
+  thirdPartyPerformance?: number;
+  inGameTourneyPerformance?: number;
+  officialEarnings?: number;
+  rankedPerformance?: number;
+  hoursPlayed?: number;
+  notorietyTeammates?: number;
+  age?: number;
+  gender?: number;
+  ability?: number;
+  region?: number;
+  gameSense?: number;
+  modifiers?: number;
+}): ScoreState {
+  return {
+    thirdPartyExperience: score.thirdPartyExperience ?? "",
+    thirdPartyPerformance: score.thirdPartyPerformance ?? "",
+    inGameTourneyPerformance: score.inGameTourneyPerformance ?? "",
+    officialEarnings: score.officialEarnings ?? 0,
+    rankedPerformance: score.rankedPerformance ?? "",
+    hoursPlayed: score.hoursPlayed ?? "",
+    notorietyTeammates: score.notorietyTeammates ?? "",
+    age: score.age ?? "",
+    gender: score.gender ?? "",
+    ability: score.ability ?? 100,
+    region: score.region ?? 100,
+    gameSense: score.gameSense ?? "",
+    modifiers: score.modifiers ?? "",
+  };
+}
+
 const TIER_PRESETS: Record<"S" | "A" | "B" | "C", ScoreState> = {
   S: {
     thirdPartyExperience: 80,
@@ -121,43 +169,25 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
   );
   const createOrUpdateScore = useMutation(api.scores.createOrUpdateScore);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const [scores, setScores] = useState<ScoreState>({
-    thirdPartyExperience: "",
-    thirdPartyPerformance: "",
-    inGameTourneyPerformance: "",
-    officialEarnings: 0,
-    rankedPerformance: "",
-    hoursPlayed: "",
-    notorietyTeammates: "",
-    age: "",
-    gender: "",
-    ability: 100,
-    region: 100,
-    gameSense: "",
-    modifiers: "",
-  });
-  
-  // Load existing scores when available
+  const [scores, setScores] = useState<ScoreState>(INITIAL_SCORES);
+  const [scoresLoaded, setScoresLoaded] = useState(false);
+
   useEffect(() => {
-    if (existingScore) {
-      setScores({
-        thirdPartyExperience: existingScore.thirdPartyExperience ?? "",
-        thirdPartyPerformance: existingScore.thirdPartyPerformance ?? "",
-        inGameTourneyPerformance: existingScore.inGameTourneyPerformance ?? "",
-        officialEarnings: existingScore.officialEarnings ?? 0,
-        rankedPerformance: existingScore.rankedPerformance ?? "",
-        hoursPlayed: existingScore.hoursPlayed ?? "",
-        notorietyTeammates: existingScore.notorietyTeammates ?? "",
-        age: existingScore.age ?? "",
-        gender: existingScore.gender ?? "",
-        ability: existingScore.ability ?? 100,
-        region: existingScore.region ?? 100,
-        gameSense: existingScore.gameSense ?? "",
-        modifiers: existingScore.modifiers ?? "",
-      });
+    if (!open) {
+      setScoresLoaded(false);
+      return;
     }
-  }, [existingScore]);
+    setScores(INITIAL_SCORES);
+    setScoresLoaded(false);
+  }, [open, playerId]);
+
+  useEffect(() => {
+    if (!open || scoresLoaded || existingScore === undefined) {
+      return;
+    }
+    setScores(existingScore ? scoreRecordToState(existingScore) : INITIAL_SCORES);
+    setScoresLoaded(true);
+  }, [open, playerId, existingScore, scoresLoaded]);
   
   const currentPlayer = player;
   const totalScore = Object.values(scores).reduce((sum, score) => sum + (typeof score === "number" ? score : 0), 0);

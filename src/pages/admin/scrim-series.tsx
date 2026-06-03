@@ -796,10 +796,12 @@ function YuniteImportPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const series = useQuery(api.scrimSeries.queries.getSeries, { seriesId });
   const importLog = useQuery(api.scrimSeries.queries.getImportLog, { seriesId });
   const importYuniteScores = useAction(api.scrimSeries.importFromYunite.importYuniteScores);
+  const deleteImportLog = useMutation(api.scrimSeries.mutations.deleteImportLog);
 
   const [tournamentId, setTournamentId] = useState("");
   const [sessionNumber, setSessionNumber] = useState("1");
   const [importing, setImporting] = useState(false);
+  const [deletingId, setDeletingId] = useState<Id<"scrimSeriesImportLog"> | null>(null);
 
   if (!series) return <Skeleton className="h-40 w-full" />;
 
@@ -832,6 +834,34 @@ function YuniteImportPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
       toast.error(msg);
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleDeleteImport = async (log: {
+    _id: Id<"scrimSeriesImportLog">;
+    sessionNumber: number;
+    tournamentId: string;
+  }) => {
+    if (
+      !confirm(
+        `Delete Session ${log.sessionNumber} import (${log.tournamentId})? This removes all scores for that session and any Yunite penalties from this import.`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingId(log._id);
+    try {
+      const result = await deleteImportLog({ importLogId: log._id });
+      const scoreMsg = result.scoresKept
+        ? "Session scores kept (another import exists for this session)."
+        : `Removed ${result.scoresDeleted} scores`;
+      toast.success(`Import deleted. ${scoreMsg}, ${result.penaltiesDeleted} penalties removed.`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to delete import";
+      toast.error(msg);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -923,6 +953,20 @@ function YuniteImportPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
                   <span className="text-xs text-muted-foreground shrink-0">
                     {new Date(log.importedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                   </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleDeleteImport(log)}
+                    disabled={deletingId === log._id}
+                    className="min-h-9 min-w-9 h-9 w-9 p-0 shrink-0 cursor-pointer text-destructive hover:text-destructive"
+                    title="Delete import"
+                  >
+                    {deletingId === log._id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3 w-3" />
+                    )}
+                  </Button>
                 </div>
               ))}
             </div>
