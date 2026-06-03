@@ -58,9 +58,11 @@ export default function MemberManagement() {
         setActiveTab(tab);
       } else if (isAdmin) {
         setActiveTab("applications");
+      } else if (isModeratorOrAdmin) {
+        setActiveTab("accepted");
       }
     }
-  }, [isRoleLoading, isAdmin, roleResolved, searchParams, tabFromPath]);
+  }, [isRoleLoading, isAdmin, isModeratorOrAdmin, roleResolved, searchParams, tabFromPath]);
   
   // New Application Dialog state
   const [newAppDialogOpen, setNewAppDialogOpen] = useState(false);
@@ -126,7 +128,7 @@ export default function MemberManagement() {
   const syncGirlRole = useAction(api.girlRole.sync.syncGirlRole);
   const girlRoleSyncStatus = useQuery(
     api.girlRole.queries.getVerificationCount,
-    isModeratorOrAdmin ? {} : "skip",
+    isAdmin ? {} : "skip",
   );
   const [convertingPlayerId, setConvertingPlayerId] = useState<Id<"players"> | null>(null);
   
@@ -528,7 +530,11 @@ export default function MemberManagement() {
 
   if (isRoleLoading) {
     return (
-      <AdminPageLayout skipHeader authTitle="Sign in to access member management">
+      <AdminPageLayout
+        skipHeader
+        requireModerator
+        authTitle="Sign in to access member management"
+      >
         <Skeleton className="h-9 w-64 mb-2" />
         <Skeleton className="h-5 w-80 mb-4" />
         <Skeleton className="h-10 w-full mb-4" />
@@ -539,12 +545,17 @@ export default function MemberManagement() {
 
   return (
     <AdminPageLayout
+      requireModerator
       title="Member Management"
-      description="Manage member applications and status"
+      description={
+        isAdmin
+          ? "Manage member applications and status"
+          : "View accepted and former members"
+      }
       authTitle="Sign in to access member management"
       showSidebar={!!isModeratorOrAdmin}
       header={{
-        actions: isModeratorOrAdmin ? (
+        actions: isAdmin ? (
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
@@ -842,7 +853,7 @@ export default function MemberManagement() {
                             currentSort={acceptedSort} 
                             onSort={() => setAcceptedSort(toggleSort(acceptedSort, "serverJoinDate"))} 
                           />
-                          {isModeratorOrAdmin && <TableHead>Actions</TableHead>}
+                          {isAdmin && <TableHead>Actions</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -915,7 +926,7 @@ export default function MemberManagement() {
                             <TableCell>
                               {format(new Date(member.serverJoinDate), "MMM d, yyyy")}
                             </TableCell>
-                            {isModeratorOrAdmin && (
+                            {isAdmin && (
                             <TableCell>
                               <div className="flex flex-nowrap gap-1">
                                 <Button
@@ -1003,7 +1014,7 @@ export default function MemberManagement() {
                               )}
                             </div>
                           </div>
-                          {isModeratorOrAdmin && (
+                          {isAdmin && (
                             <div className="flex gap-1 shrink-0">
                               <Button size="sm" variant="secondary" onClick={() => setEditingPlayerId(member._id)} className="px-2 h-7">
                                 <Edit className="h-3 w-3" />
@@ -1118,7 +1129,7 @@ export default function MemberManagement() {
                             currentSort={discordSort} 
                             onSort={() => setDiscordSort(toggleSort(discordSort, "matchConfidence"))} 
                           />
-                          {isModeratorOrAdmin && <TableHead>Actions</TableHead>}
+                          {isAdmin && <TableHead>Actions</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1167,7 +1178,7 @@ export default function MemberManagement() {
                                 </Badge>
                               )}
                             </TableCell>
-                            {isModeratorOrAdmin && (
+                            {isAdmin && (
                             <TableCell>
                               <div className="flex flex-nowrap gap-1">
                                 <Button
@@ -1231,7 +1242,7 @@ export default function MemberManagement() {
                               )}
                             </div>
                           </div>
-                          {isModeratorOrAdmin && (
+                          {isAdmin && (
                             <div className="flex gap-1 shrink-0">
                               <Button size="sm" onClick={() => handleEvaluateDiscordMember(member._id)} disabled={convertingPlayerId === member._id} className="px-2 h-7">
                                 {convertingPlayerId === member._id ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserCheck className="h-3 w-3" />}
@@ -1312,7 +1323,7 @@ export default function MemberManagement() {
                             currentSort={rejectedSort} 
                             onSort={() => setRejectedSort(toggleSort(rejectedSort, "_creationTime"))} 
                           />
-                          {isModeratorOrAdmin && <TableHead>Actions</TableHead>}
+                          {isAdmin && <TableHead>Actions</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1338,7 +1349,7 @@ export default function MemberManagement() {
                             <TableCell>
                               {format(new Date(member._creationTime), "MMM d, yyyy")}
                             </TableCell>
-                            {isModeratorOrAdmin && (
+                            {isAdmin && (
                             <TableCell>
                               <div className="flex flex-nowrap gap-1">
                                 <Button
@@ -1387,7 +1398,7 @@ export default function MemberManagement() {
                               {member.rejectionReason || "No reason provided"}
                             </p>
                           </div>
-                          {isModeratorOrAdmin && (
+                          {isAdmin && (
                             <div className="flex gap-1 shrink-0">
                               <Button size="sm" variant="secondary" onClick={() => setEditingMemberId(member._id)} className="px-2 h-7">
                                 <Edit className="h-3 w-3" />
@@ -1472,7 +1483,7 @@ export default function MemberManagement() {
                             currentSort={formerSort} 
                             onSort={() => setFormerSort(toggleSort(formerSort, "archiveReason"))} 
                           />
-                          {isModeratorOrAdmin && <TableHead>Actions</TableHead>}
+                          {isAdmin && <TableHead>Actions</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1509,7 +1520,7 @@ export default function MemberManagement() {
                                 </Badge>
                               )}
                             </TableCell>
-                            {isModeratorOrAdmin && (
+                            {isAdmin && (
                             <TableCell>
                               <div className="flex flex-nowrap gap-1">
                                 <Button
@@ -1564,7 +1575,7 @@ export default function MemberManagement() {
                               )}
                             </div>
                           </div>
-                          {isModeratorOrAdmin && (
+                          {isAdmin && (
                             <div className="flex gap-1 shrink-0">
                               <Button size="sm" variant="secondary" onClick={() => setEditingMemberId(member._id)} className="px-2 h-7">
                                 <Edit className="h-3 w-3" />

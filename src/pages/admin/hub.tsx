@@ -134,32 +134,40 @@ export default function AdminHubPage() {
   const sections: HubSection[] = [
     {
       title: "People",
-      show: isAdmin,
+      show: isAdmin || isModeratorOrAdmin,
       links: [
         {
           title: "Member Management",
-          description: "Applications, accepted members, and Discord evaluation queue.",
-          href: "/admin/member-management/applications",
+          description: isAdmin
+            ? "Applications, accepted members, and Discord evaluation queue."
+            : "View accepted and former members.",
+          href: isAdmin
+            ? "/admin/member-management/applications"
+            : "/admin/member-management/accepted",
           icon: Users,
         },
-        {
-          title: "Discord Directory",
-          description: "Advanced Discord role view, matching, and ID management.",
-          href: "/admin/discord-members",
-          icon: Shield,
-        },
-        {
-          title: "Tier Mismatches",
-          description: "Players whose Discord tier roles don't match database tiers.",
-          href: "/admin/tier-mismatches",
-          icon: ShieldAlert,
-        },
-        {
-          title: "Fuzzy Matches",
-          description: "Review uncertain player name matches from imports.",
-          href: "/admin/fuzzy-matches",
-          icon: GitMerge,
-        },
+        ...(isAdmin
+          ? [
+              {
+                title: "Discord Directory",
+                description: "Advanced Discord role view, matching, and ID management.",
+                href: "/admin/discord-members",
+                icon: Shield,
+              },
+              {
+                title: "Tier Mismatches",
+                description: "Players whose Discord tier roles don't match database tiers.",
+                href: "/admin/tier-mismatches",
+                icon: ShieldAlert,
+              },
+              {
+                title: "Fuzzy Matches",
+                description: "Review uncertain player name matches from imports.",
+                href: "/admin/fuzzy-matches",
+                icon: GitMerge,
+              },
+            ]
+          : []),
       ],
     },
     {

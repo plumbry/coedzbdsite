@@ -287,6 +287,14 @@ export default function AdminSidebar() {
           { path: "/admin/tier-mismatches", label: "Tier Mismatches", icon: ShieldAlert },
         ],
       });
+    } else if (isModeratorOrAdmin) {
+      result.push({
+        id: "members",
+        label: "Members",
+        items: [
+          { path: "/admin/member-management", label: "Member Management", icon: Users },
+        ],
+      });
     }
 
     if (isAdmin) {
