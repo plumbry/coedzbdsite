@@ -527,7 +527,8 @@ export const addPenaltyWithDedup = mutation({
   },
 });
 
-// Delete a Yunite import and revert its scores/penalties for that session
+// Delete a Yunite import and revert its scores/penalties for that session.
+// If this is the only import for the series, all players/scores/penalties are removed too.
 export const deleteImportLog = mutation({
   args: { importLogId: v.id("scrimSeriesImportLog") },
   handler: async (ctx, args) => {
@@ -541,44 +542,90 @@ export const deleteImportLog = mutation({
       throw new ConvexError({ message: "Import not found", code: "NOT_FOUND" });
     }
 
-    const sessionIndex = importLog.sessionNumber - 1;
-    const penaltyPrefix = `${importLog.tournamentId}|${importLog.sessionNumber}|`;
-
     const importLogs = await ctx.db
       .query("scrimSeriesImportLog")
       .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
       .collect();
 
-    const hasOtherImportForSession = importLogs.some(
-      (entry) => entry._id !== args.importLogId && entry.sessionNumber === importLog.sessionNumber
-    );
-
-    const penalties = await ctx.db
-      .query("scrimSeriesPenalties")
-      .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
-      .collect();
-
-    let penaltiesDeleted = 0;
-    for (const penalty of penalties) {
-      if (penalty.dedupKey?.startsWith(penaltyPrefix)) {
-        await ctx.db.delete(penalty._id);
-        penaltiesDeleted++;
-      }
-    }
+    const isOnlyImport = importLogs.length === 1;
 
     let scoresDeleted = 0;
-    if (!hasOtherImportForSession) {
+    let penaltiesDeleted = 0;
+    let playersDeleted = 0;
+
+    if (isOnlyImport) {
       const scores = await ctx.db
         .query("scrimSeriesScores")
         .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
         .collect();
-
       for (const score of scores) {
-        if (score.sessionIndex === sessionIndex) {
-          await ctx.db.delete(score._id);
-          scoresDeleted++;
+        await ctx.db.delete(score._id);
+        scoresDeleted++;
+      }
+
+      const penalties = await ctx.db
+        .query("scrimSeriesPenalties")
+        .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
+        .collect();
+      for (const penalty of penalties) {
+        await ctx.db.delete(penalty._id);
+        penaltiesDeleted++;
+      }
+
+      const players = await ctx.db
+        .query("scrimSeriesPlayers")
+        .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
+        .collect();
+      for (const player of players) {
+        await ctx.db.delete(player._id);
+        playersDeleted++;
+      }
+    } else {
+      const sessionIndex = importLog.sessionNumber - 1;
+      const penaltyPrefix = `${importLog.tournamentId}|${importLog.sessionNumber}|`;
+
+      const hasOtherImportForSession = importLogs.some(
+        (entry) => entry._id !== args.importLogId && entry.sessionNumber === importLog.sessionNumber
+      );
+
+      const penalties = await ctx.db
+        .query("scrimSeriesPenalties")
+        .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
+        .collect();
+
+      for (const penalty of penalties) {
+        if (penalty.dedupKey?.startsWith(penaltyPrefix)) {
+          await ctx.db.delete(penalty._id);
+          penaltiesDeleted++;
         }
       }
+
+      if (!hasOtherImportForSession) {
+        const scores = await ctx.db
+          .query("scrimSeriesScores")
+          .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
+          .collect();
+
+        for (const score of scores) {
+          if (score.sessionIndex === sessionIndex) {
+            await ctx.db.delete(score._id);
+            scoresDeleted++;
+          }
+        }
+      }
+
+      await ctx.db.delete(args.importLogId);
+
+      return {
+        success: true,
+        sessionNumber: importLog.sessionNumber,
+        tournamentId: importLog.tournamentId,
+        scoresDeleted,
+        penaltiesDeleted,
+        playersDeleted,
+        fullWipe: false,
+        scoresKept: hasOtherImportForSession,
+      };
     }
 
     await ctx.db.delete(args.importLogId);
@@ -589,7 +636,9 @@ export const deleteImportLog = mutation({
       tournamentId: importLog.tournamentId,
       scoresDeleted,
       penaltiesDeleted,
-      scoresKept: hasOtherImportForSession,
+      playersDeleted,
+      fullWipe: true,
+      scoresKept: false,
     };
   },
 });

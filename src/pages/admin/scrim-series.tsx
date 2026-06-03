@@ -842,9 +842,12 @@ function YuniteImportPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
     sessionNumber: number;
     tournamentId: string;
   }) => {
+    const isOnlyImport = importLog?.length === 1;
     if (
       !confirm(
-        `Delete Session ${log.sessionNumber} import (${log.tournamentId})? This removes all scores for that session and any Yunite penalties from this import.`
+        isOnlyImport
+          ? "Delete the only import for this series? This removes all players, scores, penalties, and import history. This cannot be undone."
+          : `Delete Session ${log.sessionNumber} import (${log.tournamentId})? This removes all scores for that session and any Yunite penalties from this import.`
       )
     ) {
       return;
@@ -853,10 +856,16 @@ function YuniteImportPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
     setDeletingId(log._id);
     try {
       const result = await deleteImportLog({ importLogId: log._id });
-      const scoreMsg = result.scoresKept
-        ? "Session scores kept (another import exists for this session)."
-        : `Removed ${result.scoresDeleted} scores`;
-      toast.success(`Import deleted. ${scoreMsg}, ${result.penaltiesDeleted} penalties removed.`);
+      if (result.fullWipe) {
+        toast.success(
+          `Import deleted. Removed ${result.playersDeleted} players, ${result.scoresDeleted} scores, and ${result.penaltiesDeleted} penalties.`
+        );
+      } else {
+        const scoreMsg = result.scoresKept
+          ? "Session scores kept (another import exists for this session)."
+          : `Removed ${result.scoresDeleted} scores`;
+        toast.success(`Import deleted. ${scoreMsg}, ${result.penaltiesDeleted} penalties removed.`);
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to delete import";
       toast.error(msg);
