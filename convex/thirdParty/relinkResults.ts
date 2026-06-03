@@ -1,5 +1,6 @@
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
+import { normalizeDiscordId } from "../lib/playerIdentity";
 
 /**
  * Re-link thirdPartyResults to players by matching Discord IDs
@@ -28,13 +29,15 @@ export const relinkThirdPartyResults = mutation({
     const discordIdToPlayer = new Map();
     
     for (const player of allPlayers) {
-      // Add primary Discord ID
-      discordIdToPlayer.set(player.discordUserId, player);
-      
-      // Add alternate Discord IDs
-      if (player.alternateDiscordUserIds) {
-        for (const altId of player.alternateDiscordUserIds) {
-          discordIdToPlayer.set(altId, player);
+      if (player.discordUserId?.trim()) {
+        discordIdToPlayer.set(
+          normalizeDiscordId(player.discordUserId),
+          player,
+        );
+      }
+      for (const altId of player.alternateDiscordUserIds ?? []) {
+        if (altId.trim()) {
+          discordIdToPlayer.set(normalizeDiscordId(altId), player);
         }
       }
     }
@@ -51,8 +54,7 @@ export const relinkThirdPartyResults = mutation({
         continue;
       }
       
-      // Look up player from our map
-      const player = discordIdToPlayer.get(discordId);
+      const player = discordIdToPlayer.get(normalizeDiscordId(discordId));
       
       if (player) {
         // Check if already correctly linked

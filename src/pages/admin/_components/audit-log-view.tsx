@@ -64,7 +64,7 @@ const getCategoryLabel = (category: string) => {
     case "players": return "Players";
     case "scores": return "Scores";
     case "events": return "Events";
-    case "imports": return "3rd Party Imports";
+    case "imports": return "Tournament Imports";
     case "users": return "Users";
     default: return "Other";
   }
@@ -221,7 +221,7 @@ export default function AuditLogView() {
               <SelectItem value="players">Players</SelectItem>
               <SelectItem value="scores">Scores</SelectItem>
               <SelectItem value="events">Events</SelectItem>
-              <SelectItem value="imports">3rd Party Imports</SelectItem>
+              <SelectItem value="imports">Tournament Imports</SelectItem>
               <SelectItem value="users">Users</SelectItem>
             </SelectContent>
           </Select>

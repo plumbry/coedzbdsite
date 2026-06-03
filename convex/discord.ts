@@ -3,6 +3,7 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel.d.ts";
 import type { MutationCtx } from "./_generated/server";
 import { getDisplayName } from "./auth_helpers";
+import { relinkEventResultsForPlayer } from "./helpers/playerResults";
 
 type SyncMatchConfidence = "exact" | "username" | "fuzzy";
 
@@ -720,6 +721,8 @@ export const addAlternateDiscordId = mutation({
       alternateDiscordUserIds: [...currentAlternates, args.newDiscordUserId],
     });
 
+    await relinkEventResultsForPlayer(ctx, args.playerId);
+
     return { success: true };
   },
 });
@@ -802,6 +805,8 @@ export const setAlternateAsPrimary = mutation({
       discordUserId: args.alternateDiscordUserId,
       alternateDiscordUserIds: newAlternates,
     });
+
+    await relinkEventResultsForPlayer(ctx, args.playerId);
 
     return { success: true };
   },

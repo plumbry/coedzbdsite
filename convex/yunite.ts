@@ -1,17 +1,17 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { resolvePlayerByDiscordId } from "./helpers/playerDiscordId";
 
 /**
  * Find player by Discord ID - includes ALL players regardless of status (active/archived)
+ * Matches primary and alternate Discord IDs.
  * This ensures historical match data stays linked even after a player is archived
  */
 export const findPlayerByDiscordId = query({
   args: { discordUserId: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
-      .query("players")
-      .filter((q) => q.eq(q.field("discordUserId"), args.discordUserId))
-      .first();
+    const match = await resolvePlayerByDiscordId(ctx, args.discordUserId);
+    return match?.player ?? null;
   },
 });
 

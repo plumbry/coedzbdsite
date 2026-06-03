@@ -184,7 +184,7 @@ export default function AdminHubPage() {
           : []),
         {
           title: "Uploads & Imports",
-          description: "CSV imports, third-party results, and Yunite tournament sync.",
+          description: "Yunite imports (ZBD event records) and third-party CSV uploads.",
           href: "/admin/uploads",
           icon: Upload,
         },

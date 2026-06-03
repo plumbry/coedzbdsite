@@ -194,10 +194,10 @@ function FeaturesContent() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-primary">
               <Zap className="h-4 w-4" />
-              Relink Third Party Results
+              Relink Tournament Results
             </CardTitle>
             <CardDescription className="text-xs">
-              Re-link tournament results. Use if player stats aren&apos;t showing after database changes.
+              Re-link Yunite and third-party CSV results to players. Use if profile stats are missing after database changes.
             </CardDescription>
           </CardHeader>
           <CardContent className="py-3">

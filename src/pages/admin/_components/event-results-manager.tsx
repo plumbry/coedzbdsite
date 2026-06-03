@@ -205,7 +205,7 @@ function EventResultsManagerContent() {
         <CardContent className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
           <p className="text-sm text-muted-foreground">
-            No event results found. Results are created when importing from third-party sources.
+            No event results found. Manual entries and Yunite-linked results appear here after import.
           </p>
         </CardContent>
       </Card>

@@ -1,5 +1,6 @@
 import type { Doc } from "../_generated/dataModel.d.ts";
 import type { QueryCtx } from "../_generated/server.d.ts";
+import { normalizeDiscordId } from "../lib/playerIdentity";
 
 export type DiscordIdMatchType = "primary" | "alternate";
 
@@ -40,12 +41,19 @@ export function findPlayerByDiscordIdInList(
   players: Doc<"players">[],
   discordId: string,
 ): PlayerDiscordIdMatch | null {
-  const primary = players.find((p) => p.discordUserId === discordId);
+  const normalized = normalizeDiscordId(discordId);
+  const primary = players.find(
+    (p) =>
+      p.discordUserId &&
+      normalizeDiscordId(p.discordUserId) === normalized,
+  );
   if (primary) {
     return { player: primary, matchType: "primary" };
   }
   const alternate = players.find((p) =>
-    p.alternateDiscordUserIds?.includes(discordId),
+    p.alternateDiscordUserIds?.some(
+      (id) => normalizeDiscordId(id) === normalized,
+    ),
   );
   if (alternate) {
     return { player: alternate, matchType: "alternate" };

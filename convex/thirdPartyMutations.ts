@@ -654,22 +654,14 @@ export const saveYuniteAPIImport = internalMutation({
     
     // Process each entry
     for (const entry of args.entries) {
-      // Try to match player by Discord ID or Epic ID
-      let matchedPlayer = null;
-      
-      // First try Discord ID match
-      if (entry.discordId) {
-        const cleanDiscordId = entry.discordId.trim().replace(/['"]/g, '');
-        matchedPlayer = allPlayers.find(
-          p => p.discordUserId && p.discordUserId.trim() === cleanDiscordId
-        );
-      }
-      
-      // If no match, try Epic ID (case-insensitive)
+      let matchedPlayer = findPlayerForImportEntry(allPlayers, {
+        discordId: entry.discordId,
+        epicId: entry.epicId,
+      });
       if (!matchedPlayer && entry.epicId) {
         matchedPlayer = allPlayers.find(
-          p => p.epicUsername.toLowerCase() === entry.epicId.toLowerCase()
-        );
+          (p) => p.epicUsername.toLowerCase() === entry.epicId!.toLowerCase(),
+        ) ?? null;
       }
       
       if (matchedPlayer) {
@@ -1066,12 +1058,10 @@ export const replaceCSVData = mutation({
         );
       }
       
-      // If no match, try Discord ID
       if (!matchedPlayer && entry.discordId) {
-        const cleanDiscordId = entry.discordId.trim().replace(/['"]/g, '');
-        matchedPlayer = allPlayers.find(
-          p => p.discordUserId && p.discordUserId.trim() === cleanDiscordId
-        );
+        matchedPlayer = findPlayerForImportEntry(allPlayers, {
+          discordId: entry.discordId,
+        });
       }
       
       if (matchedPlayer) {

@@ -38,9 +38,9 @@ export default function ThirdPartiesTab({ playerId }: ThirdPartiesTabProps) {
               <EmptyMedia variant="icon">
                 <Trophy />
               </EmptyMedia>
-              <EmptyTitle>No 3rd-party events yet</EmptyTitle>
+              <EmptyTitle>No third-party CSV results yet</EmptyTitle>
               <EmptyDescription>
-                No 3rd-party events have been imported for this player yet.
+                Results from third-party CSV uploads (outside Yunite) will appear here.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -178,7 +178,7 @@ export default function ThirdPartiesTab({ playerId }: ThirdPartiesTabProps) {
       
       {/* Sort Control */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Event Results</h3>
+        <h3 className="text-lg font-semibold">Third Party Results</h3>
         <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Sort by" />

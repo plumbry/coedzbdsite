@@ -213,7 +213,7 @@ export default function PlayerProfileContent({ playerId }: PlayerProfileContentP
           </TabsTrigger>
           <TabsTrigger value="thirdparty" className="flex items-center gap-2">
             <ExternalLink className="h-4 w-4" />
-            3rd Parties
+            Third Party CSV
           </TabsTrigger>
         </TabsList>
         

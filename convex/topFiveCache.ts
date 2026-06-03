@@ -4,6 +4,7 @@ import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { internal } from "./_generated/api";
 import { filterVisibleMembers } from "./helpers/playerAlt";
+import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 
 // Helper function to calculate top-5 data for a single player
 async function calculatePlayerTopFiveData(
@@ -23,11 +24,7 @@ async function calculatePlayerTopFiveData(
     return null;
   }
   
-  // Get all third party results for this player
-  const playerResults = await ctx.db
-    .query("thirdPartyResults")
-    .withIndex("by_player", (q) => q.eq("playerId", playerId))
-    .collect();
+  const playerResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
   
   // Step 1: Get ALL player results with import and event data
   const allResultsPromises = playerResults.map(async (result) => {
@@ -624,11 +621,7 @@ export const getPlayerTopFiveDetails = query({
       return null;
     }
     
-    // Get all third party results for this player
-    const playerResults = await ctx.db
-      .query("thirdPartyResults")
-      .withIndex("by_player", (q) => q.eq("playerId", player._id))
-      .collect();
+    const playerResults = await fetchThirdPartyResultsForPlayer(ctx, player._id);
     
     // Build list of events with import and event data
     const allResultsPromises = playerResults.map(async (result) => {

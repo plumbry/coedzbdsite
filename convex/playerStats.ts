@@ -2,6 +2,34 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import type { QueryCtx } from "./_generated/server";
+import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
+import { isYuniteImport } from "./lib/importSource";
+
+async function partitionThirdPartyResultsByImport(
+  ctx: QueryCtx,
+  results: Doc<"thirdPartyResults">[],
+) {
+  const yuniteResults: Doc<"thirdPartyResults">[] = [];
+  const csvResults: Doc<"thirdPartyResults">[] = [];
+  const importIsYunite = new Map<string, boolean>();
+
+  for (const result of results) {
+    const importKey = result.importId as string;
+    let isYunite = importIsYunite.get(importKey);
+    if (isYunite === undefined) {
+      const importRecord = await ctx.db.get(result.importId);
+      isYunite = importRecord ? isYuniteImport(importRecord) : false;
+      importIsYunite.set(importKey, isYunite);
+    }
+    if (isYunite) {
+      yuniteResults.push(result);
+    } else {
+      csvResults.push(result);
+    }
+  }
+
+  return { yuniteResults, csvResults };
+}
 
 async function fetchPlayerResultRows(ctx: QueryCtx, playerId: Id<"players">) {
   const eventResults = await ctx.db
@@ -9,10 +37,7 @@ async function fetchPlayerResultRows(ctx: QueryCtx, playerId: Id<"players">) {
     .withIndex("by_player", (q) => q.eq("playerId", playerId))
     .collect();
 
-  const thirdPartyResults = await ctx.db
-    .query("thirdPartyResults")
-    .withIndex("by_player", (q) => q.eq("playerId", playerId))
-    .collect();
+  const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
 
   return { eventResults, thirdPartyResults };
 }
@@ -107,7 +132,12 @@ async function formatPlayerAllEvents(
 
   const player = await ctx.db.get(playerId);
   const importIds = new Set(thirdPartyResults.map((e) => e.importId));
-  type ImportInfo = { eventId?: string; eventDate?: string; leaderboardId?: string };
+  type ImportInfo = {
+    eventId?: string;
+    eventDate?: string;
+    leaderboardId?: string;
+    isYunite: boolean;
+  };
   type EventInfo = {
     name?: string;
     type?: string;
@@ -125,6 +155,7 @@ async function formatPlayerAllEvents(
           eventId: importData.eventId as string | undefined,
           eventDate: importData.eventDate as string | undefined,
           leaderboardId: importData.leaderboardId as string | undefined,
+          isYunite: isYuniteImport(importData),
         }
       : null;
     importCache.set(importId as string, info);
@@ -206,6 +237,8 @@ async function formatPlayerAllEvents(
         }
       }
 
+      const isYunite = importData?.isYunite ?? false;
+
       return {
         _id: event._id,
         _creationTime: event._creationTime,
@@ -218,7 +251,7 @@ async function formatPlayerAllEvents(
         eliminations: event.eliminations || 0,
         kdRatio: undefined,
         eventScore: event.points,
-        source: "thirdParty" as const,
+        source: (isYunite ? "yunite" : "csv") as const,
         leaderboardUrl,
         yuniteLeaderboardUrl: undefined,
         teammateName: teammateNames.length > 0 ? teammateNames.join(", ") : undefined,
@@ -236,36 +269,44 @@ async function formatPlayerAllEvents(
   });
 }
 
-// Get comprehensive player stats from both eventResults and thirdPartyResults
-// Note: We read from both tables to get complete player history
-// - Yunite API auto-sync creates eventResults only
-// - Manual admin imports create thirdPartyResults only
-// - No duplication occurs because each source writes to only one table
+/** ZBD performance: manual event results + Yunite imports (not third-party CSV). */
+async function fetchZbdPerformanceRows(ctx: QueryCtx, playerId: Id<"players">) {
+  const { eventResults, thirdPartyResults } = await fetchPlayerResultRows(
+    ctx,
+    playerId,
+  );
+  const { yuniteResults } = await partitionThirdPartyResultsByImport(
+    ctx,
+    thirdPartyResults,
+  );
+  return { eventResults, yuniteResults };
+}
+
 export const getPlayerComprehensiveStats = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
-    const { eventResults, thirdPartyResults } = await fetchPlayerResultRows(
+    const { eventResults, yuniteResults } = await fetchZbdPerformanceRows(
       ctx,
       args.playerId,
     );
-    return computeComprehensiveStats(eventResults, thirdPartyResults);
+    return computeComprehensiveStats(eventResults, yuniteResults);
   },
 });
 
 export const getPlayerZBDPerformanceBundle = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
-    const { eventResults, thirdPartyResults } = await fetchPlayerResultRows(
+    const { eventResults, yuniteResults } = await fetchZbdPerformanceRows(
       ctx,
       args.playerId,
     );
     return {
-      stats: computeComprehensiveStats(eventResults, thirdPartyResults),
+      stats: computeComprehensiveStats(eventResults, yuniteResults),
       events: await formatPlayerAllEvents(
         ctx,
         args.playerId,
         eventResults,
-        thirdPartyResults,
+        yuniteResults,
       ),
     };
   },
@@ -309,19 +350,15 @@ export const getPlayerStatsByEpic = query({
   },
 });
 
-// Get all event participations for a player from both tables
-// Note: We read from both tables to show complete player history
-// - Yunite API auto-sync creates eventResults only
-// - Manual admin imports create thirdPartyResults only
-// - No duplication occurs because each source writes to only one table
+/** All ZBD event records (manual + Yunite imports) for a player. */
 export const getPlayerAllEvents = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
-    const { eventResults, thirdPartyResults } = await fetchPlayerResultRows(
+    const { eventResults, yuniteResults } = await fetchZbdPerformanceRows(
       ctx,
       args.playerId,
     );
-    return formatPlayerAllEvents(ctx, args.playerId, eventResults, thirdPartyResults);
+    return formatPlayerAllEvents(ctx, args.playerId, eventResults, yuniteResults);
   },
 });
 

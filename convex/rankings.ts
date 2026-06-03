@@ -4,6 +4,7 @@ import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { api } from "./_generated/api";
 import { internal } from "./_generated/api";
+import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 
 // Event data structure for per-event scoring
 interface EventData {
@@ -30,11 +31,9 @@ async function getPlayerEvents(ctx: QueryCtx, playerId: Id<"players">): Promise<
     .collect();
   
   // Get third party results (only those linked to events)
-  const allThirdPartyResults = await ctx.db
-    .query("thirdPartyResults")
-    .withIndex("by_player", (q) => q.eq("playerId", playerId))
-    .filter((q) => q.eq(q.field("matched"), true))
-    .collect();
+  const allThirdPartyResults = (
+    await fetchThirdPartyResultsForPlayer(ctx, playerId)
+  ).filter((r) => r.matched);
   
   // Process manual events
   for (const result of manualEvents) {

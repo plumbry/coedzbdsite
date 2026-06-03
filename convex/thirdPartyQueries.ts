@@ -6,6 +6,8 @@ import {
   extractTournamentIdFromLeaderboardId,
   extractTournamentIdFromUrl,
 } from "./lib/yunite";
+import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
+import { isYuniteImport } from "./lib/importSource";
 
 export const getPlayerThirdPartyResults = query({
   args: { 
@@ -13,16 +15,16 @@ export const getPlayerThirdPartyResults = query({
     linkedToEvent: v.optional(v.union(v.literal("linked"), v.literal("unlinked"), v.literal("all"))),
   },
   handler: async (ctx, args) => {
-    const results = await ctx.db
-      .query("thirdPartyResults")
-      .withIndex("by_player", (q) => q.eq("playerId", args.playerId))
-      .collect();
+    const results = await fetchThirdPartyResultsForPlayer(ctx, args.playerId);
     
     // Filter based on whether the import is linked to an event and add event info
     const filteredResults = await Promise.all(
       results.map(async (result) => {
         const importRecord = await ctx.db.get(result.importId);
-        const isLinked = importRecord?.eventId !== undefined;
+        if (!importRecord || isYuniteImport(importRecord)) {
+          return null;
+        }
+        const isLinked = importRecord.eventId !== undefined;
         
         // Apply filter
         const filterType = args.linkedToEvent || "all";

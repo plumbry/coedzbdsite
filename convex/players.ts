@@ -15,6 +15,7 @@ import {
   isVisibleInMemberLists,
 } from "./helpers/playerAlt";
 import { playerMatchesSearchTerm } from "./helpers/playerDiscordId";
+import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 
 export const getPlayers = query({
   args: {},
@@ -330,10 +331,7 @@ async function syncPlayerEventParticipationStats(
     .query("eventResults")
     .withIndex("by_player", (q) => q.eq("playerId", playerId))
     .collect();
-  const thirdPartyResults = await ctx.db
-    .query("thirdPartyResults")
-    .withIndex("by_player", (q) => q.eq("playerId", playerId))
-    .collect();
+  const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
 
   const uniqueEventNames = new Set([
     ...eventResults.map((e) => e.eventName),

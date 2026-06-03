@@ -1100,7 +1100,7 @@ export default function ImportThirdParty() {
           <div>
             <CardTitle className="text-sm">Import Leaderboard Data</CardTitle>
             <CardDescription className="text-xs">
-              Pull leaderboards via Yunite API (primary), CSV for third-party events, or view import history
+              Yunite API for ZBD event records; Third Party CSV for external tournaments; import history below
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2 text-xs">

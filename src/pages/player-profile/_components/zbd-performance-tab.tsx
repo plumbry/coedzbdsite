@@ -32,7 +32,7 @@ interface EventResult {
   eventScore?: number;
   kdRatio?: number;
   wins?: number;
-  source: "manual" | "thirdParty";
+  source: "manual" | "yunite" | "csv";
   yuniteLeaderboardUrl?: string;
   leaderboardUrl?: string;
   teammateName?: string;
@@ -44,7 +44,7 @@ interface EventResult {
 function EventResultsGrouped({ events }: { events: EventResult[] }) {
   // Group events
   // Manual events: group by eventName
-  // Third-party events: group by groupEventName (the Event they're linked to)
+  // Yunite imports: group by linked ZBD event name
   const grouped = events.reduce((acc: Record<string, EventResult[]>, event) => {
     const groupKey = event.source === "manual" ? event.eventName : (event.groupEventName || event.eventName);
     if (!acc[groupKey]) {
@@ -113,7 +113,7 @@ function EventResultsGrouped({ events }: { events: EventResult[] }) {
                             {groupEvents.length} {groupEvents.length === 1 ? "result" : "results"}
                           </Badge>
                           <Badge variant={groupEvents[0].source === "manual" ? "secondary" : "outline"} className="text-xs">
-                            {groupEvents[0].source === "manual" ? "Manual" : "CSV"}
+                            {groupEvents[0].source === "manual" ? "Manual" : "Yunite"}
                           </Badge>
                           {isCumulativeEvent && firstEvent.excludeLowestScore && groupEvents.length >= 4 && (
                             <Badge variant="outline" className="text-xs">
@@ -328,7 +328,7 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
       {/* Data Disclaimer */}
       <div className="rounded-lg border border-muted bg-muted/30 p-3">
         <p className="text-xs text-muted-foreground">
-          <span className="font-semibold">Note:</span> Kill data may have minor discrepancies due to Yunite API limitations. Stats are calculated from available tournament data.
+          <span className="font-semibold">Note:</span> ZBD event records come from Yunite imports and manually added events. Kill data may have minor discrepancies due to Yunite API limitations.
         </p>
       </div>
       
@@ -796,11 +796,11 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
         </>
       )}
       
-      {/* Event Results */}
+      {/* ZBD event records (Yunite + manual) */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium">Event Results</CardTitle>
+            <CardTitle className="text-sm font-medium">ZBD Event Records</CardTitle>
             {isAdmin && (
               <Button size="sm" onClick={onAddEvent}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -838,9 +838,11 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
                 <EmptyMedia variant="icon">
                   <Trophy />
                 </EmptyMedia>
-                <EmptyTitle>No event results yet</EmptyTitle>
+                <EmptyTitle>No ZBD event records yet</EmptyTitle>
                 <EmptyDescription>
-                  {isAdmin ? "Add event results to track player performance" : "No tournament results available for this player"}
+                  {isAdmin
+                    ? "Add a manual event or import tournaments from Yunite to track performance"
+                    : "No Yunite imports or manual events for this player yet"}
                 </EmptyDescription>
               </EmptyHeader>
               {isAdmin && (

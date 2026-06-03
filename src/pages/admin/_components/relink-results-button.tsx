@@ -12,7 +12,7 @@ export default function RelinkResultsButton() {
 
   const handleRelink = async () => {
     if (!confirm(
-      "Relink all third party tournament results to current players?\n\n" +
+      "Relink all tournament results (Yunite imports and third-party CSV) to current players?\n\n" +
       "This will:\n" +
       "• Match results to players using Discord IDs\n" +
       "• Update player stats on profile pages\n" +

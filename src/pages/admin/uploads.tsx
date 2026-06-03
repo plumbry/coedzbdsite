@@ -21,7 +21,7 @@ export default function UploadsPage() {
   return (
     <AdminPageLayout requireAdmin
       title="Uploads & Imports"
-      description="Import third-party results and Yunite tournament sync"
+      description="Yunite imports (ZBD event records) and third-party CSV uploads"
     >
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList>
