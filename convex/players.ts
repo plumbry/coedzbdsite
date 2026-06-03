@@ -1393,10 +1393,126 @@ export const findPotentialDuplicates = query({
   },
 });
 
+const isPlaceholderDiscordId = (id: string) =>
+  id.startsWith("placeholder_") || id === "imported";
+
+function resolveDiscordUserId(
+  profile: { discordUserId: string },
+  other: { discordUserId: string },
+) {
+  if (
+    isPlaceholderDiscordId(profile.discordUserId) &&
+    !isPlaceholderDiscordId(other.discordUserId)
+  ) {
+    return other.discordUserId;
+  }
+  return profile.discordUserId;
+}
+
+function buildProfileFieldsFromSource(
+  profile: {
+    discordUsername: string;
+    nickname?: string;
+    name?: string;
+    avatarUrl?: string;
+    discordUserId: string;
+    alternateDiscordUserIds?: string[];
+    serverJoinDate: string;
+    epicUsername: string;
+    epicId?: string;
+    previousEpicIds?: Array<{ epicId: string; changedAt: string }>;
+    platform?: "PC" | "PS4" | "XB1" | "SWITCH" | "MOBILE";
+    twitterUsername?: string;
+    twitchUsername?: string;
+    youtubeUsername?: string;
+    discordRoles?: Array<{ id: string; name: string }>;
+    matchConfidence?: "exact" | "username" | "fuzzy" | "manual";
+    status?: "active" | "archived" | "rejected" | "discord_member";
+    currentMembershipStatus?: "accepted" | "rejected" | "former";
+  },
+  other: { discordUserId: string; epicId?: string; previousEpicIds?: Array<{ epicId: string; changedAt: string }>; platform?: "PC" | "PS4" | "XB1" | "SWITCH" | "MOBILE"; matchConfidence?: "exact" | "username" | "fuzzy" | "manual"; status?: "active" | "archived" | "rejected" | "discord_member"; currentMembershipStatus?: "accepted" | "rejected" | "former" },
+) {
+  return {
+    discordUsername: profile.discordUsername,
+    nickname: profile.nickname,
+    name: profile.name,
+    avatarUrl: profile.avatarUrl,
+    discordUserId: resolveDiscordUserId(profile, other),
+    alternateDiscordUserIds: profile.alternateDiscordUserIds,
+    serverJoinDate: profile.serverJoinDate,
+    epicUsername: profile.epicUsername,
+    epicId: profile.epicId ?? other.epicId,
+    previousEpicIds: profile.previousEpicIds ?? other.previousEpicIds,
+    platform: profile.platform ?? other.platform,
+    twitterUsername: profile.twitterUsername,
+    twitchUsername: profile.twitchUsername,
+    youtubeUsername: profile.youtubeUsername,
+    discordRoles: profile.discordRoles,
+    matchConfidence: profile.matchConfidence ?? other.matchConfidence,
+    status: profile.status ?? other.status,
+    currentMembershipStatus:
+      profile.currentMembershipStatus ?? other.currentMembershipStatus,
+  };
+}
+
+export const getPlayersMergePreview = query({
+  args: {
+    playerIdA: v.id("players"),
+    playerIdB: v.id("players"),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const load = async (playerId: Id<"players">) => {
+      const player = await ctx.db.get(playerId);
+      if (!player) return null;
+      const score = await ctx.db
+        .query("manualScores")
+        .withIndex("by_player", (q) => q.eq("playerId", playerId))
+        .first();
+      return {
+        _id: player._id,
+        discordUsername: player.discordUsername,
+        epicUsername: player.epicUsername,
+        discordUserId: player.discordUserId,
+        nickname: player.nickname,
+        serverJoinDate: player.serverJoinDate,
+        tier: player.tier,
+        totalScore: player.totalScore,
+        discordRoles: player.discordRoles,
+        _creationTime: player._creationTime,
+        evaluation: score
+          ? {
+              totalScore: score.totalScore,
+              tier: score.tier,
+              gender: score.gender,
+            }
+          : null,
+      };
+    };
+
+    const a = await load(args.playerIdA);
+    const b = await load(args.playerIdB);
+    if (!a || !b) {
+      throw new ConvexError({
+        message: "One or both players not found",
+        code: "NOT_FOUND",
+      });
+    }
+    return { a, b };
+  },
+});
+
 export const mergePlayers = mutation({
   args: {
     primaryPlayerId: v.id("players"),
     secondaryPlayerId: v.id("players"),
+    selections: v.optional(
+      v.object({
+        profilePlayerId: v.id("players"),
+        evaluationPlayerId: v.id("players"),
+      }),
+    ),
   },
   handler: async (ctx, args) => {
     const user = await requireAdmin(ctx);
@@ -1411,35 +1527,75 @@ export const mergePlayers = mutation({
         code: "NOT_FOUND",
       });
     }
+
+    const playerIds = new Set([args.primaryPlayerId, args.secondaryPlayerId]);
+    if (args.selections) {
+      if (
+        !playerIds.has(args.selections.profilePlayerId) ||
+        !playerIds.has(args.selections.evaluationPlayerId)
+      ) {
+        throw new ConvexError({
+          message: "Profile and evaluation selections must be one of the two players being merged",
+          code: "INVALID_ARGUMENT",
+        });
+      }
+    }
+
+    const adminComments = [primaryPlayer.adminComments, secondaryPlayer.adminComments]
+      .filter(Boolean)
+      .join(" | ");
+
+    let mergedData: Record<string, unknown>;
+    let auditSelectionNote = "";
+
+    if (!args.selections) {
+      const isPlaceholderId = isPlaceholderDiscordId;
+      mergedData = {
+        discordUsername: primaryPlayer.discordUsername,
+        nickname: primaryPlayer.nickname || secondaryPlayer.nickname,
+        discordUserId:
+          isPlaceholderId(primaryPlayer.discordUserId) &&
+          !isPlaceholderId(secondaryPlayer.discordUserId)
+            ? secondaryPlayer.discordUserId
+            : primaryPlayer.discordUserId,
+        serverJoinDate: primaryPlayer.serverJoinDate || secondaryPlayer.serverJoinDate,
+        epicUsername: primaryPlayer.epicUsername,
+        twitterUsername: primaryPlayer.twitterUsername || secondaryPlayer.twitterUsername,
+        twitchUsername: primaryPlayer.twitchUsername || secondaryPlayer.twitchUsername,
+        youtubeUsername: primaryPlayer.youtubeUsername || secondaryPlayer.youtubeUsername,
+        adminComments,
+        discordRoles: primaryPlayer.discordRoles || secondaryPlayer.discordRoles,
+        tier: primaryPlayer.tier || secondaryPlayer.tier,
+        totalScore: primaryPlayer.totalScore ?? secondaryPlayer.totalScore,
+        status: primaryPlayer.status || secondaryPlayer.status,
+      };
+    } else {
+      const profilePlayer =
+        args.selections.profilePlayerId === args.secondaryPlayerId
+          ? secondaryPlayer
+          : primaryPlayer;
+      const profileOther =
+        profilePlayer._id === primaryPlayer._id ? secondaryPlayer : primaryPlayer;
+      const evaluationPlayer =
+        args.selections.evaluationPlayerId === args.secondaryPlayerId
+          ? secondaryPlayer
+          : primaryPlayer;
+
+      mergedData = {
+        ...buildProfileFieldsFromSource(profilePlayer, profileOther),
+        adminComments,
+        tier: evaluationPlayer.tier ?? profilePlayer.tier ?? profileOther.tier,
+        totalScore:
+          evaluationPlayer.totalScore ??
+          profilePlayer.totalScore ??
+          profileOther.totalScore,
+      };
+
+      auditSelectionNote = ` [profile: ${profilePlayer.discordUsername}, evaluation: ${evaluationPlayer.discordUsername}]`;
+    }
     
-    // Merge data - prefer real data over placeholders
-    const isPlaceholderId = (id: string) => id.startsWith("placeholder_") || id === "imported";
-    
-    const mergedData = {
-      discordUsername: primaryPlayer.discordUsername,
-      nickname: primaryPlayer.nickname || secondaryPlayer.nickname,
-      discordUserId: isPlaceholderId(primaryPlayer.discordUserId) && !isPlaceholderId(secondaryPlayer.discordUserId)
-        ? secondaryPlayer.discordUserId
-        : primaryPlayer.discordUserId,
-      serverJoinDate: primaryPlayer.serverJoinDate || secondaryPlayer.serverJoinDate,
-      epicUsername: primaryPlayer.epicUsername,
-      twitterUsername: primaryPlayer.twitterUsername || secondaryPlayer.twitterUsername,
-      twitchUsername: primaryPlayer.twitchUsername || secondaryPlayer.twitchUsername,
-      youtubeUsername: primaryPlayer.youtubeUsername || secondaryPlayer.youtubeUsername,
-      adminComments: [primaryPlayer.adminComments, secondaryPlayer.adminComments]
-        .filter(Boolean)
-        .join(" | "),
-      discordRoles: primaryPlayer.discordRoles || secondaryPlayer.discordRoles,
-      // Prefer primary tier/score, but fallback to secondary
-      tier: primaryPlayer.tier || secondaryPlayer.tier,
-      totalScore: primaryPlayer.totalScore ?? secondaryPlayer.totalScore,
-      status: primaryPlayer.status || secondaryPlayer.status,
-    };
-    
-    // Update primary player with merged data
     await ctx.db.patch(args.primaryPlayerId, mergedData);
     
-    // Migrate scores from secondary to primary (if secondary has scores and primary doesn't)
     const primaryScore = await ctx.db
       .query("manualScores")
       .withIndex("by_player", (q) => q.eq("playerId", args.primaryPlayerId))
@@ -1449,17 +1605,41 @@ export const mergePlayers = mutation({
       .query("manualScores")
       .withIndex("by_player", (q) => q.eq("playerId", args.secondaryPlayerId))
       .first();
-    
-    if (secondaryScore && !primaryScore) {
-      // Copy secondary score to primary
-      await ctx.db.insert("manualScores", {
-        ...secondaryScore,
-        playerId: args.primaryPlayerId,
-        evaluatedBy: user._id,
-      });
+
+    if (!args.selections) {
+      if (secondaryScore && !primaryScore) {
+        const { _id: _scoreId, _creationTime: _scoreCreated, ...scoreFields } =
+          secondaryScore;
+        await ctx.db.insert("manualScores", {
+          ...scoreFields,
+          playerId: args.primaryPlayerId,
+          evaluatedBy: user._id,
+        });
+      }
+    } else {
+      const chosenScore =
+        args.selections.evaluationPlayerId === args.secondaryPlayerId
+          ? secondaryScore
+          : primaryScore;
+
+      if (primaryScore) {
+        await ctx.db.delete(primaryScore._id);
+      }
+      if (secondaryScore) {
+        await ctx.db.delete(secondaryScore._id);
+      }
+
+      if (chosenScore) {
+        const { _id: _scoreId, _creationTime: _scoreCreated, ...scoreFields } =
+          chosenScore;
+        await ctx.db.insert("manualScores", {
+          ...scoreFields,
+          playerId: args.primaryPlayerId,
+          evaluatedBy: user._id,
+        });
+      }
     }
     
-    // Migrate tier history from secondary to primary
     const secondaryTierHistory = await ctx.db
       .query("tierHistory")
       .withIndex("by_player", (q) => q.eq("playerId", args.secondaryPlayerId))
@@ -1475,27 +1655,23 @@ export const mergePlayers = mutation({
       });
     }
     
-    // Delete secondary player's scores
-    if (secondaryScore) {
+    if (!args.selections && secondaryScore) {
       await ctx.db.delete(secondaryScore._id);
     }
     
-    // Delete secondary player's tier history
     for (const history of secondaryTierHistory) {
       await ctx.db.delete(history._id);
     }
     
-    // Delete secondary player
     await ctx.db.delete(args.secondaryPlayerId);
     
-    // Log audit
     await logAudit(ctx, {
       userId: user._id,
       userName: getDisplayName(user),
       action: "players_merged",
       entityType: "player",
       entityId: args.primaryPlayerId,
-      details: `Merged ${secondaryPlayer.discordUsername} (${secondaryPlayer.epicUsername}) into ${primaryPlayer.discordUsername} (${primaryPlayer.epicUsername})`,
+      details: `Merged ${secondaryPlayer.discordUsername} (${secondaryPlayer.epicUsername}) into ${primaryPlayer.discordUsername} (${primaryPlayer.epicUsername})${auditSelectionNote}`,
     });
     
     return { success: true, mergedPlayerId: args.primaryPlayerId };
