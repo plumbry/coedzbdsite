@@ -140,10 +140,8 @@ export default function AdminHubPage() {
           title: "Member Management",
           description: isAdmin
             ? "Applications, accepted members, and Discord evaluation queue."
-            : "View accepted and former members.",
-          href: isAdmin
-            ? "/admin/member-management/applications"
-            : "/admin/member-management/accepted",
+            : "View pending applications (tier only), accepted, and former members.",
+          href: "/admin/member-management/applications",
           icon: Users,
         },
         ...(isAdmin

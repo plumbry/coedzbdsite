@@ -1,11 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query, internalQuery, internalMutation } from "./_generated/server";
-import { requireAdmin, getDisplayName } from "./auth_helpers";
+import { requireAdmin, requireModeratorOrAdmin, getDisplayName } from "./auth_helpers";
 import {
   loadFemaleVerificationLookup,
   enrichPlayerWithFemaleVerification,
 } from "./helpers/femaleVerification";
-import type { Id } from "./_generated/dataModel.d.ts";
+import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
 import { filterVisibleMembers } from "./helpers/playerAlt";
@@ -13,6 +13,17 @@ import {
   playerMatchesSearchTerm,
   resolvePlayerByDiscordId,
 } from "./helpers/playerDiscordId";
+
+/** Event mods may see tier letter only; admins receive full manual score records. */
+function applicationEvaluationForRole(
+  score: Doc<"manualScores"> | null,
+  role: Doc<"users">["role"],
+) {
+  if (!score) return null;
+  if (role === "admin") return score;
+  if (role === "event_mod") return { tier: score.tier };
+  return null;
+}
 
 // Search players to link a returning member's application (accepted, former, rejected)
 export const searchPlayersForApplicationLink = query({
@@ -217,32 +228,31 @@ export const submitApplication = mutation({
 export const getPendingApplications = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
-    
+    const user = await requireModeratorOrAdmin(ctx);
+
     const applications = await ctx.db
       .query("applications")
       .withIndex("by_status", (q) => q.eq("status", "pending"))
       .order("desc")
       .collect();
-    
-    // Get evaluation scores for each
+
     const applicationsWithScores = await Promise.all(
       applications.map(async (app) => {
-        let evaluation = null;
+        let score: Doc<"manualScores"> | null = null;
         if (app.playerId) {
-          evaluation = await ctx.db
+          score = await ctx.db
             .query("manualScores")
             .withIndex("by_player", (q) => q.eq("playerId", app.playerId!))
             .first();
         }
-        
+
         return {
           ...app,
-          evaluation,
+          evaluation: applicationEvaluationForRole(score, user.role),
         };
-      })
+      }),
     );
-    
+
     return applicationsWithScores;
   },
 });

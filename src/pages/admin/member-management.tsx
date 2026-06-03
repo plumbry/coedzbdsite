@@ -51,15 +51,13 @@ export default function MemberManagement() {
       setRoleResolved(true);
       const tab = tabFromPath || searchParams.get("tab");
       const adminTabs = ["applications", "accepted", "rejected", "former", "discord"];
-      const publicTabs = ["accepted", "former"];
+      const modTabs = ["applications", "accepted", "former"];
       if (tab === "discord" && isAdmin) {
         setActiveTab("discord");
-      } else if (tab && (isAdmin ? adminTabs : publicTabs).includes(tab)) {
+      } else if (tab && (isAdmin ? adminTabs : modTabs).includes(tab)) {
         setActiveTab(tab);
-      } else if (isAdmin) {
+      } else if (isAdmin || isModeratorOrAdmin) {
         setActiveTab("applications");
-      } else if (isModeratorOrAdmin) {
-        setActiveTab("accepted");
       }
     }
   }, [isRoleLoading, isAdmin, isModeratorOrAdmin, roleResolved, searchParams, tabFromPath]);
@@ -99,7 +97,7 @@ export default function MemberManagement() {
   // Queries — only fire when authenticated
   const pendingApplications = useQuery(
     api.memberManagement.getPendingApplications,
-    isAdmin && activeTab === "applications" ? {} : "skip",
+    isModeratorOrAdmin && activeTab === "applications" ? {} : "skip",
   );
   const acceptedMembers = useQuery(
     api.memberManagement.getAcceptedMembers,
@@ -132,9 +130,9 @@ export default function MemberManagement() {
   );
   const [convertingPlayerId, setConvertingPlayerId] = useState<Id<"players"> | null>(null);
   
-  // Redirect non-admins to "Accepted" tab
-  if (!isAdmin && activeTab !== "accepted" && activeTab !== "former") {
-    setActiveTab("accepted");
+  const modTabs = ["applications", "accepted", "former"];
+  if (!isAdmin && !modTabs.includes(activeTab)) {
+    setActiveTab("applications");
   }
   
   // Accept application
@@ -550,7 +548,7 @@ export default function MemberManagement() {
       description={
         isAdmin
           ? "Manage member applications and status"
-          : "View accepted and former members"
+          : "View pending applications (tier only), accepted, and former members"
       }
       authTitle="Sign in to access member management"
       showSidebar={!!isModeratorOrAdmin}
@@ -601,8 +599,16 @@ export default function MemberManagement() {
     >
       <Tabs value={activeTab} onValueChange={handleTabChange}>
           <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
-            <TabsList className={`inline-flex w-auto min-w-full md:grid md:w-full h-10 ${isAdmin ? "md:grid-cols-5" : "md:grid-cols-2"}`}>
-              {isAdmin && <TabsTrigger value="applications" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Applications</TabsTrigger>}
+            <TabsList
+              className={`inline-flex w-auto min-w-full md:grid md:w-full h-10 ${
+                isAdmin ? "md:grid-cols-5" : isModeratorOrAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
+              }`}
+            >
+              {isModeratorOrAdmin && (
+                <TabsTrigger value="applications" className="text-xs md:text-sm py-1.5 whitespace-nowrap">
+                  Applications
+                </TabsTrigger>
+              )}
               <TabsTrigger value="accepted" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Accepted</TabsTrigger>
               {isAdmin && <TabsTrigger value="rejected" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Rejected</TabsTrigger>}
               <TabsTrigger value="former" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Former</TabsTrigger>
@@ -610,8 +616,8 @@ export default function MemberManagement() {
             </TabsList>
           </div>
           
-          {/* Applications Tab - Admin Only */}
-          {isAdmin && (
+          {/* Applications Tab - staff view; admin manages */}
+          {isModeratorOrAdmin && (
             <TabsContent value="applications">
             <Card className="p-0 sm:p-6">
               <CardHeader className="px-3 py-4 sm:px-6 sm:py-6">
@@ -620,12 +626,15 @@ export default function MemberManagement() {
                     <CardTitle>Applications</CardTitle>
                     <CardDescription>
                       {pendingApplications?.length || 0} pending application(s)
+                      {!isAdmin && " — tier letter only"}
                     </CardDescription>
                   </div>
-                  <Button onClick={() => setNewAppDialogOpen(true)} className="cursor-pointer w-full sm:w-auto">
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Application
-                  </Button>
+                  {isAdmin && (
+                    <Button onClick={() => setNewAppDialogOpen(true)} className="cursor-pointer w-full sm:w-auto">
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Application
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="px-3 sm:px-6">
@@ -671,7 +680,10 @@ export default function MemberManagement() {
                                     app.evaluation.tier === "A" ? "secondary" :
                                     "outline"
                                   } className="text-xs">
-                                    Tier {app.evaluation.tier} - {app.evaluation.totalScore} pts
+                                    Tier {app.evaluation.tier}
+                                    {isAdmin && "totalScore" in app.evaluation && (
+                                      <> - {app.evaluation.totalScore} pts</>
+                                    )}
                                   </Badge>
                                 )}
                               </div>
@@ -692,49 +704,51 @@ export default function MemberManagement() {
                               {app.fortniteProfileLink}
                               <ExternalLink className="h-3 w-3 shrink-0" />
                             </a>
-                            <div className="flex flex-wrap gap-1">
-                              <Button
-                                onClick={() => setEditingApplicationId(app._id)}
-                                variant="secondary"
-                                size="sm"
-                                className="cursor-pointer px-2 h-7 text-xs"
-                              >
-                                <Edit className="mr-1 h-3 w-3" />
-                                Edit
-                              </Button>
-                              <Button
-                                onClick={() => handleAccept(app._id)}
-                                size="sm"
-                                className="cursor-pointer px-2 h-7 text-xs"
-                              >
-                                <UserCheck className="mr-1 h-3 w-3" />
-                                Accept
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  setSelectedApplication(app._id);
-                                  setRejectDialogOpen(true);
-                                }}
-                                variant="destructive"
-                                size="sm"
-                                className="cursor-pointer px-2 h-7 text-xs"
-                              >
-                                <UserX className="mr-1 h-3 w-3" />
-                                Reject
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  setApplicationToDelete(app._id);
-                                  setDeleteConfirmOpen(true);
-                                }}
-                                variant="destructive"
-                                size="sm"
-                                className="cursor-pointer px-2 h-7 text-xs"
-                              >
-                                <Trash2 className="mr-1 h-3 w-3" />
-                                Delete
-                              </Button>
-                            </div>
+                            {isAdmin && (
+                              <div className="flex flex-wrap gap-1">
+                                <Button
+                                  onClick={() => setEditingApplicationId(app._id)}
+                                  variant="secondary"
+                                  size="sm"
+                                  className="cursor-pointer px-2 h-7 text-xs"
+                                >
+                                  <Edit className="mr-1 h-3 w-3" />
+                                  Edit
+                                </Button>
+                                <Button
+                                  onClick={() => handleAccept(app._id)}
+                                  size="sm"
+                                  className="cursor-pointer px-2 h-7 text-xs"
+                                >
+                                  <UserCheck className="mr-1 h-3 w-3" />
+                                  Accept
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    setSelectedApplication(app._id);
+                                    setRejectDialogOpen(true);
+                                  }}
+                                  variant="destructive"
+                                  size="sm"
+                                  className="cursor-pointer px-2 h-7 text-xs"
+                                >
+                                  <UserX className="mr-1 h-3 w-3" />
+                                  Reject
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    setApplicationToDelete(app._id);
+                                    setDeleteConfirmOpen(true);
+                                  }}
+                                  variant="destructive"
+                                  size="sm"
+                                  className="cursor-pointer px-2 h-7 text-xs"
+                                >
+                                  <Trash2 className="mr-1 h-3 w-3" />
+                                  Delete
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
@@ -1723,17 +1737,18 @@ export default function MemberManagement() {
           </DialogContent>
         </Dialog>
         
-        {/* Edit Application Dialog */}
-        <EditApplicationDialog
-          application={editingApplicationId ? (pendingApplications?.find(a => a._id === editingApplicationId) ?? null) : null}
-          onClose={() => setEditingApplicationId(null)}
-        />
-        
-        {/* New Application Dialog */}
-        <NewApplicationDialog
-          open={newAppDialogOpen}
-          onOpenChange={setNewAppDialogOpen}
-        />
+        {isAdmin && (
+          <>
+            <EditApplicationDialog
+              application={editingApplicationId ? (pendingApplications?.find(a => a._id === editingApplicationId) ?? null) : null}
+              onClose={() => setEditingApplicationId(null)}
+            />
+            <NewApplicationDialog
+              open={newAppDialogOpen}
+              onOpenChange={setNewAppDialogOpen}
+            />
+          </>
+        )}
 
         {isAdmin && canOpenMergeDialog && mergePair && (
           <MergeMembersDialog
