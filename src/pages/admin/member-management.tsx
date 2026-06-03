@@ -28,6 +28,7 @@ import EditMemberStatusDialog from "../_components/edit-member-status-dialog.tsx
 import NewApplicationDialog from "./_components/new-application-dialog.tsx";
 import EditApplicationDialog from "./_components/edit-application-dialog.tsx";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import PlayerProfileLink from "@/components/player-profile-link.tsx";
 import FemaleVerifiedBadge from "@/components/female-verified-badge.tsx";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 
@@ -886,12 +887,12 @@ export default function MemberManagement() {
                             )}
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
-                                <Link 
-                                  to={`/player/${member.discordUsername}`}
+                                <PlayerProfileLink
+                                  discordUsername={member.discordUsername}
                                   className="hover:underline text-primary"
                                 >
                                   {member.discordUsername}
-                                </Link>
+                                </PlayerProfileLink>
                                 {member.femaleVerified && (
                                   <FemaleVerifiedBadge compact />
                                 )}
@@ -1001,12 +1002,12 @@ export default function MemberManagement() {
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <Link 
-                                to={`/player/${member.discordUsername}`}
+                              <PlayerProfileLink
+                                discordUsername={member.discordUsername}
                                 className="hover:underline text-primary text-sm font-medium truncate block"
                               >
                                 {member.discordUsername}
-                              </Link>
+                              </PlayerProfileLink>
                               {member.femaleVerified && (
                                 <FemaleVerifiedBadge compact />
                               )}
@@ -1150,12 +1151,12 @@ export default function MemberManagement() {
                           <TableRow key={member._id} className="h-10">
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
-                                <Link 
-                                  to={`/player/${member.discordUsername}`}
+                                <PlayerProfileLink
+                                  discordUsername={member.discordUsername}
                                   className="hover:underline text-primary"
                                 >
                                   {member.discordUsername}
-                                </Link>
+                                </PlayerProfileLink>
                                 {member.femaleVerified && (
                                   <FemaleVerifiedBadge compact />
                                 )}
@@ -1232,12 +1233,12 @@ export default function MemberManagement() {
                         <div key={member._id} className="py-2 flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <Link 
-                                to={`/player/${member.discordUsername}`}
+                              <PlayerProfileLink
+                                discordUsername={member.discordUsername}
                                 className="hover:underline text-primary text-sm font-medium truncate block"
                               >
                                 {member.discordUsername}
-                              </Link>
+                              </PlayerProfileLink>
                               {member.femaleVerified && (
                                 <FemaleVerifiedBadge compact />
                               )}
@@ -1344,12 +1345,12 @@ export default function MemberManagement() {
                           <TableRow key={member._id} className="h-10">
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
-                                <Link 
-                                  to={`/player/${member.discordUsername}`}
+                                <PlayerProfileLink
+                                  discordUsername={member.discordUsername}
                                   className="hover:underline text-primary"
                                 >
                                   {member.discordUsername}
-                                </Link>
+                                </PlayerProfileLink>
                                 {member.femaleVerified && (
                                   <FemaleVerifiedBadge compact />
                                 )}
@@ -1397,12 +1398,12 @@ export default function MemberManagement() {
                         <div key={member._id} className="py-2 flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <Link 
-                                to={`/player/${member.discordUsername}`}
+                              <PlayerProfileLink
+                                discordUsername={member.discordUsername}
                                 className="hover:underline text-primary text-sm font-medium truncate block"
                               >
                                 {member.discordUsername}
-                              </Link>
+                              </PlayerProfileLink>
                               {member.femaleVerified && (
                                 <FemaleVerifiedBadge compact />
                               )}
@@ -1507,12 +1508,12 @@ export default function MemberManagement() {
                           >
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
-                                <Link 
-                                  to={`/player/${member.discordUsername}`}
+                                <PlayerProfileLink
+                                  discordUsername={member.discordUsername}
                                   className="hover:underline text-primary"
                                 >
                                   {member.discordUsername}
-                                </Link>
+                                </PlayerProfileLink>
                                 {member.femaleVerified && (
                                   <FemaleVerifiedBadge compact />
                                 )}
@@ -1568,12 +1569,12 @@ export default function MemberManagement() {
                         <div key={member._id} className={`py-2 flex items-center justify-between gap-2 ${member.hasLeftServer ? "bg-red-50 dark:bg-red-950/20 -mx-3 px-3 rounded" : ""}`}>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <Link 
-                                to={`/player/${member.discordUsername}`}
+                              <PlayerProfileLink
+                                discordUsername={member.discordUsername}
                                 className="hover:underline text-primary text-sm font-medium truncate"
                               >
                                 {member.discordUsername}
-                              </Link>
+                              </PlayerProfileLink>
                               {member.femaleVerified && (
                                 <FemaleVerifiedBadge compact />
                               )}

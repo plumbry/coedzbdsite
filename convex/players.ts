@@ -63,6 +63,8 @@ export const getPlayerById = query({
 export const getPlayerByUsername = query({
   args: { username: v.string() },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     // Try to find by Discord username first (case insensitive)
     const byDiscord = await ctx.db
       .query("players")
@@ -88,6 +90,8 @@ export const getPlayerByUsername = query({
 export const getPlayerProfile = query({
   args: { id: v.id("players") },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const player = await ctx.db.get(args.id);
     
     if (!player || isAltAccount(player)) {

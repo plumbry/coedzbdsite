@@ -231,7 +231,7 @@ export default function Index() {
                     <TableRow key={member._id}>
                       <TableCell>
                         <div className="flex items-center gap-2 flex-wrap">
-                          {isModeratorOrAdmin ? (
+                          {isAdmin ? (
                             <Link 
                               to={`/player/${member.discordUsername}`}
                               className="hover:underline font-medium cursor-pointer"

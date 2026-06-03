@@ -652,7 +652,7 @@ export const updateSinglePlayerPowerScore = mutation({
       : 0;
     
     // Get deaths per match from match stats
-    const matchStats = await ctx.runQuery(api.playerStats.getPlayerMatchStats, {
+    const matchStats = await ctx.runQuery(internal.playerStats.getPlayerMatchStatsInternal, {
       playerId: args.playerId,
     });
     const deathsPerMatch = matchStats?.deathsPerMatch || 0;
@@ -820,7 +820,7 @@ export const updatePlayerPowerScore = mutation({
     const avgElims = totalMatches > 0 ? totalElims / totalMatches : 0;
     
     // Get deaths per match from match stats
-    const matchStats = await ctx.runQuery(api.playerStats.getPlayerMatchStats, {
+    const matchStats = await ctx.runQuery(internal.playerStats.getPlayerMatchStatsInternal, {
       playerId: args.playerId,
     });
     const deathsPerMatch = matchStats?.deathsPerMatch || 0;
@@ -882,7 +882,7 @@ export const getPlayerEventBreakdown = query({
     const avgElims = totalMatches > 0 ? totalElims / totalMatches : 0;
     
     // Get deaths per match from match stats
-    const matchStats: { deathsPerMatch: number } | null = await ctx.runQuery(api.playerStats.getPlayerMatchStats, {
+    const matchStats: { deathsPerMatch: number } | null = await ctx.runQuery(internal.playerStats.getPlayerMatchStatsInternal, {
       playerId: args.playerId,
     });
     const deathsPerMatch: number = matchStats?.deathsPerMatch || 0;

@@ -11,8 +11,11 @@ import { useUserRole } from "@/hooks/use-user-role.ts";
 
 export default function PlayerProfile() {
   const { username } = useParams<{ username: string }>();
-  const { isModeratorOrAdmin, isLoading: roleLoading } = useUserRole();
-  const player = useQuery(api.players.getPlayerByUsername, username ? { username } : "skip");
+  const { isAdmin, isLoading: roleLoading } = useUserRole();
+  const player = useQuery(
+    api.players.getPlayerByUsername,
+    isAdmin && username ? { username } : "skip",
+  );
   
   return (
     <PageShell>
@@ -29,12 +32,12 @@ export default function PlayerProfile() {
         </div>
       )}
 
-      {!roleLoading && !isModeratorOrAdmin && (
+      {!roleLoading && !isAdmin && (
         <div className="text-center py-8">
           <Lock className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
-          <h2 className="text-lg font-semibold">Staff Only</h2>
+          <h2 className="text-lg font-semibold">Administrators Only</h2>
           <p className="text-sm text-muted-foreground mt-2">
-            Player stats are only visible to staff members. Please sign in with a staff account to view this page.
+            Player stats profiles are only visible to administrators.
           </p>
           <Link to="/">
             <Button variant="secondary" size="sm" className="mt-4">
@@ -44,7 +47,7 @@ export default function PlayerProfile() {
         </div>
       )}
       
-      {!roleLoading && isModeratorOrAdmin && (
+      {!roleLoading && isAdmin && (
         <>
           {player === undefined && (
             <div className="space-y-4">

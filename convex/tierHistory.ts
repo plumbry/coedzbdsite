@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
+import { requireAdmin } from "./auth_helpers";
 
 export const getPlayerTierHistory = query({
   args: { playerId: v.id("players") },
@@ -25,7 +26,9 @@ export const getPlayerTierHistory = query({
 export const getLatestTierChange = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
-    // Public query - get the most recent tier change
+    await requireAdmin(ctx);
+
+    // Get the most recent tier change
     const latestChange = await ctx.db
       .query("tierHistory")
       .withIndex("by_player", (q) => q.eq("playerId", args.playerId))

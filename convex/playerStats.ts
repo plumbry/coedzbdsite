@@ -1,7 +1,8 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { query, internalQuery } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import type { QueryCtx } from "./_generated/server";
+import { requireAdmin } from "./auth_helpers";
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 import { isYuniteImport } from "./lib/importSource";
 
@@ -285,6 +286,8 @@ async function fetchZbdPerformanceRows(ctx: QueryCtx, playerId: Id<"players">) {
 export const getPlayerComprehensiveStats = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const { eventResults, yuniteResults } = await fetchZbdPerformanceRows(
       ctx,
       args.playerId,
@@ -296,6 +299,8 @@ export const getPlayerComprehensiveStats = query({
 export const getPlayerZBDPerformanceBundle = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const { eventResults, yuniteResults } = await fetchZbdPerformanceRows(
       ctx,
       args.playerId,
@@ -354,6 +359,8 @@ export const getPlayerStatsByEpic = query({
 export const getPlayerAllEvents = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const { eventResults, yuniteResults } = await fetchZbdPerformanceRows(
       ctx,
       args.playerId,
@@ -367,6 +374,8 @@ export const getPlayerAllEvents = query({
 export const getPlayerDuoPerformance = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     // Get the player details
     const player = await ctx.db.get(args.playerId);
     if (!player) {
@@ -515,31 +524,39 @@ export const getPlayerDuoPerformance = query({
   },
 });
 
-// Get player match-level statistics
+async function computePlayerMatchStats(ctx: QueryCtx, playerId: Id<"players">) {
+  const matchStats = await ctx.db
+    .query("matchPlayerStats")
+    .withIndex("by_player", (q) => q.eq("playerId", playerId))
+    .collect();
+
+  if (matchStats.length === 0) {
+    return null;
+  }
+
+  const totalMatches = matchStats.length;
+  const totalDeaths = matchStats.reduce((sum, m) => sum + m.deaths, 0);
+  const totalEliminations = matchStats.reduce((sum, m) => sum + m.eliminations, 0);
+  const totalPlacements = matchStats.reduce((sum, m) => sum + m.placement, 0);
+
+  return {
+    totalMatches,
+    deathsPerMatch: Math.round((totalDeaths / totalMatches) * 100) / 100,
+    eliminationsPerMatch: Math.round((totalEliminations / totalMatches) * 100) / 100,
+    avgPlacement: Math.round((totalPlacements / totalMatches) * 10) / 10,
+  };
+}
+
+/** Rankings / power-score jobs — no role gate. */
+export const getPlayerMatchStatsInternal = internalQuery({
+  args: { playerId: v.id("players") },
+  handler: async (ctx, args) => computePlayerMatchStats(ctx, args.playerId),
+});
+
 export const getPlayerMatchStats = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
-    // Get all match stats for this player
-    const matchStats = await ctx.db
-      .query("matchPlayerStats")
-      .withIndex("by_player", (q) => q.eq("playerId", args.playerId))
-      .collect();
-
-    if (matchStats.length === 0) {
-      return null;
-    }
-
-    // Calculate aggregate stats
-    const totalMatches = matchStats.length;
-    const totalDeaths = matchStats.reduce((sum, m) => sum + m.deaths, 0);
-    const totalEliminations = matchStats.reduce((sum, m) => sum + m.eliminations, 0);
-    const totalPlacements = matchStats.reduce((sum, m) => sum + m.placement, 0);
-
-    return {
-      totalMatches,
-      deathsPerMatch: Math.round((totalDeaths / totalMatches) * 100) / 100,
-      eliminationsPerMatch: Math.round((totalEliminations / totalMatches) * 100) / 100,
-      avgPlacement: Math.round((totalPlacements / totalMatches) * 10) / 10,
-    };
+    await requireAdmin(ctx);
+    return computePlayerMatchStats(ctx, args.playerId);
   },
 });

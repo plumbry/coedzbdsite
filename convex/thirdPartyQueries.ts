@@ -15,6 +15,8 @@ export const getPlayerThirdPartyResults = query({
     linkedToEvent: v.optional(v.union(v.literal("linked"), v.literal("unlinked"), v.literal("all"))),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const results = await fetchThirdPartyResultsForPlayer(ctx, args.playerId);
     
     // Filter based on whether the import is linked to an event and add event info

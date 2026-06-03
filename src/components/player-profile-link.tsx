@@ -13,9 +13,9 @@ export default function PlayerProfileLink({
   children,
   className,
 }: PlayerProfileLinkProps) {
-  const { isModeratorOrAdmin } = useUserRole();
+  const { isAdmin } = useUserRole();
 
-  if (discordUsername && isModeratorOrAdmin) {
+  if (discordUsername && isAdmin) {
     return (
       <Link
         to={`/player/${discordUsername}`}

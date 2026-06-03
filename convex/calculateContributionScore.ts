@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel.d.ts";
+import { requireAdmin } from "./auth_helpers";
 
 /**
  * Calculate Team Contribution (TC) for a player from stored match data
@@ -177,6 +178,8 @@ export const getPlayerCS = query({
     playerId: v.id("players"),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const player = await ctx.db.get(args.playerId);
     return player?.contributionScore || null;
   },
