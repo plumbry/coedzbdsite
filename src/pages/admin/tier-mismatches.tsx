@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import { Card, CardContent } from "@/components/ui/card.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -382,7 +382,6 @@ function IncompleteEvaluationsSection() {
 function MissingRoleSection() {
   const mismatches = useQuery(api.discord.tierMismatches.getTierMismatches, {});
   const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState<MismatchStatus | "all">("all");
   const [filterTier, setFilterTier] = useState<string>("all");
   const [sortField, setSortField] = useState<string>("mismatchStatus");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -402,11 +401,6 @@ function MissingRoleSection() {
     if (!mismatches) return [];
 
     let result = [...mismatches];
-
-    // Filter by mismatch type
-    if (filterType !== "all") {
-      result = result.filter((m) => m.mismatchStatus === filterType);
-    }
 
     // Filter by website tier
     if (filterTier !== "all") {
@@ -440,22 +434,11 @@ function MissingRoleSection() {
     });
 
     return result;
-  }, [mismatches, filterType, filterTier, search, sortField, sortDirection]);
+  }, [mismatches, filterTier, search, sortField, sortDirection]);
 
   const mismatchesPagination = useClientPagination(filteredMismatches, {
-    resetDeps: [filterType, filterTier, search, sortField, sortDirection],
+    resetDeps: [filterTier, search, sortField, sortDirection],
   });
-
-  // Summary counts
-  const counts = useMemo(() => {
-    if (!mismatches) return { total: 0, wrong: 0, multiple: 0, missing: 0 };
-    return {
-      total: mismatches.length,
-      wrong: mismatches.filter((m) => m.mismatchStatus === "wrong_role").length,
-      multiple: mismatches.filter((m) => m.mismatchStatus === "multiple_roles").length,
-      missing: mismatches.filter((m) => m.mismatchStatus === "missing_role").length,
-    };
-  }, [mismatches]);
 
   const handleEvaluatePlayer = (playerId: string) => {
     setSelectedPlayerId(playerId as Id<"players">);
@@ -476,55 +459,6 @@ function MissingRoleSection() {
       <p className="text-sm text-muted-foreground">
         Discord tier roles that do not match the player&apos;s website tier, based on cached role data from the last sync.
       </p>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card
-          className={`cursor-pointer transition-colors ${filterType === "all" ? "ring-2 ring-primary" : "hover:bg-muted/50"}`}
-          onClick={() => setFilterType("all")}
-        >
-          <CardHeader className="pb-2">
-            <CardDescription>Total Mismatches</CardDescription>
-            <CardTitle className="text-3xl">{counts.total}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card
-          className={`cursor-pointer transition-colors ${filterType === "wrong_role" ? "ring-2 ring-destructive" : "hover:bg-muted/50"}`}
-          onClick={() => setFilterType(filterType === "wrong_role" ? "all" : "wrong_role")}
-        >
-          <CardHeader className="pb-2">
-            <CardDescription className="flex items-center gap-1.5">
-              <ShieldAlert className="h-3.5 w-3.5 text-destructive" />
-              Wrong Role
-            </CardDescription>
-            <CardTitle className="text-3xl text-destructive">{counts.wrong}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card
-          className={`cursor-pointer transition-colors ${filterType === "multiple_roles" ? "ring-2 ring-primary" : "hover:bg-muted/50"}`}
-          onClick={() => setFilterType(filterType === "multiple_roles" ? "all" : "multiple_roles")}
-        >
-          <CardHeader className="pb-2">
-            <CardDescription className="flex items-center gap-1.5">
-              <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
-              Multiple Roles
-            </CardDescription>
-            <CardTitle className="text-3xl">{counts.multiple}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card
-          className={`cursor-pointer transition-colors ${filterType === "missing_role" ? "ring-2 ring-secondary" : "hover:bg-muted/50"}`}
-          onClick={() => setFilterType(filterType === "missing_role" ? "all" : "missing_role")}
-        >
-          <CardHeader className="pb-2">
-            <CardDescription className="flex items-center gap-1.5">
-              <AlertCircle className="h-3.5 w-3.5 text-muted-foreground" />
-              Missing Role
-            </CardDescription>
-            <CardTitle className="text-3xl">{counts.missing}</CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
 
       {/* Filters and table */}
       <Card>
