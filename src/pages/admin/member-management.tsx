@@ -14,7 +14,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import { UserCheck, UserX, UserMinus, Loader2, ExternalLink, AlertTriangle, Edit, Award, ArrowUpDown, Search, Trash2, ShieldAlert, Plus, RefreshCw } from "lucide-react";
+import { UserCheck, UserX, UserMinus, Loader2, ExternalLink, AlertTriangle, Edit, Award, ArrowUpDown, Search, Trash2, ShieldAlert, Plus, RefreshCw, Users } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox.tsx";
+import MergeMembersDialog, { type MergeMemberRecord } from "./_components/merge-members-dialog.tsx";
 import { toast } from "sonner";
 import { ConvexError } from "convex/values";
 import { format } from "date-fns";
@@ -77,6 +79,8 @@ export default function MemberManagement() {
   const [playerToDelete, setPlayerToDelete] = useState<Id<"players"> | null>(null);
   const [isSyncingDiscordMembers, setIsSyncingDiscordMembers] = useState(false);
   const [isSyncingGirlRole, setIsSyncingGirlRole] = useState(false);
+  const [mergeSelectedIds, setMergeSelectedIds] = useState<Id<"players">[]>([]);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   
   // Search state
   const [acceptedSearch, setAcceptedSearch] = useState("");
@@ -349,6 +353,34 @@ export default function MemberManagement() {
   const formerPagination = useClientPagination(sortedFormerMembers, {
     resetDeps: [formerSearch, formerSort, activeTab],
   });
+
+  useEffect(() => {
+    if (activeTab !== "accepted") {
+      setMergeSelectedIds([]);
+      setMergeDialogOpen(false);
+    }
+  }, [activeTab]);
+
+  const toggleMergeSelection = (playerId: Id<"players">) => {
+    setMergeSelectedIds((prev) => {
+      if (prev.includes(playerId)) {
+        return prev.filter((id) => id !== playerId);
+      }
+      if (prev.length >= 2) {
+        toast.info("Select at most two members to merge. Uncheck one first.");
+        return prev;
+      }
+      return [...prev, playerId];
+    });
+  };
+
+  const mergeSelectedMembers = mergeSelectedIds
+    .map((id) => acceptedMembers?.find((m) => m._id === id))
+    .filter((m): m is MergeMemberRecord => m != null);
+
+  const canOpenMergeDialog =
+    mergeSelectedMembers.length === 2 &&
+    mergeSelectedMembers[0]._id !== mergeSelectedMembers[1]._id;
   
   if (isRoleLoading) {
     return (
@@ -586,20 +618,55 @@ export default function MemberManagement() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search members..."
-                        value={acceptedSearch}
-                        onChange={(e) => setAcceptedSearch(e.target.value)}
-                        className="pl-10"
-                      />
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search members..."
+                          value={acceptedSearch}
+                          onChange={(e) => setAcceptedSearch(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                      {isAdmin && (
+                        <div className="flex items-center gap-2 shrink-0">
+                          {mergeSelectedIds.length > 0 && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setMergeSelectedIds([])}
+                            >
+                              Clear ({mergeSelectedIds.length})
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={!canOpenMergeDialog}
+                            onClick={() => setMergeDialogOpen(true)}
+                          >
+                            <Users className="mr-1.5 h-3.5 w-3.5" />
+                            Merge Selected
+                            {mergeSelectedIds.length > 0 && (
+                              <Badge variant="outline" className="ml-1.5 px-1.5 py-0 text-[10px] font-normal">
+                                {mergeSelectedIds.length}/2
+                              </Badge>
+                            )}
+                          </Button>
+                        </div>
+                      )}
                     </div>
+                    {isAdmin && mergeSelectedIds.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Select two members to merge duplicate records (e.g. similar Discord names).
+                      </p>
+                    )}
                     <div className="overflow-x-auto">
                     {/* Desktop table */}
                     <Table className="hidden md:table [&_td]:py-1.5 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
                       <TableHeader>
                         <TableRow>
+                          {isAdmin && <TableHead className="w-10" />}
                           <SortableHeader 
                             label="Discord Username" 
                             field="discordUsername" 
@@ -635,7 +702,19 @@ export default function MemberManagement() {
                       </TableHeader>
                       <TableBody>
                         {(acceptedPagination.pageItems ?? []).map((member) => (
-                          <TableRow key={member._id} className="h-10">
+                          <TableRow
+                            key={member._id}
+                            className={`h-10 ${mergeSelectedIds.includes(member._id) ? "bg-muted/50" : ""}`}
+                          >
+                            {isAdmin && (
+                              <TableCell>
+                                <Checkbox
+                                  checked={mergeSelectedIds.includes(member._id)}
+                                  onCheckedChange={() => toggleMergeSelection(member._id)}
+                                  aria-label={`Select ${member.discordUsername} for merge`}
+                                />
+                              </TableCell>
+                            )}
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
                                 <Link 
@@ -739,8 +818,19 @@ export default function MemberManagement() {
                     {/* Mobile list */}
                     <div className="md:hidden divide-y">
                       {(acceptedPagination.pageItems ?? []).map((member) => (
-                        <div key={member._id} className="py-2 flex items-center justify-between gap-2">
-                          <div className="min-w-0">
+                        <div
+                          key={member._id}
+                          className={`py-2 flex items-center justify-between gap-2 ${mergeSelectedIds.includes(member._id) ? "bg-muted/50 -mx-3 px-3" : ""}`}
+                        >
+                          {isAdmin && (
+                            <Checkbox
+                              checked={mergeSelectedIds.includes(member._id)}
+                              onCheckedChange={() => toggleMergeSelection(member._id)}
+                              aria-label={`Select ${member.discordUsername} for merge`}
+                              className="shrink-0"
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <Link 
                                 to={`/player/${member.discordUsername}`}
@@ -1485,6 +1575,15 @@ export default function MemberManagement() {
           open={newAppDialogOpen}
           onOpenChange={setNewAppDialogOpen}
         />
+
+        {isAdmin && canOpenMergeDialog && (
+          <MergeMembersDialog
+            open={mergeDialogOpen}
+            onOpenChange={setMergeDialogOpen}
+            players={[mergeSelectedMembers[0], mergeSelectedMembers[1]]}
+            onMerged={() => setMergeSelectedIds([])}
+          />
+        )}
     </AdminPageLayout>
   );
 }
