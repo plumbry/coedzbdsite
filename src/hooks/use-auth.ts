@@ -1,9 +1,7 @@
 import { useAuth as useClerkAuth, useClerk, useSignIn } from "@clerk/react";
-import type { OAuthStrategy } from "@clerk/shared/types";
 import { useCallback } from "react";
 import { useLocation } from "react-router-dom";
 
-const DISCORD_OAUTH_STRATEGY: OAuthStrategy = "oauth_discord";
 const SSO_CALLBACK_PATH = "/sso-callback";
 
 function buildReturnUrl(location: ReturnType<typeof useLocation>): string {
@@ -25,7 +23,7 @@ export function useAuth() {
     const redirectCallbackUrl = `${window.location.origin}${SSO_CALLBACK_PATH}`;
 
     const { error } = await signIn.sso({
-      strategy: DISCORD_OAUTH_STRATEGY,
+      strategy: "oauth_discord",
       redirectCallbackUrl,
       redirectUrl: returnUrl,
     });
