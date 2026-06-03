@@ -14,6 +14,7 @@ import {
   isAltAccount,
   isVisibleInMemberLists,
 } from "./helpers/playerAlt";
+import { playerMatchesSearchTerm } from "./helpers/playerDiscordId";
 
 export const getPlayers = query({
   args: {},
@@ -495,16 +496,7 @@ export const searchPlayersForLinking = query({
     );
 
     return players
-      .filter((player) => {
-        const epic = player.epicUsername.toLowerCase();
-        const discord = player.discordUsername.toLowerCase();
-        const discordId = player.discordUserId?.toLowerCase() ?? "";
-        return (
-          epic.includes(needle) ||
-          discord.includes(needle) ||
-          discordId.includes(needle)
-        );
-      })
+      .filter((player) => playerMatchesSearchTerm(player, needle))
       .slice(0, maxResults)
       .map((player) => ({
         _id: player._id,

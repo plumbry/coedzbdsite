@@ -3,19 +3,11 @@ import { mutation, query } from "./_generated/server";
 import { getDisplayName, requireAdmin } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
 import { filterVisibleMembers, isAltAccount } from "./helpers/playerAlt";
+import { playerMatchesSearchTerm } from "./helpers/playerDiscordId";
 import type { Doc } from "./_generated/dataModel";
 
 function matchesPlayerSearch(player: Doc<"players">, needle: string): boolean {
-  const epic = player.epicUsername.toLowerCase();
-  const discord = player.discordUsername.toLowerCase();
-  const discordId = player.discordUserId?.toLowerCase() ?? "";
-  const nickname = player.nickname?.toLowerCase() ?? "";
-  return (
-    epic.includes(needle) ||
-    discord.includes(needle) ||
-    discordId.includes(needle) ||
-    nickname.includes(needle)
-  );
+  return playerMatchesSearchTerm(player, needle);
 }
 
 export const listAltPlayers = query({

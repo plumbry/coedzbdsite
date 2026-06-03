@@ -106,7 +106,10 @@ export default function DiscordMembers() {
       result = result.filter((p) =>
         (p.discordUsername?.toLowerCase().includes(query) || false) ||
         (p.epicUsername?.toLowerCase().includes(query) || false) ||
-        (p.discordUserId?.toLowerCase().includes(query) || false)
+        (p.discordUserId?.toLowerCase().includes(query) || false) ||
+        (p.alternateDiscordUserIds?.some((id) =>
+          id.toLowerCase().includes(query),
+        ) ?? false)
       );
     }
 

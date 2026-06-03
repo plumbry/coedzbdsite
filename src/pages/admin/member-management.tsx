@@ -310,7 +310,7 @@ export default function MemberManagement() {
     </TableHead>
   );
   
-  // Filter helper
+  // Filter helper (includes alternateDiscordUserIds string arrays)
   const filterData = <T extends Record<string, unknown>>(data: T[], searchTerm: string): T[] => {
     if (!searchTerm.trim()) return data;
     const term = searchTerm.toLowerCase();
@@ -319,11 +319,17 @@ export default function MemberManagement() {
         if (typeof value === "string") {
           return value.toLowerCase().includes(term);
         }
+        if (Array.isArray(value)) {
+          return value.some(
+            (entry) =>
+              typeof entry === "string" && entry.toLowerCase().includes(term),
+          );
+        }
         return false;
       });
     });
   };
-  
+
   // Apply sorting and filtering to data
   const sortedAcceptedMembers = acceptedMembers 
     ? filterData(sortData(acceptedMembers, acceptedSort.field, acceptedSort.direction), acceptedSearch)
@@ -337,6 +343,48 @@ export default function MemberManagement() {
   const sortedFormerMembers = formerMembers 
     ? filterData(sortData(formerMembers, formerSort.field, formerSort.direction), formerSearch)
     : [];
+
+  const isDiscordSnowflakeSearch = (term: string) => /^\d{17,20}$/.test(term.trim());
+  const activeMemberSearch =
+    activeTab === "accepted"
+      ? acceptedSearch
+      : activeTab === "discord"
+        ? discordSearch
+        : activeTab === "rejected"
+          ? rejectedSearch
+          : activeTab === "former"
+            ? formerSearch
+            : "";
+  const activeFilteredCount =
+    activeTab === "accepted"
+      ? sortedAcceptedMembers.length
+      : activeTab === "discord"
+        ? sortedDiscordMembers.length
+        : activeTab === "rejected"
+          ? sortedRejectedMembers.length
+          : activeTab === "former"
+            ? sortedFormerMembers.length
+            : 0;
+  const activeTotalCount =
+    activeTab === "accepted"
+      ? (acceptedMembers?.length ?? 0)
+      : activeTab === "discord"
+        ? (discordMembers?.length ?? 0)
+        : activeTab === "rejected"
+          ? (rejectedMembers?.length ?? 0)
+          : activeTab === "former"
+            ? (formerMembers?.length ?? 0)
+            : 0;
+
+  const discordIdLookup = useQuery(
+    api.memberManagement.lookupDiscordId,
+    isAdmin &&
+      isDiscordSnowflakeSearch(activeMemberSearch) &&
+      activeFilteredCount === 0 &&
+      activeTotalCount > 0
+      ? { discordId: activeMemberSearch.trim() }
+      : "skip",
+  );
 
   const applicationsPagination = useClientPagination(pendingApplications ?? undefined, {
     resetDeps: [activeTab],
@@ -385,7 +433,99 @@ export default function MemberManagement() {
 
   const canOpenMergeDialog =
     mergePair !== null && mergePair[0]._id !== mergePair[1]._id;
-  
+
+  const memberListTabLabel: Record<string, string> = {
+    accepted: "Accepted",
+    former: "Former",
+    rejected: "Rejected",
+    discord: "Discord Members",
+    hidden_alt: "Alt accounts (hidden from lists)",
+    other: "Other / archived",
+  };
+
+  const renderDiscordLookupAlert = () => {
+    if (!isAdmin || !isDiscordSnowflakeSearch(activeMemberSearch)) {
+      return null;
+    }
+    if (discordIdLookup === undefined) {
+      return null;
+    }
+    if (!discordIdLookup) {
+      return null;
+    }
+
+    const { player, staffUser, applications } = discordIdLookup;
+
+    if (player) {
+      return (
+        <Alert>
+          <AlertTitle>Discord ID linked to a member</AlertTitle>
+          <AlertDescription className="space-y-1 text-sm">
+            <p>
+              <span className="font-mono">{activeMemberSearch.trim()}</span> is a{" "}
+              <strong>{player.matchType}</strong> ID on{" "}
+              <strong>{player.discordUsername}</strong> ({player.epicUsername}).
+            </p>
+            {player.matchType === "alternate" && (
+              <p>
+                The Discord ID column shows the primary ID{" "}
+                <span className="font-mono">{player.discordUserId}</span>. Search by
+                username or that ID to find them in this table.
+              </p>
+            )}
+            {player.memberListTab === "hidden_alt" ? (
+              <p>This record is marked as an alt and is excluded from member management lists.</p>
+            ) : player.memberListTab && player.memberListTab !== activeTab ? (
+              <p>
+                Open the{" "}
+                <strong>
+                  {memberListTabLabel[player.memberListTab] ?? player.memberListTab}
+                </strong>{" "}
+                tab to view them (current tab:{" "}
+                {memberListTabLabel[activeTab] ?? activeTab}).
+              </p>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    if (staffUser) {
+      return (
+        <Alert>
+          <AlertTitle>Discord ID linked to a staff account</AlertTitle>
+          <AlertDescription className="text-sm">
+            This ID is on staff user <strong>{staffUser.displayName ?? staffUser.username}</strong>,
+            not on a player/member record.
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    if (applications.length > 0) {
+      const latest = applications[0];
+      return (
+        <Alert>
+          <AlertTitle>Discord ID on application only</AlertTitle>
+          <AlertDescription className="text-sm">
+            Found on application for <strong>{latest.discordUsername}</strong> (status:{" "}
+            {latest.status}). Check the Applications tab — it may not match a player row yet.
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>No member record for this Discord ID</AlertTitle>
+        <AlertDescription className="text-sm">
+          <span className="font-mono">{activeMemberSearch.trim()}</span> is not on any player,
+          staff account, or application in the database.
+        </AlertDescription>
+      </Alert>
+    );
+  };
+
   if (isRoleLoading) {
     return (
       <AdminPageLayout skipHeader authTitle="Sign in to access member management">
@@ -660,6 +800,7 @@ export default function MemberManagement() {
                         </div>
                       )}
                     </div>
+                    {activeTab === "accepted" && renderDiscordLookupAlert()}
                     {isAdmin && mergeSelectedIds.length > 0 && (
                       <p className="text-xs text-muted-foreground">
                         Select two members to merge duplicate records (e.g. similar Discord names).
@@ -936,6 +1077,7 @@ export default function MemberManagement() {
                         className="pl-10"
                       />
                     </div>
+                    {activeTab === "discord" && renderDiscordLookupAlert()}
                     <div className="overflow-x-auto">
                     <Table className="hidden md:table [&_td]:py-1.5 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
                       <TableHeader>
@@ -1146,6 +1288,7 @@ export default function MemberManagement() {
                         className="pl-10"
                       />
                     </div>
+                    {activeTab === "rejected" && renderDiscordLookupAlert()}
                     <div className="overflow-x-auto">
                     <Table className="hidden md:table [&_td]:py-1.5 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
                       <TableHeader>
@@ -1300,6 +1443,7 @@ export default function MemberManagement() {
                         className="pl-10"
                       />
                     </div>
+                    {activeTab === "former" && renderDiscordLookupAlert()}
                     <div className="overflow-x-auto">
                     <Table className="hidden md:table [&_td]:py-1.5 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
                       <TableHeader>

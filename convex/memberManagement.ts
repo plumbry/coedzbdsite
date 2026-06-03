@@ -9,6 +9,10 @@ import type { Id } from "./_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
 import { filterVisibleMembers } from "./helpers/playerAlt";
+import {
+  playerMatchesSearchTerm,
+  resolvePlayerByDiscordId,
+} from "./helpers/playerDiscordId";
 
 // Search players to link a returning member's application (accepted, former, rejected)
 export const searchPlayersForApplicationLink = query({
@@ -39,14 +43,7 @@ export const searchPlayersForApplicationLink = query({
         ) {
           return false;
         }
-        const epic = player.epicUsername.toLowerCase();
-        const discord = player.discordUsername.toLowerCase();
-        const discordId = player.discordUserId?.toLowerCase() ?? "";
-        return (
-          epic.includes(needle) ||
-          discord.includes(needle) ||
-          discordId.includes(needle)
-        );
+        return playerMatchesSearchTerm(player, needle);
       })
       .slice(0, maxResults)
       .map((player) => ({
@@ -1169,25 +1166,80 @@ export const deletePlayer = mutation({
   },
 });
 
+// Resolve where a Discord ID is linked (admin troubleshooting)
+export const lookupDiscordId = query({
+  args: { discordId: v.string() },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const discordId = args.discordId.trim();
+    if (!discordId) {
+      return null;
+    }
+
+    const playerMatch = await resolvePlayerByDiscordId(ctx, discordId);
+
+    const staffUser = await ctx.db
+      .query("users")
+      .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", discordId))
+      .first();
+
+    const applications = await ctx.db
+      .query("applications")
+      .withIndex("by_discord_id", (q) => q.eq("discordId", discordId))
+      .order("desc")
+      .collect();
+
+    const memberListTab = (() => {
+      if (!playerMatch) return null;
+      const p = playerMatch.player;
+      if (p.isAlt) return "hidden_alt" as const;
+      if (p.currentMembershipStatus === "accepted") return "accepted" as const;
+      if (p.currentMembershipStatus === "former") return "former" as const;
+      if (p.currentMembershipStatus === "rejected") return "rejected" as const;
+      if (p.status === "discord_member") return "discord" as const;
+      return "other" as const;
+    })();
+
+    return {
+      player: playerMatch
+        ? {
+            _id: playerMatch.player._id,
+            discordUsername: playerMatch.player.discordUsername,
+            epicUsername: playerMatch.player.epicUsername,
+            discordUserId: playerMatch.player.discordUserId,
+            alternateDiscordUserIds: playerMatch.player.alternateDiscordUserIds,
+            currentMembershipStatus: playerMatch.player.currentMembershipStatus,
+            status: playerMatch.player.status,
+            isAlt: playerMatch.player.isAlt ?? false,
+            matchType: playerMatch.matchType,
+            memberListTab,
+          }
+        : null,
+      staffUser: staffUser
+        ? {
+            _id: staffUser._id,
+            username: staffUser.username,
+            displayName: staffUser.displayName,
+          }
+        : null,
+      applications: applications.slice(0, 5).map((app) => ({
+        _id: app._id,
+        status: app.status,
+        discordUsername: app.discordUsername,
+        playerId: app.playerId,
+      })),
+    };
+  },
+});
+
 // Internal query for HTTP endpoint - get member by Discord ID
 export const getMemberByDiscordId = internalQuery({
   args: { discordId: v.string() },
   handler: async (ctx, args): Promise<{ tier: string | undefined; evaluationGender: number | undefined } | null> => {
-    // First, try to look up player by primary Discord ID
-    let player = await ctx.db
-      .query("players")
-      .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", args.discordId))
-      .first();
-    
-    // If not found, check alternate Discord IDs
-    if (!player) {
-      // Need to scan for alternate IDs since there's no index on alternateDiscordUserIds
-      const allPlayers = await ctx.db.query("players").collect();
-      player = allPlayers.find(p => 
-        p.alternateDiscordUserIds?.includes(args.discordId)
-      ) || null;
-    }
-    
+    const playerMatch = await resolvePlayerByDiscordId(ctx, args.discordId);
+    const player = playerMatch?.player ?? null;
+
     if (!player) {
       return null;
     }
