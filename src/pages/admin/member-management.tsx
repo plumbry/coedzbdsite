@@ -626,7 +626,6 @@ export default function MemberManagement() {
                     <CardTitle>Applications</CardTitle>
                     <CardDescription>
                       {pendingApplications?.length || 0} pending application(s)
-                      {!isAdmin && " — tier letter only"}
                     </CardDescription>
                   </div>
                   {isAdmin && (
