@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
 import { UserCheck, UserX, UserMinus, Loader2, ExternalLink, AlertTriangle, Edit, Award, ArrowUpDown, Search, Trash2, ShieldAlert, Plus, RefreshCw, Users } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
-import MergeMembersDialog, { type MergeMemberRecord } from "./_components/merge-members-dialog.tsx";
+import MergeMembersDialog from "./_components/merge-members-dialog.tsx";
 import { toast } from "sonner";
 import { ConvexError } from "convex/values";
 import { format } from "date-fns";
@@ -376,11 +376,15 @@ export default function MemberManagement() {
 
   const mergeSelectedMembers = mergeSelectedIds
     .map((id) => acceptedMembers?.find((m) => m._id === id))
-    .filter((m): m is MergeMemberRecord => m != null);
+    .filter((m) => m != null);
+
+  const mergePair =
+    mergeSelectedMembers.length === 2
+      ? ([mergeSelectedMembers[0], mergeSelectedMembers[1]] as const)
+      : null;
 
   const canOpenMergeDialog =
-    mergeSelectedMembers.length === 2 &&
-    mergeSelectedMembers[0]._id !== mergeSelectedMembers[1]._id;
+    mergePair !== null && mergePair[0]._id !== mergePair[1]._id;
   
   if (isRoleLoading) {
     return (
@@ -1576,11 +1580,11 @@ export default function MemberManagement() {
           onOpenChange={setNewAppDialogOpen}
         />
 
-        {isAdmin && canOpenMergeDialog && (
+        {isAdmin && canOpenMergeDialog && mergePair && (
           <MergeMembersDialog
             open={mergeDialogOpen}
             onOpenChange={setMergeDialogOpen}
-            players={[mergeSelectedMembers[0], mergeSelectedMembers[1]]}
+            players={mergePair}
             onMerged={() => setMergeSelectedIds([])}
           />
         )}

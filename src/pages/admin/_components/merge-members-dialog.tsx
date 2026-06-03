@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { AlertTriangle, ArrowLeftRight, Check, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
-export type MergeMemberRecord = {
+type MergeMemberPlayer = {
   _id: Id<"players">;
   discordUsername: string;
   epicUsername: string;
@@ -28,14 +28,14 @@ export type MergeMemberRecord = {
 interface MergeMembersDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  players: [MergeMemberRecord, MergeMemberRecord];
+  players: readonly [MergeMemberPlayer, MergeMemberPlayer];
   onMerged?: () => void;
 }
 
 const isPlaceholderId = (id: string) =>
   id.startsWith("placeholder_") || id === "imported";
 
-function suggestPrimary(players: [MergeMemberRecord, MergeMemberRecord]): MergeMemberRecord {
+function suggestPrimary(players: readonly [MergeMemberPlayer, MergeMemberPlayer]): MergeMemberPlayer {
   return [...players].sort((a, b) => {
     if (a.tier && !b.tier) return -1;
     if (!a.tier && b.tier) return 1;
@@ -54,7 +54,7 @@ function MemberPreview({
   player,
   variant,
 }: {
-  player: MergeMemberRecord;
+  player: MergeMemberPlayer;
   variant: "keep" | "remove";
 }) {
   const isKeep = variant === "keep";
