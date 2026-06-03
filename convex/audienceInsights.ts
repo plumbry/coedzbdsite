@@ -11,8 +11,10 @@ import { isVisibleInMemberLists } from "./helpers/playerAlt";
 import { requireAdmin } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
-const MEMBERS_PER_BATCH = 12;
+const MEMBERS_PER_BATCH = 8;
 const STALE_JOB_MS = 6 * 60 * 60 * 1000;
+const STALE_PROGRESS_MS = 5 * 60 * 1000;
+const RECONCILE_IDLE_MS = 90 * 1000;
 const SEGMENT_LIST_PAGE_SIZE = 40;
 const SEGMENT_DELETE_BATCH = 50;
 
@@ -312,6 +314,10 @@ function countersFromJob(job: Doc<"audienceInsightsJobs">): JobCounters {
   };
 }
 
+function jobIdleMs(job: Doc<"audienceInsightsJobs">, now: number): number {
+  return now - (job.lastProgressAt ?? job.startedAt);
+}
+
 async function failStaleRunningJobs(ctx: MutationCtx) {
   const running = await ctx.db
     .query("audienceInsightsJobs")
@@ -320,11 +326,45 @@ async function failStaleRunningJobs(ctx: MutationCtx) {
 
   const now = Date.now();
   for (const job of running) {
-    if (now - job.startedAt > STALE_JOB_MS) {
+    const idleMs = jobIdleMs(job, now);
+    if (now - job.startedAt > STALE_JOB_MS || idleMs > STALE_PROGRESS_MS) {
       await ctx.db.patch(job._id, {
         status: "failed",
-        errorMessage: "Rebuild timed out — click Refresh stats again.",
+        errorMessage:
+          idleMs > STALE_PROGRESS_MS
+            ? "Rebuild stopped making progress — click Refresh stats to try again."
+            : "Rebuild timed out — click Refresh stats again.",
         completedAt: now,
+      });
+    }
+  }
+}
+
+/** Re-schedule a stalled chain before we mark the job failed. */
+async function reconcileAudienceInsightsJobs(ctx: MutationCtx) {
+  const running = await ctx.db
+    .query("audienceInsightsJobs")
+    .withIndex("by_status", (q) => q.eq("status", "running"))
+    .collect();
+
+  const now = Date.now();
+  for (const job of running) {
+    const idleMs = jobIdleMs(job, now);
+    if (idleMs < RECONCILE_IDLE_MS || idleMs >= STALE_PROGRESS_MS) {
+      continue;
+    }
+
+    await ctx.db.patch(job._id, { lastProgressAt: now });
+
+    if (job.processedCount > 0 || job.playersCursor) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.audienceInsights.processRebuildBatch,
+        { jobId: job._id },
+      );
+    } else {
+      await ctx.scheduler.runAfter(0, internal.audienceInsights.clearSegmentMembers, {
+        jobId: job._id,
       });
     }
   }
@@ -423,23 +463,31 @@ export const listAudienceInsightMembers = query({
 export const clearSegmentMembers = internalMutation({
   args: {
     jobId: v.id("audienceInsightsJobs"),
+    deleteCursor: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
-    let cursor: string | null = null;
-    let isDone = false;
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.status !== "running") {
+      return;
+    }
 
-    while (!isDone) {
-      const page = await ctx.db.query("audienceInsightsSegmentMembers").paginate({
-        numItems: SEGMENT_DELETE_BATCH,
-        cursor,
+    const page = await ctx.db.query("audienceInsightsSegmentMembers").paginate({
+      numItems: SEGMENT_DELETE_BATCH,
+      cursor: args.deleteCursor ?? null,
+    });
+
+    for (const row of page.page) {
+      await ctx.db.delete(row._id);
+    }
+
+    await ctx.db.patch(args.jobId, { lastProgressAt: Date.now() });
+
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.audienceInsights.clearSegmentMembers, {
+        jobId: args.jobId,
+        deleteCursor: page.continueCursor,
       });
-
-      for (const row of page.page) {
-        await ctx.db.delete(row._id);
-      }
-
-      isDone = page.isDone;
-      cursor = page.continueCursor;
+      return;
     }
 
     await ctx.scheduler.runAfter(
@@ -464,22 +512,51 @@ export const getRebuildJobStatus = query({
       return null;
     }
 
+    const now = Date.now();
+    const idleMs = jobIdleMs(job, now);
+
     return {
       status: job.status,
       processedCount: job.processedCount,
       totalCount: job.totalCount,
       startedAt: job.startedAt,
+      lastProgressAt: job.lastProgressAt ?? job.startedAt,
+      appearsStuck: idleMs >= RECONCILE_IDLE_MS,
     };
   },
 });
 
-/** No-op kept for older clients; legacy tables are no longer read. */
+/** Fails timed-out jobs and re-kicks stalled background chains (safe to call while viewing the page). */
 export const cleanupAudienceInsightsRebuildJobs = mutation({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
+    await reconcileAudienceInsightsJobs(ctx);
     await failStaleRunningJobs(ctx);
-    return { deletedJobs: 0, cacheRepaired: false };
+    return { ok: true };
+  },
+});
+
+export const cancelAudienceInsightsRebuild = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const running = await ctx.db
+      .query("audienceInsightsJobs")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .collect();
+
+    const now = Date.now();
+    for (const job of running) {
+      await ctx.db.patch(job._id, {
+        status: "failed",
+        errorMessage: "Rebuild cancelled.",
+        completedAt: now,
+      });
+    }
+
+    return { cancelled: running.length };
   },
 });
 
@@ -511,6 +588,7 @@ export const rebuildAudienceInsightsCache = mutation({
       playersCursor: null,
       ...EMPTY_COUNTERS,
       startedAt: now,
+      lastProgressAt: now,
     });
 
     await ctx.scheduler.runAfter(0, internal.audienceInsights.clearSegmentMembers, {
@@ -561,6 +639,7 @@ export const processRebuildBatch = internalMutation({
           processedCount,
           totalCount: Math.max(job.totalCount, processedCount),
           playersCursor: page.continueCursor,
+          lastProgressAt: Date.now(),
           ...counters,
         });
 
@@ -588,6 +667,7 @@ export const processRebuildBatch = internalMutation({
         totalCount: totalMembers,
         processedCount: totalMembers,
         playersCursor: null,
+        lastProgressAt: completedAt,
         ...counters,
         completedAt,
       });

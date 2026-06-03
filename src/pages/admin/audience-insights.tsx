@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from "react";
+import { Component, useEffect, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useMutation, useQuery } from "convex/react";
@@ -189,11 +189,22 @@ function AudienceInsightsContent() {
   const eventCoverage = useQuery(api.players.getAcceptedMemberEventCountCoverage);
   const rebuildJob = useQuery(api.audienceInsights.getRebuildJobStatus);
   const rebuildCache = useMutation(api.audienceInsights.rebuildAudienceInsightsCache);
+  const reconcileRebuild = useMutation(api.audienceInsights.cleanupAudienceInsightsRebuildJobs);
+  const cancelRebuild = useMutation(api.audienceInsights.cancelAudienceInsightsRebuild);
   const backfillEventCounts = useMutation(
     api.cacheStatus.backfillPlayerEventParticipationStats,
   );
 
   const isJobRunning = rebuildJob?.status === "running";
+
+  useEffect(() => {
+    if (!isJobRunning) return;
+    void reconcileRebuild({});
+    const intervalId = window.setInterval(() => {
+      void reconcileRebuild({});
+    }, 30_000);
+    return () => window.clearInterval(intervalId);
+  }, [isJobRunning, reconcileRebuild]);
   const hasCache = insights !== undefined && insights.totalMembers > 0;
   const eventsReady = insights?.eventsReady === true;
   const progressPercent =
@@ -222,6 +233,21 @@ function AudienceInsightsContent() {
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to start event count backfill",
+      );
+    }
+  };
+
+  const runCancelRebuild = async () => {
+    try {
+      const result = await cancelRebuild({});
+      if (result.cancelled > 0) {
+        toast.success("Rebuild cancelled. You can start a new refresh.");
+      } else {
+        toast.message("No rebuild was running.");
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to cancel audience insights rebuild",
       );
     }
   };
@@ -264,11 +290,22 @@ function AudienceInsightsContent() {
           <AlertDescription className="space-y-3">
             <p>
               The &quot;Played more than 5 events&quot; chart uses each member&apos;s{" "}
-              <strong>events played count</strong> on their player record. Yours are mostly unset
-              {eventCoverage
-                ? ` (${eventCoverage.withEventCount} / ${eventCoverage.totalAccepted} members have a count)`
-                : ""}
-              , so everyone shows as 5 or fewer until you backfill from result history.
+              <strong>events played count</strong> on their player record.
+              {eventCoverage && eventCoverage.needsBackfill ? (
+                <>
+                  {" "}
+                  Many members are still missing a count (
+                  {eventCoverage.withEventCount} / {eventCoverage.totalAccepted} have one).
+                </>
+              ) : eventCoverage && eventCoverage.overFiveEvents === 0 ? (
+                <>
+                  {" "}
+                  Counts are set for {eventCoverage.withEventCount} /{" "}
+                  {eventCoverage.totalAccepted} members, but none are above 5 yet — refresh the
+                  chart after confirming backfill on Data Cache.
+                </>
+              ) : null}{" "}
+              Until counts reflect real participation, everyone can appear in the 5-or-fewer bucket.
             </p>
             <ol className="list-decimal list-inside text-sm space-y-1">
               <li>Click Backfill event counts (runs in the background, a few minutes).</li>
@@ -305,6 +342,17 @@ function AudienceInsightsContent() {
                 <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
               </div>
             )}
+            {rebuildJob.appearsStuck && (
+              <p className="text-sm text-muted-foreground">
+                Progress has paused. The page will try to resume automatically; if nothing
+                changes after a few minutes, cancel and click Refresh stats again.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => void runCancelRebuild()}>
+                Cancel rebuild
+              </Button>
+            </div>
           </AlertDescription>
         </Alert>
       )}

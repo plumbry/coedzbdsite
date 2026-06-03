@@ -736,6 +736,7 @@ export default defineSchema({
     eventsOverFive: v.number(),
     eventsFiveOrLess: v.number(),
     startedAt: v.number(),
+    lastProgressAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
     errorMessage: v.optional(v.string()),
   }).index("by_status", ["status"]),
