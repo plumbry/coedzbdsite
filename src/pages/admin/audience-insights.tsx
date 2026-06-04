@@ -527,7 +527,7 @@ function AudienceInsightsContent() {
         ) : (
           <DonutCard
             title="Played More Than 3 Events in the Last 4 Weeks"
-            description="Distinct events with a match import in the last 4 weeks (from match participation data)."
+            description="Tournament/scrim imports and manual results dated within the last 4 weeks (same sources as player event counts)."
             data={chartSegments(insights.recentEvents)}
             total={insights.totalMembers || 1}
             chartType="recentEvents"

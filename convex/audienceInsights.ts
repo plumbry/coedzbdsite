@@ -8,10 +8,11 @@ import {
 } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { isVisibleInMemberLists } from "./helpers/playerAlt";
+import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 import { requireAdmin } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
-const AUDIENCE_INSIGHTS_CACHE_VERSION = 3;
+const AUDIENCE_INSIGHTS_CACHE_VERSION = 4;
 const RECENT_EVENT_WINDOW_WEEKS = 4;
 const RECENT_EVENT_PLAYED_THRESHOLD = 3;
 const MEMBERS_PER_BATCH = 8;
@@ -121,57 +122,91 @@ function tenureBucketForMonths(months: number | null): keyof Pick<
   return "tenure2yPlus";
 }
 
-async function buildRecentEventImportIndex(
-  ctx: MutationCtx | QueryCtx,
-): Promise<Map<Id<"thirdPartyImports">, Id<"events">>> {
-  const windowStart = new Date(
-    Date.now() - RECENT_EVENT_WINDOW_WEEKS * 7 * 24 * 60 * 60 * 1000,
-  )
-    .toISOString()
-    .split("T")[0];
-
-  const recentEvents = await ctx.db
-    .query("events")
-    .withIndex("by_date")
-    .filter((q) => q.gte(q.field("startDate"), windowStart))
-    .collect();
-
-  const importToEvent = new Map<Id<"thirdPartyImports">, Id<"events">>();
-  for (const event of recentEvents) {
-    const imports = await ctx.db
-      .query("thirdPartyImports")
-      .withIndex("by_event", (q) => q.eq("eventId", event._id))
-      .collect();
-    for (const imp of imports) {
-      importToEvent.set(imp._id, event._id);
-    }
+function parseParticipationDateMs(dateStr: string): number | null {
+  const parsed = Date.parse(dateStr);
+  if (!Number.isNaN(parsed)) {
+    return parsed;
   }
-  return importToEvent;
+
+  const parts = dateStr.split("/");
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) {
+      return null;
+    }
+    return new Date(year, month, day).getTime();
+  }
+
+  return null;
 }
 
-async function countDistinctRecentEventsForPlayer(
+async function resolveImportParticipationTime(
   ctx: MutationCtx | QueryCtx,
-  playerId: Id<"players">,
-  importToEvent: Map<Id<"thirdPartyImports">, Id<"events">>,
-): Promise<number> {
-  if (importToEvent.size === 0) {
-    return 0;
+  importData: Doc<"thirdPartyImports">,
+  importDateCache: Map<Id<"thirdPartyImports">, number | null>,
+): Promise<number | null> {
+  const cached = importDateCache.get(importData._id);
+  if (cached !== undefined) {
+    return cached;
   }
 
-  const playerMatches = await ctx.db
-    .query("matchPlayerStats")
-    .withIndex("by_player", (q) => q.eq("playerId", playerId))
-    .order("desc")
-    .take(80);
-
-  const eventIds = new Set<Id<"events">>();
-  for (const match of playerMatches) {
-    const eventId = importToEvent.get(match.importId);
-    if (eventId) {
-      eventIds.add(eventId);
+  let dateStr: string | undefined;
+  if (importData.eventId) {
+    const event = await ctx.db.get(importData.eventId);
+    if (event?.startDate) {
+      dateStr = event.startDate;
     }
   }
-  return eventIds.size;
+  if (!dateStr && importData.eventDate) {
+    dateStr = importData.eventDate;
+  }
+
+  const timestamp = dateStr ? parseParticipationDateMs(dateStr) : null;
+  importDateCache.set(importData._id, timestamp);
+  return timestamp;
+}
+
+async function countRecentEventsForPlayer(
+  ctx: MutationCtx | QueryCtx,
+  playerId: Id<"players">,
+  importDateCache: Map<Id<"thirdPartyImports">, number | null>,
+): Promise<number> {
+  const windowStartMs =
+    Date.now() - RECENT_EVENT_WINDOW_WEEKS * 7 * 24 * 60 * 60 * 1000;
+  const participationKeys = new Set<string>();
+
+  const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
+  for (const result of thirdPartyResults) {
+    const importData = await ctx.db.get(result.importId);
+    if (!importData) continue;
+
+    const participatedAt = await resolveImportParticipationTime(
+      ctx,
+      importData,
+      importDateCache,
+    );
+    if (participatedAt === null || participatedAt < windowStartMs) {
+      continue;
+    }
+    participationKeys.add(result.importId);
+  }
+
+  const manualResults = await ctx.db
+    .query("eventResults")
+    .withIndex("by_player", (q) => q.eq("playerId", playerId))
+    .collect();
+
+  for (const result of manualResults) {
+    const participatedAt = parseParticipationDateMs(result.eventDate);
+    if (participatedAt === null || participatedAt < windowStartMs) {
+      continue;
+    }
+    participationKeys.add(`manual:${result._id}`);
+  }
+
+  return participationKeys.size;
 }
 
 function accumulateMember(
@@ -841,7 +876,7 @@ export const processRebuildBatch = internalMutation({
     }
 
     const counters = countersFromJob(job);
-    const importToEvent = await buildRecentEventImportIndex(ctx);
+    const importDateCache = new Map<Id<"thirdPartyImports">, number | null>();
 
     try {
       const page = await ctx.db
@@ -857,10 +892,10 @@ export const processRebuildBatch = internalMutation({
       for (const member of page.page) {
         if (!isVisibleInMemberLists(member)) continue;
         const gender = await genderForPlayer(ctx, member._id);
-        const recentEventsInWindow = await countDistinctRecentEventsForPlayer(
+        const recentEventsInWindow = await countRecentEventsForPlayer(
           ctx,
           member._id,
-          importToEvent,
+          importDateCache,
         );
         accumulateMember(counters, member, gender, recentEventsInWindow);
         await insertSegmentMemberRows(
