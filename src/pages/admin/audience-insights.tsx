@@ -64,6 +64,10 @@ function pct(part: number, total: number): number {
   return Math.round((part / total) * 100);
 }
 
+function chartSegments(data: ChartPoint[] | undefined): ChartPoint[] {
+  return data ?? [];
+}
+
 function DonutCard({
   title,
   description,
@@ -85,7 +89,8 @@ function DonutCard({
     const key = labelToSegmentKey(chartType, label);
     if (key) onSegmentClick(key);
   };
-  if (data.length === 0) {
+  const segments = chartSegments(data);
+  if (segments.length === 0) {
     return (
       <Card className="py-0">
         <CardHeader className="py-3 space-y-2">
@@ -121,7 +126,7 @@ function DonutCard({
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={data}
+                  data={segments}
                   dataKey="value"
                   nameKey="label"
                   innerRadius={62}
@@ -143,7 +148,7 @@ function DonutCard({
                     if (label) handleLabelClick(label);
                   }}
                 >
-                  {data.map((entry) => (
+                  {segments.map((entry) => (
                     <Cell key={entry.label} fill={entry.color} />
                   ))}
                 </Pie>
@@ -164,7 +169,7 @@ function DonutCard({
             </ResponsiveContainer>
           </div>
           <div className="space-y-2">
-            {data.map((entry) => (
+            {segments.map((entry) => (
               <button
                 key={entry.label}
                 type="button"
@@ -287,7 +292,10 @@ function AudienceInsightsContent() {
     : "Not cached yet";
 
   const tierActiveUsesLiveData = insights.tierActiveSource === "live";
-  const tierChartData = tierScope === "active" ? insights.tierActive : insights.tier;
+  const tierChartData =
+    tierScope === "active"
+      ? chartSegments(insights.tierActive)
+      : chartSegments(insights.tier);
   const tierChartTotal =
     tierScope === "active"
       ? insights.totalActiveMembers || 1
@@ -427,7 +435,7 @@ function AudienceInsightsContent() {
         <DonutCard
           title="Gender Split"
           description="Distribution by evaluation gender category."
-          data={insights.gender}
+          data={chartSegments(insights.gender)}
           total={insights.totalMembers || 1}
           chartType="gender"
           onSegmentClick={(key) => openSegment("gender", key)}
@@ -474,7 +482,7 @@ function AudienceInsightsContent() {
         <DonutCard
           title="How Long Have They Been a Member?"
           description="Time in the server since Discord join date."
-          data={insights.tenure}
+          data={chartSegments(insights.tenure)}
           total={insights.totalMembers || 1}
           chartType="tenure"
           onSegmentClick={(key) => openSegment("tenure", key)}
@@ -495,7 +503,7 @@ function AudienceInsightsContent() {
           <DonutCard
             title="Played More Than 5 Events"
             description="Uses each member's events played count."
-            data={insights.events}
+            data={chartSegments(insights.events)}
             total={insights.totalMembers}
             chartType="events"
             onSegmentClick={(key) => openSegment("events", key)}
