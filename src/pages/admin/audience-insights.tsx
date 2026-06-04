@@ -280,7 +280,7 @@ function AudienceInsightsContent() {
   if (insights === undefined) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+        {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-72 w-full" />
         ))}
       </div>
@@ -502,11 +502,36 @@ function AudienceInsightsContent() {
         ) : (
           <DonutCard
             title="Played More Than 5 Events"
-            description="Uses each member's events played count."
+            description="Uses each member's lifetime events played count."
             data={chartSegments(insights.events)}
             total={insights.totalMembers}
             chartType="events"
             onSegmentClick={(key) => openSegment("events", key)}
+          />
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {!hasCache ? (
+          <Card className="py-0">
+            <CardHeader className="py-3">
+              <CardTitle className="text-base">
+                Played More Than 3 Events in the Last 4 Weeks
+              </CardTitle>
+              <CardDescription>Refresh stats to build the cache.</CardDescription>
+            </CardHeader>
+            <CardContent className="pb-4">
+              <Skeleton className="h-56 w-full" />
+            </CardContent>
+          </Card>
+        ) : (
+          <DonutCard
+            title="Played More Than 3 Events in the Last 4 Weeks"
+            description="Distinct events with a match import in the last 4 weeks (from match participation data)."
+            data={chartSegments(insights.recentEvents)}
+            total={insights.totalMembers || 1}
+            chartType="recentEvents"
+            onSegmentClick={(key) => openSegment("recentEvents", key)}
           />
         )}
       </div>

@@ -11,7 +11,9 @@ import { isVisibleInMemberLists } from "./helpers/playerAlt";
 import { requireAdmin } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
-const AUDIENCE_INSIGHTS_CACHE_VERSION = 2;
+const AUDIENCE_INSIGHTS_CACHE_VERSION = 3;
+const RECENT_EVENT_WINDOW_WEEKS = 4;
+const RECENT_EVENT_PLAYED_THRESHOLD = 3;
 const MEMBERS_PER_BATCH = 8;
 const STALE_JOB_MS = 6 * 60 * 60 * 1000;
 const STALE_PROGRESS_MS = 5 * 60 * 1000;
@@ -24,6 +26,7 @@ const chartTypeValidator = v.union(
   v.literal("tier"),
   v.literal("tenure"),
   v.literal("events"),
+  v.literal("recentEvents"),
 );
 
 type ChartSegment = {
@@ -57,6 +60,8 @@ type JobCounters = {
   tenureUnknown: number;
   eventsOverFive: number;
   eventsFiveOrLess: number;
+  recentEventsOverThree: number;
+  recentEventsThreeOrLess: number;
 };
 
 const EMPTY_COUNTERS: JobCounters = {
@@ -82,6 +87,8 @@ const EMPTY_COUNTERS: JobCounters = {
   tenureUnknown: 0,
   eventsOverFive: 0,
   eventsFiveOrLess: 0,
+  recentEventsOverThree: 0,
+  recentEventsThreeOrLess: 0,
 };
 
 function monthsSinceServerJoin(serverJoinDate: string): number | null {
@@ -114,10 +121,64 @@ function tenureBucketForMonths(months: number | null): keyof Pick<
   return "tenure2yPlus";
 }
 
+async function buildRecentEventImportIndex(
+  ctx: MutationCtx | QueryCtx,
+): Promise<Map<Id<"thirdPartyImports">, Id<"events">>> {
+  const windowStart = new Date(
+    Date.now() - RECENT_EVENT_WINDOW_WEEKS * 7 * 24 * 60 * 60 * 1000,
+  )
+    .toISOString()
+    .split("T")[0];
+
+  const recentEvents = await ctx.db
+    .query("events")
+    .withIndex("by_date")
+    .filter((q) => q.gte(q.field("startDate"), windowStart))
+    .collect();
+
+  const importToEvent = new Map<Id<"thirdPartyImports">, Id<"events">>();
+  for (const event of recentEvents) {
+    const imports = await ctx.db
+      .query("thirdPartyImports")
+      .withIndex("by_event", (q) => q.eq("eventId", event._id))
+      .collect();
+    for (const imp of imports) {
+      importToEvent.set(imp._id, event._id);
+    }
+  }
+  return importToEvent;
+}
+
+async function countDistinctRecentEventsForPlayer(
+  ctx: MutationCtx | QueryCtx,
+  playerId: Id<"players">,
+  importToEvent: Map<Id<"thirdPartyImports">, Id<"events">>,
+): Promise<number> {
+  if (importToEvent.size === 0) {
+    return 0;
+  }
+
+  const playerMatches = await ctx.db
+    .query("matchPlayerStats")
+    .withIndex("by_player", (q) => q.eq("playerId", playerId))
+    .order("desc")
+    .take(80);
+
+  const eventIds = new Set<Id<"events">>();
+  for (const match of playerMatches) {
+    const eventId = importToEvent.get(match.importId);
+    if (eventId) {
+      eventIds.add(eventId);
+    }
+  }
+  return eventIds.size;
+}
+
 function accumulateMember(
   counters: JobCounters,
   member: AcceptedMember,
   gender: number | undefined,
+  recentEventsInWindow: number,
 ) {
   if (gender === 100) counters.male += 1;
   else if (gender === 50) counters.female += 1;
@@ -141,6 +202,12 @@ function accumulateMember(
   const eventsPlayed = member.eventsPlayedCount ?? 0;
   if (eventsPlayed > 5) counters.eventsOverFive += 1;
   else counters.eventsFiveOrLess += 1;
+
+  if (recentEventsInWindow > RECENT_EVENT_PLAYED_THRESHOLD) {
+    counters.recentEventsOverThree += 1;
+  } else {
+    counters.recentEventsThreeOrLess += 1;
+  }
 
   const tenureKey = tenureBucketForMonths(
     monthsSinceServerJoin(member.serverJoinDate),
@@ -196,6 +263,18 @@ function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
       {
         label: "5 or fewer events",
         value: counters.eventsFiveOrLess,
+        color: "#16a34a",
+      },
+    ],
+    recentEvents: [
+      {
+        label: "> 3 Events (last 4 weeks)",
+        value: counters.recentEventsOverThree,
+        color: "#4f46e5",
+      },
+      {
+        label: "3 or fewer (last 4 weeks)",
+        value: counters.recentEventsThreeOrLess,
         color: "#16a34a",
       },
     ],
@@ -256,6 +335,9 @@ function isValidSegment(chart: string, segment: string): boolean {
   if (chart === "events") {
     return segment === "over5" || segment === "fiveOrLess";
   }
+  if (chart === "recentEvents") {
+    return segment === "over3" || segment === "threeOrLess";
+  }
   return false;
 }
 
@@ -277,10 +359,17 @@ function eventsSegmentForMember(member: AcceptedMember): string {
   return (member.eventsPlayedCount ?? 0) > 5 ? "over5" : "fiveOrLess";
 }
 
+function recentEventsSegmentForCount(recentEventsInWindow: number): string {
+  return recentEventsInWindow > RECENT_EVENT_PLAYED_THRESHOLD
+    ? "over3"
+    : "threeOrLess";
+}
+
 async function insertSegmentMemberRows(
   ctx: MutationCtx,
   member: AcceptedMember,
   gender: number | undefined,
+  recentEventsInWindow: number,
 ) {
   const base = {
     playerId: member._id,
@@ -302,6 +391,10 @@ async function insertSegmentMemberRows(
     { chart: "tier" as const, segment: tierSegmentForMember(member) },
     { chart: "tenure" as const, segment: tenureBucketToSegmentSlug(tenureBucket) },
     { chart: "events" as const, segment: eventsSegmentForMember(member) },
+    {
+      chart: "recentEvents" as const,
+      segment: recentEventsSegmentForCount(recentEventsInWindow),
+    },
   ];
 
   for (const row of segmentRows) {
@@ -323,6 +416,7 @@ async function upsertAudienceInsightsSnapshot(
     tierActive: ChartSegment[];
     tenure: ChartSegment[];
     events: ChartSegment[];
+    recentEvents: ChartSegment[];
     eventsReady: boolean;
     segmentMembersIndexed: boolean;
     lastUpdated: number;
@@ -360,6 +454,8 @@ function countersFromJob(job: Doc<"audienceInsightsJobs">): JobCounters {
     tenureUnknown: job.tenureUnknown ?? 0,
     eventsOverFive: job.eventsOverFive ?? 0,
     eventsFiveOrLess: job.eventsFiveOrLess ?? 0,
+    recentEventsOverThree: job.recentEventsOverThree ?? 0,
+    recentEventsThreeOrLess: job.recentEventsThreeOrLess ?? 0,
   };
 }
 
@@ -473,6 +569,7 @@ const emptyInsights = {
   tierActive: [] as ChartSegment[],
   tenure: [] as ChartSegment[],
   events: [] as ChartSegment[],
+  recentEvents: [] as ChartSegment[],
   eventsReady: false,
   tierActiveReady: false,
   tierActiveSource: "cache" as const,
@@ -511,6 +608,7 @@ export const getAudienceInsights = query({
       tierActive,
       tenure: cached.tenure ?? [],
       events: cached.events ?? [],
+      recentEvents: cached.recentEvents ?? [],
       eventsReady: cached.eventsReady,
       segmentMembersIndexed: cached.segmentMembersIndexed === true,
       lastUpdated: cached.lastUpdated,
@@ -743,6 +841,7 @@ export const processRebuildBatch = internalMutation({
     }
 
     const counters = countersFromJob(job);
+    const importToEvent = await buildRecentEventImportIndex(ctx);
 
     try {
       const page = await ctx.db
@@ -758,8 +857,18 @@ export const processRebuildBatch = internalMutation({
       for (const member of page.page) {
         if (!isVisibleInMemberLists(member)) continue;
         const gender = await genderForPlayer(ctx, member._id);
-        accumulateMember(counters, member, gender);
-        await insertSegmentMemberRows(ctx, member, gender);
+        const recentEventsInWindow = await countDistinctRecentEventsForPlayer(
+          ctx,
+          member._id,
+          importToEvent,
+        );
+        accumulateMember(counters, member, gender, recentEventsInWindow);
+        await insertSegmentMemberRows(
+          ctx,
+          member,
+          gender,
+          recentEventsInWindow,
+        );
       }
 
       const processedCount = job.processedCount + page.page.length;

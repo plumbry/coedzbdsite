@@ -699,6 +699,15 @@ export default defineSchema({
         color: v.string(),
       }),
     ),
+    recentEvents: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          value: v.number(),
+          color: v.string(),
+        }),
+      ),
+    ),
     eventsReady: v.boolean(),
     segmentMembersIndexed: v.optional(v.boolean()),
     lastUpdated: v.number(),
@@ -710,6 +719,7 @@ export default defineSchema({
       v.literal("tier"),
       v.literal("tenure"),
       v.literal("events"),
+      v.literal("recentEvents"),
     ),
     segment: v.string(),
     playerId: v.id("players"),
@@ -756,6 +766,8 @@ export default defineSchema({
     tenureUnknown: v.number(),
     eventsOverFive: v.number(),
     eventsFiveOrLess: v.number(),
+    recentEventsOverThree: v.optional(v.number()),
+    recentEventsThreeOrLess: v.optional(v.number()),
     startedAt: v.number(),
     lastProgressAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),

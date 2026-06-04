@@ -1,10 +1,16 @@
-export type AudienceChartType = "gender" | "tier" | "tenure" | "events";
+export type AudienceChartType =
+  | "gender"
+  | "tier"
+  | "tenure"
+  | "events"
+  | "recentEvents";
 
 export const AUDIENCE_CHART_TYPES: AudienceChartType[] = [
   "gender",
   "tier",
   "tenure",
   "events",
+  "recentEvents",
 ];
 
 const LABEL_TO_SEGMENT: Record<AudienceChartType, Record<string, string>> = {
@@ -31,6 +37,10 @@ const LABEL_TO_SEGMENT: Record<AudienceChartType, Record<string, string>> = {
   events: {
     "> 5 Events": "over5",
     "5 or fewer events": "fiveOrLess",
+  },
+  recentEvents: {
+    "> 3 Events (last 4 weeks)": "over3",
+    "3 or fewer (last 4 weeks)": "threeOrLess",
   },
 };
 
@@ -59,6 +69,10 @@ const SEGMENT_TO_LABEL: Record<AudienceChartType, Record<string, string>> = {
     over5: "More than 5 events",
     fiveOrLess: "5 or fewer events",
   },
+  recentEvents: {
+    over3: "More than 3 events (last 4 weeks)",
+    threeOrLess: "3 or fewer events (last 4 weeks)",
+  },
 };
 
 const CHART_TITLES: Record<AudienceChartType, string> = {
@@ -66,6 +80,7 @@ const CHART_TITLES: Record<AudienceChartType, string> = {
   tier: "Tier split",
   tenure: "Member tenure",
   events: "Events played",
+  recentEvents: "Recent event participation",
 };
 
 export function isAudienceChartType(value: string): value is AudienceChartType {
