@@ -527,7 +527,7 @@ function AudienceInsightsContent() {
         ) : (
           <DonutCard
             title="Played More Than 3 Events in the Last 4 Weeks"
-            description="Tournament/scrim imports and manual results dated within the last 4 weeks (same sources as player event counts)."
+            description="Each Yunite leaderboard import counts as one event, dated within the last 4 weeks."
             data={chartSegments(insights.recentEvents)}
             total={insights.totalMembers || 1}
             chartType="recentEvents"

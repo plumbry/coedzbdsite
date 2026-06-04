@@ -39,8 +39,8 @@ const LABEL_TO_SEGMENT: Record<AudienceChartType, Record<string, string>> = {
     "5 or fewer events": "fiveOrLess",
   },
   recentEvents: {
-    "> 3 Events (last 4 weeks)": "over3",
-    "3 or fewer (last 4 weeks)": "threeOrLess",
+    "> 3 Leaderboards (last 4 weeks)": "over3",
+    "3 or fewer leaderboards (last 4 weeks)": "threeOrLess",
   },
 };
 
@@ -70,8 +70,8 @@ const SEGMENT_TO_LABEL: Record<AudienceChartType, Record<string, string>> = {
     fiveOrLess: "5 or fewer events",
   },
   recentEvents: {
-    over3: "More than 3 events (last 4 weeks)",
-    threeOrLess: "3 or fewer events (last 4 weeks)",
+    over3: "More than 3 Yunite leaderboards (last 4 weeks)",
+    threeOrLess: "3 or fewer Yunite leaderboards (last 4 weeks)",
   },
 };
 
@@ -80,7 +80,7 @@ const CHART_TITLES: Record<AudienceChartType, string> = {
   tier: "Tier split",
   tenure: "Member tenure",
   events: "Events played",
-  recentEvents: "Recent event participation",
+  recentEvents: "Recent Yunite leaderboard participation",
 };
 
 export function isAudienceChartType(value: string): value is AudienceChartType {

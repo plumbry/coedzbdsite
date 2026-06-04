@@ -9,10 +9,11 @@ import {
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { isVisibleInMemberLists } from "./helpers/playerAlt";
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
+import { isYuniteImport } from "./lib/importSource";
 import { requireAdmin } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
-const AUDIENCE_INSIGHTS_CACHE_VERSION = 4;
+const AUDIENCE_INSIGHTS_CACHE_VERSION = 5;
 const RECENT_EVENT_WINDOW_WEEKS = 4;
 const RECENT_EVENT_PLAYED_THRESHOLD = 3;
 const MEMBERS_PER_BATCH = 8;
@@ -142,7 +143,7 @@ function parseParticipationDateMs(dateStr: string): number | null {
   return null;
 }
 
-async function resolveImportParticipationTime(
+async function resolveYuniteLeaderboardTime(
   ctx: MutationCtx | QueryCtx,
   importData: Doc<"thirdPartyImports">,
   importDateCache: Map<Id<"thirdPartyImports">, number | null>,
@@ -152,15 +153,12 @@ async function resolveImportParticipationTime(
     return cached;
   }
 
-  let dateStr: string | undefined;
-  if (importData.eventId) {
+  let dateStr: string | undefined = importData.eventDate;
+  if (!dateStr && importData.eventId) {
     const event = await ctx.db.get(importData.eventId);
     if (event?.startDate) {
       dateStr = event.startDate;
     }
-  }
-  if (!dateStr && importData.eventDate) {
-    dateStr = importData.eventDate;
   }
 
   const timestamp = dateStr ? parseParticipationDateMs(dateStr) : null;
@@ -168,45 +166,35 @@ async function resolveImportParticipationTime(
   return timestamp;
 }
 
-async function countRecentEventsForPlayer(
+/** Each Yunite leaderboard import the player appears on counts as one event. */
+async function countRecentYuniteLeaderboardsForPlayer(
   ctx: MutationCtx | QueryCtx,
   playerId: Id<"players">,
   importDateCache: Map<Id<"thirdPartyImports">, number | null>,
 ): Promise<number> {
   const windowStartMs =
     Date.now() - RECENT_EVENT_WINDOW_WEEKS * 7 * 24 * 60 * 60 * 1000;
-  const participationKeys = new Set<string>();
+  const leaderboardImportIds = new Set<Id<"thirdPartyImports">>();
 
   const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
   for (const result of thirdPartyResults) {
     const importData = await ctx.db.get(result.importId);
-    if (!importData) continue;
+    if (!importData || !isYuniteImport(importData)) {
+      continue;
+    }
 
-    const participatedAt = await resolveImportParticipationTime(
+    const leaderboardAt = await resolveYuniteLeaderboardTime(
       ctx,
       importData,
       importDateCache,
     );
-    if (participatedAt === null || participatedAt < windowStartMs) {
+    if (leaderboardAt === null || leaderboardAt < windowStartMs) {
       continue;
     }
-    participationKeys.add(result.importId);
+    leaderboardImportIds.add(result.importId);
   }
 
-  const manualResults = await ctx.db
-    .query("eventResults")
-    .withIndex("by_player", (q) => q.eq("playerId", playerId))
-    .collect();
-
-  for (const result of manualResults) {
-    const participatedAt = parseParticipationDateMs(result.eventDate);
-    if (participatedAt === null || participatedAt < windowStartMs) {
-      continue;
-    }
-    participationKeys.add(`manual:${result._id}`);
-  }
-
-  return participationKeys.size;
+  return leaderboardImportIds.size;
 }
 
 function accumulateMember(
@@ -303,12 +291,12 @@ function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
     ],
     recentEvents: [
       {
-        label: "> 3 Events (last 4 weeks)",
+        label: "> 3 Leaderboards (last 4 weeks)",
         value: counters.recentEventsOverThree,
         color: "#4f46e5",
       },
       {
-        label: "3 or fewer (last 4 weeks)",
+        label: "3 or fewer leaderboards (last 4 weeks)",
         value: counters.recentEventsThreeOrLess,
         color: "#16a34a",
       },
@@ -892,7 +880,7 @@ export const processRebuildBatch = internalMutation({
       for (const member of page.page) {
         if (!isVisibleInMemberLists(member)) continue;
         const gender = await genderForPlayer(ctx, member._id);
-        const recentEventsInWindow = await countRecentEventsForPlayer(
+        const recentEventsInWindow = await countRecentYuniteLeaderboardsForPlayer(
           ctx,
           member._id,
           importDateCache,
