@@ -513,6 +513,51 @@ http.route({
   }),
 });
 
+// GET endpoint for Discord bot — website-evaluated female members (gender = 50)
+http.route({
+  path: "/api/discord/female-evaluated-members",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    try {
+      const result = await ctx.runQuery(
+        internal.discord.femaleEvaluatedMembers.getFemaleEvaluatedDiscordMembers,
+        {}
+      );
+
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Error fetching female-evaluated members:", error);
+      return new Response(
+        JSON.stringify({
+          error: "Internal server error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
 // POST endpoint for Discord bot to acknowledge that roles have been removed
 http.route({
   path: "/api/discord/acknowledge-role-removals",
