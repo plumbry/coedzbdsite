@@ -302,6 +302,17 @@ export const getPlayerComprehensiveStats = query({
   },
 });
 
+export const comprehensiveStatsForPlayerInternal = internalQuery({
+  args: { playerId: v.id("players") },
+  handler: async (ctx, args) => {
+    const { eventResults, yuniteResults } = await fetchZbdPerformanceRows(
+      ctx,
+      args.playerId,
+    );
+    return computeComprehensiveStats(eventResults, yuniteResults);
+  },
+});
+
 export const getPlayerZBDPerformanceBundle = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {

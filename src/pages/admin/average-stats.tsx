@@ -12,25 +12,45 @@ import { useState } from "react";
 
 function AverageStatsContent() {
   const stats = useQuery(api.aggregateStats.getAveragePlayerStats);
+  const rebuildJob = useQuery(api.aggregateStats.getRebuildJobStatus);
   const rebuildCache = useMutation(api.aggregateStats.rebuildAggregateStatsCache);
-  const [isRebuilding, setIsRebuilding] = useState(false);
-  
+  const [isStartingRebuild, setIsStartingRebuild] = useState(false);
+
+  const isJobRunning = rebuildJob?.status === "running";
+  const rebuildProgress =
+    rebuildJob && rebuildJob.totalCount > 0
+      ? Math.min(
+          100,
+          Math.round((rebuildJob.processedCount / rebuildJob.totalCount) * 100),
+        )
+      : null;
+
   const handleRebuildCache = async () => {
-    setIsRebuilding(true);
+    setIsStartingRebuild(true);
     try {
-      await rebuildCache({});
-      toast.success("Aggregate stats cache rebuilt successfully");
+      const result = await rebuildCache({});
+      if (result.completed) {
+        toast.success("Aggregate stats cache rebuilt successfully");
+      } else {
+        toast.success(
+          `Rebuild started for ${result.playerCount} players. Stats will update when it finishes.`,
+        );
+      }
     } catch (error) {
       if (error instanceof ConvexError) {
         const { message } = error.data as { code: string; message: string };
-        toast.error(`Error: ${message}`);
+        toast.error(message);
+      } else if (error instanceof Error) {
+        toast.error(error.message);
       } else {
         toast.error("Failed to rebuild cache");
       }
     } finally {
-      setIsRebuilding(false);
+      setIsStartingRebuild(false);
     }
   };
+
+  const isRebuilding = isStartingRebuild || isJobRunning;
   
   if (stats === undefined) {
     return (
@@ -64,11 +84,17 @@ function AverageStatsContent() {
   
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
           {stats?.lastUpdated && (
             <p className="text-xs text-muted-foreground">
               Last updated: {new Date(stats.lastUpdated).toLocaleString()}
+            </p>
+          )}
+          {isJobRunning && rebuildProgress !== null && (
+            <p className="text-xs text-muted-foreground">
+              Rebuilding cache… {rebuildJob.processedCount}/{rebuildJob.totalCount}{" "}
+              ({rebuildProgress}%)
             </p>
           )}
         </div>

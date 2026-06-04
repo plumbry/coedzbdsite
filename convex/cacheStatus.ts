@@ -552,11 +552,17 @@ export const rebuildAggregateStatsCache = mutation({
     }
     
     const result = await ctx.runMutation(api.aggregateStats.rebuildAggregateStatsCache);
-    const playerCount = "success" in result ? result.playerCount : result.playerCount;
-    
+
+    if (result.completed) {
+      return {
+        success: true,
+        message: `Aggregate stats cache rebuilt (${result.playerCount} players).`,
+      };
+    }
+
     return {
       success: true,
-      message: `Aggregate stats cache rebuilt successfully (${playerCount} players).`,
+      message: `Aggregate stats rebuild started for ${result.playerCount} players. Refresh this page in a few minutes.`,
     };
   },
 });

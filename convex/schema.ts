@@ -657,6 +657,39 @@ export default defineSchema({
     lastUpdated: v.number(),
   }),
 
+  aggregateStatsJobs: defineTable({
+    status: v.union(
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+    ),
+    totalCount: v.number(),
+    processedCount: v.number(),
+    nextPlayerIndex: v.number(),
+    players: v.array(
+      v.object({
+        playerId: v.id("players"),
+        tier: v.optional(v.string()),
+      }),
+    ),
+    accumulatedStats: v.array(
+      v.object({
+        tier: v.optional(v.string()),
+        totalGames: v.number(),
+        totalEliminations: v.number(),
+        averagePlacement: v.number(),
+        averageScore: v.number(),
+        averageKD: v.number(),
+        winRate: v.number(),
+        top3Finishes: v.number(),
+      }),
+    ),
+    errorMessage: v.optional(v.string()),
+    startedAt: v.number(),
+    lastProgressAt: v.number(),
+    completedAt: v.optional(v.number()),
+  }).index("by_status", ["status"]),
+
   // Cached audience insights donuts (admin audience-insights page)
   audienceInsightsSnapshot: defineTable({
     insightsCacheVersion: v.optional(v.number()),
