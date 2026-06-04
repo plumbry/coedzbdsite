@@ -64,9 +64,10 @@ function foldUpsetKill(agg: UpsetAggregation, kill: Doc<"matchKillEvents">) {
   }
 }
 
+/** Count rows in matchKillEvents (source of truth for cache rebuild). */
 async function countMatchKillEvents(ctx: MutationCtx): Promise<number> {
-  const meta = await getOrCreateKillEventsMetadata(ctx);
-  return meta.totalKillEvents;
+  const events = await ctx.db.query("matchKillEvents").collect();
+  return events.length;
 }
 
 async function aggregateUpsetKills(ctx: MutationCtx): Promise<UpsetAggregation> {
