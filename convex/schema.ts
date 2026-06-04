@@ -674,6 +674,16 @@ export default defineSchema({
         color: v.string(),
       }),
     ),
+    tierActive: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          value: v.number(),
+          color: v.string(),
+        }),
+      ),
+    ),
+    totalActiveMembers: v.optional(v.number()),
     tenure: v.array(
       v.object({
         label: v.string(),
@@ -708,7 +718,10 @@ export default defineSchema({
     eventsPlayedCount: v.number(),
     genderLabel: v.string(),
     serverJoinDate: v.string(),
-  }).index("by_chart_segment", ["chart", "segment"]),
+    isRecentlyActive: v.optional(v.boolean()),
+  })
+    .index("by_chart_segment", ["chart", "segment"])
+    .index("by_chart_segment_active", ["chart", "segment", "isRecentlyActive"]),
 
   audienceInsightsJobs: defineTable({
     status: v.union(
@@ -727,6 +740,12 @@ export default defineSchema({
     tierB: v.number(),
     tierC: v.number(),
     tierOther: v.number(),
+    totalActiveMembers: v.number(),
+    tierSActive: v.number(),
+    tierAActive: v.number(),
+    tierBActive: v.number(),
+    tierCActive: v.number(),
+    tierOtherActive: v.number(),
     tenureUnder3m: v.number(),
     tenure3to6m: v.number(),
     tenure6to12m: v.number(),

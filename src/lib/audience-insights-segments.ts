@@ -80,13 +80,27 @@ export function segmentKeyToLabel(chart: AudienceChartType, segment: string): st
   return SEGMENT_TO_LABEL[chart][segment] ?? null;
 }
 
-export function audienceSegmentPath(chart: AudienceChartType, segment: string): string {
-  return `/admin/audience-insights/${chart}/${segment}`;
+export function audienceSegmentPath(
+  chart: AudienceChartType,
+  segment: string,
+  options?: { activeOnly?: boolean },
+): string {
+  const base = `/admin/audience-insights/${chart}/${segment}`;
+  if (options?.activeOnly) {
+    return `${base}?members=active`;
+  }
+  return base;
 }
 
-export function audienceSegmentPageTitle(chart: AudienceChartType, segment: string): string {
+export function audienceSegmentPageTitle(
+  chart: AudienceChartType,
+  segment: string,
+  options?: { activeOnly?: boolean },
+): string {
   const segmentLabel = segmentKeyToLabel(chart, segment) ?? segment;
-  return `${CHART_TITLES[chart]} — ${segmentLabel}`;
+  const scope =
+    chart === "tier" && options?.activeOnly ? " (active members)" : "";
+  return `${CHART_TITLES[chart]} — ${segmentLabel}${scope}`;
 }
 
 export function isValidSegmentKey(chart: AudienceChartType, segment: string): boolean {

@@ -42,6 +42,12 @@ type JobCounters = {
   tierB: number;
   tierC: number;
   tierOther: number;
+  totalActiveMembers: number;
+  tierSActive: number;
+  tierAActive: number;
+  tierBActive: number;
+  tierCActive: number;
+  tierOtherActive: number;
   tenureUnder3m: number;
   tenure3to6m: number;
   tenure6to12m: number;
@@ -61,6 +67,12 @@ const EMPTY_COUNTERS: JobCounters = {
   tierB: 0,
   tierC: 0,
   tierOther: 0,
+  totalActiveMembers: 0,
+  tierSActive: 0,
+  tierAActive: 0,
+  tierBActive: 0,
+  tierCActive: 0,
+  tierOtherActive: 0,
   tenureUnder3m: 0,
   tenure3to6m: 0,
   tenure6to12m: 0,
@@ -116,6 +128,15 @@ function accumulateMember(
   else if (member.tier === "C") counters.tierC += 1;
   else counters.tierOther += 1;
 
+  if (member.isRecentlyActive) {
+    counters.totalActiveMembers += 1;
+    if (member.tier === "S") counters.tierSActive += 1;
+    else if (member.tier === "A") counters.tierAActive += 1;
+    else if (member.tier === "B") counters.tierBActive += 1;
+    else if (member.tier === "C") counters.tierCActive += 1;
+    else counters.tierOtherActive += 1;
+  }
+
   const eventsPlayed = member.eventsPlayedCount ?? 0;
   if (eventsPlayed > 5) counters.eventsOverFive += 1;
   else counters.eventsFiveOrLess += 1;
@@ -126,24 +147,41 @@ function accumulateMember(
   counters[tenureKey] += 1;
 }
 
+function tierSegmentsFromCounters(
+  counters: Pick<
+    JobCounters,
+    "tierS" | "tierA" | "tierB" | "tierC" | "tierOther"
+  >,
+): ChartSegment[] {
+  return [
+    { label: "Tier S", value: counters.tierS, color: "#ef4444" },
+    { label: "Tier A", value: counters.tierA, color: "#f59e0b" },
+    { label: "Tier B", value: counters.tierB, color: "#3b82f6" },
+    { label: "Tier C", value: counters.tierC, color: "#22c55e" },
+    { label: "Unassigned", value: counters.tierOther, color: "#6b7280" },
+  ].filter((s) => s.value > 0);
+}
+
 function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
   const filterPositive = (segments: ChartSegment[]) =>
     segments.filter((s) => s.value > 0);
 
   return {
     totalMembers,
+    totalActiveMembers: counters.totalActiveMembers,
     gender: filterPositive([
       { label: "Male", value: counters.male, color: "#4f46e5" },
       { label: "Female", value: counters.female, color: "#22c55e" },
       { label: "Unknown", value: counters.genderUnknown, color: "#ef4444" },
     ]),
-    tier: filterPositive([
-      { label: "Tier S", value: counters.tierS, color: "#ef4444" },
-      { label: "Tier A", value: counters.tierA, color: "#f59e0b" },
-      { label: "Tier B", value: counters.tierB, color: "#3b82f6" },
-      { label: "Tier C", value: counters.tierC, color: "#22c55e" },
-      { label: "Unassigned", value: counters.tierOther, color: "#6b7280" },
-    ]),
+    tier: tierSegmentsFromCounters(counters),
+    tierActive: tierSegmentsFromCounters({
+      tierS: counters.tierSActive,
+      tierA: counters.tierAActive,
+      tierB: counters.tierBActive,
+      tierC: counters.tierCActive,
+      tierOther: counters.tierOtherActive,
+    }),
     tenure: filterPositive([
       { label: "Under 3 months", value: counters.tenureUnder3m, color: "#4f46e5" },
       { label: "3–6 months", value: counters.tenure3to6m, color: "#22c55e" },
@@ -251,6 +289,7 @@ async function insertSegmentMemberRows(
     eventsPlayedCount: member.eventsPlayedCount ?? 0,
     genderLabel: genderLabel(gender),
     serverJoinDate: member.serverJoinDate,
+    isRecentlyActive: member.isRecentlyActive ?? false,
   };
 
   const tenureBucket = tenureBucketForMonths(
@@ -276,8 +315,10 @@ async function upsertAudienceInsightsSnapshot(
   ctx: MutationCtx,
   payload: {
     totalMembers: number;
+    totalActiveMembers: number;
     gender: ChartSegment[];
     tier: ChartSegment[];
+    tierActive: ChartSegment[];
     tenure: ChartSegment[];
     events: ChartSegment[];
     eventsReady: boolean;
@@ -303,6 +344,12 @@ function countersFromJob(job: Doc<"audienceInsightsJobs">): JobCounters {
     tierB: job.tierB,
     tierC: job.tierC,
     tierOther: job.tierOther,
+    totalActiveMembers: job.totalActiveMembers,
+    tierSActive: job.tierSActive,
+    tierAActive: job.tierAActive,
+    tierBActive: job.tierBActive,
+    tierCActive: job.tierCActive,
+    tierOtherActive: job.tierOtherActive,
     tenureUnder3m: job.tenureUnder3m,
     tenure3to6m: job.tenure3to6m,
     tenure6to12m: job.tenure6to12m,
@@ -372,11 +419,14 @@ async function reconcileAudienceInsightsJobs(ctx: MutationCtx) {
 
 const emptyInsights = {
   totalMembers: 0,
+  totalActiveMembers: 0,
   gender: [] as ChartSegment[],
   tier: [] as ChartSegment[],
+  tierActive: [] as ChartSegment[],
   tenure: [] as ChartSegment[],
   events: [] as ChartSegment[],
   eventsReady: false,
+  tierActiveReady: false,
   lastUpdated: undefined as number | undefined,
   needsRebuild: true,
 };
@@ -394,14 +444,17 @@ export const getAudienceInsights = query({
 
     return {
       totalMembers: cached.totalMembers,
+      totalActiveMembers: cached.totalActiveMembers ?? 0,
       gender: cached.gender,
       tier: cached.tier,
+      tierActive: cached.tierActive ?? [],
       tenure: cached.tenure,
       events: cached.events,
       eventsReady: cached.eventsReady,
       segmentMembersIndexed: cached.segmentMembersIndexed === true,
       lastUpdated: cached.lastUpdated,
       needsRebuild: false,
+      tierActiveReady: cached.tierActive !== undefined,
     };
   },
 });
@@ -412,6 +465,7 @@ export const listAudienceInsightMembers = query({
     chart: chartTypeValidator,
     segment: v.string(),
     playersCursor: v.optional(v.union(v.string(), v.null())),
+    activeOnly: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
@@ -433,15 +487,30 @@ export const listAudienceInsightMembers = query({
       };
     }
 
-    const page = await ctx.db
-      .query("audienceInsightsSegmentMembers")
-      .withIndex("by_chart_segment", (q) =>
-        q.eq("chart", args.chart).eq("segment", args.segment),
-      )
-      .paginate({
-        numItems: SEGMENT_LIST_PAGE_SIZE,
-        cursor: args.playersCursor ?? null,
-      });
+    const activeOnly = args.chart === "tier" && args.activeOnly === true;
+
+    const page = activeOnly
+      ? await ctx.db
+          .query("audienceInsightsSegmentMembers")
+          .withIndex("by_chart_segment_active", (q) =>
+            q
+              .eq("chart", args.chart)
+              .eq("segment", args.segment)
+              .eq("isRecentlyActive", true),
+          )
+          .paginate({
+            numItems: SEGMENT_LIST_PAGE_SIZE,
+            cursor: args.playersCursor ?? null,
+          })
+      : await ctx.db
+          .query("audienceInsightsSegmentMembers")
+          .withIndex("by_chart_segment", (q) =>
+            q.eq("chart", args.chart).eq("segment", args.segment),
+          )
+          .paginate({
+            numItems: SEGMENT_LIST_PAGE_SIZE,
+            cursor: args.playersCursor ?? null,
+          });
 
     return {
       members: page.page.map((row) => ({

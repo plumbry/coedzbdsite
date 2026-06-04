@@ -1,4 +1,4 @@
-import { Component, useEffect, type ReactNode } from "react";
+import { Component, useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useMutation, useQuery } from "convex/react";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { Progress } from "@/components/ui/progress.tsx";
 import { RefreshCw } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group.tsx";
 import { toast } from "sonner";
 import {
   audienceSegmentPath,
@@ -70,6 +71,7 @@ function DonutCard({
   total,
   chartType,
   onSegmentClick,
+  headerActions,
 }: {
   title: string;
   description: string;
@@ -77,6 +79,7 @@ function DonutCard({
   total: number;
   chartType: AudienceChartType;
   onSegmentClick: (segmentKey: string) => void;
+  headerActions?: ReactNode;
 }) {
   const handleLabelClick = (label: string) => {
     const key = labelToSegmentKey(chartType, label);
@@ -85,8 +88,11 @@ function DonutCard({
   if (data.length === 0) {
     return (
       <Card className="py-0">
-        <CardHeader className="py-3">
-          <CardTitle className="text-base">{title}</CardTitle>
+        <CardHeader className="py-3 space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <CardTitle className="text-base">{title}</CardTitle>
+            {headerActions}
+          </div>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="pb-4">
@@ -100,8 +106,11 @@ function DonutCard({
 
   return (
     <Card className="py-0">
-      <CardHeader className="py-3">
-        <CardTitle className="text-base">{title}</CardTitle>
+      <CardHeader className="py-3 space-y-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <CardTitle className="text-base">{title}</CardTitle>
+          {headerActions}
+        </div>
         <CardDescription>
           {description} Click a slice or legend item to view members.
         </CardDescription>
@@ -179,12 +188,19 @@ function DonutCard({
   );
 }
 
+type TierMemberScope = "all" | "active";
+
 function AudienceInsightsContent() {
   const navigate = useNavigate();
   const insights = useQuery(api.audienceInsights.getAudienceInsights);
+  const [tierScope, setTierScope] = useState<TierMemberScope>("all");
 
-  const openSegment = (chartType: AudienceChartType, segmentKey: string) => {
-    navigate(audienceSegmentPath(chartType, segmentKey));
+  const openSegment = (
+    chartType: AudienceChartType,
+    segmentKey: string,
+    options?: { activeOnly?: boolean },
+  ) => {
+    navigate(audienceSegmentPath(chartType, segmentKey, options));
   };
   const eventCoverage = useQuery(api.players.getAcceptedMemberEventCountCoverage);
   const rebuildJob = useQuery(api.audienceInsights.getRebuildJobStatus);
@@ -269,6 +285,14 @@ function AudienceInsightsContent() {
   const cacheLabel = insights.lastUpdated
     ? `Cached ${new Date(insights.lastUpdated).toLocaleString()}`
     : "Not cached yet";
+
+  const tierActiveReady = insights.tierActiveReady === true;
+  const tierChartData =
+    tierScope === "active" && tierActiveReady ? insights.tierActive : insights.tier;
+  const tierChartTotal =
+    tierScope === "active" && tierActiveReady
+      ? insights.totalActiveMembers || 1
+      : insights.totalMembers || 1;
 
   return (
     <div className="space-y-4">
@@ -401,11 +425,42 @@ function AudienceInsightsContent() {
         />
         <DonutCard
           title="Tier Split"
-          description="How accepted members are distributed across tiers."
-          data={insights.tier}
-          total={insights.totalMembers || 1}
+          description={
+            tierScope === "active"
+              ? "Active members (played in the last 6 weeks) by tier."
+              : "How accepted members are distributed across tiers."
+          }
+          data={tierChartData}
+          total={tierChartTotal}
           chartType="tier"
-          onSegmentClick={(key) => openSegment("tier", key)}
+          onSegmentClick={(key) =>
+            openSegment("tier", key, {
+              activeOnly: tierScope === "active" && tierActiveReady,
+            })
+          }
+          headerActions={
+            <ToggleGroup
+              type="single"
+              value={tierScope}
+              onValueChange={(value) => {
+                if (value === "all" || value === "active") setTierScope(value);
+              }}
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+            >
+              <ToggleGroupItem value="all" aria-label="All members">
+                All Members
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="active"
+                aria-label="Active members"
+                disabled={hasCache && !tierActiveReady}
+              >
+                Active Members
+              </ToggleGroupItem>
+            </ToggleGroup>
+          }
         />
       </div>
 

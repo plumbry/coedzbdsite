@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -39,6 +39,9 @@ type MemberRow = {
 
 export default function AudienceInsightsSegmentPage() {
   const { chart, segment } = useParams<{ chart: string; segment: string }>();
+  const [searchParams] = useSearchParams();
+  const activeOnly =
+    chart === "tier" && searchParams.get("members") === "active";
   const [search, setSearch] = useState("");
   const [allMembers, setAllMembers] = useState<MemberRow[]>([]);
   const [playersCursor, setPlayersCursor] = useState<string | null>(null);
@@ -55,6 +58,7 @@ export default function AudienceInsightsSegmentPage() {
           chart: chartType,
           segment: segmentKey,
           playersCursor: playersCursor ?? undefined,
+          activeOnly: activeOnly || undefined,
         }
       : "skip",
   );
@@ -65,7 +69,7 @@ export default function AudienceInsightsSegmentPage() {
     setHasMore(true);
     setInitialLoaded(false);
     setSearch("");
-  }, [chartType, segmentKey]);
+  }, [chartType, segmentKey, activeOnly]);
 
   useEffect(() => {
     if (!page) return;
@@ -107,7 +111,7 @@ export default function AudienceInsightsSegmentPage() {
     return <Navigate to="/admin/audience-insights" replace />;
   }
 
-  const title = audienceSegmentPageTitle(chartType, segmentKey);
+  const title = audienceSegmentPageTitle(chartType, segmentKey, { activeOnly });
   const isLoadingFirstPage = !initialLoaded && page === undefined;
   const needsRefresh = page?.needsRefresh === true;
 
@@ -115,7 +119,11 @@ export default function AudienceInsightsSegmentPage() {
     <AdminPageLayout
       requireAdmin
       title={title}
-      description="Accepted members in this audience segment."
+      description={
+        activeOnly
+          ? "Active members in this segment (played in the last 6 weeks)."
+          : "Accepted members in this audience segment."
+      }
       authTitle="Sign in to view audience segment"
       header={{
         actions: (
