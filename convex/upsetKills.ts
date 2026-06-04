@@ -6,8 +6,6 @@ import { paginationOptsValidator } from "convex/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin } from "./auth_helpers";
 
-const KILL_EVENTS_PAGE_SIZE = 1000;
-
 type PlayerUpsetCounts = Record<
   string,
   { kills: number; deaths: number; playerId: Id<"players"> | undefined }
@@ -66,40 +64,20 @@ function foldUpsetKill(agg: UpsetAggregation, kill: Doc<"matchKillEvents">) {
   }
 }
 
-async function countMatchKillEventsPaginated(ctx: MutationCtx): Promise<number> {
-  let total = 0;
-  let cursor: string | null = null;
-  let done = false;
-
-  while (!done) {
-    const page = await ctx.db
-      .query("matchKillEvents")
-      .paginate({ numItems: KILL_EVENTS_PAGE_SIZE, cursor });
-    total += page.page.length;
-    done = page.isDone;
-    cursor = page.continueCursor;
-  }
-
-  return total;
+async function countMatchKillEvents(ctx: MutationCtx): Promise<number> {
+  const meta = await getOrCreateKillEventsMetadata(ctx);
+  return meta.totalKillEvents;
 }
 
-async function aggregateUpsetKillsPaginated(ctx: MutationCtx): Promise<UpsetAggregation> {
+async function aggregateUpsetKills(ctx: MutationCtx): Promise<UpsetAggregation> {
   const agg = emptyUpsetAggregation();
-  let cursor: string | null = null;
-  let done = false;
+  const upsets = await ctx.db
+    .query("matchKillEvents")
+    .withIndex("by_upset", (q) => q.eq("isUpset", true))
+    .collect();
 
-  while (!done) {
-    const page = await ctx.db
-      .query("matchKillEvents")
-      .withIndex("by_upset", (q) => q.eq("isUpset", true))
-      .paginate({ numItems: 500, cursor });
-
-    for (const kill of page.page) {
-      foldUpsetKill(agg, kill);
-    }
-
-    done = page.isDone;
-    cursor = page.continueCursor;
+  for (const kill of upsets) {
+    foldUpsetKill(agg, kill);
   }
 
   return agg;
@@ -153,29 +131,21 @@ async function dedupeKillEventsForImport(
 ) {
   const seen = new Map<string, Id<"matchKillEvents">>();
   const duplicateIds: Id<"matchKillEvents">[] = [];
-  let total = 0;
-  let cursor: string | null = null;
-  let done = false;
+  const events = await ctx.db
+    .query("matchKillEvents")
+    .withIndex("by_import", (q) => q.eq("importId", importId))
+    .collect();
 
-  while (!done) {
-    const page = await ctx.db
-      .query("matchKillEvents")
-      .withIndex("by_import", (q) => q.eq("importId", importId))
-      .paginate({ numItems: 500, cursor });
-
-    for (const event of page.page) {
-      total++;
-      const key = duplicateKillEventKey(event);
-      if (seen.has(key)) {
-        duplicateIds.push(event._id);
-      } else {
-        seen.set(key, event._id);
-      }
+  for (const event of events) {
+    const key = duplicateKillEventKey(event);
+    if (seen.has(key)) {
+      duplicateIds.push(event._id);
+    } else {
+      seen.set(key, event._id);
     }
-
-    done = page.isDone;
-    cursor = page.continueCursor;
   }
+
+  const total = events.length;
 
   let upsetDuplicatesRemoved = 0;
   for (const id of duplicateIds) {
@@ -359,27 +329,28 @@ export const deleteKillEventsForImport = internalMutation({
     importId: v.id("thirdPartyImports"),
   },
   handler: async (ctx, args) => {
+    const batchSize = 500;
     let deleted = 0;
     let upsetDeleted = 0;
-    let cursor: string | null = null;
-    let done = false;
 
-    while (!done) {
-      const page = await ctx.db
+    // Delete in batches via .take(); each batch removes rows so the next .take() advances.
+    while (true) {
+      const events = await ctx.db
         .query("matchKillEvents")
         .withIndex("by_import", (q) => q.eq("importId", args.importId))
-        .paginate({ numItems: 500, cursor });
+        .take(batchSize);
 
-      for (const event of page.page) {
+      if (events.length === 0) {
+        break;
+      }
+
+      for (const event of events) {
         if (event.isUpset) {
           upsetDeleted++;
         }
         await ctx.db.delete(event._id);
         deleted++;
       }
-
-      done = page.isDone;
-      cursor = page.continueCursor;
     }
 
     if (deleted > 0) {
@@ -599,8 +570,8 @@ export const getUpsetKillsStats = query({
 export const rebuildStatsCache = mutation({
   args: {},
   handler: async (ctx) => {
-    const agg = await aggregateUpsetKillsPaginated(ctx);
-    const totalEventsCount = await countMatchKillEventsPaginated(ctx);
+    const agg = await aggregateUpsetKills(ctx);
+    const totalEventsCount = await countMatchKillEvents(ctx);
 
     const { byKillerTier, byVictimTier, byTierDiff, playerUpsetCounts } = agg;
 
@@ -1233,8 +1204,8 @@ export const backfillKillEventsMetadata = mutation({
   handler: async (ctx) => {
     await requireAdmin(ctx);
 
-    const totalKillEvents = await countMatchKillEventsPaginated(ctx);
-    const agg = await aggregateUpsetKillsPaginated(ctx);
+    const totalKillEvents = await countMatchKillEvents(ctx);
+    const agg = await aggregateUpsetKills(ctx);
 
     await syncKillEventsMetadata(ctx, {
       totalKillEvents,

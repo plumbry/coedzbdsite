@@ -69,6 +69,7 @@ import type * as inGameEarnings_queries from "../inGameEarnings/queries.js";
 import type * as leaderboardStats from "../leaderboardStats.js";
 import type * as lib_importSource from "../lib/importSource.js";
 import type * as lib_playerIdentity from "../lib/playerIdentity.js";
+import type * as lib_scrimLeaderboard from "../lib/scrimLeaderboard.js";
 import type * as lib_yunite from "../lib/yunite.js";
 import type * as memberManagement from "../memberManagement.js";
 import type * as migrateHasMatchData from "../migrateHasMatchData.js";
@@ -198,6 +199,7 @@ declare const fullApi: ApiFromModules<{
   leaderboardStats: typeof leaderboardStats;
   "lib/importSource": typeof lib_importSource;
   "lib/playerIdentity": typeof lib_playerIdentity;
+  "lib/scrimLeaderboard": typeof lib_scrimLeaderboard;
   "lib/yunite": typeof lib_yunite;
   memberManagement: typeof memberManagement;
   migrateHasMatchData: typeof migrateHasMatchData;
