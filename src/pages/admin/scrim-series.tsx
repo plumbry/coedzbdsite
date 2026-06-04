@@ -882,7 +882,7 @@ function YuniteImportPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
             <Upload className="h-4 w-4" /> Import from Yunite
           </CardTitle>
           <CardDescription className="text-xs">
-            Enter a Yunite Tournament ID and Session number to pull scores automatically.
+            Enter a Yunite Tournament ID and Session number to import scores from the Yunite API (admin-triggered).
             Scores are team-level (all teammates get the same game scores).
           </CardDescription>
         </CardHeader>

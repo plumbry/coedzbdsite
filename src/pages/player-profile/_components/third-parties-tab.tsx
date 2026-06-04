@@ -40,7 +40,7 @@ export default function ThirdPartiesTab({ playerId }: ThirdPartiesTabProps) {
               </EmptyMedia>
               <EmptyTitle>No third-party CSV results yet</EmptyTitle>
               <EmptyDescription>
-                Results from third-party CSV uploads (outside Yunite) will appear here.
+                Results from external tournaments (Third Party CSV uploads, outside ZBD Yunite events) will appear here when not linked to a calendar event.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

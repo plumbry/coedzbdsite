@@ -27,6 +27,7 @@ export default function EventManager() {
   const { isAdmin } = useUserRole();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Id<"events"> | null>(null);
+  const [editingLinkedImportCount, setEditingLinkedImportCount] = useState(0);
   const [deletingEvent, setDeletingEvent] = useState<Id<"events"> | null>(null);
   const [isICSImportOpen, setIsICSImportOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "scrim" | "minicup" | "season" | "mini-season" | "random-squads" | "random-trios" | "solos-meets-duos" | "scrim-series" | "showdown">("all");
@@ -52,6 +53,7 @@ export default function EventManager() {
   const [smdTeamSize, setSmdTeamSize] = useState<"duo" | "trio">("duo");
   const [bestNGames, setBestNGames] = useState<number | undefined>(undefined);
   const [seriesDurationWeeks, setSeriesDurationWeeks] = useState<3 | 6>(3);
+  const [linkedScrimSeriesId, setLinkedScrimSeriesId] = useState<Id<"scrimSeries"> | "none">("none");
   
   // Compute status based on dates
   const computeStatus = (): "upcoming" | "ongoing" | "completed" => {
@@ -90,6 +92,7 @@ export default function EventManager() {
   const events = useQuery(api.events.management.getAllEvents, {
     resolveImageUrls: true,
   });
+  const scrimSeriesOptions = useQuery(api.scrimSeries.queries.listSeries);
   const createEvent = useMutation(api.events.management.createEvent);
   const updateEvent = useMutation(api.events.management.updateEvent);
   const deleteEvent = useMutation(api.events.management.deleteEvent);
@@ -132,8 +135,12 @@ export default function EventManager() {
     seriesDurationWeeks?: 3 | 6;
     image?: Id<"_storage">;
     imageUrl?: string | null;
+    linkedImportCount?: number;
+    linkedScrimSeriesId?: Id<"scrimSeries">;
   }) => {
     setEditingEvent(event._id);
+    setEditingLinkedImportCount(event.linkedImportCount ?? 0);
+    setLinkedScrimSeriesId(event.linkedScrimSeriesId ?? "none");
     setName(event.name);
     setType(event.type);
     setMode(event.mode);
@@ -197,6 +204,7 @@ export default function EventManager() {
     setSmdTeamSize("duo");
     setBestNGames(undefined);
     setSeriesDurationWeeks(3);
+    setLinkedScrimSeriesId("none");
     setStandardLeaderboards(["", "", "", ""]);
     setTwoLobbies(false);
     setStandardLeaderboardsLobby2(["", "", "", ""]);
@@ -210,6 +218,7 @@ export default function EventManager() {
     setCurrentImageId(null);
     setCurrentImageUrl(null);
     setEditingEvent(null);
+    setEditingLinkedImportCount(0);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
   
@@ -250,6 +259,24 @@ export default function EventManager() {
     const filteredQ1 = qualifierLobby1.filter(l => l.trim());
     const filteredQ2 = qualifierLobby2.filter(l => l.trim());
     const filteredFinals = finalsLeaderboards.filter(l => l.trim());
+
+    const totalLeaderboardUrls =
+      filteredStdBoards.length +
+      (twoLobbies ? filteredStdBoardsLobby2.length : 0) +
+      filteredQ1.length +
+      filteredQ2.length +
+      filteredFinals.length;
+
+    if (totalLeaderboardUrls === 0) {
+      const hasLinkedImports = editingEvent
+        ? editingLinkedImportCount > 0
+        : false;
+      if (!hasLinkedImports) {
+        toast.warning(
+          "No Yunite leaderboard URLs on this event. Add URLs or link imports from Admin → Uploads after Yunite sync.",
+        );
+      }
+    }
     
     setIsSubmitting(true);
     
@@ -284,6 +311,12 @@ export default function EventManager() {
           smdTeamSize: type === "solos-meets-duos" ? smdTeamSize : undefined,
           bestNGames: type === "scrim-series" ? bestNGames : undefined,
           seriesDurationWeeks: type === "scrim-series" ? seriesDurationWeeks : undefined,
+          linkedScrimSeriesId:
+            type === "scrim-series"
+              ? linkedScrimSeriesId === "none"
+                ? null
+                : linkedScrimSeriesId
+              : null,
         });
         toast.success("Event updated");
       } else {
@@ -312,6 +345,10 @@ export default function EventManager() {
           smdTeamSize: type === "solos-meets-duos" ? smdTeamSize : undefined,
           bestNGames: type === "scrim-series" ? bestNGames : undefined,
           seriesDurationWeeks: type === "scrim-series" ? seriesDurationWeeks : undefined,
+          linkedScrimSeriesId:
+            type === "scrim-series" && linkedScrimSeriesId !== "none"
+              ? linkedScrimSeriesId
+              : undefined,
         });
         toast.success("Event created");
       }
@@ -971,9 +1008,41 @@ export default function EventManager() {
                   {type === "scrim-series" ? "Scrim Series" : "Showdown"} Settings
                 </h3>
                 {type === "scrim-series" && (
+                  <>
+                  <div className="space-y-2">
+                    <Label htmlFor="linkedScrimSeries">Linked Scrim Series (/scrim-series)</Label>
+                    <Select
+                      value={linkedScrimSeriesId === "none" ? "none" : linkedScrimSeriesId}
+                      onValueChange={(v) =>
+                        setLinkedScrimSeriesId(
+                          v === "none" ? "none" : (v as Id<"scrimSeries">),
+                        )
+                      }
+                    >
+                      <SelectTrigger id="linkedScrimSeries">
+                        <SelectValue placeholder="Select a scrim series" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None (Yunite imports only)</SelectItem>
+                        {scrimSeriesOptions?.map((series) => (
+                          <SelectItem key={series._id} value={series._id}>
+                            {series.name}
+                            {series.isActive ? "" : " (inactive)"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      When linked, the public event page shows the Admin → Scrim Series leaderboard and Yunite links from imported sessions. Manage scores in{" "}
+                      <a href="/admin/scrim-series" className="underline">
+                        Scrim Series admin
+                      </a>
+                      .
+                    </p>
+                  </div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="bestNGames">Best N Games (per player)</Label>
+                      <Label htmlFor="bestNGames">Best N Games (Yunite fallback)</Label>
                       <Input
                         id="bestNGames"
                         type="number"
@@ -987,11 +1056,11 @@ export default function EventManager() {
                         }}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Only the top N scoring games per player will count towards their total. Leave blank to count all games.
+                        Used only when no Scrim Series is linked above (Yunite import path).
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="seriesDurationWeeks">Series Duration</Label>
+                      <Label htmlFor="seriesDurationWeeks">Series Duration (calendar)</Label>
                       <Select
                         value={seriesDurationWeeks.toString()}
                         onValueChange={(v) => setSeriesDurationWeeks(parseInt(v) as 3 | 6)}
@@ -1006,6 +1075,7 @@ export default function EventManager() {
                       </Select>
                     </div>
                   </div>
+                  </>
                 )}
                 {type === "showdown" && (
                   <p className="text-sm text-muted-foreground">

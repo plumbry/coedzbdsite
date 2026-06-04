@@ -30,7 +30,7 @@ export default function ImportThirdParty() {
   // CSV state
   const [csvEventName, setCsvEventName] = useState("");
   const [csvEventDate, setCsvEventDate] = useState("");
-  const [csvSource, setCsvSource] = useState("Yunite");
+  const [csvSource, setCsvSource] = useState("External");
   const [csvLeaderboardUrl, setCsvLeaderboardUrl] = useState("");
   const [csvEventId, setCsvEventId] = useState<string>("none");
   const [allowZbdEventAssignment, setAllowZbdEventAssignment] = useState(false);
@@ -304,7 +304,7 @@ export default function ImportThirdParty() {
       const result = await importFromCSV({
         eventName: csvEventName.trim(),
         eventDate: csvEventDate.trim() || undefined,
-        source: csvSource.trim() || "Yunite",
+        source: csvSource.trim() || "External",
         leaderboardUrl: csvLeaderboardUrl.trim() || undefined,
         eventId: csvEventId !== "none" ? csvEventId as Id<"events"> : undefined,
         entries,

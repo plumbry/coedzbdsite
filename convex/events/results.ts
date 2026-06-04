@@ -176,6 +176,7 @@ export const getEventLeaderboards = query({
         
         return {
           importId: imp._id,
+          leaderboardUrl: imp.leaderboardUrl,
           leaderboardName: imp.eventName,
           eventDate: imp.eventDate || "",
           source: imp.source,

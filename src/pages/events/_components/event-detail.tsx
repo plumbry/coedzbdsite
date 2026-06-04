@@ -14,6 +14,7 @@ import { useUserRole } from "@/hooks/use-user-role.ts";
 import PageShell from "@/components/page-shell.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import PlayerProfileLink from "@/components/player-profile-link.tsx";
+import LinkedScrimSeriesResults from "./linked-scrim-series-results.tsx";
 
 export default function EventDetail() {
   const { eventId } = useParams<{ eventId: string }>();
@@ -26,7 +27,16 @@ export default function EventDetail() {
   
   const eventLeaderboards = useQuery(
     api.events.results.getEventLeaderboards,
-    eventId ? { eventId: eventId as Id<"events"> } : "skip"
+    eventId && event && !event.linkedScrimSeriesId
+      ? { eventId: eventId as Id<"events"> }
+      : "skip",
+  );
+
+  const linkedScrimImportLog = useQuery(
+    api.scrimSeries.queries.getImportLog,
+    event?.linkedScrimSeriesId
+      ? { seriesId: event.linkedScrimSeriesId }
+      : "skip",
   );
   
   if (!eventId) {
@@ -60,9 +70,74 @@ export default function EventDetail() {
       </PageShell>
     );
   }
-  
 
-  
+  const publicLeaderboardLinks: Array<{ url: string; label: string }> = [];
+  const seenLeaderboardUrls = new Set<string>();
+  const addLeaderboardLink = (url: string, label: string) => {
+    const trimmed = url.trim();
+    if (!trimmed || trimmed.startsWith("CSV Import:") || seenLeaderboardUrls.has(trimmed)) {
+      return;
+    }
+    seenLeaderboardUrls.add(trimmed);
+    publicLeaderboardLinks.push({ url: trimmed, label });
+  };
+
+  if (event.type === "mini-season") {
+    event.qualifierLobby1Leaderboards?.forEach((url, i) =>
+      addLeaderboardLink(url, `Qualifier Lobby 1${event.qualifierLobby1Leaderboards!.length > 1 ? ` (${i + 1})` : ""}`),
+    );
+    event.qualifierLobby2Leaderboards?.forEach((url, i) =>
+      addLeaderboardLink(url, `Qualifier Lobby 2${event.qualifierLobby2Leaderboards!.length > 1 ? ` (${i + 1})` : ""}`),
+    );
+    event.finalsLeaderboards?.forEach((url, i) =>
+      addLeaderboardLink(url, `Finals${event.finalsLeaderboards!.length > 1 ? ` (${i + 1})` : ""}`),
+    );
+  } else {
+    event.standardLeaderboards?.forEach((url, i) =>
+      addLeaderboardLink(url, `Leaderboard ${i + 1}`),
+    );
+    event.standardLeaderboardsLobby2?.forEach((url, i) =>
+      addLeaderboardLink(url, `Lobby 2 — ${i + 1}`),
+    );
+    event.qualifierLobby1Leaderboards?.forEach((url, i) =>
+      addLeaderboardLink(url, `Qualifier Lobby 1 — ${i + 1}`),
+    );
+    event.qualifierLobby2Leaderboards?.forEach((url, i) =>
+      addLeaderboardLink(url, `Qualifier Lobby 2 — ${i + 1}`),
+    );
+    event.finalsLeaderboards?.forEach((url, i) =>
+      addLeaderboardLink(url, `Finals — ${i + 1}`),
+    );
+  }
+
+  eventLeaderboards?.leaderboards.forEach((lb, index) => {
+    if (lb.leaderboardUrl) {
+      addLeaderboardLink(lb.leaderboardUrl, lb.leaderboardName || `Imported week ${index + 1}`);
+    }
+  });
+
+  if (event.linkedScrimSeriesId && event.linkedScrimSeries) {
+    const seriesPath = event.linkedScrimSeries.slug ?? event.linkedScrimSeriesId;
+    addLeaderboardLink(
+      `/scrim-series/${seriesPath}`,
+      `Full Scrim Series page (${event.linkedScrimSeries.name})`,
+    );
+
+    if (linkedScrimImportLog) {
+      const seenTournaments = new Set<string>();
+      for (const log of linkedScrimImportLog) {
+        if (seenTournaments.has(log.tournamentId)) continue;
+        seenTournaments.add(log.tournamentId);
+        addLeaderboardLink(
+          `https://yunite.xyz/leaderboard/${log.tournamentId}`,
+          `Yunite — Session ${log.sessionNumber}`,
+        );
+      }
+    }
+  }
+
+  const usesLinkedScrimSeries = Boolean(event.linkedScrimSeriesId);
+
   return (
     <PageShell>
       <PageHeader
@@ -87,7 +162,7 @@ export default function EventDetail() {
               {event.status}
             </Badge>
             {isAdmin && (
-              <Link to="/admin">
+              <Link to={`/admin/events-manager`}>
                 <Button size="sm" variant="outline">
                   Edit Event
                 </Button>
@@ -131,7 +206,12 @@ export default function EventDetail() {
                 ? "Showdown"
                 : "Random"}
             </Badge>
-            {event.type === "scrim-series" && event.bestNGames && (
+            {event.type === "scrim-series" && event.linkedScrimSeries && (
+              <Badge variant="outline" className="text-xs">
+                Linked: {event.linkedScrimSeries.name}
+              </Badge>
+            )}
+            {event.type === "scrim-series" && !event.linkedScrimSeriesId && event.bestNGames && (
               <p className="text-xs text-muted-foreground mt-2">
                 Best {event.bestNGames} games per player
               </p>
@@ -201,28 +281,28 @@ export default function EventDetail() {
         </Card>
       )}
       
-      {/* Leaderboards */}
-      {event.standardLeaderboards && event.standardLeaderboards.length > 0 && (
+      {/* Yunite leaderboard links (event URLs + linked imports) */}
+      {publicLeaderboardLinks.length > 0 && (
         <Card className="mb-8">
           <CardHeader>
             <CardTitle>Leaderboards</CardTitle>
             <CardDescription>
-              View leaderboards for this event
+              Yunite links for this event (configured on the event and from linked imports)
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {event.standardLeaderboards.map((url, index) => (
+              {publicLeaderboardLinks.map((link) => (
                 <a
-                  key={index}
-                  href={url}
+                  key={link.url}
+                  href={link.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-between p-3 border rounded-lg hover:border-primary transition-colors"
                 >
                   <div>
-                    <p className="font-medium">Leaderboard {index + 1}</p>
-                    <p className="text-sm text-muted-foreground truncate max-w-md">{url}</p>
+                    <p className="font-medium">{link.label}</p>
+                    <p className="text-sm text-muted-foreground truncate max-w-md">{link.url}</p>
                   </div>
                   <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
                 </a>
@@ -232,8 +312,28 @@ export default function EventDetail() {
         </Card>
       )}
       
-      {/* Event Results */}
-      {eventLeaderboards && (eventLeaderboards.leaderboards.length > 0 || eventLeaderboards.cumulativeLeaderboard.length > 0 || eventLeaderboards.dynamicPairDetection || eventLeaderboards.isSolosMeetsDuos || eventLeaderboards.isScrimSeries || eventLeaderboards.isShowdown) && (
+      {/* Event Results — linked standalone Scrim Series */}
+      {usesLinkedScrimSeries && event.linkedScrimSeriesId && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Event Results</CardTitle>
+            <CardDescription>
+              {event.linkedScrimSeries
+                ? `Scrim Series leaderboard — Best ${event.linkedScrimSeries.bestN} games (from Admin → Scrim Series)`
+                : "Scrim Series leaderboard"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LinkedScrimSeriesResults
+              seriesId={event.linkedScrimSeriesId}
+              seriesName={event.linkedScrimSeries?.name}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Event Results — Yunite imports */}
+      {!usesLinkedScrimSeries && eventLeaderboards && (eventLeaderboards.leaderboards.length > 0 || eventLeaderboards.cumulativeLeaderboard.length > 0 || eventLeaderboards.dynamicPairDetection || eventLeaderboards.isSolosMeetsDuos || eventLeaderboards.isScrimSeries || eventLeaderboards.isShowdown) && (
         <Card>
           <CardHeader>
             <CardTitle>Event Results</CardTitle>
@@ -846,13 +946,14 @@ export default function EventDetail() {
                     if (eventLeaderboards.isRandomSquads || eventLeaderboards.isRandomTrios) {
                       label = `Event Leaderboard ${eventLeaderboards.leaderboards.length > 1 ? index + 1 : ""}`;
                     } else if (event.type === "mini-season") {
-                      // For mini-seasons: first two are qualifier lobbies, third+ is finals
                       if (index === 0) {
                         label = "Qualifier Lobby 1";
                       } else if (index === 1) {
                         label = "Qualifier Lobby 2";
-                      } else {
+                      } else if (index === 2) {
                         label = "Finals";
+                      } else {
+                        label = "Consolation";
                       }
                     } else if (eventLeaderboards.twoLobbies) {
                       // For two-lobby events: every 2 imports = 1 week

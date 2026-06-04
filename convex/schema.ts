@@ -433,6 +433,8 @@ export default defineSchema({
     bestNGames: v.optional(v.number()),
     // Scrim Series: duration in weeks (3 or 6)
     seriesDurationWeeks: v.optional(v.union(v.literal(3), v.literal(6))),
+    // Link to standalone /scrim-series product (admin/scrim-series)
+    linkedScrimSeriesId: v.optional(v.id("scrimSeries")),
     createdBy: v.id("users"),
     // Discord Scheduled Event sync
     discordEventId: v.optional(v.string()), // Discord scheduled event ID
@@ -442,7 +444,8 @@ export default defineSchema({
     .index("by_type", ["type"])
     .index("by_date", ["startDate"])
     .index("by_season_id", ["seasonId"])
-    .index("by_discord_event_id", ["discordEventId"]),
+    .index("by_discord_event_id", ["discordEventId"])
+    .index("by_linked_scrim_series", ["linkedScrimSeriesId"]),
   
   // Pre-assigned groups for solos-meets-duos events (duos or trios)
   eventDuoPairs: defineTable({

@@ -460,7 +460,8 @@ export const rebuildEventCache = mutation({
     
     return {
       success: true,
-      message: "Events are synced automatically from Yunite API. No manual rebuild needed.",
+      message:
+        "Event records are created in Events Manager or via Discord cron. Yunite results are imported manually from Admin → Uploads.",
     };
   },
 });
@@ -491,7 +492,8 @@ export const rebuildImportCache = mutation({
     
     return {
       success: true,
-      message: "Imports are synced automatically from Yunite API and CSV uploads. No manual rebuild needed.",
+      message:
+        "Imports are created when an admin runs Yunite sync or uploads CSV from Admin → Uploads. No manual rebuild needed.",
     };
   },
 });
@@ -522,7 +524,8 @@ export const rebuildMatchStatsCache = mutation({
     
     return {
       success: true,
-      message: "Match stats are synced automatically from Yunite API. No manual rebuild needed.",
+      message:
+        "Match stats are updated when an admin runs Sync Match Data per import. No manual rebuild needed.",
     };
   },
 });

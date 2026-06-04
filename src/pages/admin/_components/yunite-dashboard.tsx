@@ -328,9 +328,9 @@ export default function YuniteDashboard({
                   <Activity className="h-4 w-4 text-yellow-600 dark:text-yellow-500" />
                 </div>
                 <div className="flex-1">
-                  <h4 className="font-semibold text-sm mb-1">Bulk Auto-Sync</h4>
+                  <h4 className="font-semibold text-sm mb-1">Bulk Yunite Sync (admin-triggered)</h4>
                   <p className="text-sm text-muted-foreground mb-3">
-                    Automatically import all recent tournaments at once. This is faster but provides less control. For more control, use the Yunite Tournament ID Import in the Uploads tab.
+                    Fetches and imports all recent guild tournaments from the Yunite API when you click sync (not scheduled). Match data still requires a separate manual sync per import. For selective imports, use Fetch Recent Tournaments on the Uploads tab.
                   </p>
                 </div>
               </div>

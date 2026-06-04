@@ -4,6 +4,8 @@ import { requireAdmin, requireModeratorOrAdmin, getDisplayName } from "../auth_h
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel.d.ts";
 import type { MutationCtx } from "../_generated/server";
+import { appendLeaderboardUrlToEvent } from "../lib/eventLeaderboardLinks";
+import { applyLinkedScrimSeries } from "../lib/scrimSeriesEventLink";
 import { collectEventLeaderboardUrls, extractTournamentIdFromUrl } from "../lib/yunite";
 
 // Auto-link existing unlinked imports to an event based on matching leaderboard URLs
@@ -33,6 +35,11 @@ async function autoLinkImportsToEvent(
     
     if (matchingImport && !matchingImport.eventId) {
       await ctx.db.patch(matchingImport._id, { eventId });
+      await appendLeaderboardUrlToEvent(
+        ctx,
+        eventId,
+        matchingImport.leaderboardUrl,
+      );
       linked++;
     }
   }
@@ -67,6 +74,17 @@ export const getAllEvents = query({
       .order("desc")
       .collect();
 
+    const imports = await ctx.db.query("thirdPartyImports").collect();
+    const linkedImportCountByEvent = new Map<Id<"events">, number>();
+    for (const imp of imports) {
+      if (imp.eventId) {
+        linkedImportCountByEvent.set(
+          imp.eventId,
+          (linkedImportCountByEvent.get(imp.eventId) ?? 0) + 1,
+        );
+      }
+    }
+
     const eventsWithDetails = await Promise.all(
       events.map(async (event) => {
         let imageUrl: string | null = null;
@@ -81,6 +99,10 @@ export const getAllEvents = query({
           status: computedStatus,
           imageUrl,
           standardCount: event.standardLeaderboards?.length || 0,
+          linkedImportCount: linkedImportCountByEvent.get(event._id) ?? 0,
+          leaderboardUrlCount: collectEventLeaderboardUrls(event, {
+            includeStandardLobby2: true,
+          }).length,
         };
       }),
     );
@@ -257,12 +279,43 @@ export const getEvent = query({
     
     // Compute status based on dates
     const computedStatus = computeEventStatus(event.startDate, event.endDate);
+
+    const linkedImports = await ctx.db
+      .query("thirdPartyImports")
+      .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+      .collect();
+
+    let linkedScrimSeries: {
+      _id: Id<"scrimSeries">;
+      name: string;
+      slug?: string;
+      bestN: number;
+      isActive: boolean;
+    } | null = null;
+
+    if (event.linkedScrimSeriesId) {
+      const series = await ctx.db.get(event.linkedScrimSeriesId);
+      if (series) {
+        linkedScrimSeries = {
+          _id: series._id,
+          name: series.name,
+          slug: series.slug,
+          bestN: series.bestN,
+          isActive: series.isActive,
+        };
+      }
+    }
     
     return {
       ...event,
       status: computedStatus, // Override with computed status
       imageUrl,
       standardCount: event.standardLeaderboards?.length || 0,
+      linkedImportCount: linkedImports.length,
+      leaderboardUrlCount: collectEventLeaderboardUrls(event, {
+        includeStandardLobby2: true,
+      }).length,
+      linkedScrimSeries,
     };
   },
 });
@@ -308,6 +361,7 @@ export const createEvent = mutation({
     smdTeamSize: v.optional(v.union(v.literal("duo"), v.literal("trio"))),
     bestNGames: v.optional(v.number()),
     seriesDurationWeeks: v.optional(v.union(v.literal(3), v.literal(6))),
+    linkedScrimSeriesId: v.optional(v.union(v.id("scrimSeries"), v.null())),
   },
   handler: async (ctx, args) => {
     await requireModeratorOrAdmin(ctx);
@@ -404,6 +458,10 @@ export const createEvent = mutation({
         }
       }
     }
+
+    if (args.type === "scrim-series" && args.linkedScrimSeriesId) {
+      await applyLinkedScrimSeries(ctx, eventId, args.linkedScrimSeriesId);
+    }
     
     return eventId;
   },
@@ -451,6 +509,7 @@ export const updateEvent = mutation({
     smdTeamSize: v.optional(v.union(v.literal("duo"), v.literal("trio"))),
     bestNGames: v.optional(v.number()),
     seriesDurationWeeks: v.optional(v.union(v.literal(3), v.literal(6))),
+    linkedScrimSeriesId: v.optional(v.union(v.id("scrimSeries"), v.null())),
   },
   handler: async (ctx, args) => {
     await requireModeratorOrAdmin(ctx);
@@ -466,6 +525,7 @@ export const updateEvent = mutation({
     }
     
     const updates: Record<string, unknown> = {};
+    const effectiveTypeEarly = args.type ?? event.type;
     
     if (args.name !== undefined) updates.name = args.name;
     if (args.type !== undefined) updates.type = args.type;
@@ -508,6 +568,10 @@ export const updateEvent = mutation({
       updates.bestNGames = undefined;
       updates.seriesDurationWeeks = undefined;
     }
+
+    if (args.type !== undefined && effectiveTypeEarly !== "scrim-series") {
+      updates.linkedScrimSeriesId = undefined;
+    }
     
     // Recompute status if dates have changed
     if (args.startDate !== undefined || args.endDate !== undefined) {
@@ -543,6 +607,17 @@ export const updateEvent = mutation({
     }
     
     await ctx.db.patch(args.eventId, updates);
+
+    if (args.linkedScrimSeriesId !== undefined) {
+      const seriesId =
+        args.linkedScrimSeriesId === null ? undefined : args.linkedScrimSeriesId;
+      const linkType = args.type ?? event.type;
+      if (linkType === "scrim-series") {
+        await applyLinkedScrimSeries(ctx, args.eventId, seriesId);
+      }
+    } else if (args.type !== undefined && effectiveTypeEarly !== "scrim-series") {
+      await applyLinkedScrimSeries(ctx, args.eventId, undefined);
+    }
     
     // Log to audit
     const user = await ctx.db
@@ -557,7 +632,10 @@ export const updateEvent = mutation({
         action: "event_updated",
         entityType: "event",
         entityId: args.eventId,
-        details: JSON.stringify(updates),
+        details: JSON.stringify({
+          ...updates,
+          linkedScrimSeriesId: args.linkedScrimSeriesId,
+        }),
       });
     }
     

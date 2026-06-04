@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
 import { touchPlayerEventParticipationOnInsert } from "./helpers/playerEventStats";
 import type { Id } from "./_generated/dataModel.d.ts";
+import { appendLeaderboardUrlToEvent } from "./lib/eventLeaderboardLinks";
 import {
   collectEventLeaderboardUrls,
   extractTournamentIdFromLeaderboardId,
@@ -107,6 +108,10 @@ export const saveImport = internalMutation({
       importedByName: args.importedByName,
       eventId: matchedEventId,
     });
+
+    if (matchedEventId) {
+      await appendLeaderboardUrlToEvent(ctx, matchedEventId, args.leaderboardUrl);
+    }
     
     // Process each entry
     for (const entry of args.entries) {
@@ -933,19 +938,12 @@ export const linkImportToEvent = mutation({
       if (!event) {
         throw new Error("Event not found");
       }
-      
-      // Auto-fill leaderboard URL into event's standardLeaderboards if not already present
-      if (importRecord.leaderboardUrl) {
-        const existingUrls = event.standardLeaderboards ?? [];
-        const urlAlreadyPresent = existingUrls.some(
-          (url) => url === importRecord.leaderboardUrl
-        );
-        if (!urlAlreadyPresent) {
-          await ctx.db.patch(args.eventId, {
-            standardLeaderboards: [...existingUrls, importRecord.leaderboardUrl],
-          });
-        }
-      }
+
+      await appendLeaderboardUrlToEvent(
+        ctx,
+        args.eventId,
+        importRecord.leaderboardUrl,
+      );
     }
     
     const oldEventId = importRecord.eventId;
@@ -1181,7 +1179,7 @@ export const createImportRecord = mutation({
       }
     }
     
-    return await ctx.db.insert("thirdPartyImports", {
+    const importId = await ctx.db.insert("thirdPartyImports", {
       leaderboardUrl: args.leaderboardUrl,
       leaderboardId: args.leaderboardId,
       eventName: args.eventName,
@@ -1197,6 +1195,12 @@ export const createImportRecord = mutation({
       matchDataSynced: args.matchDataSynced,
       eventId: matchedEventId,
     });
+
+    if (matchedEventId) {
+      await appendLeaderboardUrlToEvent(ctx, matchedEventId, args.leaderboardUrl);
+    }
+
+    return importId;
   },
 });
 
