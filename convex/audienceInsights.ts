@@ -9,11 +9,14 @@ import {
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { isVisibleInMemberLists } from "./helpers/playerAlt";
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
-import { isYuniteImport } from "./lib/importSource";
+import {
+  buildScrimYuniteTournamentIdSet,
+  isScrimYuniteLeaderboard,
+} from "./lib/scrimLeaderboard";
 import { requireAdmin } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
-const AUDIENCE_INSIGHTS_CACHE_VERSION = 5;
+const AUDIENCE_INSIGHTS_CACHE_VERSION = 6;
 const RECENT_EVENT_WINDOW_WEEKS = 4;
 const RECENT_EVENT_PLAYED_THRESHOLD = 3;
 const MEMBERS_PER_BATCH = 8;
@@ -166,11 +169,13 @@ async function resolveYuniteLeaderboardTime(
   return timestamp;
 }
 
-/** Each Yunite leaderboard import the player appears on counts as one event. */
-async function countRecentYuniteLeaderboardsForPlayer(
+/** Each scrim Yunite leaderboard import the player appears on counts as one. */
+async function countRecentScrimLeaderboardsForPlayer(
   ctx: MutationCtx | QueryCtx,
   playerId: Id<"players">,
   importDateCache: Map<Id<"thirdPartyImports">, number | null>,
+  scrimTournamentIds: Set<string>,
+  linkedEventCache: Map<Id<"events">, Doc<"events"> | null>,
 ): Promise<number> {
   const windowStartMs =
     Date.now() - RECENT_EVENT_WINDOW_WEEKS * 7 * 24 * 60 * 60 * 1000;
@@ -179,7 +184,17 @@ async function countRecentYuniteLeaderboardsForPlayer(
   const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
   for (const result of thirdPartyResults) {
     const importData = await ctx.db.get(result.importId);
-    if (!importData || !isYuniteImport(importData)) {
+    if (!importData) {
+      continue;
+    }
+
+    const isScrimLeaderboard = await isScrimYuniteLeaderboard(
+      ctx,
+      importData,
+      scrimTournamentIds,
+      linkedEventCache,
+    );
+    if (!isScrimLeaderboard) {
       continue;
     }
 
@@ -291,12 +306,12 @@ function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
     ],
     recentEvents: [
       {
-        label: "> 3 Leaderboards (last 4 weeks)",
+        label: "> 3 scrim leaderboards (last 4 weeks)",
         value: counters.recentEventsOverThree,
         color: "#4f46e5",
       },
       {
-        label: "3 or fewer leaderboards (last 4 weeks)",
+        label: "3 or fewer scrim leaderboards (last 4 weeks)",
         value: counters.recentEventsThreeOrLess,
         color: "#16a34a",
       },
@@ -865,6 +880,8 @@ export const processRebuildBatch = internalMutation({
 
     const counters = countersFromJob(job);
     const importDateCache = new Map<Id<"thirdPartyImports">, number | null>();
+    const scrimTournamentIds = await buildScrimYuniteTournamentIdSet(ctx);
+    const linkedEventCache = new Map<Id<"events">, Doc<"events"> | null>();
 
     try {
       const page = await ctx.db
@@ -880,10 +897,12 @@ export const processRebuildBatch = internalMutation({
       for (const member of page.page) {
         if (!isVisibleInMemberLists(member)) continue;
         const gender = await genderForPlayer(ctx, member._id);
-        const recentEventsInWindow = await countRecentYuniteLeaderboardsForPlayer(
+        const recentEventsInWindow = await countRecentScrimLeaderboardsForPlayer(
           ctx,
           member._id,
           importDateCache,
+          scrimTournamentIds,
+          linkedEventCache,
         );
         accumulateMember(counters, member, gender, recentEventsInWindow);
         await insertSegmentMemberRows(

@@ -516,7 +516,7 @@ function AudienceInsightsContent() {
           <Card className="py-0">
             <CardHeader className="py-3">
               <CardTitle className="text-base">
-                Played More Than 3 Events in the Last 4 Weeks
+                Played More Than 3 Scrim Leaderboards in the Last 4 Weeks
               </CardTitle>
               <CardDescription>Refresh stats to build the cache.</CardDescription>
             </CardHeader>
@@ -526,8 +526,8 @@ function AudienceInsightsContent() {
           </Card>
         ) : (
           <DonutCard
-            title="Played More Than 3 Events in the Last 4 Weeks"
-            description="Each Yunite leaderboard import counts as one event, dated within the last 4 weeks."
+            title="Played More Than 3 Scrim Leaderboards in the Last 4 Weeks"
+            description="Each Yunite leaderboard on a scrim event counts separately (one calendar scrim can have many leaderboards), dated within the last 4 weeks."
             data={chartSegments(insights.recentEvents)}
             total={insights.totalMembers || 1}
             chartType="recentEvents"
