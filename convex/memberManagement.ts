@@ -13,6 +13,11 @@ import {
   playerMatchesSearchTerm,
   resolvePlayerByDiscordId,
 } from "./helpers/playerDiscordId";
+import { getEvaluationGenderForDiscordId } from "./helpers/evaluationGender";
+import {
+  getManualScoreForPlayer,
+  pickCanonicalManualScore,
+} from "./helpers/manualScores";
 
 /** Event mods may see tier letter only; admins receive full manual score records. */
 function applicationEvaluationForRole(
@@ -240,10 +245,17 @@ export const getPendingApplications = query({
       applications.map(async (app) => {
         let score: Doc<"manualScores"> | null = null;
         if (app.playerId) {
-          score = await ctx.db
+          score = await getManualScoreForPlayer(ctx, app.playerId);
+        }
+
+        if (!score) {
+          const applicationScores = await ctx.db
             .query("manualScores")
-            .withIndex("by_player", (q) => q.eq("playerId", app.playerId!))
-            .first();
+            .withIndex("by_application", (q) =>
+              q.eq("applicationId", app._id),
+            )
+            .collect();
+          score = pickCanonicalManualScore(applicationScores);
         }
 
         return {
@@ -272,14 +284,21 @@ export const getApplicationHistory = query({
     // Get evaluations for each
     const applicationsWithEvaluations = await Promise.all(
       applications.map(async (app) => {
-        let evaluation = null;
+        let evaluation: Doc<"manualScores"> | null = null;
         if (app.playerId) {
-          evaluation = await ctx.db
-            .query("manualScores")
-            .withIndex("by_player", (q) => q.eq("playerId", app.playerId!))
-            .first();
+          evaluation = await getManualScoreForPlayer(ctx, app.playerId);
         }
-        
+
+        if (!evaluation) {
+          const applicationScores = await ctx.db
+            .query("manualScores")
+            .withIndex("by_application", (q) =>
+              q.eq("applicationId", app._id),
+            )
+            .collect();
+          evaluation = pickCanonicalManualScore(applicationScores);
+        }
+
         return {
           ...app,
           evaluation,
@@ -1247,22 +1266,19 @@ export const lookupDiscordId = query({
 export const getMemberByDiscordId = internalQuery({
   args: { discordId: v.string() },
   handler: async (ctx, args): Promise<{ tier: string | undefined; evaluationGender: number | undefined } | null> => {
+    const evaluationGender = await getEvaluationGenderForDiscordId(
+      ctx,
+      args.discordId,
+    );
     const playerMatch = await resolvePlayerByDiscordId(ctx, args.discordId);
-    const player = playerMatch?.player ?? null;
 
-    if (!player) {
+    if (evaluationGender === undefined && !playerMatch) {
       return null;
     }
-    
-    // Get evaluation scores for the player
-    const evaluation = await ctx.db
-      .query("manualScores")
-      .withIndex("by_player", (q) => q.eq("playerId", player._id))
-      .first();
-    
+
     return {
-      tier: player.tier,
-      evaluationGender: evaluation?.gender,
+      tier: playerMatch?.player.tier,
+      evaluationGender,
     };
   },
 });
