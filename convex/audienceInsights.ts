@@ -11,6 +11,7 @@ import { isVisibleInMemberLists } from "./helpers/playerAlt";
 import { requireAdmin } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
+const AUDIENCE_INSIGHTS_CACHE_VERSION = 2;
 const MEMBERS_PER_BATCH = 8;
 const STALE_JOB_MS = 6 * 60 * 60 * 1000;
 const STALE_PROGRESS_MS = 5 * 60 * 1000;
@@ -314,6 +315,7 @@ async function insertSegmentMemberRows(
 async function upsertAudienceInsightsSnapshot(
   ctx: MutationCtx,
   payload: {
+    insightsCacheVersion: number;
     totalMembers: number;
     totalActiveMembers: number;
     gender: ChartSegment[];
@@ -336,28 +338,74 @@ async function upsertAudienceInsightsSnapshot(
 
 function countersFromJob(job: Doc<"audienceInsightsJobs">): JobCounters {
   return {
-    male: job.male,
-    female: job.female,
-    genderUnknown: job.genderUnknown,
-    tierS: job.tierS,
-    tierA: job.tierA,
-    tierB: job.tierB,
-    tierC: job.tierC,
-    tierOther: job.tierOther,
-    totalActiveMembers: job.totalActiveMembers,
-    tierSActive: job.tierSActive,
-    tierAActive: job.tierAActive,
-    tierBActive: job.tierBActive,
-    tierCActive: job.tierCActive,
-    tierOtherActive: job.tierOtherActive,
-    tenureUnder3m: job.tenureUnder3m,
-    tenure3to6m: job.tenure3to6m,
-    tenure6to12m: job.tenure6to12m,
-    tenure1to2y: job.tenure1to2y,
-    tenure2yPlus: job.tenure2yPlus,
-    tenureUnknown: job.tenureUnknown,
-    eventsOverFive: job.eventsOverFive,
-    eventsFiveOrLess: job.eventsFiveOrLess,
+    male: job.male ?? 0,
+    female: job.female ?? 0,
+    genderUnknown: job.genderUnknown ?? 0,
+    tierS: job.tierS ?? 0,
+    tierA: job.tierA ?? 0,
+    tierB: job.tierB ?? 0,
+    tierC: job.tierC ?? 0,
+    tierOther: job.tierOther ?? 0,
+    totalActiveMembers: job.totalActiveMembers ?? 0,
+    tierSActive: job.tierSActive ?? 0,
+    tierAActive: job.tierAActive ?? 0,
+    tierBActive: job.tierBActive ?? 0,
+    tierCActive: job.tierCActive ?? 0,
+    tierOtherActive: job.tierOtherActive ?? 0,
+    tenureUnder3m: job.tenureUnder3m ?? 0,
+    tenure3to6m: job.tenure3to6m ?? 0,
+    tenure6to12m: job.tenure6to12m ?? 0,
+    tenure1to2y: job.tenure1to2y ?? 0,
+    tenure2yPlus: job.tenure2yPlus ?? 0,
+    tenureUnknown: job.tenureUnknown ?? 0,
+    eventsOverFive: job.eventsOverFive ?? 0,
+    eventsFiveOrLess: job.eventsFiveOrLess ?? 0,
+  };
+}
+
+function snapshotHasActiveTierCache(
+  cached: Doc<"audienceInsightsSnapshot">,
+): boolean {
+  return (
+    cached.insightsCacheVersion === AUDIENCE_INSIGHTS_CACHE_VERSION ||
+    typeof cached.totalActiveMembers === "number"
+  );
+}
+
+async function computeActiveTierBreakdown(ctx: QueryCtx): Promise<{
+  tierActive: ChartSegment[];
+  totalActiveMembers: number;
+}> {
+  const counters = {
+    tierS: 0,
+    tierA: 0,
+    tierB: 0,
+    tierC: 0,
+    tierOther: 0,
+  };
+  let totalActiveMembers = 0;
+
+  const players = await ctx.db
+    .query("players")
+    .withIndex("by_membership_status", (q) =>
+      q.eq("currentMembershipStatus", "accepted"),
+    )
+    .collect();
+
+  for (const member of players) {
+    if (!isVisibleInMemberLists(member)) continue;
+    if (!member.isRecentlyActive) continue;
+    totalActiveMembers += 1;
+    if (member.tier === "S") counters.tierS += 1;
+    else if (member.tier === "A") counters.tierA += 1;
+    else if (member.tier === "B") counters.tierB += 1;
+    else if (member.tier === "C") counters.tierC += 1;
+    else counters.tierOther += 1;
+  }
+
+  return {
+    tierActive: tierSegmentsFromCounters(counters),
+    totalActiveMembers,
   };
 }
 
@@ -427,6 +475,7 @@ const emptyInsights = {
   events: [] as ChartSegment[],
   eventsReady: false,
   tierActiveReady: false,
+  tierActiveSource: "cache" as const,
   lastUpdated: undefined as number | undefined,
   needsRebuild: true,
 };
@@ -442,19 +491,32 @@ export const getAudienceInsights = query({
       return emptyInsights;
     }
 
+    const hasCachedActiveTier = snapshotHasActiveTierCache(cached);
+    let tierActive = cached.tierActive ?? [];
+    let totalActiveMembers = cached.totalActiveMembers ?? 0;
+    let tierActiveSource: "cache" | "live" = "cache";
+
+    if (!hasCachedActiveTier) {
+      const live = await computeActiveTierBreakdown(ctx);
+      tierActive = live.tierActive;
+      totalActiveMembers = live.totalActiveMembers;
+      tierActiveSource = "live";
+    }
+
     return {
       totalMembers: cached.totalMembers,
-      totalActiveMembers: cached.totalActiveMembers ?? 0,
+      totalActiveMembers,
       gender: cached.gender,
       tier: cached.tier,
-      tierActive: cached.tierActive ?? [],
+      tierActive,
       tenure: cached.tenure,
       events: cached.events,
       eventsReady: cached.eventsReady,
       segmentMembersIndexed: cached.segmentMembersIndexed === true,
       lastUpdated: cached.lastUpdated,
       needsRebuild: false,
-      tierActiveReady: cached.tierActive !== undefined,
+      tierActiveReady: true,
+      tierActiveSource,
     };
   },
 });
@@ -489,31 +551,26 @@ export const listAudienceInsightMembers = query({
 
     const activeOnly = args.chart === "tier" && args.activeOnly === true;
 
-    const page = activeOnly
-      ? await ctx.db
-          .query("audienceInsightsSegmentMembers")
-          .withIndex("by_chart_segment_active", (q) =>
-            q
-              .eq("chart", args.chart)
-              .eq("segment", args.segment)
-              .eq("isRecentlyActive", true),
-          )
-          .paginate({
-            numItems: SEGMENT_LIST_PAGE_SIZE,
-            cursor: args.playersCursor ?? null,
-          })
-      : await ctx.db
-          .query("audienceInsightsSegmentMembers")
-          .withIndex("by_chart_segment", (q) =>
-            q.eq("chart", args.chart).eq("segment", args.segment),
-          )
-          .paginate({
-            numItems: SEGMENT_LIST_PAGE_SIZE,
-            cursor: args.playersCursor ?? null,
-          });
+    const page = await ctx.db
+      .query("audienceInsightsSegmentMembers")
+      .withIndex("by_chart_segment", (q) =>
+        q.eq("chart", args.chart).eq("segment", args.segment),
+      )
+      .paginate({
+        numItems: SEGMENT_LIST_PAGE_SIZE,
+        cursor: args.playersCursor ?? null,
+      });
 
-    return {
-      members: page.page.map((row) => ({
+    const members = [];
+    for (const row of page.page) {
+      if (activeOnly) {
+        if (row.isRecentlyActive === false) continue;
+        if (row.isRecentlyActive !== true) {
+          const player = await ctx.db.get(row.playerId);
+          if (!player?.isRecentlyActive) continue;
+        }
+      }
+      members.push({
         playerId: row.playerId,
         discordUsername: row.discordUsername,
         epicUsername: row.epicUsername,
@@ -521,7 +578,11 @@ export const listAudienceInsightMembers = query({
         eventsPlayedCount: row.eventsPlayedCount,
         genderLabel: row.genderLabel,
         serverJoinDate: row.serverJoinDate,
-      })),
+      });
+    }
+
+    return {
+      members,
       nextCursor: page.isDone ? null : page.continueCursor,
       hasMore: !page.isDone,
       needsRefresh: false,
@@ -726,6 +787,7 @@ export const processRebuildBatch = internalMutation({
 
       await upsertAudienceInsightsSnapshot(ctx, {
         ...segments,
+        insightsCacheVersion: AUDIENCE_INSIGHTS_CACHE_VERSION,
         eventsReady: true,
         segmentMembersIndexed: true,
         lastUpdated: completedAt,

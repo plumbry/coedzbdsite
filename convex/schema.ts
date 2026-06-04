@@ -659,6 +659,7 @@ export default defineSchema({
 
   // Cached audience insights donuts (admin audience-insights page)
   audienceInsightsSnapshot: defineTable({
+    insightsCacheVersion: v.optional(v.number()),
     totalMembers: v.number(),
     gender: v.array(
       v.object({

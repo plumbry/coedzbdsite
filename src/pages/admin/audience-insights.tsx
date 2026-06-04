@@ -286,11 +286,10 @@ function AudienceInsightsContent() {
     ? `Cached ${new Date(insights.lastUpdated).toLocaleString()}`
     : "Not cached yet";
 
-  const tierActiveReady = insights.tierActiveReady === true;
-  const tierChartData =
-    tierScope === "active" && tierActiveReady ? insights.tierActive : insights.tier;
+  const tierActiveUsesLiveData = insights.tierActiveSource === "live";
+  const tierChartData = tierScope === "active" ? insights.tierActive : insights.tier;
   const tierChartTotal =
-    tierScope === "active" && tierActiveReady
+    tierScope === "active"
       ? insights.totalActiveMembers || 1
       : insights.totalMembers || 1;
 
@@ -390,6 +389,16 @@ function AudienceInsightsContent() {
         </Alert>
       )}
 
+      {hasCache && tierActiveUsesLiveData && !isJobRunning && (
+        <Alert>
+          <AlertTitle>Active tier split is live-calculated</AlertTitle>
+          <AlertDescription>
+            The chart uses current player activity flags. Click Refresh stats once to cache active
+            tier data and speed up segment member lists.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardContent className="pt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
@@ -435,7 +444,7 @@ function AudienceInsightsContent() {
           chartType="tier"
           onSegmentClick={(key) =>
             openSegment("tier", key, {
-              activeOnly: tierScope === "active" && tierActiveReady,
+              activeOnly: tierScope === "active",
             })
           }
           headerActions={
@@ -448,15 +457,12 @@ function AudienceInsightsContent() {
               variant="outline"
               size="sm"
               className="shrink-0"
+              disabled={!hasCache}
             >
               <ToggleGroupItem value="all" aria-label="All members">
                 All Members
               </ToggleGroupItem>
-              <ToggleGroupItem
-                value="active"
-                aria-label="Active members"
-                disabled={hasCache && !tierActiveReady}
-              >
+              <ToggleGroupItem value="active" aria-label="Active members">
                 Active Members
               </ToggleGroupItem>
             </ToggleGroup>
