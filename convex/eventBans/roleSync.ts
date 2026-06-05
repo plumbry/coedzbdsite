@@ -4,10 +4,19 @@ import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
+import { getDiscordRoleNameForBanType } from "../lib/eventBanDiscordRoles";
 
 const ROLE_SYNC_DELAY_MS = 300;
+const TIER_ROLE_NAMES = ["Tier S", "Tier A", "Tier B", "Tier C"];
 
 type DiscordRole = { id: string; name: string };
+
+function withoutTierRoles(roleIds: string[], roleNameToId: Map<string, string>): string[] {
+  const tierRoleIds = new Set(
+    TIER_ROLE_NAMES.map((name) => roleNameToId.get(name)).filter((id): id is string => !!id),
+  );
+  return roleIds.filter((id) => !tierRoleIds.has(id));
+}
 
 function getDiscordConfig() {
   const token = process.env.DISCORD_BOT_TOKEN;
@@ -107,10 +116,18 @@ export const forceRoleSync = action({
 
     for (const item of pendingAdds) {
       try {
-        const roleId = roleNameToId.get(item.banType);
+        const discordRoleName =
+          item.discordRoleName ?? getDiscordRoleNameForBanType(item.banType);
+        if (!discordRoleName) {
+          errors++;
+          errorMessages.push(`No Discord role mapping for ban type "${item.banType}"`);
+          continue;
+        }
+
+        const roleId = roleNameToId.get(discordRoleName);
         if (!roleId) {
           errors++;
-          errorMessages.push(`Discord role not found for "${item.banType}"`);
+          errorMessages.push(`Discord role not found for "${discordRoleName}"`);
           continue;
         }
 
@@ -121,11 +138,19 @@ export const forceRoleSync = action({
           continue;
         }
 
-        if (!currentRoles.includes(roleId)) {
-          const ok = await setMemberRoleIds(token, guildId, item.discordId, [
-            ...currentRoles,
-            roleId,
-          ]);
+        let targetRoles = currentRoles.includes(roleId)
+          ? [...currentRoles]
+          : [...currentRoles, roleId];
+        if (item.banType === "Probation") {
+          targetRoles = withoutTierRoles(targetRoles, roleNameToId);
+        }
+
+        const rolesUnchanged =
+          targetRoles.length === currentRoles.length &&
+          targetRoles.every((id) => currentRoles.includes(id));
+
+        if (!rolesUnchanged) {
+          const ok = await setMemberRoleIds(token, guildId, item.discordId, targetRoles);
           if (!ok) {
             errors++;
             errorMessages.push(`Failed to add ${item.banType} for ${item.discordId}`);
@@ -146,10 +171,18 @@ export const forceRoleSync = action({
 
     for (const item of pendingRemovals) {
       try {
-        const roleId = roleNameToId.get(item.banType);
+        const discordRoleName =
+          item.discordRoleName ?? getDiscordRoleNameForBanType(item.banType);
+        if (!discordRoleName) {
+          errors++;
+          errorMessages.push(`No Discord role mapping for ban type "${item.banType}"`);
+          continue;
+        }
+
+        const roleId = roleNameToId.get(discordRoleName);
         if (!roleId) {
           errors++;
-          errorMessages.push(`Discord role not found for "${item.banType}"`);
+          errorMessages.push(`Discord role not found for "${discordRoleName}"`);
           continue;
         }
 

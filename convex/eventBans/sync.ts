@@ -6,6 +6,7 @@ import { v, ConvexError } from "convex/values";
 import type { ActionCtx } from "../_generated/server";
 import { sheets } from "@googleapis/sheets";
 import { JWT } from "google-auth-library";
+import { requiresDiscordRoleSync } from "../lib/eventBanDiscordRoles";
 
 const SPREADSHEET_ID = "1K5BcAIM-Of9buZVmBzdtGRvjJO2XP9ZAPbFIzE5j1ZM";
 const SHEET_NAME = "Event Bans";
@@ -139,7 +140,9 @@ async function performSync(ctx: ActionCtx): Promise<{ success: boolean; imported
     } else {
       // Also check banType column for "Minor Event Ban" or "Major Event Ban"
       const banTypeLower = banType.trim().toLowerCase();
-      if (banTypeLower.startsWith("minor")) {
+      if (banTypeLower === "probation") {
+        offenseTrack = "probation";
+      } else if (banTypeLower.startsWith("minor")) {
         offenseTrack = "minor";
       } else if (banTypeLower.startsWith("major")) {
         offenseTrack = "major";
@@ -470,13 +473,11 @@ export const deleteBan = action({
     }
 
     // If the ban had a Discord role synced, queue removal so the bot picks it up
-    const roleSyncBanTypes = [
-      "Minor Event Ban",
-      "Major Event Ban",
-      "Event Ban",
-      "Probation",
-    ];
-    if (ban.syncedToDiscord && !ban.roleRemovedFromDiscord && roleSyncBanTypes.includes(ban.banType)) {
+    if (
+      ban.syncedToDiscord &&
+      !ban.roleRemovedFromDiscord &&
+      requiresDiscordRoleSync(ban.banType)
+    ) {
       await ctx.runMutation(internal.eventBans.mutations.queuePendingRoleRemoval, {
         discordId: ban.discordId,
         banType: ban.banType,

@@ -167,6 +167,9 @@ function parseOffenseFromReason(
   }
 
   const banTypeLower = banType.trim().toLowerCase();
+  if (banTypeLower === "probation") {
+    return { offenseTrack: "probation" };
+  }
   if (banTypeLower.startsWith("minor")) {
     return { offenseTrack: "minor" };
   }
@@ -405,6 +408,9 @@ export const createBan = mutation({
 
     const moderatorTag = getDisplayName(user);
 
+    const isProbation =
+      args.banType === "Probation" || args.offenseTrack === "probation";
+
     const id = await ctx.db.insert("eventBans", {
       discordId: args.discordId,
       playerTag: args.playerTag,
@@ -416,8 +422,9 @@ export const createBan = mutation({
       reason: args.reason,
       moderatorTag,
       messageId,
-      // Warnings (0 events) are recorded but immediately ended
-      status: args.originalEvents === 0 ? "ENDED" : "ACTIVE",
+      // Warnings (0 events) end immediately; probation stays active for role sync
+      status:
+        isProbation ? "ACTIVE" : args.originalEvents === 0 ? "ENDED" : "ACTIVE",
       offenseTrack: args.offenseTrack,
       offenseNumber: args.offenseNumber,
     });

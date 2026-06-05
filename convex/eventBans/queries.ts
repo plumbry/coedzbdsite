@@ -4,6 +4,10 @@ import { paginationOptsValidator } from "convex/server";
 import { requireEventBanAccess } from "../auth_helpers";
 import { requireEventBanReadAccess, viewerTokenArg } from "./viewerAuth";
 import { filterVisibleMembers } from "../helpers/playerAlt";
+import {
+  getDiscordRoleNameForBanType,
+  requiresDiscordRoleSync,
+} from "../lib/eventBanDiscordRoles";
 
 export const getActiveBans = query({
   args: { viewerToken: viewerTokenArg },
@@ -129,13 +133,6 @@ export const getRoleSyncVisibility = query({
   handler: async (ctx) => {
     await requireEventBanAccess(ctx);
 
-    const roleSyncBanTypes = new Set([
-      "Minor Event Ban",
-      "Major Event Ban",
-      "Event Ban",
-      "Probation",
-    ]);
-
     const unsynced = await ctx.db
       .query("eventBans")
       .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", false))
@@ -145,7 +142,7 @@ export const getRoleSyncVisibility = query({
       .filter((q) => q.eq(q.field("syncedToDiscord"), undefined))
       .collect();
     const pendingRoleAdds = [...unsynced, ...neverSynced].filter((ban) =>
-      roleSyncBanTypes.has(ban.banType),
+      requiresDiscordRoleSync(ban.banType),
     );
 
     const syncedNotRemoved = await ctx.db
@@ -158,7 +155,7 @@ export const getRoleSyncVisibility = query({
 
     const pendingRoleRemovals = syncedNotRemoved.filter((ban) => {
       if (ban.roleRemovedFromDiscord) return false;
-      if (!roleSyncBanTypes.has(ban.banType)) return false;
+      if (!requiresDiscordRoleSync(ban.banType)) return false;
       if (ban.banType !== "Probation" && ban.status === "ENDED") return true;
 
       if (ban.banType === "Probation") {
@@ -374,13 +371,6 @@ export const getBanById = internalQuery({
 export const getPendingRoleSyncs = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const roleSyncBanTypes = new Set([
-      "Minor Event Ban",
-      "Major Event Ban",
-      "Event Ban",
-      "Probation",
-    ]);
-
     const unsynced = await ctx.db
       .query("eventBans")
       .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", false))
@@ -391,14 +381,15 @@ export const getPendingRoleSyncs = internalQuery({
       .filter((q) => q.eq(q.field("syncedToDiscord"), undefined))
       .collect();
 
-    const pending = [...unsynced, ...neverSynced].filter(
-      (ban) => roleSyncBanTypes.has(ban.banType),
+    const pending = [...unsynced, ...neverSynced].filter((ban) =>
+      requiresDiscordRoleSync(ban.banType),
     );
 
     return pending.map((ban) => ({
       _id: ban._id,
       discordId: ban.discordId,
       banType: ban.banType,
+      discordRoleName: getDiscordRoleNameForBanType(ban.banType),
     }));
   },
 });
@@ -411,13 +402,6 @@ export const getPendingRoleSyncs = internalQuery({
 export const getPendingRoleRemovals = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const roleSyncBanTypes = new Set([
-      "Minor Event Ban",
-      "Major Event Ban",
-      "Event Ban",
-      "Probation",
-    ]);
-
     const now = Date.now();
     const TWENTY_EIGHT_DAYS_MS = 28 * 24 * 60 * 60 * 1000;
 
@@ -429,7 +413,7 @@ export const getPendingRoleRemovals = internalQuery({
     const fromBans = syncedNotRemoved
       .filter((ban) => {
         if (ban.roleRemovedFromDiscord) return false;
-        if (!roleSyncBanTypes.has(ban.banType)) return false;
+        if (!requiresDiscordRoleSync(ban.banType)) return false;
 
         if (ban.banType !== "Probation" && ban.status === "ENDED") {
           return true;
@@ -454,6 +438,7 @@ export const getPendingRoleRemovals = internalQuery({
         _id: ban._id,
         discordId: ban.discordId,
         banType: ban.banType,
+        discordRoleName: getDiscordRoleNameForBanType(ban.banType),
         source: "eventBans" as const,
       }));
 
@@ -462,6 +447,7 @@ export const getPendingRoleRemovals = internalQuery({
       _id: entry._id,
       discordId: entry.discordId,
       banType: entry.banType,
+      discordRoleName: getDiscordRoleNameForBanType(entry.banType),
       source: "pendingRoleRemovals" as const,
     }));
 

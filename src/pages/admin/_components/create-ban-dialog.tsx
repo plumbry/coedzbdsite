@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
@@ -26,25 +26,33 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Plus, Search, User } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce.ts";
+import {
+  type OffenseTrack,
+  type PenaltyKind,
+  defaultEventsFor,
+  resolveBanType,
+  showsEventCount,
+  getDiscordRoleLabel,
+} from "@/lib/event-ban-form.ts";
 
-// Minor progression: 1st=Warning, 2nd+=1 Event Ban
-// Players can receive multiple minor warnings for different things
-const MINOR_PENALTIES: Record<number, { label: string; events: number; type: string }> = {
-  1: { label: "1st Minor - Warning", events: 0, type: "Minor Warning" },
-  2: { label: "2nd Minor - 1 Event Ban", events: 1, type: "Minor Event Ban" },
-};
-
-// Major progression: 1st=Warning (once), 2nd=Multi-Event Ban (moderator selects events)
-const MAJOR_PENALTIES: Record<number, { label: string; events: number; type: string }> = {
-  1: { label: "1st Major - Warning", events: 0, type: "Major Warning" },
-  2: { label: "2nd Major - Multi-Event Ban", events: 3, type: "Major Event Ban" },
+const TRACK_SUGGESTIONS: Record<
+  Exclude<OffenseTrack, "probation">,
+  Record<number, { label: string; kind: PenaltyKind; events: number }>
+> = {
+  minor: {
+    1: { label: "1st minor — warning", kind: "warning", events: 0 },
+    2: { label: "2nd minor — event ban", kind: "event_ban", events: 1 },
+  },
+  major: {
+    1: { label: "1st major — warning", kind: "warning", events: 0 },
+    2: { label: "2nd major — event ban", kind: "event_ban", events: 3 },
+  },
 };
 
 export default function CreateBanDialog() {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Player search state
   const [playerSearch, setPlayerSearch] = useState("");
   const [debouncedSearch] = useDebounce(playerSearch, 300);
   const [selectedPlayer, setSelectedPlayer] = useState<{
@@ -55,40 +63,52 @@ export default function CreateBanDialog() {
   } | null>(null);
   const [showResults, setShowResults] = useState(false);
 
-  // Form state
   const [discordId, setDiscordId] = useState("");
   const [playerTag, setPlayerTag] = useState("");
-  const [banType, setBanType] = useState("Minor Warning");
+  const [offenseTrack, setOffenseTrack] = useState<OffenseTrack>("minor");
+  const [penaltyKind, setPenaltyKind] = useState<PenaltyKind>("warning");
   const [originalEvents, setOriginalEvents] = useState("0");
   const [reason, setReason] = useState("");
-  const [offenseTrack, setOffenseTrack] = useState<string>("minor");
 
-  // Queries
   const searchResults = useQuery(
     api.eventBans.queries.searchPlayersForBan,
-    debouncedSearch.length >= 2 ? { search: debouncedSearch } : "skip"
+    debouncedSearch.length >= 2 ? { search: debouncedSearch } : "skip",
   );
 
   const offenseHistory = useQuery(
     api.eventBans.queries.getPlayerOffenseHistory,
-    discordId ? { discordId } : "skip"
+    discordId ? { discordId } : "skip",
   );
 
   const createBan = useMutation(api.eventBans.mutations.createBan);
 
-  // Auto-detect offense number based on history
-  const nextOffenseNumber = offenseTrack === "minor"
-    ? (offenseHistory?.minorCount ?? 0) + 1
-    : (offenseHistory?.majorCount ?? 0) + 1;
+  const banType = useMemo(
+    () =>
+      offenseTrack === "probation"
+        ? "Probation"
+        : resolveBanType(offenseTrack, penaltyKind),
+    [offenseTrack, penaltyKind],
+  );
 
-  // Suggest next penalty based on history (display only, does not auto-fill)
-  const suggestedPenalty = (() => {
-    if (!offenseHistory) return null;
-    const penalties = offenseTrack === "minor" ? MINOR_PENALTIES : MAJOR_PENALTIES;
-    const maxKey = Math.max(...Object.keys(penalties).map(Number));
-    const penaltyKey = Math.min(nextOffenseNumber, maxKey);
-    return penalties[penaltyKey] ?? null;
-  })();
+  const nextOffenseNumber =
+    offenseTrack === "probation"
+      ? undefined
+      : offenseTrack === "minor"
+        ? (offenseHistory?.minorCount ?? 0) + 1
+        : (offenseHistory?.majorCount ?? 0) + 1;
+
+  const suggestedPenalty =
+    offenseTrack !== "probation" && nextOffenseNumber
+      ? TRACK_SUGGESTIONS[offenseTrack][Math.min(nextOffenseNumber, 2)]
+      : null;
+
+  useEffect(() => {
+    if (offenseTrack === "probation") {
+      setOriginalEvents("0");
+      return;
+    }
+    setOriginalEvents(String(defaultEventsFor(offenseTrack, penaltyKind)));
+  }, [offenseTrack, penaltyKind]);
 
   const handleSelectPlayer = (player: {
     discordUsername: string;
@@ -108,10 +128,10 @@ export default function CreateBanDialog() {
     setSelectedPlayer(null);
     setDiscordId("");
     setPlayerTag("");
-    setBanType("Minor Warning");
+    setOffenseTrack("minor");
+    setPenaltyKind("warning");
     setOriginalEvents("0");
     setReason("");
-    setOffenseTrack("minor");
   };
 
   const handleSubmit = async () => {
@@ -128,7 +148,8 @@ export default function CreateBanDialog() {
       return;
     }
 
-    const events = parseInt(originalEvents, 10);
+    const events =
+      offenseTrack === "probation" ? 0 : parseInt(originalEvents, 10);
     if (isNaN(events) || events < 0) {
       toast.error("Events must be 0 or higher");
       return;
@@ -145,10 +166,15 @@ export default function CreateBanDialog() {
         offenseTrack,
         offenseNumber: nextOffenseNumber,
       });
-      toast.success(`Ban applied to ${playerTag.trim()} (${offenseTrack} offense #${nextOffenseNumber})`);
+
+      const trackLabel =
+        offenseTrack === "probation"
+          ? "probation"
+          : `${offenseTrack} offense #${nextOffenseNumber}`;
+      toast.success(`Ban applied to ${playerTag.trim()} (${trackLabel})`);
       resetForm();
       setOpen(false);
-    } catch (error) {
+    } catch {
       toast.error("Failed to create ban");
     } finally {
       setIsSubmitting(false);
@@ -167,12 +193,11 @@ export default function CreateBanDialog() {
         <DialogHeader>
           <DialogTitle>Create Event Ban</DialogTitle>
           <DialogDescription>
-            Search for a player to auto-fill their details and detect their offense history.
+            Choose an offense track, then apply a warning or event ban. Probation applies the probation role and removes tier roles.
           </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="space-y-4">
-          {/* Player Search */}
           <div className="space-y-2">
             <Label>Search Player</Label>
             <div className="relative">
@@ -190,7 +215,6 @@ export default function CreateBanDialog() {
               />
             </div>
 
-            {/* Search Results Dropdown */}
             {showResults && searchResults && searchResults.length > 0 && !selectedPlayer && (
               <div className="border rounded-md bg-popover shadow-md max-h-48 overflow-y-auto">
                 {searchResults.map((player) => (
@@ -217,7 +241,6 @@ export default function CreateBanDialog() {
             )}
           </div>
 
-          {/* Selected player indicator */}
           {selectedPlayer && (
             <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
               <User className="h-4 w-4 text-primary" />
@@ -241,7 +264,6 @@ export default function CreateBanDialog() {
             </div>
           )}
 
-          {/* Manual Discord ID (only show if no player selected) */}
           {!selectedPlayer && (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -265,88 +287,100 @@ export default function CreateBanDialog() {
             </div>
           )}
 
-          {/* Offense Track */}
           <div className="space-y-2">
-            <Label>Offense Track</Label>
-            <Select value={offenseTrack} onValueChange={setOffenseTrack}>
+            <Label>Offense track</Label>
+            <Select
+              value={offenseTrack}
+              onValueChange={(value) => setOffenseTrack(value as OffenseTrack)}
+            >
               <SelectTrigger className="cursor-pointer">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="minor" className="cursor-pointer">Minor</SelectItem>
                 <SelectItem value="major" className="cursor-pointer">Major</SelectItem>
+                <SelectItem value="probation" className="cursor-pointer">Probation</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Auto-detected offense info */}
-          {offenseHistory && discordId && (
-            <div className="p-3 bg-muted/50 rounded-md space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Auto-detected</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 border-yellow-200">
-                  Minor: {offenseHistory.minorCount} prior
-                </Badge>
-                <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-200">
-                  Major: {offenseHistory.majorCount} prior
-                </Badge>
-                <Badge className="bg-primary/10 text-primary border-primary/20">
-                  Next: {offenseTrack === "minor" ? "Minor" : "Major"} #{nextOffenseNumber}
-                </Badge>
-              </div>
-              {(() => {
-                const penalties = offenseTrack === "minor" ? MINOR_PENALTIES : MAJOR_PENALTIES;
-                const maxKey = Math.max(...Object.keys(penalties).map(Number));
-                const penaltyKey = Math.min(nextOffenseNumber, maxKey);
-                const penalty = penalties[penaltyKey];
-                return penalty ? (
-                  <p className="text-sm text-foreground mt-1">
-                    Suggested: <span className="font-medium">{penalty.label}</span> ({penalty.events} events)
-                  </p>
-                ) : null;
-              })()}
+          {offenseTrack === "probation" ? (
+            <div className="rounded-md border border-red-200 bg-red-500/5 p-3 text-sm">
+              <p className="font-medium text-red-700">28-day server probation</p>
+              <p className="mt-1 text-muted-foreground">
+                Applies the Probation Discord role and removes any tier role. No warning or event-ban sub-choice is needed.
+              </p>
             </div>
+          ) : (
+            <>
+              {offenseHistory && discordId && (
+                <div className="p-3 bg-muted/50 rounded-md space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Auto-detected</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 border-yellow-200">
+                      Minor: {offenseHistory.minorCount} prior
+                    </Badge>
+                    <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-200">
+                      Major: {offenseHistory.majorCount} prior
+                    </Badge>
+                    <Badge className="bg-primary/10 text-primary border-primary/20">
+                      Next: {offenseTrack === "minor" ? "Minor" : "Major"} #{nextOffenseNumber}
+                    </Badge>
+                  </div>
+                  {suggestedPenalty && (
+                    <p className="text-sm text-foreground mt-1">
+                      Suggested: <span className="font-medium">{suggestedPenalty.label}</span> ({suggestedPenalty.events} events)
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className={showsEventCount(offenseTrack, penaltyKind) ? "grid grid-cols-2 gap-3" : "space-y-2"}>
+                <div className="space-y-2">
+                  <Label>Penalty</Label>
+                  <Select
+                    value={penaltyKind}
+                    onValueChange={(value) => setPenaltyKind(value as PenaltyKind)}
+                  >
+                    <SelectTrigger className="cursor-pointer">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="warning" className="cursor-pointer">Warning</SelectItem>
+                      <SelectItem value="event_ban" className="cursor-pointer">Event ban</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {showsEventCount(offenseTrack, penaltyKind) && (
+                  <div className="space-y-2">
+                    <Label htmlFor="events">Number of events</Label>
+                    <Input
+                      id="events"
+                      type="number"
+                      min="1"
+                      value={originalEvents}
+                      onChange={(e) => setOriginalEvents(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {suggestedPenalty && (
+                <p className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
+                  Suggested: <span className="font-medium text-foreground">{suggestedPenalty.label}</span>
+                  {" "}
+                  ({suggestedPenalty.events === 0 ? "warning only" : `${suggestedPenalty.events} event${suggestedPenalty.events !== 1 ? "s" : ""}`})
+                </p>
+              )}
+            </>
           )}
 
-          {/* Ban Type & Events */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Ban Type</Label>
-              <Select value={banType} onValueChange={setBanType}>
-                <SelectTrigger className="cursor-pointer">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Minor Warning" className="cursor-pointer">Minor Warning</SelectItem>
-                  <SelectItem value="Major Warning" className="cursor-pointer">Major Warning</SelectItem>
-                  <SelectItem value="Minor Event Ban" className="cursor-pointer">Minor Event Ban</SelectItem>
-                  <SelectItem value="Major Event Ban" className="cursor-pointer">Major Event Ban</SelectItem>
-                  <SelectItem value="Event Ban" className="cursor-pointer">Event Ban</SelectItem>
-                  <SelectItem value="Probation" className="cursor-pointer">Probation (28-day server ban)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="events">Number of Events</Label>
-              <Input
-                id="events"
-                type="number"
-                min="0"
-                value={originalEvents}
-                onChange={(e) => setOriginalEvents(e.target.value)}
-              />
-            </div>
+          <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Stored as <span className="font-medium text-foreground">{banType}</span>
+            {getDiscordRoleLabel(banType) &&
+              ` — will sync "${getDiscordRoleLabel(banType)}" Discord role`}
           </div>
 
-          {/* Suggestion based on offense history */}
-          {suggestedPenalty && (
-            <p className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
-              Suggested: <span className="font-medium text-foreground">{suggestedPenalty.label}</span>
-              {" "}({suggestedPenalty.events === 0 ? "warning only" : `${suggestedPenalty.events} event${suggestedPenalty.events !== 1 ? "s" : ""}`})
-            </p>
-          )}
-
-          {/* Reason */}
           <div className="space-y-2">
             <Label htmlFor="reason">Reason</Label>
             <Textarea
@@ -360,18 +394,10 @@ export default function CreateBanDialog() {
         </DialogBody>
 
         <DialogFooter>
-          <Button
-            variant="ghost"
-            onClick={() => setOpen(false)}
-            className="cursor-pointer"
-          >
+          <Button variant="ghost" onClick={() => setOpen(false)} className="cursor-pointer">
             Cancel
           </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="cursor-pointer"
-          >
+          <Button onClick={handleSubmit} disabled={isSubmitting} className="cursor-pointer">
             {isSubmitting ? "Creating..." : "Apply Ban"}
           </Button>
         </DialogFooter>

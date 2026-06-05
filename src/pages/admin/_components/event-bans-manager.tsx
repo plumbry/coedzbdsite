@@ -262,21 +262,30 @@ export default function EventBansManager({
             </>
           ) : canEdit ? (
             <>
-              <CreateBanDialog />
-              <Button
-                onClick={handleEventPassed}
-                disabled={isEventPassing}
-                size="sm"
-                variant={eventPassedCountdown !== null ? "destructive" : "secondary"}
-                className="cursor-pointer h-8 text-xs sm:text-sm"
-              >
-                <CalendarCheck className={`mr-1 h-3.5 w-3.5 ${isEventPassing ? "animate-pulse" : ""}`} />
-                {isEventPassing
-                  ? "Processing..."
-                  : eventPassedCountdown !== null
-                    ? `Cancel (${eventPassedCountdown}s)`
-                    : `Event Passed${eventPassedQty > 1 ? ` (×${eventPassedQty})` : ""}`}
-              </Button>
+              <div className="flex flex-col items-start gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CreateBanDialog />
+                  <Button
+                    onClick={handleEventPassed}
+                    disabled={isEventPassing}
+                    size="sm"
+                    variant={eventPassedCountdown !== null ? "destructive" : "secondary"}
+                    className="cursor-pointer h-8 text-xs sm:text-sm"
+                  >
+                    <CalendarCheck className={`mr-1 h-3.5 w-3.5 ${isEventPassing ? "animate-pulse" : ""}`} />
+                    {isEventPassing
+                      ? "Processing..."
+                      : eventPassedCountdown !== null
+                        ? `Cancel (${eventPassedCountdown}s)`
+                        : `Event Passed${eventPassedQty > 1 ? ` (×${eventPassedQty})` : ""}`}
+                  </Button>
+                </div>
+                {syncStatus && syncStatus.activeBans > 0 && (
+                  <p className="max-w-[16rem] sm:max-w-xs text-[10px] sm:text-xs leading-snug text-amber-700">
+                    Click Event Passed before adding a ban.
+                  </p>
+                )}
+              </div>
               <div className="flex items-center gap-1">
                 <span className="text-[10px] sm:text-xs text-muted-foreground">Qty:</span>
                 <Input
@@ -1040,6 +1049,13 @@ function OffenseTrackBadge({ track, number }: { track?: string; number?: number 
     return (
       <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-200">
         Major #{number ?? "?"}
+      </Badge>
+    );
+  }
+  if (track === "probation") {
+    return (
+      <Badge variant="secondary" className="bg-red-500/10 text-red-700 border-red-200">
+        Probation
       </Badge>
     );
   }

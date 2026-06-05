@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -23,6 +23,15 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { toast } from "sonner";
+import {
+  type OffenseTrack,
+  type PenaltyKind,
+  defaultEventsFor,
+  parseBanToForm,
+  resolveBanType,
+  showsEventCount,
+  getDiscordRoleLabel,
+} from "@/lib/event-ban-form.ts";
 
 export type EditableBan = {
   _id: string;
@@ -51,7 +60,8 @@ export default function EditBanDialog({ ban, onOpenChange }: EditBanDialogProps)
 
   const [discordId, setDiscordId] = useState("");
   const [playerTag, setPlayerTag] = useState("");
-  const [banType, setBanType] = useState("Minor Event Ban");
+  const [offenseTrack, setOffenseTrack] = useState<OffenseTrack>("minor");
+  const [penaltyKind, setPenaltyKind] = useState<PenaltyKind>("warning");
   const [originalEvents, setOriginalEvents] = useState("1");
   const [remainingEvents, setRemainingEvents] = useState("1");
   const [startDate, setStartDate] = useState("");
@@ -59,14 +69,23 @@ export default function EditBanDialog({ ban, onOpenChange }: EditBanDialogProps)
   const [reason, setReason] = useState("");
   const [moderatorTag, setModeratorTag] = useState("");
   const [status, setStatus] = useState("ACTIVE");
-  const [offenseTrack, setOffenseTrack] = useState<string>("none");
   const [offenseNumber, setOffenseNumber] = useState("");
+
+  const banType = useMemo(
+    () =>
+      offenseTrack === "probation"
+        ? "Probation"
+        : resolveBanType(offenseTrack, penaltyKind),
+    [offenseTrack, penaltyKind],
+  );
 
   useEffect(() => {
     if (!ban) return;
+    const parsed = parseBanToForm(ban.banType, ban.offenseTrack);
     setDiscordId(ban.discordId);
     setPlayerTag(ban.playerTag);
-    setBanType(ban.banType);
+    setOffenseTrack(parsed.track);
+    setPenaltyKind(parsed.kind ?? "warning");
     setOriginalEvents(String(ban.originalEvents));
     setRemainingEvents(String(ban.remainingEvents));
     setStartDate(ban.startDate);
@@ -74,7 +93,6 @@ export default function EditBanDialog({ ban, onOpenChange }: EditBanDialogProps)
     setReason(ban.reason);
     setModeratorTag(ban.moderatorTag);
     setStatus(ban.status);
-    setOffenseTrack(ban.offenseTrack ?? "none");
     setOffenseNumber(ban.offenseNumber !== undefined ? String(ban.offenseNumber) : "");
   }, [ban]);
 
@@ -98,9 +116,16 @@ export default function EditBanDialog({ ban, onOpenChange }: EditBanDialogProps)
       return;
     }
 
-    const parsedOriginal = parseInt(originalEvents, 10);
-    const parsedRemaining = parseInt(remainingEvents, 10);
-    if (isNaN(parsedOriginal) || parsedOriginal < 0 || isNaN(parsedRemaining) || parsedRemaining < 0) {
+    const parsedOriginal =
+      offenseTrack === "probation" ? 0 : parseInt(originalEvents, 10);
+    const parsedRemaining =
+      offenseTrack === "probation" ? 0 : parseInt(remainingEvents, 10);
+    if (
+      isNaN(parsedOriginal) ||
+      parsedOriginal < 0 ||
+      isNaN(parsedRemaining) ||
+      parsedRemaining < 0
+    ) {
       toast.error("Event counts must be 0 or higher");
       return;
     }
@@ -126,7 +151,7 @@ export default function EditBanDialog({ ban, onOpenChange }: EditBanDialogProps)
         reason: reason.trim(),
         moderatorTag: moderatorTag.trim(),
         status,
-        offenseTrack: offenseTrack === "none" ? undefined : offenseTrack,
+        offenseTrack,
         offenseNumber: parsedOffenseNumber,
       });
 
@@ -175,18 +200,32 @@ export default function EditBanDialog({ ban, onOpenChange }: EditBanDialogProps)
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Ban type</Label>
-              <Select value={banType} onValueChange={setBanType}>
+              <Label>Offense track</Label>
+              <Select
+                value={offenseTrack}
+                onValueChange={(value) => {
+                  const track = value as OffenseTrack;
+                  setOffenseTrack(track);
+                  if (track === "probation") {
+                    setOriginalEvents("0");
+                    setRemainingEvents("0");
+                  } else if (showsEventCount(track, penaltyKind)) {
+                    const events = defaultEventsFor(track, penaltyKind);
+                    setOriginalEvents(String(events));
+                    setRemainingEvents(String(events));
+                  } else {
+                    setOriginalEvents("0");
+                    setRemainingEvents("0");
+                  }
+                }}
+              >
                 <SelectTrigger className="cursor-pointer">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Minor Warning" className="cursor-pointer">Minor Warning</SelectItem>
-                  <SelectItem value="Major Warning" className="cursor-pointer">Major Warning</SelectItem>
-                  <SelectItem value="Minor Event Ban" className="cursor-pointer">Minor Event Ban</SelectItem>
-                  <SelectItem value="Major Event Ban" className="cursor-pointer">Major Event Ban</SelectItem>
-                  <SelectItem value="Event Ban" className="cursor-pointer">Event Ban</SelectItem>
-                  <SelectItem value="Probation" className="cursor-pointer">Probation (28-day server ban)</SelectItem>
+                  <SelectItem value="minor" className="cursor-pointer">Minor</SelectItem>
+                  <SelectItem value="major" className="cursor-pointer">Major</SelectItem>
+                  <SelectItem value="probation" className="cursor-pointer">Probation</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -204,54 +243,81 @@ export default function EditBanDialog({ ban, onOpenChange }: EditBanDialogProps)
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Offense track</Label>
-              <Select value={offenseTrack} onValueChange={setOffenseTrack}>
-                <SelectTrigger className="cursor-pointer">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none" className="cursor-pointer">None</SelectItem>
-                  <SelectItem value="minor" className="cursor-pointer">Minor</SelectItem>
-                  <SelectItem value="major" className="cursor-pointer">Major</SelectItem>
-                </SelectContent>
-              </Select>
+          {offenseTrack === "probation" ? (
+            <div className="rounded-md border border-red-200 bg-red-500/5 p-3 text-sm">
+              <p className="font-medium text-red-700">28-day server probation</p>
+              <p className="mt-1 text-muted-foreground">
+                Applies the Probation Discord role and removes any tier role.
+              </p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-offense-number">Offense #</Label>
-              <Input
-                id="edit-offense-number"
-                type="number"
-                min={1}
-                placeholder="Optional"
-                value={offenseNumber}
-                onChange={(e) => setOffenseNumber(e.target.value)}
-              />
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Penalty</Label>
+                <Select
+                  value={penaltyKind}
+                  onValueChange={(value) => {
+                    const kind = value as PenaltyKind;
+                    setPenaltyKind(kind);
+                    const events = defaultEventsFor(offenseTrack, kind);
+                    setOriginalEvents(String(events));
+                    if (kind === "warning") {
+                      setRemainingEvents("0");
+                    }
+                  }}
+                >
+                  <SelectTrigger className="cursor-pointer">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="warning" className="cursor-pointer">Warning</SelectItem>
+                    <SelectItem value="event_ban" className="cursor-pointer">Event ban</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-offense-number">Offense #</Label>
+                <Input
+                  id="edit-offense-number"
+                  type="number"
+                  min={1}
+                  placeholder="Optional"
+                  value={offenseNumber}
+                  onChange={(e) => setOffenseNumber(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="edit-original-events">Original events</Label>
-              <Input
-                id="edit-original-events"
-                type="number"
-                min={0}
-                value={originalEvents}
-                onChange={(e) => setOriginalEvents(e.target.value)}
-              />
+          {showsEventCount(offenseTrack, penaltyKind) && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="edit-original-events">Original events</Label>
+                <Input
+                  id="edit-original-events"
+                  type="number"
+                  min={0}
+                  value={originalEvents}
+                  onChange={(e) => setOriginalEvents(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-remaining-events">Remaining events</Label>
+                <Input
+                  id="edit-remaining-events"
+                  type="number"
+                  min={0}
+                  value={remainingEvents}
+                  onChange={(e) => setRemainingEvents(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-remaining-events">Remaining events</Label>
-              <Input
-                id="edit-remaining-events"
-                type="number"
-                min={0}
-                value={remainingEvents}
-                onChange={(e) => setRemainingEvents(e.target.value)}
-              />
-            </div>
+          )}
+
+          <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Stored as <span className="font-medium text-foreground">{banType}</span>
+            {getDiscordRoleLabel(banType) &&
+              ` — will sync "${getDiscordRoleLabel(banType)}" Discord role`}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
