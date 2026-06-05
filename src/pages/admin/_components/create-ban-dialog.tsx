@@ -443,7 +443,7 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
           setStepError(null);
         }}
         title="Minor"
-        description="First offenses and lower-severity incidents on the minor track."
+        description="Lower-severity incidents such as leaving an event early, no VODs after 2 reminders, in-game toxicity (emoting, shooting bodies, heated words), or outside-game toxicity. Escalates through warnings and event bans."
       />
       <ChoiceCard
         selected={offenseTrack === "major"}
@@ -452,7 +452,7 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
           setStepError(null);
         }}
         title="Major"
-        description="Serious offenses on the major track with stricter escalation."
+        description="Serious offenses such as racist commentary, bullying, harassment, intentional griefing (with proof), or repeated major violations. Follows strict progression and can lead to removal."
       />
       <ChoiceCard
         selected={offenseTrack === "probation"}
