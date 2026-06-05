@@ -79,7 +79,6 @@ async function syncAllMembers(guild) {
     
     let successCount = 0;
     let failCount = 0;
-    const syncedDiscordIds = [];
 
     for (const [, member] of members) {
       if (member.user.bot) continue; // Skip bots
@@ -87,7 +86,6 @@ async function syncAllMembers(guild) {
       const success = await syncMember(member);
       if (success) {
         successCount++;
-        syncedDiscordIds.push(member.user.id);
       } else {
         failCount++;
       }
@@ -97,32 +95,9 @@ async function syncAllMembers(guild) {
     }
 
     console.log(`\n✨ Sync complete! Success: ${successCount}, Failed: ${failCount}`);
-    
-    // After syncing all members, archive players no longer in the server
-    if (syncedDiscordIds.length > 0) {
-      console.log(`\n🗑️ Checking for players to archive (${syncedDiscordIds.length} current members)...`);
-      try {
-        const archiveUrl = API_URL.replace('/sync-member', '/archive-missing');
-        const archiveResponse = await fetch(archiveUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${API_KEY}`,
-          },
-          body: JSON.stringify({ currentDiscordUserIds: syncedDiscordIds }),
-        });
-        
-        if (archiveResponse.ok) {
-          const archiveResult = await archiveResponse.json();
-          console.log(`✅ Archive check complete: ${archiveResult.archived} archived, ${archiveResult.cleared} cleared\n`);
-        } else {
-          const errorText = await archiveResponse.text();
-          console.error(`❌ Archive check failed: ${archiveResponse.status} - ${errorText}\n`);
-        }
-      } catch (archiveError) {
-        console.error(`❌ Archive check error: ${archiveError.message}\n`);
-      }
-    }
+    console.log(
+      'ℹ️  Missing-member archival is handled by the server daily Discord sync cron (not this bot).\n',
+    );
   } catch (error) {
     console.error('❌ Error during full sync:', error.message);
   }
@@ -165,8 +140,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 // Member leave event
 client.on('guildMemberRemove', async (member) => {
   console.log(`\n👋 Member left: ${member.user.username}`);
-  // Note: Member has already left, so we just log it
-  // The periodic sync will handle cleanup of archived players
+  // Archival of departed members is handled by the server daily Discord sync cron.
 });
 
 // Error handling

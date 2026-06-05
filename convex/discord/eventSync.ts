@@ -3,6 +3,7 @@
 import { action, internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
+import { requireAdminAction } from "../auth_helpers";
 
 interface DiscordScheduledEvent {
   id: string;
@@ -78,10 +79,11 @@ async function fetchAndSyncDiscordEvents(ctx: ActionCtx): Promise<SyncResult> {
   };
 }
 
-// Public action for manual sync button
+// Admin manual sync — daily cron uses syncDiscordEventsInternal.
 export const syncDiscordEvents = action({
   args: {},
   handler: async (ctx): Promise<SyncResult> => {
+    await requireAdminAction(ctx);
     return fetchAndSyncDiscordEvents(ctx);
   },
 });

@@ -2,6 +2,7 @@ import { mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel.d.ts";
+import { requireAdmin } from "./auth_helpers";
 
 /**
  * Reset matchDataSynced flag for imports that don't have actual match data
@@ -10,6 +11,8 @@ import type { Id } from "./_generated/dataModel.d.ts";
 export const resetInvalidSyncFlags = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const imports = await ctx.db
       .query("thirdPartyImports")
       .filter((q) => q.eq(q.field("source"), "Yunite"))
@@ -57,6 +60,8 @@ export const fixOrphanedMatchStats = mutation({
     lastPlayerId: v.optional(v.id("players")),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     let updated = 0;
     let skipped = 0;
     const updates: Array<{ discordId: string; oldPlayerId: string; newPlayerId: string; count: number }> = [];

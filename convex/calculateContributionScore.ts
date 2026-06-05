@@ -13,6 +13,8 @@ export const calculateAndStoreCS = mutation({
     playerId: v.id("players"),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     // Get player info
     const player = await ctx.db.get(args.playerId);
     if (!player) {
@@ -257,6 +259,8 @@ export const recalculateAllCS = mutation({
     cutoffTimestamp: v.optional(v.number()), // Frontend passes Date.now() from before the loop started
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const FORCE = args.forceRecalculate || false;
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
 

@@ -148,13 +148,12 @@ export async function listFemaleEvaluatedDiscordMembers(
   const seen = new Set<string>();
   const members: FemaleEvaluatedDiscordMember[] = [];
 
-  const scores = await ctx.db.query("manualScores").collect();
+  const scores = await ctx.db
+    .query("manualScores")
+    .withIndex("by_gender", (q) => q.eq("gender", FEMALE_EVALUATED_GENDER))
+    .collect();
 
   for (const score of scores) {
-    if (score.gender !== FEMALE_EVALUATED_GENDER) {
-      continue;
-    }
-
     const resolved = await resolveDiscordFromScore(ctx, score);
     if (!resolved || seen.has(resolved.discordUserId)) {
       continue;

@@ -1,6 +1,7 @@
 import { ConvexError } from "convex/values";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 
 /** Returns the user's preferred display name: username > name > email > fallback */
 export function getDisplayName(user: Doc<"users">): string {
@@ -31,6 +32,21 @@ export async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
   }
 
   return user;
+}
+
+/** Admin gate for actions (Discord/Yunite sync, external API fetches, etc.). */
+export async function requireAdminAction(ctx: ActionCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new ConvexError({
+      message: "User not logged in",
+      code: "UNAUTHENTICATED",
+    });
+  }
+
+  await ctx.runQuery(internal.userProvisioning.assertAdminByToken, {
+    tokenIdentifier: identity.tokenIdentifier,
+  });
 }
 
 export async function requireAdmin(ctx: QueryCtx | MutationCtx) {

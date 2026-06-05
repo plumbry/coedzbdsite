@@ -1,9 +1,12 @@
 import { mutation } from "./_generated/server";
+import { requireAdmin } from "./auth_helpers";
 
 // Helper mutation to sync player scores and clean up old score records
 export const syncScores = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     // Delete old incomplete score records
     const allScores = await ctx.db.query("manualScores").collect();
     const validScores = [];
@@ -36,6 +39,8 @@ export const syncScores = mutation({
 export const migrateSocialLinksToUsernames = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const players = await ctx.db.query("players").collect();
     let migratedCount = 0;
     
@@ -90,6 +95,8 @@ export const migrateSocialLinksToUsernames = mutation({
 export const cleanupDeprecatedUrlFields = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const players = await ctx.db.query("players").collect();
     let cleanedCount = 0;
     

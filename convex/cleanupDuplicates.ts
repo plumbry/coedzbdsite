@@ -1,19 +1,13 @@
 import { mutation } from "./_generated/server";
-import { ConvexError } from "convex/values";
 import type { Doc } from "./_generated/dataModel.d.ts";
+import { requireAdmin } from "./auth_helpers";
 
 // Remove all duplicate eventResults, keeping only the most recent one per player+event
 export const cleanupAllDuplicates = mutation({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "User not logged in",
-        code: "UNAUTHENTICATED",
-      });
-    }
-    
+    await requireAdmin(ctx);
+
     // Get all event results
     const allResults = await ctx.db
       .query("eventResults")

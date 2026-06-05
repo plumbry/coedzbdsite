@@ -8,6 +8,7 @@ import { mutation, query } from "./_generated/server";
 import { isValidDiscordSnowflake } from "./auth_discord";
 import { summarizeIdentityForDebug } from "./auth_discord";
 import type { Id } from "./_generated/dataModel";
+import { requireAdmin } from "./auth_helpers";
 
 function assertDevToolsEnabled(): void {
   if (process.env.MIGRATION_DEV_TOOLS_ENABLED !== "true") {
@@ -73,6 +74,7 @@ export const seedDevStaffUsers = mutation({
   args: {},
   handler: async (ctx) => {
     assertDevToolsEnabled();
+    await requireAdmin(ctx);
 
     const results: Array<{
       username?: string;
@@ -178,6 +180,7 @@ export const getMigrationLinkStatus = query({
   args: {},
   handler: async (ctx) => {
     assertDevToolsEnabled();
+    await requireAdmin(ctx);
 
     const users = await ctx.db.query("users").collect();
     return users.map((user) => ({
@@ -198,6 +201,7 @@ export const debugAuthIdentity = query({
   args: {},
   handler: async (ctx) => {
     assertDevToolsEnabled();
+    await requireAdmin(ctx);
 
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
@@ -224,6 +228,7 @@ export const devResetUserLink = mutation({
   },
   handler: async (ctx, args) => {
     assertDevToolsEnabled();
+    await requireAdmin(ctx);
 
     const user = await ctx.db.get(args.userId);
     if (!user) {

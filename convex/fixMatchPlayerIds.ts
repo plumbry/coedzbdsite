@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel.d.ts";
+import { requireAdmin } from "./auth_helpers";
 
 /**
  * Fix match records that are linked to wrong/old player IDs
@@ -11,6 +12,8 @@ export const fixMatchPlayerIdMismatches = mutation({
     batchSize: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const BATCH_SIZE = args.batchSize || 100;
     
     console.log("[Fix Match Player IDs] Starting...");
@@ -161,6 +164,8 @@ export const fixMatchPlayerIdMismatches = mutation({
 export const checkMatchPlayerIdMismatches = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     console.log("[Check Match Player IDs] Starting diagnostic...");
     
     // Get all players sorted by creation time (newest first)

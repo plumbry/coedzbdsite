@@ -2,13 +2,17 @@
 
 import { action } from "./_generated/server";
 import { v } from "convex/values";
+import { requireAdminAction } from "./auth_helpers";
 
+/** Admin-only manual fetch — not triggered by public page loads. */
 export const fetchPlayerStats = action({
   args: { 
     epicName: v.string(),
     timewindow: v.optional(v.union(v.literal("season"), v.literal("lifetime")))
   },
   handler: async (ctx, args) => {
+    await requireAdminAction(ctx);
+
     const apiKey = process.env.FN_API;
     
     if (!apiKey) {

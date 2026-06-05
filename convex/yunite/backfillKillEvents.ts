@@ -114,7 +114,7 @@ export const backfillKillEventsBatch = internalAction({
         );
         // Auto-rebuild stats cache
         try {
-          await ctx.runMutation(api.upsetKills.rebuildStatsCache, {});
+          await ctx.runMutation(internal.upsetKills.rebuildStatsCacheInternal, {});
           console.log("📊 Stats cache rebuilt automatically");
         } catch (e) {
           console.error("Failed to auto-rebuild stats cache:", e);
@@ -422,7 +422,7 @@ export const backfillKillEventsBatch = internalAction({
         );
         // Auto-rebuild stats cache
         try {
-          await ctx.runMutation(api.upsetKills.rebuildStatsCache, {});
+          await ctx.runMutation(internal.upsetKills.rebuildStatsCacheInternal, {});
           console.log("📊 Stats cache rebuilt automatically");
         } catch (e) {
           console.error("Failed to auto-rebuild stats cache:", e);

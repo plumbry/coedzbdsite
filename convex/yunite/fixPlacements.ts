@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
+import { requireAdminAction } from "../auth_helpers";
 
 interface YuniteUser {
   index: number;
@@ -53,6 +54,8 @@ export const fixPlacementsBatch = action({
       throw new Error("YUNITE_API_KEY and YUNITE_GUILD_ID must be set");
     }
     
+    await requireAdminAction(ctx);
+
     const BATCH_SIZE = 5;
     const startIndex = args.startIndex ?? 0;
     

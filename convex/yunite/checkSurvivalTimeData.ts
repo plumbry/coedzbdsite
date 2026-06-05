@@ -2,6 +2,7 @@
 
 import { action } from "../_generated/server";
 import { v } from "convex/values";
+import { requireAdminAction } from "../auth_helpers";
 
 // Debug action to check what survival time data is available from Yunite API
 export const checkLeaderboardData = action({
@@ -9,6 +10,8 @@ export const checkLeaderboardData = action({
     tournamentId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
     

@@ -1,10 +1,13 @@
 import { mutation } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel.d.ts";
+import { requireAdmin } from "./auth_helpers";
 
 // Helper mutation to clean up old manualScores records
 export const deleteOldScores = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const scores = await ctx.db.query("manualScores").collect();
     
     let deleted = 0;

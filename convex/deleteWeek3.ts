@@ -1,18 +1,12 @@
 import { mutation } from "./_generated/server";
-import { ConvexError } from "convex/values";
+import { requireAdmin } from "./auth_helpers";
 
 // One-time mutation to delete all ZBD Season 5 Week 3 results from both tables
 export const deleteAllWeek3Results = mutation({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "User not logged in",
-        code: "UNAUTHENTICATED",
-      });
-    }
-    
+    await requireAdmin(ctx);
+
     // Delete from eventResults
     const eventResults = await ctx.db.query("eventResults").collect();
     const week3EventResults = eventResults.filter(r => r.eventName === "ZBD Season 5 Week 3");

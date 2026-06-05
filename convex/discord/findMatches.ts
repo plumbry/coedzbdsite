@@ -1,4 +1,5 @@
 import { query } from "../_generated/server";
+import { requireAdmin } from "../auth_helpers";
 
 // Helper function to normalize usernames for fuzzy matching
 function normalizeUsername(username: string): string {
@@ -169,6 +170,8 @@ function areUsernamesSimilar(username1: string, username2: string): boolean {
 export const findPotentialMatches = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const players = await ctx.db.query("players").collect();
     
     // Discord members that need conversion

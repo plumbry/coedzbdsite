@@ -709,11 +709,6 @@ export const getAcceptedMembers = query({
 
     const enriched = await Promise.all(
       players.map(async (player) => {
-        const score = await ctx.db
-          .query("manualScores")
-          .withIndex("by_player", (q) => q.eq("playerId", player._id))
-          .first();
-
         const latestApplication = await ctx.db
           .query("applications")
           .withIndex("by_player_id", (q) => q.eq("playerId", player._id))
@@ -724,7 +719,7 @@ export const getAcceptedMembers = query({
           ...enrichPlayerWithFemaleVerification(
             {
               ...player,
-              gender: score?.gender,
+              gender: player.gender,
             },
             verificationLookup,
           ),
@@ -738,7 +733,7 @@ export const getAcceptedMembers = query({
   },
 });
 
-// Slim public member directory (home page) — no admin-only fields
+// Slim public member directory (home page) — no admin-only fields, no per-player score reads.
 export const getPublicMemberDirectory = query({
   args: {},
   handler: async (ctx) => {
@@ -754,32 +749,25 @@ export const getPublicMemberDirectory = query({
 
     const verificationLookup = await loadFemaleVerificationLookup(ctx);
 
-    const directory = await Promise.all(
-      players.map(async (player) => {
-        const score = await ctx.db
-          .query("manualScores")
-          .withIndex("by_player", (q) => q.eq("playerId", player._id))
-          .first();
+    const directory = players.map((player) => {
+      const verification = enrichPlayerWithFemaleVerification(
+        player,
+        verificationLookup,
+      );
 
-        const verification = enrichPlayerWithFemaleVerification(
-          player,
-          verificationLookup,
-        );
-
-        return {
-          _id: player._id,
-          discordUsername: player.discordUsername,
-          epicUsername: player.epicUsername,
-          nickname: player.nickname,
-          tier: player.tier,
-          avatarUrl: player.avatarUrl,
-          totalScore: player.totalScore,
-          gender: score?.gender,
-          femaleVerified: verification.femaleVerified,
-          isActive: player.isRecentlyActive ?? false,
-        };
-      }),
-    );
+      return {
+        _id: player._id,
+        discordUsername: player.discordUsername,
+        epicUsername: player.epicUsername,
+        nickname: player.nickname,
+        tier: player.tier,
+        avatarUrl: player.avatarUrl,
+        totalScore: player.totalScore,
+        gender: player.gender,
+        femaleVerified: verification.femaleVerified,
+        isActive: player.isRecentlyActive ?? false,
+      };
+    });
 
     return sortPlayersForList(directory);
   },

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "../_generated/server";
+import { requireAdmin } from "../auth_helpers";
 
 /**
  * Get all Yunite imports (API-based, not CSV)
@@ -7,6 +8,8 @@ import { query, mutation } from "../_generated/server";
 export const getAllYuniteImports = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     // Get all imports where source is "Yunite" and leaderboardId starts with "yunite-"
     const allImports = await ctx.db
       .query("thirdPartyImports")
@@ -28,6 +31,8 @@ export const updateResultPlacements = mutation({
     discordIdToPoints: v.record(v.string(), v.number()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     // Get all results for this import
     const results = await ctx.db
       .query("thirdPartyResults")
@@ -67,6 +72,8 @@ export const updateEventResultPlacements = mutation({
     discordIdToPoints: v.record(v.string(), v.number()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     // Get all event results linked to this import
     const eventResults = await ctx.db
       .query("eventResults")

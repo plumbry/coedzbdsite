@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card.tsx";
@@ -74,38 +74,11 @@ const aggregateStats = (data: FortniteAPIData): AggregatedStats => {
 export default function InGameStatsTab({ epicUsername }: InGameStatsTabProps) {
   const fetchStats = useAction(api.fortnitetracker.fetchPlayerStats);
   const [statsData, setStatsData] = useState<FortniteAPIData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   // Always use lifetime since season stats aren't working properly in the API
-  
-  useEffect(() => {
-    const loadStats = async () => {
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const result = await fetchStats({ epicName: epicUsername, timewindow: "lifetime" });
-        
-        if (result.error) {
-          setError(result.error);
-          setStatsData(null);
-        } else if (result.data) {
-          setStatsData(result.data as FortniteAPIData);
-          setLastUpdated(new Date());
-          setError(null);
-        }
-      } catch (err) {
-        setError("Failed to load stats");
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    loadStats();
-  }, [epicUsername, fetchStats]);
-  
+
   const refreshStats = async () => {
     setIsLoading(true);
     setError(null);
@@ -165,8 +138,14 @@ export default function InGameStatsTab({ epicUsername }: InGameStatsTabProps) {
   if (!statsData) {
     return (
       <Card>
-        <CardContent className="py-12 text-center">
-          <p className="text-muted-foreground">No stats available</p>
+        <CardContent className="py-12 text-center space-y-4">
+          <p className="text-muted-foreground">
+            Stats are not loaded automatically. Use Refresh to fetch from the Fortnite API (admin only).
+          </p>
+          <Button onClick={refreshStats} disabled={isLoading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            Load Stats
+          </Button>
         </CardContent>
       </Card>
     );

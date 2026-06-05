@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
+import { requireAdminAction } from "../auth_helpers";
 
 // Valid platform values from Yunite
 type YunitePlatform = "PC" | "PS4" | "XB1" | "SWITCH" | "MOBILE";
@@ -35,6 +36,8 @@ export const syncPlatforms = action({
     skipped: number;
     errors: string[];
   }> => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
 

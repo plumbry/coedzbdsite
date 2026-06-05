@@ -43,7 +43,8 @@ http.route({
   }),
 });
 
-// Webhook endpoint for Discord bot to sync member data
+// Webhook endpoint for Discord bot to sync member data.
+// Uses upsertDiscordMember (indexed lookups only — safe for high-volume per-member calls).
 http.route({
   path: "/api/discord/sync-member",
   method: "POST",
@@ -106,63 +107,20 @@ http.route({
   }),
 });
 
-// Webhook endpoint for Discord bot to archive players no longer in server
+// Retired: archive-missing ran a full players scan per webhook call.
+// Missing members are archived during the daily Discord member sync cron instead.
 http.route({
   path: "/api/discord/archive-missing",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    // Verify API key
-    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
-    const authHeader = request.headers.get("Authorization");
-    
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "Server configuration error: API key not set" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-    
-    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
-    
-    try {
-      const body = await request.json();
-      
-      if (!body.currentDiscordUserIds || !Array.isArray(body.currentDiscordUserIds)) {
-        return new Response(
-          JSON.stringify({ error: "Missing required field: currentDiscordUserIds (array)" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        );
-      }
-      
-      console.log(`Archive check: ${body.currentDiscordUserIds.length} current Discord members`);
-      
-      const result = await ctx.runMutation(internal.discord.archiveMissingPlayersInternal, {
-        currentDiscordUserIds: body.currentDiscordUserIds,
-      });
-      
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          archived: result.archived,
-          cleared: result.cleared,
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    } catch (error) {
-      console.error("Error archiving missing players:", error);
-      return new Response(
-        JSON.stringify({ 
-          error: "Internal server error", 
-          message: error instanceof Error ? error.message : "Unknown error" 
-        }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
+  handler: httpAction(async () => {
+    return new Response(
+      JSON.stringify({
+        error: "Endpoint retired",
+        message:
+          "Archive missing members is handled by the daily Discord member sync (05:00 UTC). Remove calls to this endpoint from the bot.",
+      }),
+      { status: 410, headers: { "Content-Type": "application/json" } },
+    );
   }),
 });
 

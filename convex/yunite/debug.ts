@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
+import { requireAdminAction } from "../auth_helpers";
 import type { Id } from "../_generated/dataModel.d.ts";
 
 /**
@@ -50,6 +51,8 @@ export const inspectTournamentRaw = action({
     tournamentId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
 
@@ -109,6 +112,8 @@ export const fetchTournamentLeaderboard = action({
     tournamentId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
     
@@ -169,6 +174,8 @@ export const saveTournamentImport = action({
     playersUnmatched: number;
     matchesFetched?: number;
   }> => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
     
@@ -452,6 +459,8 @@ export const fetchTournamentMatches = action({
     tournamentId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
     
@@ -497,6 +506,8 @@ export const fetchMatchData = action({
     sessionId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
     

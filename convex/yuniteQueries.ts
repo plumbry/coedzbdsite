@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
+import { requireAdmin } from "./auth_helpers";
 
 // Count match stats for a player
 export const countPlayerMatchStats = query({
@@ -294,6 +295,8 @@ export const getPlayerYunitePerformance = query({
 export const debugTeamIdGroupings = query({
   args: { importId: v.id("thirdPartyImports") },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const results = await ctx.db
       .query("thirdPartyResults")
       .withIndex("by_import", (q) => q.eq("importId", args.importId))

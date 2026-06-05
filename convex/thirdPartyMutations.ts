@@ -1,4 +1,5 @@
 import { internalMutation, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
 import { touchPlayerEventParticipationOnInsert } from "./helpers/playerEventStats";
@@ -316,6 +317,12 @@ export const importFromCSV = mutation({
         unmatched: playersUnmatched,
       }),
     });
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.helpers.eventDrivenRebuilds.scheduleEventParticipationRebuild,
+      {},
+    );
     
     return {
       success: true,

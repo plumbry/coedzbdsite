@@ -1,10 +1,13 @@
 import { query } from "./_generated/server";
+import { requireAdmin } from "./auth_helpers";
 
 // Split backup summary into small/large table queries to avoid scan limits
 
 export const getBackupSummarySmallTables = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const players = await ctx.db.query("players").collect();
     const events = await ctx.db.query("events").collect();
     const imports = await ctx.db.query("thirdPartyImports").collect();
@@ -43,6 +46,8 @@ export const getBackupSummarySmallTables = query({
 export const getBackupResultsCount = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     let resultsCount = 0;
     let resultsCursor: string | null = null;
     let resultsDone = false;
@@ -59,6 +64,8 @@ export const getBackupResultsCount = query({
 export const getBackupMatchStatsCount = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     let matchStatsCount = 0;
     let matchStatsCursor: string | null = null;
     let matchStatsDone = false;
@@ -75,6 +82,8 @@ export const getBackupMatchStatsCount = query({
 export const getBackupEventResultsCount = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     let eventResultsCount = 0;
     let eventResultsCursor: string | null = null;
     let eventResultsDone = false;
@@ -91,6 +100,8 @@ export const getBackupEventResultsCount = query({
 export const createFullBackup = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     // Note: This may still timeout for very large datasets
     // For large datasets, use partial backups instead
     const players = await ctx.db.query("players").collect();
@@ -167,6 +178,8 @@ export const createFullBackup = query({
 export const createPlayerBackup = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const players = await ctx.db.query("players").collect();
     
     return {
@@ -184,6 +197,8 @@ export const createPlayerBackup = query({
 export const createEventsBackup = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const events = await ctx.db.query("events").collect();
     
     return {
@@ -201,6 +216,8 @@ export const createEventsBackup = query({
 export const createResultsBackup = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const imports = await ctx.db.query("thirdPartyImports").collect();
     
     // Large tables - paginate

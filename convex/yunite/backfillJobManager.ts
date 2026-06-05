@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { ConvexError } from "convex/values";
+import { requireAdmin } from "../auth_helpers";
 
 /**
  * Job manager for the kill events backfill process.
@@ -15,6 +16,8 @@ export const startBackfillJob = mutation({
     forceRefresh: v.boolean(),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     // Check if there's already a running job
     const existingJobs = await ctx.db
       .query("backfillJobStatus")
@@ -62,6 +65,8 @@ export const startBackfillJob = mutation({
 export const getBackfillJobStatus = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const job = await ctx.db
       .query("backfillJobStatus")
       .order("desc")
@@ -77,6 +82,8 @@ export const cancelBackfillJob = mutation({
     jobId: v.id("backfillJobStatus"),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const job = await ctx.db.get(args.jobId);
     if (!job || job.status !== "running") return;
 
@@ -93,6 +100,8 @@ export const dismissJob = mutation({
     jobId: v.id("backfillJobStatus"),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const job = await ctx.db.get(args.jobId);
     if (!job) return;
     // Only allow dismissing completed/failed/cancelled jobs

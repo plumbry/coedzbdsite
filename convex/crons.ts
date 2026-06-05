@@ -3,6 +3,11 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
+// Sync strategy: scheduled jobs handle Discord member/role state daily.
+// Manual admin buttons trigger Discord/Yunite/stats syncs on demand.
+// Imports and score changes schedule targeted cache rebuilds (see helpers/eventDrivenRebuilds).
+// Webhooks only perform small indexed updates (see http.ts / discord.upsertDiscordMember).
+
 // Refresh member activity flags for public directory
 crons.daily(
   "refresh member activity flags",

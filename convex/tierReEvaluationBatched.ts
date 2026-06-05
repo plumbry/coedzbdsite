@@ -1,7 +1,8 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id, Doc } from "./_generated/dataModel.d.ts";
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api";
+import { requireAdmin } from "./auth_helpers";
 import { filterVisibleMembers } from "./helpers/playerAlt";
 import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerStats";
 import {
@@ -59,7 +60,7 @@ const numericToTier = (value: number): string => {
 };
 
 // Step 1: Calculate and cache tier medians
-export const calculateTierMedians = mutation({
+export const calculateTierMedians = internalMutation({
   args: {},
   handler: async (ctx): Promise<{ success: boolean; tiersCalculated: number; totalPlayers: number }> => {
     // Clear old medians
@@ -166,7 +167,7 @@ export const calculateTierMedians = mutation({
 });
 
 // Step 2a: Clear existing cache in a lightweight transaction
-export const clearCache = mutation({
+export const clearCache = internalMutation({
   args: {},
   handler: async (ctx): Promise<{ deleted: number }> => {
     const existingCache = await ctx.db.query("tierReEvaluationCache").collect();
@@ -178,13 +179,13 @@ export const clearCache = mutation({
 });
 
 // Step 2b: Initialize batch rebuild (no longer clears cache — done separately)
-export const initializeBatchRebuild = mutation({
+export const initializeBatchRebuild = internalMutation({
   args: {
     recentOnly: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<{ totalPlayers: number; batchCount: number }> => {
     // Calculate tier medians (separate from clearing)
-    await ctx.runMutation(api.tierReEvaluationBatched.calculateTierMedians, {});
+    await ctx.runMutation(internal.tierReEvaluationBatched.calculateTierMedians, {});
 
     // Get only active players using existing indexes (exclude former/archived)
     const activePlayers = await ctx.db
@@ -225,7 +226,7 @@ export const initializeBatchRebuild = mutation({
 });
 
 // Step 3: Process a single batch
-export const processBatch = mutation({
+export const processBatch = internalMutation({
   args: {
     batchNumber: v.number(),
     recentOnly: v.optional(v.boolean()),
@@ -625,7 +626,7 @@ export const processBatch = mutation({
 // Step 4: Finalize recent (6-week) comparisons after all batches complete.
 // Computes 6-week tier medians from cached recentHolisticScore values,
 // then updates each cache entry's recent diff fields against those medians.
-export const finalizeRecentComparisons = mutation({
+export const finalizeRecentComparisons = internalMutation({
   args: {},
   handler: async (ctx): Promise<{ updated: number; recentMedians: Record<string, number | undefined> }> => {
     const allCache = await ctx.db.query("tierReEvaluationCache").collect();
@@ -693,6 +694,8 @@ export const finalizeRecentComparisons = mutation({
 export const getBatchProgress = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const cache = await ctx.db.query("tierReEvaluationCache").collect();
     return { cacheCount: cache.length };
   },

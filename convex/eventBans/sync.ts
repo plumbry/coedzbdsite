@@ -41,7 +41,7 @@ async function getGoogleSheetsClient() {
   return sheets({ version: "v4", auth });
 }
 
-// Public action for manual sync (admin only)
+// Admin manual sync — daily cron uses syncEventBansInternal.
 export const syncEventBans = action({
   args: {},
   handler: async (ctx): Promise<{ success: boolean; imported: number; updated: number; errors: number }> => {
@@ -52,6 +52,10 @@ export const syncEventBans = action({
         code: "UNAUTHENTICATED",
       });
     }
+
+    await ctx.runQuery(internal.userProvisioning.assertAdminByToken, {
+      tokenIdentifier: identity.tokenIdentifier,
+    });
 
     return await performSync(ctx);
   },

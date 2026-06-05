@@ -2,6 +2,7 @@
 
 import { v } from "convex/values";
 import { action } from "../_generated/server";
+import { requireAdminAction } from "../auth_helpers";
 
 /**
  * Probe Yunite API for member/user data that may include platform info.
@@ -15,6 +16,8 @@ export const probeYuniteUserEndpoints = action({
     success: boolean;
     results: Record<string, unknown>;
   }> => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
 

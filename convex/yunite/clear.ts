@@ -3,10 +3,12 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
+import { requireAdminAction } from "../auth_helpers";
 
 export const clearYuniteData = action({
   args: {},
   handler: async (ctx) => {
+    await requireAdminAction(ctx);
     // Get all Yunite imports
     const yuniteImports = await ctx.runQuery(internal.yunite.clearHelpers.getYuniteImports);
     
@@ -45,7 +47,7 @@ export const clearYuniteData = action({
     }
     
     // Reset sync status
-    await ctx.runMutation(api.sync.updateSyncStatus, {
+    await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
       syncType: "yunite",
       status: "success",
       recordsAdded: 0,
@@ -61,6 +63,8 @@ export const clearYuniteData = action({
 export const cleanupOrphanedResults = action({
   args: {},
   handler: async (ctx) => {
+    await requireAdminAction(ctx);
+
     console.log("🧹 Cleaning up orphaned results...");
     
     let totalDeleted = 0;

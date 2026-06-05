@@ -1,5 +1,5 @@
 import { mutation } from "./_generated/server";
-import { ConvexError } from "convex/values";
+import { requireAdmin } from "./auth_helpers";
 
 /**
  * One-time fix: Find players with "imported" Discord ID but have discordRoles
@@ -9,15 +9,8 @@ import { ConvexError } from "convex/values";
 export const fixImportedWithRoles = mutation({
   args: {},
   handler: async (ctx) => {
-    // Verify admin
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "Not authenticated",
-        code: "UNAUTHENTICATED",
-      });
-    }
-    
+    await requireAdmin(ctx);
+
     const allPlayers = await ctx.db.query("players").collect();
     
     // Find players with "imported" as Discord ID AND discordRoles set

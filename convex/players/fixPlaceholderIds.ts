@@ -1,5 +1,6 @@
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
+import { requireAdmin } from "../auth_helpers";
 
 /**
  * Fix players with placeholder Discord IDs by finding their real IDs from thirdPartyResults
@@ -11,6 +12,8 @@ export const fixPlaceholderDiscordIds = mutation({
     offset: v.optional(v.number())
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const batchSize = args.batchSize || 50;
     const offset = args.offset || 0;
     

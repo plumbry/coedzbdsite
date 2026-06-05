@@ -5,6 +5,10 @@ import type { MutationCtx } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin } from "./auth_helpers";
+import {
+  buildKillEventDisplayFields,
+  enrichKillEventsForList,
+} from "./helpers/killEventDisplay";
 
 type PlayerUpsetCounts = Record<
   string,
@@ -64,8 +68,13 @@ function foldUpsetKill(agg: UpsetAggregation, kill: Doc<"matchKillEvents">) {
   }
 }
 
-/** Count rows in matchKillEvents (source of truth for cache rebuild). */
+/** Total kill events from metadata (avoids full-table scan). */
 async function countMatchKillEvents(ctx: MutationCtx): Promise<number> {
+  const metadata = await ctx.db.query("matchKillEventsMetadata").first();
+  if (metadata) {
+    return metadata.totalKillEvents;
+  }
+
   const events = await ctx.db.query("matchKillEvents").collect();
   return events.length;
 }
@@ -211,6 +220,14 @@ export const storeKillEvent = internalMutation({
   handler: async (ctx, args) => {
     const isUpset = isUpsetKill(args.killerTier, args.victimTier);
     const tierDiff = calculateTierDifference(args.killerTier, args.victimTier);
+
+    const display = await buildKillEventDisplayFields(ctx, {
+      importId: args.importId,
+      killerDiscordId: args.killerDiscordId,
+      killerPlayerId: args.killerPlayerId,
+      victimDiscordId: args.victimDiscordId,
+      victimPlayerId: args.victimPlayerId,
+    });
     
     await ctx.db.insert("matchKillEvents", {
       importId: args.importId,
@@ -226,6 +243,7 @@ export const storeKillEvent = internalMutation({
       eventType: args.eventType,
       weapon: args.weapon,
       timeInMatch: args.timeInMatch,
+      ...display,
     });
 
     await adjustKillEventsMetadata(ctx, {
@@ -258,6 +276,11 @@ export const storeKillEventsBatch = internalMutation({
     let inserted = 0;
     let skipped = 0;
     let upsetInserted = 0;
+    const importCache = new Map<
+      Id<"thirdPartyImports">,
+      Doc<"thirdPartyImports"> | null
+    >();
+    const playerCache = new Map<Id<"players">, Doc<"players"> | null>();
 
     for (const event of args.events) {
       // Check for duplicate (same import, session, killer, victim)
@@ -290,6 +313,24 @@ export const storeKillEventsBatch = internalMutation({
       
       const isUpset = isUpsetKill(event.killerTier, event.victimTier);
       const tierDiff = calculateTierDifference(event.killerTier, event.victimTier);
+
+      if (!importCache.has(event.importId)) {
+        importCache.set(event.importId, await ctx.db.get(event.importId));
+      }
+      const display = await buildKillEventDisplayFields(
+        ctx,
+        {
+          importId: event.importId,
+          killerDiscordId: event.killerDiscordId,
+          killerPlayerId: event.killerPlayerId,
+          victimDiscordId: event.victimDiscordId,
+          victimPlayerId: event.victimPlayerId,
+        },
+        {
+          importRecord: importCache.get(event.importId) ?? null,
+          players: playerCache,
+        },
+      );
       
       await ctx.db.insert("matchKillEvents", {
         importId: event.importId,
@@ -306,6 +347,7 @@ export const storeKillEventsBatch = internalMutation({
         weapon: event.weapon,
         timeInMatch: event.timeInMatch,
         knockedBy: event.knockedBy,
+        ...display,
       });
       inserted++;
       if (isUpset) {
@@ -407,26 +449,8 @@ export const getUpsetKills = query({
       filtered = filtered.filter(e => e.eventType === args.eventType);
     }
     
-    // Enrich with player names
-    const enriched = await Promise.all(filtered.map(async (event) => {
-      const killer = event.killerPlayerId 
-        ? await ctx.db.get(event.killerPlayerId)
-        : null;
-      const victim = event.victimPlayerId
-        ? await ctx.db.get(event.victimPlayerId)
-        : null;
-      const importRecord = await ctx.db.get(event.importId);
-      
-      return {
-        ...event,
-        killerName: killer?.discordUsername || killer?.epicUsername || event.killerDiscordId,
-        killerEpicUsername: killer?.epicUsername,
-        victimName: victim?.discordUsername || victim?.epicUsername || event.victimDiscordId,
-        victimEpicUsername: victim?.epicUsername,
-        eventName: importRecord?.eventName || "Unknown Event",
-        eventDate: importRecord?.eventDate,
-      };
-    }));
+    // Enrich with batched lookups (denormalized fields used when present on older rows)
+    const enriched = await enrichKillEventsForList(ctx, filtered);
     
     return {
       ...results,
@@ -567,10 +591,7 @@ export const getUpsetKillsStats = query({
   },
 });
 
-// Rebuild the upset kills stats cache
-export const rebuildStatsCache = mutation({
-  args: {},
-  handler: async (ctx) => {
+async function rebuildStatsCacheHandler(ctx: MutationCtx) {
     const agg = await aggregateUpsetKills(ctx);
     const totalEventsCount = await countMatchKillEvents(ctx);
 
@@ -660,6 +681,20 @@ export const rebuildStatsCache = mutation({
       topKillersCount: enrichedTopKillers.length,
       topVictimsCount: enrichedTopVictims.length,
     };
+}
+
+/** Scheduled after match imports — no admin auth required. */
+export const rebuildStatsCacheInternal = internalMutation({
+  args: {},
+  handler: async (ctx) => rebuildStatsCacheHandler(ctx),
+});
+
+// Admin manual rebuild — also used by data cache admin buttons.
+export const rebuildStatsCache = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    return rebuildStatsCacheHandler(ctx);
   },
 });
 
@@ -860,6 +895,8 @@ export const getAllPlayerKills = query({
 export const removeDuplicateKillEvents = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     const imports = await ctx.db.query("thirdPartyImports").collect();
 
     let totalEvents = 0;
@@ -1161,6 +1198,8 @@ export const clearAllKillEvents = mutation({
     batchSize: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const batchSize = args.batchSize || 500;
     
     // Get a batch of events to delete

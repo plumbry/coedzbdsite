@@ -1,19 +1,12 @@
 import { mutation } from "./_generated/server";
-import { ConvexError } from "convex/values";
+import { requireAdmin } from "./auth_helpers";
 
 // One-time migration to fix players with "imported" Discord ID
 export const fixImportedDiscordId = mutation({
   args: {},
   handler: async (ctx) => {
-    // Verify admin
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "Not authenticated",
-        code: "UNAUTHENTICATED",
-      });
-    }
-    
+    await requireAdmin(ctx);
+
     const players = await ctx.db.query("players").collect();
     
     // Find players with "imported" Discord ID

@@ -108,11 +108,8 @@ export const findResultByDiscordId = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("thirdPartyResults")
-      .filter((q) => 
-        q.and(
-          q.eq(q.field("importId"), args.importId),
-          q.eq(q.field("discordId"), args.discordId)
-        )
+      .withIndex("by_import_discord", (q) =>
+        q.eq("importId", args.importId).eq("discordId", args.discordId),
       )
       .first();
   },

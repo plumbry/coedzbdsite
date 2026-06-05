@@ -1,6 +1,7 @@
 import type { Doc } from "../_generated/dataModel.d.ts";
 import type { QueryCtx } from "../_generated/server.d.ts";
 import { normalizeDiscordId } from "../lib/playerIdentity";
+import { findPlayerByDiscordUserId } from "./playerDiscordAliases";
 
 export type DiscordIdMatchType = "primary" | "alternate";
 
@@ -61,19 +62,26 @@ export function findPlayerByDiscordIdInList(
   return null;
 }
 
-/** Resolve a Discord snowflake to a player (primary index, then alternate IDs). */
+/**
+ * Resolve a Discord snowflake to a player via indexed lookups only.
+ * Safe for HTTP /api/member and other high-volume read paths.
+ */
 export async function resolvePlayerByDiscordId(
   ctx: QueryCtx,
   discordId: string,
 ): Promise<PlayerDiscordIdMatch | null> {
-  const primary = await ctx.db
-    .query("players")
-    .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", discordId))
-    .first();
-  if (primary) {
-    return { player: primary, matchType: "primary" };
+  const player = await findPlayerByDiscordUserId(ctx, discordId);
+  if (!player) {
+    return null;
   }
 
-  const allPlayers = await ctx.db.query("players").collect();
-  return findPlayerByDiscordIdInList(allPlayers, discordId);
+  const normalized = normalizeDiscordId(discordId);
+  const isPrimary =
+    !!player.discordUserId &&
+    normalizeDiscordId(player.discordUserId) === normalized;
+
+  return {
+    player,
+    matchType: isPrimary ? "primary" : "alternate",
+  };
 }

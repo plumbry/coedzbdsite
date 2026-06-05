@@ -794,10 +794,11 @@ export const bulkCreatePlayers = mutation({
           const currentPlayer = await ctx.db.get(playerId);
           const previousTier = currentPlayer?.tier;
           
-          // Update player with tier and total score
+          // Update player with tier, total score, and denormalized gender
           await ctx.db.patch(playerId, {
             totalScore,
             tier,
+            ...(playerData.gender !== undefined ? { gender: playerData.gender } : {}),
           });
           
           // Create tier history if tier changed or is new

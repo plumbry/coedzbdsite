@@ -4,6 +4,7 @@ import { action } from "./_generated/server";
 import { api } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { v } from "convex/values";
+import { requireAdminAction } from "./auth_helpers";
 
 interface BackfillResult {
   processed: number;
@@ -20,6 +21,8 @@ interface BackfillResult {
 export const resetAllSyncFlags = action({
   args: {},
   handler: async (ctx): Promise<{ resetCount: number }> => {
+    await requireAdminAction(ctx);
+
     const allImports = (await ctx.runQuery(
       api.thirdPartyQueries.getAllImports,
     )) as Doc<"thirdPartyImports">[];
@@ -51,6 +54,8 @@ export const checkMatchDataStats = action({
     playersMissingMatchData: number;
     missingDataPlayers: string[];
   }> => {
+    await requireAdminAction(ctx);
+
     // Get all players with match data (from matchPlayerStats table)
     const allMatchStats = await ctx.runQuery(api.yuniteQueries.getAllMatchPlayerStats);
     const playersWithMatchDataSet = new Set(allMatchStats.map((stat: typeof allMatchStats[number]) => stat.playerId));
@@ -100,6 +105,8 @@ export const backfillAllMatchStats = action({
     forceResync: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<BackfillResult> => {
+    await requireAdminAction(ctx);
+
     const FORCE_RESYNC = args.forceResync || false;
     console.log(`🔄 [BACKFILL] Starting match stats backfill... ${FORCE_RESYNC ? '(FORCE RESYNC)' : ''}`);
     console.log(`🔄 [BACKFILL] Timestamp: ${new Date().toISOString()}`);

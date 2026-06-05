@@ -97,6 +97,8 @@ export default defineSchema({
     eventsPlayedCount: v.optional(v.number()),
     /** Denormalized most recent event date (ISO string). */
     lastEventDate: v.optional(v.string()),
+    /** Denormalized from manualScores.gender for public directory (avoids N+1 score reads). */
+    gender: v.optional(v.number()),
     // Discord sync match quality (when bot syncs Discord members)
     matchConfidence: v.optional(v.union(
       v.literal("exact"), // Exact Discord ID match
@@ -163,6 +165,14 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_membership_status", ["currentMembershipStatus"])
     .index("by_is_alt", ["isAlt"]),
+
+  /** Indexed Discord ID → player lookup for alternates (webhook-safe; no full-table scan). */
+  playerDiscordAliases: defineTable({
+    discordUserId: v.string(),
+    playerId: v.id("players"),
+  })
+    .index("by_discord_user_id", ["discordUserId"])
+    .index("by_player", ["playerId"]),
   
   manualScores: defineTable({
     playerId: v.id("players"),
@@ -201,7 +211,8 @@ export default defineSchema({
     evaluatedBy: v.optional(v.id("users")),
   })
     .index("by_player", ["playerId"])
-    .index("by_application", ["applicationId"]),
+    .index("by_application", ["applicationId"])
+    .index("by_gender", ["gender"]),
   
   // Member Applications System
   applications: defineTable({
@@ -230,6 +241,8 @@ export default defineSchema({
     processedByName: v.optional(v.string()),
   })
     .index("by_discord_id", ["discordId"])
+    .index("by_discord_id_and_status", ["discordId", "status"])
+    .index("by_discord_username", ["discordUsername"])
     .index("by_status", ["status"])
     .index("by_player_id", ["playerId"]),
   
@@ -361,6 +374,7 @@ export default defineSchema({
   })
     .index("by_player", ["playerId"])
     .index("by_import", ["importId"])
+    .index("by_import_discord", ["importId", "discordId"])
     .index("by_event_name", ["eventName"])
     .index("by_source", ["source"])
     .index("by_matched", ["importId", "matched"]),
@@ -1025,6 +1039,13 @@ export default defineSchema({
     timeInMatch: v.optional(v.number()), // Seconds since match start
     // Knock attribution (for killfeed: knocked/finished/eliminated)
     knockedBy: v.optional(v.string()), // Discord ID of who originally knocked the victim (for eliminations)
+    // Denormalized display fields (avoid per-row reads on upset kills list)
+    killerName: v.optional(v.string()),
+    killerEpicUsername: v.optional(v.string()),
+    victimName: v.optional(v.string()),
+    victimEpicUsername: v.optional(v.string()),
+    eventName: v.optional(v.string()),
+    eventDate: v.optional(v.string()),
   })
     .index("by_import", ["importId"])
     .index("by_match", ["importId", "sessionId"])

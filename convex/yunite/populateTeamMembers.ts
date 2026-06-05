@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
+import { requireAdminAction } from "../auth_helpers";
 
 interface LeaderboardUser {
   discordId: string;
@@ -44,6 +45,8 @@ async function fetchWithRetry(
 export const populateForImport = action({
   args: { importId: v.id("thirdPartyImports") },
   handler: async (ctx, args): Promise<{ success: boolean; updated: number }> => {
+    await requireAdminAction(ctx);
+
     const apiKey = process.env.YUNITE_API_KEY;
     const guildId = process.env.YUNITE_GUILD_ID;
     
@@ -103,6 +106,8 @@ export const populateAllImports = action({
     totalUpdated: number;
     failedImports: string[];
   }> => {
+    await requireAdminAction(ctx);
+
     console.log("🔄 Starting to populate team members for all Yunite imports...");
     
     const imports = await ctx.runQuery(api.yuniteQueries.getAllYuniteTournaments);

@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
+import { requireAdminAction } from "../auth_helpers";
 import type { FunctionReference } from "convex/server";
 
 interface DiscordRole {
@@ -26,6 +27,8 @@ export const checkDiscordRoles = action({
     mismatches: RoleMismatch[];
     errors: number;
   }> => {
+    await requireAdminAction(ctx);
+
     const discordBotToken = process.env.DISCORD_BOT_TOKEN;
     const discordGuildId = process.env.DISCORD_GUILD_ID;
     

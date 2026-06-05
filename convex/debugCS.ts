@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel.d.ts";
+import { requireAdminAction } from "./auth_helpers";
 
 /**
  * Debug CS calculation for a specific player
@@ -13,6 +14,8 @@ export const debugCSCalculation = action({
     epicUsername: v.string(),
   },
   handler: async (ctx, args): Promise<{ error: string } | { success: boolean; result: unknown; error?: string }> => {
+    await requireAdminAction(ctx);
+
     console.log(`\n=== DEBUG CS for ${args.epicUsername} ===`);
     
     // Get player

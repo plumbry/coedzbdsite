@@ -1,6 +1,7 @@
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
 import { normalizeDiscordId } from "../lib/playerIdentity";
+import { requireAdmin } from "../auth_helpers";
 
 /**
  * Re-link thirdPartyResults to players by matching Discord IDs
@@ -16,6 +17,8 @@ export const relinkThirdPartyResults = mutation({
     offset: v.optional(v.number())
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     const batchSize = args.batchSize || 100;
     const offset = args.offset || 0;
     

@@ -21,7 +21,11 @@ import {
 
 const EVENT_BATCH = 6;
 const PLAYER_CACHE_BATCH = 3;
-const STALE_JOB_MS = 30 * 60 * 1000;
+/** TC/DCA do per-match reads; one player per step avoids mutation timeouts. */
+const HEAVY_PLAYER_CACHE_BATCH = 1;
+const STALE_JOB_MS = 6 * 60 * 60 * 1000;
+const STALE_PROGRESS_MS = 30 * 60 * 1000;
+const RECONCILE_IDLE_MS = 90 * 1000;
 
 const PHASE_ORDER = [
   "event_participation",
@@ -41,21 +45,58 @@ function nextPhase(current: RebuildPhase): RebuildPhase {
   return PHASE_ORDER[Math.min(idx + 1, PHASE_ORDER.length - 1)];
 }
 
+function jobIdleMs(job: { lastProgressAt: number; startedAt: number }, now: number): number {
+  return now - job.lastProgressAt;
+}
+
 async function failStaleRunningJobs(ctx: MutationCtx) {
   const running = await ctx.db
     .query("playerStatsRebuildJobs")
     .withIndex("by_status", (q: { eq: Function }) => q.eq("status", "running"))
     .collect();
-  const cutoff = Date.now() - STALE_JOB_MS;
+  const now = Date.now();
   for (const job of running) {
-    if (job.lastProgressAt < cutoff) {
+    const idleMs = jobIdleMs(job, now);
+    if (now - job.startedAt > STALE_JOB_MS || idleMs > STALE_PROGRESS_MS) {
       await ctx.db.patch(job._id, {
         status: "failed",
-        errorMessage: "Job timed out (no progress for 30 minutes)",
-        completedAt: Date.now(),
+        errorMessage:
+          idleMs > STALE_PROGRESS_MS
+            ? "Rebuild stopped making progress — cancel and start again."
+            : "Rebuild timed out — cancel and start again.",
+        completedAt: now,
+        lastProgressAt: now,
       });
     }
   }
+}
+
+/** Re-schedule a stalled chain before we mark the job failed. */
+async function reconcilePlayerStatsRebuildJobs(ctx: MutationCtx) {
+  const running = await ctx.db
+    .query("playerStatsRebuildJobs")
+    .withIndex("by_status", (q: { eq: Function }) => q.eq("status", "running"))
+    .collect();
+
+  const now = Date.now();
+  for (const job of running) {
+    const idleMs = jobIdleMs(job, now);
+    if (idleMs < RECONCILE_IDLE_MS || idleMs >= STALE_PROGRESS_MS) {
+      continue;
+    }
+
+    await ctx.db.patch(job._id, { lastProgressAt: now });
+    await ctx.scheduler.runAfter(0, internal.playerStatsRebuild.processRebuildStep, {
+      jobId: job._id,
+    });
+  }
+}
+
+function playerCacheBatchForPhase(phase: RebuildPhase): number {
+  if (phase === "contribution_score" || phase === "dca") {
+    return HEAVY_PLAYER_CACHE_BATCH;
+  }
+  return PLAYER_CACHE_BATCH;
 }
 
 /** Most recent completed full pipeline job (event counts through population averages). */
@@ -116,6 +157,8 @@ export const getActiveRebuildJob = query({
     if (!running) return null;
 
     const rebuildKind = running.rebuildKind;
+    const now = Date.now();
+    const idleMs = jobIdleMs(running, now);
 
     return {
       jobId: running._id,
@@ -130,7 +173,43 @@ export const getActiveRebuildJob = query({
       tierEvalRecentOnly: running.tierEvalRecentOnly,
       startedAt: running.startedAt,
       lastProgressAt: running.lastProgressAt,
+      appearsStuck: idleMs >= RECONCILE_IDLE_MS,
     };
+  },
+});
+
+/** Fails timed-out jobs and re-kicks stalled background chains (safe while viewing admin pages). */
+export const cleanupPlayerStatsRebuildJobs = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    await reconcilePlayerStatsRebuildJobs(ctx);
+    await failStaleRunningJobs(ctx);
+    return { ok: true };
+  },
+});
+
+export const cancelPlayerStatsRebuild = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const running = await ctx.db
+      .query("playerStatsRebuildJobs")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .collect();
+
+    const now = Date.now();
+    for (const job of running) {
+      await ctx.db.patch(job._id, {
+        status: "failed",
+        errorMessage: "Rebuild cancelled.",
+        completedAt: now,
+        lastProgressAt: now,
+      });
+    }
+
+    return { cancelled: running.length };
   },
 });
 
@@ -348,26 +427,33 @@ export const processRebuildStep = internalMutation({
         phase === "top_five"
       ) {
         const page = await ctx.db.query("players").paginate({
-          numItems: PLAYER_CACHE_BATCH,
+          numItems: playerCacheBatchForPhase(phase),
           cursor: playersCursor,
         });
 
         for (const player of page.page) {
           if (!player.hasMatchData) continue;
 
-          if (phase === "contribution_score") {
-            await ctx.runMutation(
-              internal.calculateContributionScore.calculateAndStoreCSInternal,
-              { playerId: player._id },
+          try {
+            if (phase === "contribution_score") {
+              await ctx.runMutation(
+                internal.calculateContributionScore.calculateAndStoreCSInternal,
+                { playerId: player._id },
+              );
+            } else if (phase === "dca") {
+              await ctx.runMutation(internal.dcaCache.cacheDCAForPlayer, {
+                playerId: player._id,
+              });
+            } else {
+              await ctx.runMutation(internal.topFiveCache.updateSinglePlayerCache, {
+                playerId: player._id,
+              });
+            }
+          } catch (error) {
+            console.error(
+              `[playerStatsRebuild] ${phase} failed for ${player.discordUsername}:`,
+              error,
             );
-          } else if (phase === "dca") {
-            await ctx.runMutation(internal.dcaCache.cacheDCAForPlayer, {
-              playerId: player._id,
-            });
-          } else {
-            await ctx.runMutation(internal.topFiveCache.updateSinglePlayerCache, {
-              playerId: player._id,
-            });
           }
 
           processedInPhase += 1;
@@ -395,9 +481,9 @@ export const processRebuildStep = internalMutation({
         processedInPhase = 0;
       } else if (phase === "tier_eval") {
         if (!tierEvalInitialized) {
-          await ctx.runMutation(api.tierReEvaluationBatched.clearCache, {});
+          await ctx.runMutation(internal.tierReEvaluationBatched.clearCache, {});
           const init = await ctx.runMutation(
-            api.tierReEvaluationBatched.initializeBatchRebuild,
+            internal.tierReEvaluationBatched.initializeBatchRebuild,
             { recentOnly: job.tierEvalRecentOnly },
           );
           tierEvalBatchCount = init.batchCount;
@@ -405,7 +491,7 @@ export const processRebuildStep = internalMutation({
           tierEvalInitialized = true;
           processedInPhase = 0;
         } else if (tierEvalBatchCount > 0 && tierEvalBatch < tierEvalBatchCount) {
-          await ctx.runMutation(api.tierReEvaluationBatched.processBatch, {
+          await ctx.runMutation(internal.tierReEvaluationBatched.processBatch, {
             batchNumber: tierEvalBatch,
             recentOnly: job.tierEvalRecentOnly,
           });
@@ -416,7 +502,7 @@ export const processRebuildStep = internalMutation({
 
         if (tierEvalInitialized && tierEvalBatch >= tierEvalBatchCount) {
           await ctx.runMutation(
-            api.tierReEvaluationBatched.finalizeRecentComparisons,
+            internal.tierReEvaluationBatched.finalizeRecentComparisons,
             {},
           );
           phase =

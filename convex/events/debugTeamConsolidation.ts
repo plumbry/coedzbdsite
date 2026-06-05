@@ -1,10 +1,13 @@
 import { v } from "convex/values";
 import { query } from "../_generated/server";
+import { requireAdmin } from "../auth_helpers";
 
 // Debug query to see how teams are being grouped
 export const debugTeamConsolidation = query({
   args: { eventId: v.id("events") },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
     // Get all imports for this event
     const imports = await ctx.db
       .query("thirdPartyImports")

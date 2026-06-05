@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireAdmin } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
 import { getManualScoreForPlayer } from "./helpers/manualScores";
@@ -243,10 +244,11 @@ export const createOrUpdateScore = mutation({
       });
     }
     
-    // Update player's total score and tier
+    // Update player's total score, tier, and denormalized public directory gender
     await ctx.db.patch(args.playerId, {
       totalScore,
       tier,
+      gender: args.gender,
     });
     
     // If tier changed, create history record
@@ -279,6 +281,12 @@ export const createOrUpdateScore = mutation({
       previousValue: existingScore ? `${existingScore.totalScore}/1900, Tier ${existingScore.tier}` : undefined,
       newValue: `${totalScore}/1900, Tier ${tier}`,
     });
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.helpers.eventDrivenRebuilds.scheduleTierEvalRebuild,
+      {},
+    );
     
     return { totalScore, tier };
   },

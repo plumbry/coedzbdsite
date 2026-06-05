@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import type { FunctionReference } from "convex/server";
+import { requireAdminAction } from "../auth_helpers";
 
 interface DiscordRole {
   id: string;
@@ -18,6 +19,8 @@ export const archivePlayersWithoutTierRole = action({
     playersArchived: number;
     errors: number;
   }> => {
+    await requireAdminAction(ctx);
+
     const discordBotToken = process.env.DISCORD_BOT_TOKEN;
     const discordGuildId = process.env.DISCORD_GUILD_ID;
     

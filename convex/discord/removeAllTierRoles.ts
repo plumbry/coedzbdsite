@@ -1,6 +1,7 @@
 "use node";
 
 import { action } from "../_generated/server";
+import { requireAdminAction } from "../auth_helpers";
 
 export const removeAllTierRoles = action({
   args: {},
@@ -8,10 +9,7 @@ export const removeAllTierRoles = action({
     success: boolean;
     message: string;
   }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
+    await requireAdminAction(ctx);
 
     const apiSecret = process.env.TIER_CLEAR_API_SECRET;
     if (!apiSecret) {

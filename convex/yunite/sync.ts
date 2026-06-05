@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
+import { requireAdminAction } from "../auth_helpers";
 import { extractRawKillEvents } from "./killCreditHelpers";
 import { matchPlayerForImport } from "../lib/playerIdentity";
 import type { PlayerMatchFields } from "../lib/playerIdentity";
@@ -51,6 +52,8 @@ export const syncYuniteTournaments = action({
     tournamentIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
     
@@ -71,7 +74,7 @@ export const syncYuniteTournaments = action({
       console.log("API Key first 4 chars:", yuniteApiKey?.substring(0, 4));
       
       // Update sync status to in_progress
-      await ctx.runMutation(api.sync.updateSyncStatus, {
+      await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
         syncType: "yunite",
         status: "in_progress",
       });
@@ -150,7 +153,7 @@ export const syncYuniteTournaments = action({
         const syncStatus = await ctx.runQuery(api.sync.getSyncStatus, { syncType: "yunite" });
         if (syncStatus?.status === "stopping") {
           console.log("🛑 Sync stopped by user");
-          await ctx.runMutation(api.sync.updateSyncStatus, {
+          await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
             syncType: "yunite",
             status: "success",
             recordsAdded: added,
@@ -405,12 +408,19 @@ export const syncYuniteTournaments = action({
       console.log(`Events updated: ${updated}`);
       
       // Update sync status to success
-      await ctx.runMutation(api.sync.updateSyncStatus, {
+      await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
         syncType: "yunite",
         status: "success",
         recordsAdded: added,
         recordsUpdated: updated,
       });
+
+      if (added > 0) {
+        await ctx.runMutation(
+          internal.helpers.eventDrivenRebuilds.scheduleEventParticipationRebuild,
+          {},
+        );
+      }
       
       return {
         success: true,
@@ -423,7 +433,7 @@ export const syncYuniteTournaments = action({
       
     } catch (error) {
       // Update sync status to error
-      await ctx.runMutation(api.sync.updateSyncStatus, {
+      await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
         syncType: "yunite",
         status: "error",
         errorMessage: error instanceof Error ? error.message : "Unknown error",
@@ -476,6 +486,8 @@ export const syncTournamentMatchData = action({
     importId: v.id("thirdPartyImports"),
   },
   handler: async (ctx, args) => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
     
@@ -862,9 +874,10 @@ export const syncTournamentMatchData = action({
       
       for (const playerId of uniquePlayerIds) {
         try {
-          const result = await ctx.runMutation(api.calculateContributionScore.calculateAndStoreCS, {
-            playerId,
-          });
+          const result = await ctx.runMutation(
+            internal.calculateContributionScore.calculateAndStoreCSInternal,
+            { playerId },
+          );
           if (result) {
             csCalculated++;
           }
@@ -881,9 +894,10 @@ export const syncTournamentMatchData = action({
         if (uniquePlayerIds.has(duoPlayerId)) continue;
         
         try {
-          await ctx.runMutation(api.calculateContributionScore.calculateAndStoreCS, {
-            playerId: duoPlayerId,
-          });
+          await ctx.runMutation(
+            internal.calculateContributionScore.calculateAndStoreCSInternal,
+            { playerId: duoPlayerId },
+          );
           duoRecalculated++;
         } catch (error) {
           console.warn(`Failed to recalculate CS for duo partner ${duoPlayerId}:`, error);
@@ -893,6 +907,13 @@ export const syncTournamentMatchData = action({
       console.log(`✅ Calculated CS for ${csCalculated} players (${csFailed} failed)`);
       if (duoRecalculated > 0) {
         console.log(`✅ Recalculated CS for ${duoRecalculated} duo partners`);
+      }
+
+      if (totalMatchKills > 0) {
+        await ctx.runMutation(
+          internal.helpers.eventDrivenRebuilds.scheduleUpsetKillsCacheRebuild,
+          {},
+        );
       }
       
       return {
@@ -928,6 +949,8 @@ export const syncPlayerMatchData = action({
     failed: number;
     errors: Array<{ importName: string; error: string }>;
   }> => {
+    await requireAdminAction(ctx);
+
     console.log(`🎯 Starting match data sync for player ${args.playerId}`);
     
     // Get all third party results for this player
@@ -1040,6 +1063,8 @@ export const listRecentTournaments = action({
       alreadyImported: boolean;
     }>;
   }> => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
 

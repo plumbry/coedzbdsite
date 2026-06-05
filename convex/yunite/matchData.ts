@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import type { Id } from "../_generated/dataModel.d.ts";
 import { api, internal } from "../_generated/api";
+import { requireAdminAction } from "../auth_helpers";
 
 interface KillFeedEntry {
   killerDiscordId: string;
@@ -51,6 +52,8 @@ export const fetchTournamentMatchBreakdown = action({
     importId: v.id("thirdPartyImports"),
   },
   handler: async (ctx, args): Promise<MatchBreakdownResult> => {
+    await requireAdminAction(ctx);
+
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
     

@@ -20,7 +20,6 @@ client.once('ready', async () => {
 
     let successCount = 0;
     let failCount = 0;
-    const syncedDiscordIds = [];
 
     for (const [, member] of guild.members.cache) {
       // Skip bots
@@ -56,7 +55,6 @@ client.once('ready', async () => {
         if (res.ok) {
           console.log(`✅ Synced: ${payload.username} (joined ${payload.joined_at})`);
           successCount++;
-          syncedDiscordIds.push(member.user.id);
         } else {
           const errorText = await res.text();
           console.error(`❌ Failed for ${payload.username}: ${res.status} - ${errorText}`);
@@ -72,32 +70,9 @@ client.once('ready', async () => {
     }
 
     console.log(`\n✨ Sync complete! Success: ${successCount}, Failed: ${failCount}`);
-    
-    // After syncing all members, archive players no longer in the server
-    if (syncedDiscordIds.length > 0) {
-      console.log(`\n🗑️ Checking for players to archive (${syncedDiscordIds.length} current members)...`);
-      try {
-        const archiveUrl = process.env.API_URL.replace('/sync-member', '/archive-missing');
-        const archiveRes = await fetch(archiveUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.API_KEY}`,
-          },
-          body: JSON.stringify({ currentDiscordUserIds: syncedDiscordIds }),
-        });
-        
-        if (archiveRes.ok) {
-          const archiveResult = await archiveRes.json();
-          console.log(`✅ Archive check complete: ${archiveResult.archived} archived, ${archiveResult.cleared} cleared`);
-        } else {
-          const errorText = await archiveRes.text();
-          console.error(`❌ Archive check failed: ${archiveRes.status} - ${errorText}`);
-        }
-      } catch (archiveErr) {
-        console.error(`❌ Archive check error: ${archiveErr.message}`);
-      }
-    }
+    console.log(
+      'ℹ️  Missing-member archival is handled by the server daily Discord sync cron (not this bot).',
+    );
   } catch (err) {
     console.error('❌ Bot startup error:', err);
   }

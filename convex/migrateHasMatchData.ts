@@ -1,4 +1,5 @@
 import { mutation } from "./_generated/server";
+import { requireAdmin } from "./auth_helpers";
 
 /**
  * One-time migration: Set hasMatchData flag for all players who already have match stats
@@ -7,6 +8,8 @@ import { mutation } from "./_generated/server";
 export const backfillHasMatchDataFlag = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     // Get all match stats
     const allMatchStats = await ctx.db.query("matchPlayerStats").collect();
     
@@ -52,6 +55,8 @@ export const backfillHasMatchDataFlag = mutation({
 export const fixHasMatchDataInconsistency = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
+
     // Get all players with hasMatchData flag
     const allPlayers = await ctx.db.query("players").collect();
     const playersWithFlag = allPlayers.filter(p => p.hasMatchData === true);

@@ -1,8 +1,9 @@
 "use node";
 
 import { action, internalAction } from "../_generated/server";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
+import { requireAdminAction } from "../auth_helpers";
 
 const SYNC_BATCH_SIZE = 25;
 
@@ -45,7 +46,7 @@ async function fetchAndSyncDiscordMembers(ctx: ActionCtx): Promise<SyncResult> {
     
     try {
       // Update sync status to in_progress
-      await ctx.runMutation(api.sync.updateSyncStatus, {
+      await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
         syncType: "discord",
         status: "in_progress",
       });
@@ -147,7 +148,7 @@ async function fetchAndSyncDiscordMembers(ctx: ActionCtx): Promise<SyncResult> {
         { currentDiscordUserIds: discordUserIds },
       );
 
-      await ctx.runMutation(api.sync.updateSyncStatus, {
+      await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
         syncType: "discord",
         status: "success",
         recordsAdded: added,
@@ -165,7 +166,7 @@ async function fetchAndSyncDiscordMembers(ctx: ActionCtx): Promise<SyncResult> {
       
     } catch (error) {
       // Update sync status to error
-      await ctx.runMutation(api.sync.updateSyncStatus, {
+      await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
         syncType: "discord",
         status: "error",
         errorMessage: error instanceof Error ? error.message : "Unknown error",
@@ -175,10 +176,11 @@ async function fetchAndSyncDiscordMembers(ctx: ActionCtx): Promise<SyncResult> {
     }
 }
 
-// Public action for manual sync button
+// Admin manual sync — daily cron uses syncDiscordMembersInternal.
 export const syncDiscordMembers = action({
   args: {},
   handler: async (ctx): Promise<SyncResult> => {
+    await requireAdminAction(ctx);
     return fetchAndSyncDiscordMembers(ctx);
   },
 });
