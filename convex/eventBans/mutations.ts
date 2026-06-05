@@ -177,10 +177,30 @@ function parseOffenseFromReason(
   return {};
 }
 
-export const updateBanReasonInternal = internalMutation({
+const sheetDateValidator = (value: string, field: string) => {
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+    throw new ConvexError({
+      message: `${field} must be DD/MM/YYYY`,
+      code: "BAD_REQUEST",
+    });
+  }
+};
+
+export const updateBanInternal = internalMutation({
   args: {
     banId: v.id("eventBans"),
+    discordId: v.string(),
+    playerTag: v.string(),
+    banType: v.string(),
+    originalEvents: v.number(),
+    remainingEvents: v.number(),
+    startDate: v.string(),
+    lastUpdated: v.string(),
     reason: v.string(),
+    moderatorTag: v.string(),
+    status: v.string(),
+    offenseTrack: v.optional(v.string()),
+    offenseNumber: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const ban = await ctx.db.get(args.banId);
@@ -191,30 +211,75 @@ export const updateBanReasonInternal = internalMutation({
       });
     }
 
+    const discordId = args.discordId.trim();
+    const playerTag = args.playerTag.trim();
+    const banType = args.banType.trim();
     const reason = args.reason.trim();
-    if (!reason) {
+    const moderatorTag = args.moderatorTag.trim();
+    const startDate = args.startDate.trim();
+    const lastUpdated = args.lastUpdated.trim();
+    const status = args.status.trim().toUpperCase();
+
+    if (!discordId || !playerTag || !banType || !reason || !moderatorTag) {
       throw new ConvexError({
-        message: "Reason cannot be empty",
+        message: "Player, ban type, reason, and moderator are required",
         code: "BAD_REQUEST",
       });
     }
 
-    const today = new Date();
-    const todayStr = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
-    const { offenseTrack, offenseNumber } = parseOffenseFromReason(reason, ban.banType);
+    if (args.originalEvents < 0 || args.remainingEvents < 0) {
+      throw new ConvexError({
+        message: "Event counts cannot be negative",
+        code: "BAD_REQUEST",
+      });
+    }
+
+    if (status !== "ACTIVE" && status !== "ENDED") {
+      throw new ConvexError({
+        message: 'Status must be "ACTIVE" or "ENDED"',
+        code: "BAD_REQUEST",
+      });
+    }
+
+    sheetDateValidator(startDate, "Start date");
+    sheetDateValidator(lastUpdated, "Last updated");
+
+    const parsedOffense = parseOffenseFromReason(reason, banType);
+    const offenseTrack = args.offenseTrack?.trim() || parsedOffense.offenseTrack;
+    const offenseNumber = args.offenseNumber ?? parsedOffense.offenseNumber;
 
     await ctx.db.patch(args.banId, {
+      discordId,
+      playerTag,
+      banType,
+      originalEvents: args.originalEvents,
+      remainingEvents: args.remainingEvents,
+      startDate,
+      lastUpdated,
       reason,
+      moderatorTag,
+      status,
       offenseTrack,
       offenseNumber,
-      lastUpdated: todayStr,
     });
 
     return {
-      discordId: ban.discordId,
+      matchDiscordId: ban.discordId,
       messageId: ban.messageId,
-      startDate: ban.startDate,
-      lastUpdated: todayStr,
+      matchStartDate: ban.startDate,
+      row: {
+        discordId,
+        playerTag,
+        banType,
+        originalEvents: args.originalEvents,
+        remainingEvents: args.remainingEvents,
+        startDate,
+        lastUpdated,
+        reason,
+        moderatorTag,
+        messageId: ban.messageId,
+        status,
+      },
     };
   },
 });

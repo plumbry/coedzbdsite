@@ -7,21 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.t
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Input } from "@/components/ui/input.tsx";
-import { Label } from "@/components/ui/label.tsx";
-import { Textarea } from "@/components/ui/textarea.tsx";
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog.tsx";
 import { Search, Ban, Clock, AlertTriangle, TrendingUp, Trash2, CalendarCheck, Undo2, Lock, Pencil, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import CreateBanDialog from "./create-ban-dialog.tsx";
+import EditBanDialog, { type EditableBan } from "./edit-ban-dialog.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import ConfirmDialog from "@/components/confirm-dialog.tsx";
 import { formatDistanceToNow } from "date-fns";
@@ -168,10 +158,19 @@ export default function EventBansManager({
         parts.push(`${result.rolesRemoved} role${result.rolesRemoved === 1 ? "" : "s"} removed`);
       }
 
-      if (result.errors > 0) {
-        toast.warning(
-          `Role sync partially complete: ${parts.join(", ")}. ${result.errors} error${result.errors === 1 ? "" : "s"}.`,
-        );
+      const errorSuffix =
+        result.errors > 0
+          ? `${result.errors} error${result.errors === 1 ? "" : "s"}${
+              result.errorMessages.length > 0
+                ? `: ${result.errorMessages.slice(0, 3).join("; ")}`
+                : ""
+            }`
+          : "";
+
+      if (result.errors > 0 && parts.length === 0) {
+        toast.error(`Role sync failed with ${errorSuffix}`);
+      } else if (result.errors > 0) {
+        toast.warning(`Role sync partially complete: ${parts.join(", ")}. ${errorSuffix}`);
       } else {
         toast.success(`Role sync complete: ${parts.join(", ")}`);
       }
@@ -547,68 +546,16 @@ function BansTable({
   emptyMessage,
   canDelete,
 }: {
-  bans: Array<{
-    _id: string;
-    playerTag: string;
-    discordId: string;
-    banType: string;
-    remainingEvents: number;
-    originalEvents: number;
-    startDate: string;
-    lastUpdated: string;
-    reason: string;
-    moderatorTag: string;
-    offenseTrack?: string;
-    offenseNumber?: number;
-  }>;
+  bans: Array<EditableBan>;
   isLoading: boolean;
   emptyMessage: string;
   canDelete: boolean;
 }) {
   const deleteBanAction = useAction(api.eventBans.sync.deleteBan);
-  const updateBanReasonAction = useAction(api.eventBans.sync.updateBanReason);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [editingBan, setEditingBan] = useState<{
-    _id: string;
-    playerTag: string;
-    reason: string;
-  } | null>(null);
-  const [editReason, setEditReason] = useState("");
-  const [isSavingReason, setIsSavingReason] = useState(false);
+  const [editingBan, setEditingBan] = useState<EditableBan | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const bansPagination = useClientPagination(bans);
-
-  const openEditDialog = (ban: { _id: string; playerTag: string; reason: string }) => {
-    setEditingBan(ban);
-    setEditReason(ban.reason);
-  };
-
-  const handleSaveReason = async () => {
-    if (!editingBan) return;
-    const trimmedReason = editReason.trim();
-    if (!trimmedReason) {
-      toast.error("Reason cannot be empty");
-      return;
-    }
-
-    setIsSavingReason(true);
-    try {
-      const result = await updateBanReasonAction({
-        banId: editingBan._id as Id<"eventBans">,
-        reason: trimmedReason,
-      });
-      if (result.updatedInSheet) {
-        toast.success("Ban reason updated on site and Google Sheet");
-      } else {
-        toast.success("Ban reason updated on site (could not find matching row in sheet)");
-      }
-      setEditingBan(null);
-    } catch {
-      toast.error("Failed to update ban reason");
-    } finally {
-      setIsSavingReason(false);
-    }
-  };
 
   const handleDelete = (ban: { _id: string; playerTag: string }) => {
     setPendingConfirm({
@@ -674,7 +621,7 @@ function BansTable({
                       variant="ghost"
                       size="sm"
                       className="h-7 w-7 p-0 cursor-pointer"
-                      onClick={() => openEditDialog(ban)}
+                      onClick={() => setEditingBan(ban)}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -760,7 +707,7 @@ function BansTable({
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0 cursor-pointer"
-                            onClick={() => openEditDialog(ban)}
+                            onClick={() => setEditingBan(ban)}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -794,36 +741,10 @@ function BansTable({
         itemLabel="bans"
       />
 
-      <Dialog open={editingBan !== null} onOpenChange={(open) => !open && setEditingBan(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit ban reason</DialogTitle>
-            <DialogDescription>
-              Update the reason for {editingBan?.playerTag}. Changes sync to the Google Sheet when a matching row is found.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody>
-            <div className="space-y-2">
-              <Label htmlFor="ban-reason">Reason</Label>
-              <Textarea
-                id="ban-reason"
-                value={editReason}
-                onChange={(e) => setEditReason(e.target.value)}
-                rows={4}
-                placeholder="Enter ban reason..."
-              />
-            </div>
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingBan(null)} disabled={isSavingReason}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveReason} disabled={isSavingReason}>
-              {isSavingReason ? "Saving..." : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditBanDialog
+        ban={editingBan}
+        onOpenChange={(open) => !open && setEditingBan(null)}
+      />
 
       <ConfirmDialog
         open={pendingConfirm !== null}

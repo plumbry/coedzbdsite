@@ -343,11 +343,45 @@ export const updateSheetBansToActive = internalAction({
   },
 });
 
-// Update a ban's reason in both the database and the Google Sheet
-export const updateBanReason = action({
+function findBanSheetRowIndex(
+  rows: string[][],
+  matchDiscordId: string,
+  messageId: string,
+  matchStartDate: string,
+): number {
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    const rowDiscordId = (row[0] || "").trim();
+    const rowMessageId = (row[9] || "").trim();
+    const rowStartDate = (row[5] || "").trim();
+
+    if (
+      rowDiscordId === matchDiscordId &&
+      (rowMessageId === messageId || rowStartDate === matchStartDate)
+    ) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// Update a ban in both the database and the Google Sheet
+export const updateBan = action({
   args: {
     banId: v.id("eventBans"),
+    discordId: v.string(),
+    playerTag: v.string(),
+    banType: v.string(),
+    originalEvents: v.number(),
+    remainingEvents: v.number(),
+    startDate: v.string(),
+    lastUpdated: v.string(),
     reason: v.string(),
+    moderatorTag: v.string(),
+    status: v.string(),
+    offenseTrack: v.optional(v.string()),
+    offenseNumber: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<{ success: boolean; updatedInSheet: boolean }> => {
     await ctx.runQuery(internal.eventBans.viewerAuth.assertStaffWriteAccess, {});
@@ -360,10 +394,7 @@ export const updateBanReason = action({
       });
     }
 
-    const updateResult = await ctx.runMutation(internal.eventBans.mutations.updateBanReasonInternal, {
-      banId: args.banId,
-      reason: args.reason,
-    });
+    const updateResult = await ctx.runMutation(internal.eventBans.mutations.updateBanInternal, args);
 
     let updatedInSheet = false;
     try {
@@ -375,49 +406,48 @@ export const updateBanReason = action({
       const rows = response.data.values as string[][] | null | undefined;
 
       if (rows && rows.length > 1) {
-        let rowIndex = -1;
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i];
-          if (!row) continue;
-          const rowDiscordId = (row[0] || "").trim();
-          const rowMessageId = (row[9] || "").trim();
-          const rowStartDate = (row[5] || "").trim();
-
-          if (
-            rowDiscordId === ban.discordId &&
-            (rowMessageId === ban.messageId || rowStartDate === ban.startDate)
-          ) {
-            rowIndex = i;
-            break;
-          }
-        }
+        const rowIndex = findBanSheetRowIndex(
+          rows,
+          updateResult.matchDiscordId,
+          updateResult.messageId,
+          updateResult.matchStartDate,
+        );
 
         if (rowIndex >= 0) {
+          const row = updateResult.row;
           await sheetsClient.spreadsheets.values.batchUpdate({
             spreadsheetId: SPREADSHEET_ID,
             requestBody: {
               valueInputOption: "RAW",
               data: [
                 {
-                  range: `'${SHEET_NAME}'!H${rowIndex + 1}`,
-                  values: [[args.reason.trim()]],
-                },
-                {
-                  range: `'${SHEET_NAME}'!G${rowIndex + 1}`,
-                  values: [[updateResult.lastUpdated]],
+                  range: `'${SHEET_NAME}'!A${rowIndex + 1}:K${rowIndex + 1}`,
+                  values: [[
+                    row.discordId,
+                    row.playerTag,
+                    row.banType,
+                    String(row.originalEvents),
+                    String(row.remainingEvents),
+                    row.startDate,
+                    row.lastUpdated,
+                    row.reason,
+                    row.moderatorTag,
+                    row.messageId,
+                    row.status,
+                  ]],
                 },
               ],
             },
           });
           updatedInSheet = true;
-          console.log(`Updated reason for row ${rowIndex + 1} in sheet for ban ${ban.playerTag}`);
+          console.log(`Updated row ${rowIndex + 1} in sheet for ban ${row.playerTag}`);
         } else {
           console.log(`Could not find matching row in sheet for ban ${ban.playerTag} (messageId: ${ban.messageId})`);
         }
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error("Failed to update reason in sheet:", errorMsg);
+      console.error("Failed to update ban in sheet:", errorMsg);
     }
 
     return { success: true, updatedInSheet };
