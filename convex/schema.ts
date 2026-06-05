@@ -734,6 +734,8 @@ export default defineSchema({
     playersCursor: v.union(v.string(), v.null()),
     tierEvalBatch: v.number(),
     tierEvalBatchCount: v.number(),
+    tierEvalPlayerIds: v.optional(v.array(v.id("players"))),
+    tierEvalRecentMediansDone: v.optional(v.boolean()),
     tierEvalInitialized: v.optional(v.boolean()),
     includeAggregateStats: v.boolean(),
     stopAfterPhase: v.optional(

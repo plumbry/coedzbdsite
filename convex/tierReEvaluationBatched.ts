@@ -1,4 +1,5 @@
 import { internalMutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id, Doc } from "./_generated/dataModel.d.ts";
 import { internal } from "./_generated/api";
@@ -13,7 +14,7 @@ import {
   roundHolisticScore,
 } from "./lib/stats/holisticScore";
 
-const BATCH_SIZE = 10; // Process 10 players per batch
+const BATCH_SIZE = 1; // One player per batch — heavy per-player reads (results, imports, match stats)
 
 // Helper function to convert tier letter to numeric value
 const tierToNumeric = (tier: string | undefined): number => {
@@ -183,7 +184,11 @@ export const initializeBatchRebuild = internalMutation({
   args: {
     recentOnly: v.optional(v.boolean()),
   },
-  handler: async (ctx, args): Promise<{ totalPlayers: number; batchCount: number }> => {
+  handler: async (ctx, args): Promise<{
+    totalPlayers: number;
+    batchCount: number;
+    playerIds: Id<"players">[];
+  }> => {
     // Calculate tier medians (separate from clearing)
     await ctx.runMutation(internal.tierReEvaluationBatched.calculateTierMedians, {});
 
@@ -220,16 +225,25 @@ export const initializeBatchRebuild = internalMutation({
 
     const totalPlayers = eligiblePlayers.length;
     const batchCount = Math.ceil(totalPlayers / BATCH_SIZE);
+    const playerIds = eligiblePlayers.map((p) => p._id);
 
-    return { totalPlayers, batchCount };
+    return { totalPlayers, batchCount, playerIds };
   },
 });
 
 // Step 3: Process a single batch
+async function lookupPlayerByEpicUsername(ctx: MutationCtx, epicUsername: string) {
+  return await ctx.db
+    .query("players")
+    .withIndex("by_epic_username", (q) => q.eq("epicUsername", epicUsername))
+    .first();
+}
+
 export const processBatch = internalMutation({
   args: {
     batchNumber: v.number(),
     recentOnly: v.optional(v.boolean()),
+    playerIds: v.optional(v.array(v.id("players"))),
   },
   handler: async (ctx, args): Promise<{ processed: number; playersInBatch: string[] }> => {
     // Get cached tier medians
@@ -240,65 +254,51 @@ export const processBatch = internalMutation({
 
     const { tierAverages, tierHolisticMedians, tierKillsMedians } = mediansCache;
 
-    // Get only active eligible players using existing indexes (exclude former/archived)
-    const activePlayers = await ctx.db
-      .query("players")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .collect();
-    const acceptedMembers = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
-      .collect();
+    let batchPlayers: Doc<"players">[] = [];
 
-    // Combine and deduplicate
-    const playerMap = new Map<string, typeof activePlayers[0]>();
-    for (const p of [...activePlayers, ...acceptedMembers]) {
-      playerMap.set(p._id, p);
-    }
-    let eligiblePlayers = filterVisibleMembers(
-      Array.from(playerMap.values()).filter(
-        (p) => p.hasMatchData === true && p.status !== "archived",
-      ),
-    );
-
-    // Filter to only players active in the last 6 weeks if recentOnly is enabled
-    if (args.recentOnly) {
-      const SIX_WEEKS_MS = 6 * 7 * 24 * 60 * 60 * 1000;
-      const cutoff = Date.now() - SIX_WEEKS_MS;
-      eligiblePlayers = eligiblePlayers.filter((p) => {
-        const mostRecent = p.topFiveCache?.mostRecentEventTime;
-        return mostRecent !== undefined && mostRecent >= cutoff;
-      });
-    }
-
-    // Get ALL players (including archived) for teammate lookups - need to look up teammates by epicUsername
-    const archivedPlayers = await ctx.db
-      .query("players")
-      .withIndex("by_status", (q) => q.eq("status", "archived"))
-      .collect();
-    
-    // Helper to check if Discord ID is valid (not placeholder or imported)
-    const isValidDiscordId = (id: string | undefined): boolean => {
-      if (!id || id === "") return false;
-      if (id === "imported") return false;
-      if (id.startsWith("placeholder_")) return false;
-      return true;
-    };
-    
-    // Build a map of epicUsername -> player for fast teammate lookups
-    const allPlayersForLookup = [...Array.from(playerMap.values()), ...archivedPlayers]
-      .filter(p => isValidDiscordId(p.discordUserId));
-    const epicUsernameToPlayer = new Map<string, typeof activePlayers[0]>();
-    for (const p of allPlayersForLookup) {
-      if (p.epicUsername) {
-        epicUsernameToPlayer.set(p.epicUsername, p);
+    if (args.playerIds && args.playerIds.length > 0) {
+      for (const playerId of args.playerIds) {
+        const player = await ctx.db.get(playerId);
+        if (player) {
+          batchPlayers.push(player);
+        }
       }
-    }
+    } else {
+      // Legacy path when playerIds were not stored on the rebuild job
+      const activePlayers = await ctx.db
+        .query("players")
+        .withIndex("by_status", (q) => q.eq("status", "active"))
+        .collect();
+      const acceptedMembers = await ctx.db
+        .query("players")
+        .withIndex("by_membership_status", (q) =>
+          q.eq("currentMembershipStatus", "accepted"),
+        )
+        .collect();
 
-    // Get just this batch
-    const startIdx = args.batchNumber * BATCH_SIZE;
-    const endIdx = Math.min(startIdx + BATCH_SIZE, eligiblePlayers.length);
-    const batchPlayers = eligiblePlayers.slice(startIdx, endIdx);
+      const playerMap = new Map<string, (typeof activePlayers)[0]>();
+      for (const p of [...activePlayers, ...acceptedMembers]) {
+        playerMap.set(p._id, p);
+      }
+      let eligiblePlayers = filterVisibleMembers(
+        Array.from(playerMap.values()).filter(
+          (p) => p.hasMatchData === true && p.status !== "archived",
+        ),
+      );
+
+      if (args.recentOnly) {
+        const SIX_WEEKS_MS = 6 * 7 * 24 * 60 * 60 * 1000;
+        const cutoff = Date.now() - SIX_WEEKS_MS;
+        eligiblePlayers = eligiblePlayers.filter((p) => {
+          const mostRecent = p.topFiveCache?.mostRecentEventTime;
+          return mostRecent !== undefined && mostRecent >= cutoff;
+        });
+      }
+
+      const startIdx = args.batchNumber * BATCH_SIZE;
+      const endIdx = Math.min(startIdx + BATCH_SIZE, eligiblePlayers.length);
+      batchPlayers = eligiblePlayers.slice(startIdx, endIdx);
+    }
 
     const now = Date.now();
     const processedNames: string[] = [];
@@ -408,9 +408,8 @@ export const processBatch = internalMutation({
           if (uniqueTeammates.has(teammateEpic)) continue;
           
           uniqueTeammates.add(teammateEpic);
-          // Look up teammate from ALL players (including archived) for accurate tier calculation
-          const teammate = epicUsernameToPlayer.get(teammateEpic);
-          if (teammate && teammate.tier) {
+          const teammate = await lookupPlayerByEpicUsername(ctx, teammateEpic);
+          if (teammate?.tier) {
             teammateTiers.push(tierToNumeric(teammate.tier));
           }
         }
@@ -623,15 +622,14 @@ export const processBatch = internalMutation({
   },
 });
 
-// Step 4: Finalize recent (6-week) comparisons after all batches complete.
-// Computes 6-week tier medians from cached recentHolisticScore values,
-// then updates each cache entry's recent diff fields against those medians.
-export const finalizeRecentComparisons = internalMutation({
+// Step 4a: Compute 6-week tier medians from cached recentHolisticScore values.
+export const computeRecentTierMedians = internalMutation({
   args: {},
-  handler: async (ctx): Promise<{ updated: number; recentMedians: Record<string, number | undefined> }> => {
+  handler: async (
+    ctx,
+  ): Promise<{ recentMedians: { S?: number; A?: number; B?: number; C?: number } }> => {
     const allCache = await ctx.db.query("tierReEvaluationCache").collect();
 
-    // Group recentHolisticScore by tier (only entries that have recent data)
     const tierScores: Record<string, number[]> = { S: [], A: [], B: [], C: [] };
     for (const entry of allCache) {
       if (entry.recentHolisticScore != null && ["S", "A", "B", "C"].includes(entry.tier)) {
@@ -639,24 +637,36 @@ export const finalizeRecentComparisons = internalMutation({
       }
     }
 
-    // Compute recent medians per tier
     const recentMedians: { S?: number; A?: number; B?: number; C?: number } = {};
     for (const tier of ["S", "A", "B", "C"] as const) {
       const scores = tierScores[tier].sort((a, b) => a - b);
       if (scores.length === 0) continue;
       const mid = Math.floor(scores.length / 2);
-      recentMedians[tier] = scores.length % 2 === 0
-        ? (scores[mid - 1] + scores[mid]) / 2
-        : scores[mid];
+      recentMedians[tier] =
+        scores.length % 2 === 0 ? (scores[mid - 1] + scores[mid]) / 2 : scores[mid];
     }
 
-    // Store recent medians in tierMediansCache
     const mediansCache = await ctx.db.query("tierMediansCache").first();
     if (mediansCache) {
       await ctx.db.patch(mediansCache._id, { recentTierHolisticMedians: recentMedians });
     }
 
-    // Update each cache entry's recent diff fields using the 6-week medians
+    return { recentMedians };
+  },
+});
+
+// Step 4b: Finalize recent (6-week) comparisons after all batches complete.
+// Computes 6-week tier medians from cached recentHolisticScore values,
+// then updates each cache entry's recent diff fields against those medians.
+export const finalizeRecentComparisons = internalMutation({
+  args: {},
+  handler: async (ctx): Promise<{ updated: number; recentMedians: Record<string, number | undefined> }> => {
+    const { recentMedians } = await ctx.runMutation(
+      internal.tierReEvaluationBatched.computeRecentTierMedians,
+      {},
+    );
+
+    const allCache = await ctx.db.query("tierReEvaluationCache").collect();
     const tierOrder = ["S", "A", "B", "C"];
     let updated = 0;
 

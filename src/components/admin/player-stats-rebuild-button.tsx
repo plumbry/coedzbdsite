@@ -131,12 +131,22 @@ export function PlayerStatsRebuildProgress({
         : activeRebuildJob.phaseLabel}
       {activeRebuildJob.tierEvalRecentOnly ? " (6-week tier eval)" : ""}
       {activeRebuildJob.phase === "tier_eval" &&
-        activeRebuildJob.tierEvalBatchCount > 0 && (
+        activeRebuildJob.tierEvalBatchCount > 0 &&
+        activeRebuildJob.tierEvalBatch < activeRebuildJob.tierEvalBatchCount && (
           <>
             {" "}
             (batch {activeRebuildJob.tierEvalBatch + 1}/
             {activeRebuildJob.tierEvalBatchCount})
           </>
+        )}
+      {activeRebuildJob.phase === "tier_eval" &&
+        activeRebuildJob.tierEvalBatch >= activeRebuildJob.tierEvalBatchCount &&
+        !activeRebuildJob.tierEvalRecentMediansDone && (
+          <> (computing recent tier medians)</>
+        )}
+      {activeRebuildJob.phase === "tier_eval" &&
+        activeRebuildJob.tierEvalRecentMediansDone && (
+          <> (finalizing recent comparisons)</>
         )}
     </span>
   );
