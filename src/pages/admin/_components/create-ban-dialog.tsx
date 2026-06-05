@@ -15,17 +15,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog.tsx";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { AlertTriangle, CalendarCheck, Plus, Search, User } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce.ts";
+import { cn } from "@/lib/utils.ts";
 import {
   type OffenseTrack,
   type PenaltyKind,
@@ -33,6 +27,8 @@ import {
   resolveBanType,
   showsEventCount,
   getDiscordRoleLabel,
+  OFFENSE_TRACK_LABELS,
+  PENALTY_KIND_LABELS,
 } from "@/lib/event-ban-form.ts";
 
 const TRACK_SUGGESTIONS: Record<
@@ -49,13 +45,86 @@ const TRACK_SUGGESTIONS: Record<
   },
 };
 
+type FormStep = "warning" | "player" | "track" | "penalty" | "reason" | "review";
+
 type CreateBanDialogProps = {
   onEventPassed?: () => void;
 };
 
+const STEP_QUESTIONS: Record<Exclude<FormStep, "warning">, { title: string; description: string }> = {
+  player: {
+    title: "Who is this ban for?",
+    description: "Search for a member or enter their Discord ID and display name.",
+  },
+  track: {
+    title: "What offense track applies?",
+    description: "Choose minor, major, or probation based on the punishment matrix.",
+  },
+  penalty: {
+    title: "What penalty should they receive?",
+    description: "Apply a warning or an event ban for this offense.",
+  },
+  reason: {
+    title: "What is the reason?",
+    description: "Describe what happened. This is stored with the ban record.",
+  },
+  review: {
+    title: "Review and apply",
+    description: "Confirm the details below before applying the ban.",
+  },
+};
+
+function QuestionProgress({ current, steps }: { current: FormStep; steps: FormStep[] }) {
+  const index = steps.indexOf(current);
+  if (index < 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        Step {index + 1} of {steps.length}
+      </p>
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full bg-primary transition-all duration-300"
+          style={{ width: `${((index + 1) / steps.length) * 100}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ChoiceCard({
+  selected,
+  onClick,
+  title,
+  description,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  title: string;
+  description: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "w-full rounded-lg border p-4 text-left transition-colors cursor-pointer",
+        selected
+          ? "border-primary bg-primary/5 ring-1 ring-primary"
+          : "border-border hover:border-primary/40 hover:bg-muted/40",
+      )}
+    >
+      <p className="font-medium">{title}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+    </button>
+  );
+}
+
 export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps) {
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<"warning" | "form">("form");
+  const [step, setStep] = useState<FormStep>("player");
+  const [stepError, setStepError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [playerSearch, setPlayerSearch] = useState("");
@@ -109,6 +178,13 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
       ? TRACK_SUGGESTIONS[offenseTrack][Math.min(nextOffenseNumber, 2)]
       : null;
 
+  const formSteps = useMemo((): FormStep[] => {
+    const steps: FormStep[] = ["player", "track"];
+    if (offenseTrack !== "probation") steps.push("penalty");
+    steps.push("reason", "review");
+    return steps;
+  }, [offenseTrack]);
+
   useEffect(() => {
     if (offenseTrack === "probation") {
       setOriginalEvents("0");
@@ -116,6 +192,40 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
     }
     setOriginalEvents(String(defaultEventsFor(offenseTrack, penaltyKind)));
   }, [offenseTrack, penaltyKind]);
+
+  const getNextStep = (current: FormStep): FormStep | null => {
+    if (current === "warning") return "player";
+    if (current === "player") return "track";
+    if (current === "track") return offenseTrack === "probation" ? "reason" : "penalty";
+    if (current === "penalty") return "reason";
+    if (current === "reason") return "review";
+    return null;
+  };
+
+  const getPrevStep = (current: FormStep): FormStep | null => {
+    if (current === "review") return "reason";
+    if (current === "reason") return offenseTrack === "probation" ? "track" : "penalty";
+    if (current === "penalty") return "track";
+    if (current === "track") return "player";
+    if (current === "player") return hasActiveBans ? "warning" : null;
+    return null;
+  };
+
+  const validateStep = (current: FormStep): string | null => {
+    if (current === "player") {
+      if (!discordId.trim()) return "Discord ID is required";
+      if (!playerTag.trim()) return "Player name is required";
+      return null;
+    }
+    if (current === "penalty" && showsEventCount(offenseTrack, penaltyKind)) {
+      const events = parseInt(originalEvents, 10);
+      if (!originalEvents.trim() || isNaN(events) || events < 1) {
+        return "Number of events is required (at least 1)";
+      }
+    }
+    if (current === "reason" && !reason.trim()) return "Reason is required";
+    return null;
+  };
 
   const handleSelectPlayer = (player: {
     discordUsername: string;
@@ -128,6 +238,7 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
     setPlayerTag(player.discordUsername || player.epicUsername);
     setPlayerSearch(player.discordUsername || player.epicUsername);
     setShowResults(false);
+    setStepError(null);
   };
 
   const resetForm = () => {
@@ -139,7 +250,8 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
     setPenaltyKind("warning");
     setOriginalEvents("0");
     setReason("");
-    setStep("form");
+    setStepError(null);
+    setStep("player");
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -148,7 +260,8 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
       resetForm();
       return;
     }
-    setStep(hasActiveBans ? "warning" : "form");
+    setStep(hasActiveBans ? "warning" : "player");
+    setStepError(null);
   };
 
   const handleEventPassedFromWarning = () => {
@@ -156,24 +269,39 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
     onEventPassed?.();
   };
 
+  const goNext = () => {
+    const error = validateStep(step);
+    if (error) {
+      setStepError(error);
+      toast.error(error);
+      return;
+    }
+    setStepError(null);
+    const next = getNextStep(step);
+    if (next) setStep(next);
+  };
+
+  const goBack = () => {
+    setStepError(null);
+    const prev = getPrevStep(step);
+    if (prev) setStep(prev);
+  };
+
   const handleSubmit = async () => {
-    if (!discordId.trim()) {
-      toast.error("Please select a player or enter a Discord ID");
-      return;
-    }
-    if (!playerTag.trim()) {
-      toast.error("Player tag is required");
-      return;
-    }
-    if (!reason.trim()) {
-      toast.error("Reason is required");
+    const playerError = validateStep("player");
+    const penaltyError = offenseTrack !== "probation" ? validateStep("penalty") : null;
+    const reasonError = validateStep("reason");
+    const error = playerError ?? penaltyError ?? reasonError;
+    if (error) {
+      setStepError(error);
+      toast.error(error);
       return;
     }
 
     const events =
       offenseTrack === "probation" ? 0 : parseInt(originalEvents, 10);
-    if (isNaN(events) || events < 0) {
-      toast.error("Events must be 0 or higher");
+    if (offenseTrack !== "probation" && penaltyKind === "event_ban" && (isNaN(events) || events < 1)) {
+      toast.error("Number of events is required (at least 1)");
       return;
     }
 
@@ -201,6 +329,278 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const renderPlayerStep = () => (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>Search player</Label>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Type a name to search..."
+            value={playerSearch}
+            onChange={(e) => {
+              setPlayerSearch(e.target.value);
+              setShowResults(true);
+              if (selectedPlayer) setSelectedPlayer(null);
+              setStepError(null);
+            }}
+            onFocus={() => setShowResults(true)}
+            className="pl-9"
+          />
+        </div>
+
+        {showResults && searchResults && searchResults.length > 0 && !selectedPlayer && (
+          <div className="max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
+            {searchResults.map((player) => (
+              <button
+                key={player._id}
+                type="button"
+                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                onClick={() => handleSelectPlayer(player)}
+              >
+                <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{player.discordUsername}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    Epic: {player.epicUsername} | ID: {player.discordUserId}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {showResults && debouncedSearch.length >= 2 && searchResults && searchResults.length === 0 && !selectedPlayer && (
+          <p className="text-xs text-muted-foreground">No players found. Enter their details below.</p>
+        )}
+      </div>
+
+      {selectedPlayer && (
+        <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2">
+          <User className="h-4 w-4 text-primary" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">{selectedPlayer.discordUsername}</p>
+            <p className="font-mono text-xs text-muted-foreground">{selectedPlayer.discordUserId}</p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 cursor-pointer text-xs"
+            onClick={() => {
+              setSelectedPlayer(null);
+              setPlayerSearch("");
+              setDiscordId("");
+              setPlayerTag("");
+            }}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="space-y-2">
+          <Label htmlFor="discordId">
+            Discord ID <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="discordId"
+            placeholder="123456789012345678"
+            value={discordId}
+            onChange={(e) => {
+              setDiscordId(e.target.value);
+              setStepError(null);
+            }}
+            disabled={!!selectedPlayer}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="playerTag">
+            Player name <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="playerTag"
+            placeholder="Display name for the ban record"
+            value={playerTag}
+            onChange={(e) => {
+              setPlayerTag(e.target.value);
+              setStepError(null);
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTrackStep = () => (
+    <div className="space-y-3">
+      <ChoiceCard
+        selected={offenseTrack === "minor"}
+        onClick={() => {
+          setOffenseTrack("minor");
+          setStepError(null);
+        }}
+        title="Minor"
+        description="First offenses and lower-severity incidents on the minor track."
+      />
+      <ChoiceCard
+        selected={offenseTrack === "major"}
+        onClick={() => {
+          setOffenseTrack("major");
+          setStepError(null);
+        }}
+        title="Major"
+        description="Serious offenses on the major track with stricter escalation."
+      />
+      <ChoiceCard
+        selected={offenseTrack === "probation"}
+        onClick={() => {
+          setOffenseTrack("probation");
+          setStepError(null);
+        }}
+        title="Probation"
+        description="28-day server probation — applies the Probation role and removes tier roles."
+      />
+    </div>
+  );
+
+  const renderPenaltyStep = () => (
+    <div className="space-y-4">
+      {offenseHistory && discordId && (
+        <div className="space-y-2 rounded-md bg-muted/50 p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Auto-detected</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="border-yellow-200 bg-yellow-500/10 text-yellow-700">
+              Minor: {offenseHistory.minorCount} prior
+            </Badge>
+            <Badge variant="secondary" className="border-red-200 bg-red-500/10 text-red-600">
+              Major: {offenseHistory.majorCount} prior
+            </Badge>
+            <Badge className="border-primary/20 bg-primary/10 text-primary">
+              Next: {offenseTrack === "minor" ? "Minor" : "Major"} #{nextOffenseNumber}
+            </Badge>
+          </div>
+          {suggestedPenalty && (
+            <p className="text-sm text-foreground">
+              Suggested: <span className="font-medium">{suggestedPenalty.label}</span>
+            </p>
+          )}
+        </div>
+      )}
+
+      <ChoiceCard
+        selected={penaltyKind === "warning"}
+        onClick={() => {
+          setPenaltyKind("warning");
+          setStepError(null);
+        }}
+        title="Warning"
+        description="Recorded warning only — no event ban or Discord role."
+      />
+      <ChoiceCard
+        selected={penaltyKind === "event_ban"}
+        onClick={() => {
+          setPenaltyKind("event_ban");
+          setStepError(null);
+        }}
+        title="Event ban"
+        description="Ban from events for a set number of events — syncs the Event Ban Discord role."
+      />
+
+      {showsEventCount(offenseTrack, penaltyKind) && (
+        <div className="space-y-2 rounded-lg border p-4">
+          <Label htmlFor="events">
+            Number of events <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="events"
+            type="number"
+            min="1"
+            value={originalEvents}
+            onChange={(e) => {
+              setOriginalEvents(e.target.value);
+              setStepError(null);
+            }}
+          />
+          {suggestedPenalty && suggestedPenalty.kind === "event_ban" && (
+            <p className="text-xs text-muted-foreground">
+              Suggested: {suggestedPenalty.events} event{suggestedPenalty.events !== 1 ? "s" : ""}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderReasonStep = () => (
+    <div className="space-y-2">
+      <Label htmlFor="reason">
+        Reason <span className="text-destructive">*</span>
+      </Label>
+      <Textarea
+        id="reason"
+        placeholder="Describe what happened..."
+        value={reason}
+        onChange={(e) => {
+          setReason(e.target.value);
+          setStepError(null);
+        }}
+        rows={5}
+        className="min-h-[8rem]"
+      />
+    </div>
+  );
+
+  const renderReviewStep = () => {
+    const events =
+      offenseTrack === "probation" ? 0 : parseInt(originalEvents, 10);
+
+    return (
+      <div className="space-y-3 rounded-lg border bg-muted/30 p-4 text-sm">
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">Player</span>
+          <span className="text-right font-medium">{playerTag.trim()}</span>
+        </div>
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">Discord ID</span>
+          <span className="font-mono text-right text-xs">{discordId.trim()}</span>
+        </div>
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">Offense track</span>
+          <span className="font-medium">{OFFENSE_TRACK_LABELS[offenseTrack]}</span>
+        </div>
+        {offenseTrack !== "probation" && (
+          <>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Penalty</span>
+              <span className="font-medium">{PENALTY_KIND_LABELS[penaltyKind]}</span>
+            </div>
+            {penaltyKind === "event_ban" && (
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Events</span>
+                <span className="font-medium">{events}</span>
+              </div>
+            )}
+          </>
+        )}
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">Stored as</span>
+          <span className="font-medium">{banType}</span>
+        </div>
+        {getDiscordRoleLabel(banType) && (
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">Discord role</span>
+            <span className="font-medium">{getDiscordRoleLabel(banType)}</span>
+          </div>
+        )}
+        <div className="border-t pt-3">
+          <p className="text-muted-foreground">Reason</p>
+          <p className="mt-1 whitespace-pre-wrap">{reason.trim()}</p>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -238,18 +638,10 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
               <Button variant="ghost" onClick={() => handleOpenChange(false)} className="cursor-pointer">
                 Cancel
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => setStep("form")}
-                className="cursor-pointer"
-              >
+              <Button variant="outline" onClick={() => setStep("player")} className="cursor-pointer">
                 Not Needed
               </Button>
-              <Button
-                variant="secondary"
-                onClick={handleEventPassedFromWarning}
-                className="cursor-pointer"
-              >
+              <Button variant="secondary" onClick={handleEventPassedFromWarning} className="cursor-pointer">
                 <CalendarCheck className="mr-2 h-4 w-4" />
                 Event Passed
               </Button>
@@ -257,226 +649,44 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
           </>
         ) : (
           <>
-        <DialogHeader>
-          <DialogTitle>Create Event Ban</DialogTitle>
-          <DialogDescription>
-            Choose an offense track, then apply a warning or event ban. Probation applies the probation role and removes tier roles.
-          </DialogDescription>
-        </DialogHeader>
+            <DialogHeader>
+              <DialogTitle>{STEP_QUESTIONS[step].title}</DialogTitle>
+              <DialogDescription>{STEP_QUESTIONS[step].description}</DialogDescription>
+            </DialogHeader>
 
-        <DialogBody className="space-y-4">
-          <div className="space-y-2">
-            <Label>Search Player</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Type a name to search..."
-                value={playerSearch}
-                onChange={(e) => {
-                  setPlayerSearch(e.target.value);
-                  setShowResults(true);
-                  if (selectedPlayer) setSelectedPlayer(null);
-                }}
-                onFocus={() => setShowResults(true)}
-                className="pl-9"
-              />
-            </div>
+            <DialogBody className="space-y-4">
+              <QuestionProgress current={step} steps={formSteps} />
+              {stepError && (
+                <p className="text-sm text-destructive">{stepError}</p>
+              )}
+              {step === "player" && renderPlayerStep()}
+              {step === "track" && renderTrackStep()}
+              {step === "penalty" && renderPenaltyStep()}
+              {step === "reason" && renderReasonStep()}
+              {step === "review" && renderReviewStep()}
+            </DialogBody>
 
-            {showResults && searchResults && searchResults.length > 0 && !selectedPlayer && (
-              <div className="border rounded-md bg-popover shadow-md max-h-48 overflow-y-auto">
-                {searchResults.map((player) => (
-                  <button
-                    key={player._id}
-                    type="button"
-                    className="w-full text-left px-3 py-2 hover:bg-muted/50 flex items-center gap-2 cursor-pointer transition-colors"
-                    onClick={() => handleSelectPlayer(player)}
-                  >
-                    <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{player.discordUsername}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        Epic: {player.epicUsername} | ID: {player.discordUserId}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {showResults && debouncedSearch.length >= 2 && searchResults && searchResults.length === 0 && !selectedPlayer && (
-              <p className="text-xs text-muted-foreground">No players found. You can enter details manually below.</p>
-            )}
-          </div>
-
-          {selectedPlayer && (
-            <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
-              <User className="h-4 w-4 text-primary" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">{selectedPlayer.discordUsername}</p>
-                <p className="text-xs text-muted-foreground font-mono">{selectedPlayer.discordUserId}</p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="cursor-pointer h-7 text-xs"
-                onClick={() => {
-                  setSelectedPlayer(null);
-                  setPlayerSearch("");
-                  setDiscordId("");
-                  setPlayerTag("");
-                }}
-              >
-                Clear
+            <DialogFooter>
+              {getPrevStep(step) ? (
+                <Button variant="ghost" onClick={goBack} className="mr-auto cursor-pointer">
+                  Back
+                </Button>
+              ) : (
+                <span className="mr-auto" />
+              )}
+              <Button variant="ghost" onClick={() => handleOpenChange(false)} className="cursor-pointer">
+                Cancel
               </Button>
-            </div>
-          )}
-
-          {!selectedPlayer && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="discordId">Discord ID</Label>
-                <Input
-                  id="discordId"
-                  placeholder="123456789012345678"
-                  value={discordId}
-                  onChange={(e) => setDiscordId(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="playerTag">Player Tag</Label>
-                <Input
-                  id="playerTag"
-                  placeholder="PlayerName"
-                  value={playerTag}
-                  onChange={(e) => setPlayerTag(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label>Offense track</Label>
-            <Select
-              value={offenseTrack}
-              onValueChange={(value) => setOffenseTrack(value as OffenseTrack)}
-            >
-              <SelectTrigger className="cursor-pointer">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="minor" className="cursor-pointer">Minor</SelectItem>
-                <SelectItem value="major" className="cursor-pointer">Major</SelectItem>
-                <SelectItem value="probation" className="cursor-pointer">Probation</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {offenseTrack === "probation" ? (
-            <div className="rounded-md border border-red-200 bg-red-500/5 p-3 text-sm">
-              <p className="font-medium text-red-700">28-day server probation</p>
-              <p className="mt-1 text-muted-foreground">
-                Applies the Probation Discord role and removes any tier role. No warning or event-ban sub-choice is needed.
-              </p>
-            </div>
-          ) : (
-            <>
-              {offenseHistory && discordId && (
-                <div className="p-3 bg-muted/50 rounded-md space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Auto-detected</p>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 border-yellow-200">
-                      Minor: {offenseHistory.minorCount} prior
-                    </Badge>
-                    <Badge variant="secondary" className="bg-red-500/10 text-red-600 border-red-200">
-                      Major: {offenseHistory.majorCount} prior
-                    </Badge>
-                    <Badge className="bg-primary/10 text-primary border-primary/20">
-                      Next: {offenseTrack === "minor" ? "Minor" : "Major"} #{nextOffenseNumber}
-                    </Badge>
-                  </div>
-                  {suggestedPenalty && (
-                    <p className="text-sm text-foreground mt-1">
-                      Suggested: <span className="font-medium">{suggestedPenalty.label}</span> ({suggestedPenalty.events} events)
-                    </p>
-                  )}
-                </div>
+              {step === "review" ? (
+                <Button onClick={handleSubmit} disabled={isSubmitting} className="cursor-pointer">
+                  {isSubmitting ? "Applying..." : "Apply Ban"}
+                </Button>
+              ) : (
+                <Button onClick={goNext} className="cursor-pointer">
+                  Continue
+                </Button>
               )}
-
-              <div className={showsEventCount(offenseTrack, penaltyKind) ? "grid grid-cols-2 gap-3" : "space-y-2"}>
-                <div className="space-y-2">
-                  <Label>Penalty</Label>
-                  <Select
-                    value={penaltyKind}
-                    onValueChange={(value) => setPenaltyKind(value as PenaltyKind)}
-                  >
-                    <SelectTrigger className="cursor-pointer">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="warning" className="cursor-pointer">Warning</SelectItem>
-                      <SelectItem value="event_ban" className="cursor-pointer">Event ban</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {showsEventCount(offenseTrack, penaltyKind) && (
-                  <div className="space-y-2">
-                    <Label htmlFor="events">Number of events</Label>
-                    <Input
-                      id="events"
-                      type="number"
-                      min="1"
-                      value={originalEvents}
-                      onChange={(e) => setOriginalEvents(e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {suggestedPenalty && (
-                <p className="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">
-                  Suggested: <span className="font-medium text-foreground">{suggestedPenalty.label}</span>
-                  {" "}
-                  ({suggestedPenalty.events === 0 ? "warning only" : `${suggestedPenalty.events} event${suggestedPenalty.events !== 1 ? "s" : ""}`})
-                </p>
-              )}
-            </>
-          )}
-
-          <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            Stored as <span className="font-medium text-foreground">{banType}</span>
-            {getDiscordRoleLabel(banType) &&
-              ` — will sync "${getDiscordRoleLabel(banType)}" Discord role`}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="reason">Reason</Label>
-            <Textarea
-              id="reason"
-              placeholder="Reason for the ban..."
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={3}
-            />
-          </div>
-        </DialogBody>
-
-        <DialogFooter>
-          {hasActiveBans && (
-            <Button
-              variant="ghost"
-              onClick={() => setStep("warning")}
-              className="cursor-pointer mr-auto"
-            >
-              Back
-            </Button>
-          )}
-          <Button variant="ghost" onClick={() => handleOpenChange(false)} className="cursor-pointer">
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting} className="cursor-pointer">
-            {isSubmitting ? "Creating..." : "Apply Ban"}
-          </Button>
-        </DialogFooter>
+            </DialogFooter>
           </>
         )}
       </DialogContent>
