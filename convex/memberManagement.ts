@@ -18,6 +18,15 @@ import {
   getManualScoreForPlayer,
   pickCanonicalManualScore,
 } from "./helpers/manualScores";
+import { sortByTier } from "./helpers/tierSort";
+
+function sortPlayersForList<T extends { tier?: string; discordUsername: string }>(
+  players: T[],
+): T[] {
+  return sortByTier(players, (p) => p.tier, (a, b) =>
+    a.discordUsername.localeCompare(b.discordUsername),
+  );
+}
 
 /** Event mods may see tier letter only; admins receive full manual score records. */
 function applicationEvaluationForRole(
@@ -49,18 +58,21 @@ export const searchPlayersForApplicationLink = query({
       await ctx.db.query("players").order("desc").collect(),
     );
 
-    return players
-      .filter((player) => {
-        const status = player.currentMembershipStatus;
-        if (
-          status !== "accepted" &&
-          status !== "former" &&
-          status !== "rejected"
-        ) {
-          return false;
-        }
-        return playerMatchesSearchTerm(player, needle);
-      })
+    const matches = players.filter((player) => {
+      const status = player.currentMembershipStatus;
+      if (
+        status !== "accepted" &&
+        status !== "former" &&
+        status !== "rejected"
+      ) {
+        return false;
+      }
+      return playerMatchesSearchTerm(player, needle);
+    });
+
+    return sortByTier(matches, (p) => p.tier, (a, b) =>
+      a.discordUsername.localeCompare(b.discordUsername),
+    )
       .slice(0, maxResults)
       .map((player) => ({
         _id: player._id,
@@ -722,7 +734,7 @@ export const getAcceptedMembers = query({
       }),
     );
 
-    return enriched;
+    return sortPlayersForList(enriched);
   },
 });
 
@@ -742,7 +754,7 @@ export const getPublicMemberDirectory = query({
 
     const verificationLookup = await loadFemaleVerificationLookup(ctx);
 
-    return await Promise.all(
+    const directory = await Promise.all(
       players.map(async (player) => {
         const score = await ctx.db
           .query("manualScores")
@@ -768,6 +780,8 @@ export const getPublicMemberDirectory = query({
         };
       }),
     );
+
+    return sortPlayersForList(directory);
   },
 });
 
@@ -844,8 +858,10 @@ export const getRejectedMembers = query({
       .collect();
 
     const verificationLookup = await loadFemaleVerificationLookup(ctx);
-    return rejectedPlayers.map((player) =>
-      enrichPlayerWithFemaleVerification(player, verificationLookup),
+    return sortPlayersForList(
+      rejectedPlayers.map((player) =>
+        enrichPlayerWithFemaleVerification(player, verificationLookup),
+      ),
     );
   },
 });
@@ -861,8 +877,10 @@ export const getFormerMembers = query({
       .collect();
 
     const verificationLookup = await loadFemaleVerificationLookup(ctx);
-    return formerPlayers.map((player) =>
-      enrichPlayerWithFemaleVerification(player, verificationLookup),
+    return sortPlayersForList(
+      formerPlayers.map((player) =>
+        enrichPlayerWithFemaleVerification(player, verificationLookup),
+      ),
     );
   },
 });
@@ -880,8 +898,10 @@ export const getDiscordMembers = query({
       .collect();
 
     const verificationLookup = await loadFemaleVerificationLookup(ctx);
-    return discordPlayers.map((player) =>
-      enrichPlayerWithFemaleVerification(player, verificationLookup),
+    return sortPlayersForList(
+      discordPlayers.map((player) =>
+        enrichPlayerWithFemaleVerification(player, verificationLookup),
+      ),
     );
   },
 });

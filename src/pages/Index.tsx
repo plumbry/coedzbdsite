@@ -18,6 +18,7 @@ import SearchInput from "@/components/search-input.tsx";
 import StatCard from "@/components/stat-card.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
+import { compareTierField, DEFAULT_PLAYER_LIST_SORT } from "@/lib/tier-sort.ts";
 
 export default function Index() {
   const { isAdmin, isModeratorOrAdmin } = useUserRole();
@@ -25,10 +26,9 @@ export default function Index() {
   const [genderFilter, setGenderFilter] = useState<string>("all");
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sort, setSort] = useState<{ field: string; direction: "asc" | "desc" }>({ 
-    field: "discordUsername", 
-    direction: "asc" 
-  });
+  const [sort, setSort] = useState<{ field: string; direction: "asc" | "desc" }>(
+    DEFAULT_PLAYER_LIST_SORT,
+  );
   
   const acceptedMembers = useQuery(api.memberManagement.getPublicMemberDirectory);
   
@@ -66,10 +66,11 @@ export default function Index() {
         aVal = a.epicUsername || "";
         bVal = b.epicUsername || "";
         break;
-      case "tier":
-        aVal = a.tier || "Z";
-        bVal = b.tier || "Z";
-        break;
+      case "tier": {
+        const tierCmp = compareTierField(a.tier, b.tier, sort.direction);
+        if (tierCmp !== 0) return tierCmp;
+        return (a.discordUsername || "").localeCompare(b.discordUsername || "");
+      }
       case "totalScore":
         aVal = a.totalScore || 0;
         bVal = b.totalScore || 0;

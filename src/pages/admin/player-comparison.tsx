@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input.tsx";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Label } from "@/components/ui/label.tsx";
+import { sortByTier } from "@/lib/tier-sort.ts";
 
 function PlayerComparisonContent() {
   const { isModeratorOrAdmin } = useUserRole();
@@ -107,9 +108,13 @@ function PlayerComparisonContent() {
   };
 
   // Filter players based on search
-  const filteredPlayers = allPlayers?.filter((player) =>
-    player.playerName.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  const filteredPlayers = sortByTier(
+    allPlayers?.filter((player) =>
+      player.playerName.toLowerCase().includes(searchQuery.toLowerCase()),
+    ) ?? [],
+    (player) => (player.tier === "Unranked" ? undefined : player.tier),
+    (a, b) => a.playerName.localeCompare(b.playerName),
+  );
 
   return (
     <div className="space-y-4">

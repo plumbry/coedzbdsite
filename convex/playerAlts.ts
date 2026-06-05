@@ -5,6 +5,7 @@ import { logAudit } from "./helpers/audit";
 import { filterVisibleMembers, isAltAccount } from "./helpers/playerAlt";
 import { playerMatchesSearchTerm } from "./helpers/playerDiscordId";
 import type { Doc } from "./_generated/dataModel";
+import { sortByTier } from "./helpers/tierSort";
 
 function matchesPlayerSearch(player: Doc<"players">, needle: string): boolean {
   return playerMatchesSearchTerm(player, needle);
@@ -20,17 +21,19 @@ export const listAltPlayers = query({
       .withIndex("by_is_alt", (q) => q.eq("isAlt", true))
       .collect();
 
-    return alts
-      .map((player) => ({
-        _id: player._id,
-        discordUsername: player.discordUsername,
-        epicUsername: player.epicUsername,
-        nickname: player.nickname,
-        tier: player.tier,
-        currentMembershipStatus: player.currentMembershipStatus,
-        discordUserId: player.discordUserId,
-      }))
-      .sort((a, b) => a.discordUsername.localeCompare(b.discordUsername));
+    const rows = alts.map((player) => ({
+      _id: player._id,
+      discordUsername: player.discordUsername,
+      epicUsername: player.epicUsername,
+      nickname: player.nickname,
+      tier: player.tier,
+      currentMembershipStatus: player.currentMembershipStatus,
+      discordUserId: player.discordUserId,
+    }));
+
+    return sortByTier(rows, (p) => p.tier, (a, b) =>
+      a.discordUsername.localeCompare(b.discordUsername),
+    );
   },
 });
 
@@ -50,8 +53,13 @@ export const searchPlayersForAltMarking = query({
 
     const players = await ctx.db.query("players").order("desc").collect();
 
-    return filterVisibleMembers(players)
-      .filter((player) => matchesPlayerSearch(player, needle))
+    const matches = filterVisibleMembers(players).filter((player) =>
+      matchesPlayerSearch(player, needle),
+    );
+
+    return sortByTier(matches, (p) => p.tier, (a, b) =>
+      a.discordUsername.localeCompare(b.discordUsername),
+    )
       .slice(0, maxResults)
       .map((player) => ({
         _id: player._id,

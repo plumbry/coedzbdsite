@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input.tsx";
 import { ScrollArea } from "@/components/ui/scroll-area.tsx";
 import { Calculator, X, Search } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { sortByTier } from "@/lib/tier-sort.ts";
 
 interface Player {
   _id: Id<"players">;
@@ -51,16 +52,20 @@ export default function TeamComboCalculator({ open, onOpenChange, players }: Tea
   const isValidCombo = currentCombo && ALLOWED_COMBOS.includes(currentCombo);
   
   // Filter players with tiers and by search query
-  const availablePlayers = players
-    .filter(p => p.tier) // Only show players with tiers
-    .filter(p => !selectedPlayers.find(sp => sp._id === p._id)) // Exclude already selected
-    .filter(p => {
-      const query = searchQuery.toLowerCase();
-      return (
-        p.discordUsername.toLowerCase().includes(query) ||
-        p.epicUsername.toLowerCase().includes(query)
-      );
-    });
+  const availablePlayers = sortByTier(
+    players
+      .filter((p) => p.tier)
+      .filter((p) => !selectedPlayers.find((sp) => sp._id === p._id))
+      .filter((p) => {
+        const query = searchQuery.toLowerCase();
+        return (
+          p.discordUsername.toLowerCase().includes(query) ||
+          p.epicUsername.toLowerCase().includes(query)
+        );
+      }),
+    (p) => p.tier,
+    (a, b) => a.discordUsername.localeCompare(b.discordUsername),
+  );
   
   const getTierBadgeVariant = (tier: string) => {
     return tier === "S" ? "default" : "secondary";

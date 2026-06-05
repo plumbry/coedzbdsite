@@ -31,6 +31,7 @@ import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import PlayerProfileLink from "@/components/player-profile-link.tsx";
 import FemaleVerifiedBadge from "@/components/female-verified-badge.tsx";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
+import { compareTierField } from "@/lib/tier-sort.ts";
 
 export default function MemberManagement() {
   const { user, isAdmin, isModeratorOrAdmin, isLoading: isRoleLoading } = useUserRole();
@@ -90,10 +91,10 @@ export default function MemberManagement() {
   const [formerSearch, setFormerSearch] = useState("");
   
   // Sorting state
-  const [acceptedSort, setAcceptedSort] = useState<{ field: string; direction: "asc" | "desc" }>({ field: "discordUsername", direction: "asc" });
-  const [discordSort, setDiscordSort] = useState<{ field: string; direction: "asc" | "desc" }>({ field: "discordUsername", direction: "asc" });
-  const [rejectedSort, setRejectedSort] = useState<{ field: string; direction: "asc" | "desc" }>({ field: "_creationTime", direction: "desc" });
-  const [formerSort, setFormerSort] = useState<{ field: string; direction: "asc" | "desc" }>({ field: "discordUsername", direction: "asc" });
+  const [acceptedSort, setAcceptedSort] = useState<{ field: string; direction: "asc" | "desc" }>({ field: "tier", direction: "asc" });
+  const [discordSort, setDiscordSort] = useState<{ field: string; direction: "asc" | "desc" }>({ field: "tier", direction: "asc" });
+  const [rejectedSort, setRejectedSort] = useState<{ field: string; direction: "asc" | "desc" }>({ field: "tier", direction: "asc" });
+  const [formerSort, setFormerSort] = useState<{ field: string; direction: "asc" | "desc" }>({ field: "tier", direction: "asc" });
   
   // Queries — only fire when authenticated
   const pendingApplications = useQuery(
@@ -266,6 +267,18 @@ export default function MemberManagement() {
     return [...data].sort((a, b) => {
       const aVal = a[field];
       const bVal = b[field];
+
+      if (field === "tier") {
+        const tierCmp = compareTierField(
+          typeof aVal === "string" ? aVal : undefined,
+          typeof bVal === "string" ? bVal : undefined,
+          direction,
+        );
+        if (tierCmp !== 0) return tierCmp;
+        const aName = String(a.discordUsername ?? "");
+        const bName = String(b.discordUsername ?? "");
+        return direction === "asc" ? aName.localeCompare(bName) : bName.localeCompare(aName);
+      }
       
       if (aVal === undefined || aVal === null) return 1;
       if (bVal === undefined || bVal === null) return -1;

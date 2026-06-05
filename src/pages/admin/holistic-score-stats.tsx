@@ -53,6 +53,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible.tsx";
 import { toast } from "sonner";
+import { compareTierField } from "@/lib/tier-sort.ts";
 
 type SortField =
   | "playerName"
@@ -111,8 +112,8 @@ function HolisticScoreStatsContent() {
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
-  const [sortField, setSortField] = useState<SortField>("holisticScore");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [sortField, setSortField] = useState<SortField>("tier");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [hideInsufficientData, setHideInsufficientData] = useState(true);
   const [applyTCDCA, setApplyTCDCA] = useState(false); // Display-time toggle
@@ -344,10 +345,13 @@ function HolisticScoreStatsContent() {
         aVal = a.playerName;
         bVal = b.playerName;
         break;
-      case "tier":
-        aVal = a.tier;
-        bVal = b.tier;
-        break;
+      case "tier": {
+        const tierCmp = compareTierField(a.tier, b.tier, sortDirection);
+        if (tierCmp !== 0) return tierCmp;
+        return sortDirection === "asc"
+          ? a.playerName.localeCompare(b.playerName)
+          : b.playerName.localeCompare(a.playerName);
+      }
       case "totalEvents":
         aVal = a.totalEvents;
         bVal = b.totalEvents;

@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { ConvexError } from "convex/values";
 import { useClientPagination } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
+import { compareTierField } from "@/lib/tier-sort.ts";
 
 type SortColumn = "discord" | "discordId" | "epic" | "tier" | "roles";
 type SortDirection = "asc" | "desc";
@@ -31,7 +32,7 @@ export default function DiscordMembers() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
-  const [sortColumn, setSortColumn] = useState<SortColumn>("discord");
+  const [sortColumn, setSortColumn] = useState<SortColumn>("tier");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set());
   const [matchingPlayerId, setMatchingPlayerId] = useState<Id<"players"> | null>(null);
@@ -132,13 +133,9 @@ export default function DiscordMembers() {
         case "epic":
           comparison = (a.epicUsername || "").localeCompare(b.epicUsername || "");
           break;
-        case "tier": {
-          const tierOrder: Record<string, number> = { S: 5, A: 4, B: 3, C: 2, D: 1 };
-          const tierA = a.tier ? (tierOrder[a.tier] || 0) : 0;
-          const tierB = b.tier ? (tierOrder[b.tier] || 0) : 0;
-          comparison = tierA - tierB;
+        case "tier":
+          comparison = compareTierField(a.tier, b.tier, sortDirection);
           break;
-        }
         case "roles":
           comparison = (a.discordRoles?.length || 0) - (b.discordRoles?.length || 0);
           break;

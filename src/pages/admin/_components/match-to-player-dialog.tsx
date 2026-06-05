@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
 import { Users, Link } from "lucide-react";
 import { toast } from "sonner";
+import { sortByTier } from "@/lib/tier-sort.ts";
 
 interface MatchToPlayerDialogProps {
   open: boolean;
@@ -55,12 +56,17 @@ export default function MatchToPlayerDialog({
 
   // Filter by search
   const filteredPlayers = useMemo(() => {
-    if (!searchQuery) return eligiblePlayers.slice(0, 50);
-    const query = searchQuery.toLowerCase();
-    return eligiblePlayers.filter(
-      (p) =>
-        p.discordUsername?.toLowerCase().includes(query) ||
-        p.epicUsername?.toLowerCase().includes(query)
+    const base = !searchQuery
+      ? eligiblePlayers
+      : eligiblePlayers.filter((p) => {
+          const query = searchQuery.toLowerCase();
+          return (
+            p.discordUsername?.toLowerCase().includes(query) ||
+            p.epicUsername?.toLowerCase().includes(query)
+          );
+        });
+    return sortByTier(base, (p) => p.tier, (a, b) =>
+      (a.discordUsername ?? "").localeCompare(b.discordUsername ?? ""),
     ).slice(0, 50);
   }, [eligiblePlayers, searchQuery]);
 

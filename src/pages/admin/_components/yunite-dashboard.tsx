@@ -12,6 +12,7 @@ import { ChevronRight, TrendingUp, Users, Zap, Target, Activity, Loader2, StopCi
 import { format } from "date-fns";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { sortByTier } from "@/lib/tier-sort.ts";
 
 function PlayerMatchDataSyncTool() {
   const players = useQuery(api.players.getPlayers, {});
@@ -20,10 +21,15 @@ function PlayerMatchDataSyncTool() {
   const [isSyncing, setIsSyncing] = useState(false);
   const syncPlayerMatchData = useAction(api.yunite.sync.syncPlayerMatchData);
   
-  const filteredPlayers = players?.filter(p => 
-    p.discordUsername.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.epicUsername?.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  const filteredPlayers = sortByTier(
+    players?.filter(
+      (p) =>
+        p.discordUsername.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.epicUsername?.toLowerCase().includes(searchQuery.toLowerCase()),
+    ) ?? [],
+    (p) => p.tier,
+    (a, b) => a.discordUsername.localeCompare(b.discordUsername),
+  );
   
   const handleTogglePlayer = (playerId: Id<"players">) => {
     setSelectedPlayerIds(prev => 

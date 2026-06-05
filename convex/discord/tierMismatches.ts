@@ -7,6 +7,7 @@ import {
   loadFemaleVerificationLookup,
 } from "../helpers/femaleVerification";
 import { getManualScoreForPlayer } from "../helpers/manualScores";
+import { compareTiers } from "../helpers/tierSort";
 
 // Tier role names expected in Discord
 const TIER_ROLE_NAMES = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
@@ -199,16 +200,19 @@ export const getTierMismatches = query({
       }
     }
 
-    // Sort by mismatch severity: wrong_role first, then multiple, then missing
     const severityOrder: Record<MismatchStatus, number> = {
       wrong_role: 0,
       multiple_roles: 1,
       missing_role: 2,
     };
-    mismatches.sort(
-      (a, b) =>
-        severityOrder[a.mismatchStatus] - severityOrder[b.mismatchStatus],
-    );
+    mismatches.sort((a, b) => {
+      const tierCmp = compareTiers(a.websiteTier, b.websiteTier);
+      if (tierCmp !== 0) return tierCmp;
+      const severityCmp =
+        severityOrder[a.mismatchStatus] - severityOrder[b.mismatchStatus];
+      if (severityCmp !== 0) return severityCmp;
+      return (a.discordUsername ?? "").localeCompare(b.discordUsername ?? "");
+    });
 
     return mismatches;
   },

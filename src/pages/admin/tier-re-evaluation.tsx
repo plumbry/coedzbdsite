@@ -6,6 +6,7 @@ import { useTierEvaluationCache } from "@/hooks/use-tier-evaluation-cache.ts";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
+import { compareTierField } from "@/lib/tier-sort.ts";
 
 // Component to show top 5 results link
 function Top5ResultsLink({ 
@@ -115,7 +116,7 @@ function TierReEvaluationContent() {
   // ALL HOOKS MUST BE CALLED FIRST (before any conditional returns)
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [rebuildRecentOnly, setRebuildRecentOnly] = useState(true);
-  const [sortField, setSortField] = useState<SortField>("evaluationStatus");
+  const [sortField, setSortField] = useState<SortField>("tier");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [tierFilter, setTierFilter] = useState<string>("all");
@@ -368,10 +369,13 @@ function TierReEvaluationContent() {
             aVal = a?.playerName || "";
             bVal = b?.playerName || "";
             break;
-          case "tier":
-            aVal = a?.tier || "";
-            bVal = b?.tier || "";
-            break;
+          case "tier": {
+            const tierCmp = compareTierField(a?.tier, b?.tier, sortDirection);
+            if (tierCmp !== 0) return tierCmp;
+            return sortDirection === "asc"
+              ? (a?.playerName || "").localeCompare(b?.playerName || "")
+              : (b?.playerName || "").localeCompare(a?.playerName || "");
+          }
           case "totalEvents":
             aVal = a?.totalEvents || 0;
             bVal = b?.totalEvents || 0;

@@ -26,6 +26,7 @@ import {
   isValidSegmentKey,
   type AudienceChartType,
 } from "@/lib/audience-insights-segments.ts";
+import { sortByTier } from "@/lib/tier-sort.ts";
 
 type MemberRow = {
   playerId: Id<"players">;
@@ -94,12 +95,17 @@ export default function AudienceInsightsSegmentPage() {
   }, [page]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return allMembers;
-    const term = search.toLowerCase();
-    return allMembers.filter(
-      (m) =>
-        m.discordUsername.toLowerCase().includes(term) ||
-        m.epicUsername.toLowerCase().includes(term),
+    const list = !search.trim()
+      ? allMembers
+      : allMembers.filter((m) => {
+          const term = search.toLowerCase();
+          return (
+            m.discordUsername.toLowerCase().includes(term) ||
+            m.epicUsername.toLowerCase().includes(term)
+          );
+        });
+    return sortByTier(list, (m) => m.tier, (a, b) =>
+      a.discordUsername.localeCompare(b.discordUsername),
     );
   }, [allMembers, search]);
 

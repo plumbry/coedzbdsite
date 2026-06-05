@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge.tsx";
 import { Loader2, Plus, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { sortByTier } from "@/lib/tier-sort.ts";
 
 export default function DuoPairManager({ eventId, isTrio = false }: { eventId: Id<"events">; isTrio?: boolean }) {
   const duoPairs = useQuery(api.events.duoPairs.getEventDuoPairs, { eventId });
@@ -33,9 +34,11 @@ export default function DuoPairManager({ eventId, isTrio = false }: { eventId: I
   }
 
   // Filter to active players not already paired
-  const availablePlayers = players
-    ?.filter((p) => !pairedPlayerIds.has(p._id))
-    .sort((a, b) => a.discordUsername.localeCompare(b.discordUsername)) ?? [];
+  const availablePlayers = sortByTier(
+    players?.filter((p) => !pairedPlayerIds.has(p._id)) ?? [],
+    (p) => p.tier,
+    (a, b) => a.discordUsername.localeCompare(b.discordUsername),
+  );
 
   const selectedIds = [player1Id, player2Id, player3Id].filter(Boolean);
 

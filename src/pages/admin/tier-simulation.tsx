@@ -19,6 +19,7 @@ import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import RoleGate from "@/components/role-gate.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { toast } from "sonner";
+import { sortByTier } from "@/lib/tier-sort.ts";
 
 function TierSimulationContent() {
   const { isModeratorOrAdmin, isLoading: isLoadingUser } = useUserRole();
@@ -45,13 +46,16 @@ function TierSimulationContent() {
   const filteredPlayersForSearch = useMemo(() => {
     if (!playerSearchInput.trim() || !allPlayers) return [];
     const searchLower = playerSearchInput.toLowerCase();
-    return allPlayers
+    const matches = allPlayers
       .filter((p) => !tierSimulations.has(p._id))
       .filter(
         (p) =>
           (p.discordUsername?.toLowerCase().includes(searchLower) || false) ||
-          (p.epicUsername?.toLowerCase().includes(searchLower) || false)
-      )
+          (p.epicUsername?.toLowerCase().includes(searchLower) || false),
+      );
+    return sortByTier(matches, (p) => p.tier, (a, b) =>
+      (a.discordUsername || a.epicUsername).localeCompare(b.discordUsername || b.epicUsername),
+    )
       .slice(0, 10)
       .map((p) => ({
         playerId: p._id,

@@ -15,6 +15,7 @@ import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import ScorePlayerDialog from "../_components/score-player-dialog.tsx";
 import { useClientPagination } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
+import { compareTierField } from "@/lib/tier-sort.ts";
 
 type MismatchStatus = "missing_role" | "wrong_role" | "multiple_roles";
 
@@ -391,7 +392,7 @@ function MissingRoleSection() {
   const mismatches = useQuery(api.discord.tierMismatches.getTierMismatches, {});
   const [search, setSearch] = useState("");
   const [filterTier, setFilterTier] = useState<string>("all");
-  const [sortField, setSortField] = useState<string>("mismatchStatus");
+  const [sortField, setSortField] = useState<string>("websiteTier");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [selectedPlayerId, setSelectedPlayerId] = useState<Id<"players"> | null>(null);
   const [isScoreDialogOpen, setIsScoreDialogOpen] = useState(false);
@@ -429,6 +430,13 @@ function MissingRoleSection() {
 
     // Sort
     result.sort((a, b) => {
+      if (sortField === "websiteTier") {
+        const tierCmp = compareTierField(a.websiteTier, b.websiteTier, sortDirection);
+        if (tierCmp !== 0) return tierCmp;
+        return sortDirection === "asc"
+          ? a.discordUsername.localeCompare(b.discordUsername)
+          : b.discordUsername.localeCompare(a.discordUsername);
+      }
       const aVal = a[sortField as keyof typeof a];
       const bVal = b[sortField as keyof typeof b];
       if (aVal === undefined || aVal === null) return 1;

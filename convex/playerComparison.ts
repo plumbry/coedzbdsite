@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel.d.ts";
+import { sortByTier } from "./helpers/tierSort";
 
 // Get comprehensive player data for comparison
 export const getPlayerComparisonData = query({
@@ -448,11 +449,15 @@ export const getAllPlayersForComparison = query({
     // Get all players (active, archived, and rejected)
     const allPlayers = await ctx.db.query("players").collect();
 
-    return allPlayers.map((player) => ({
+    const rows = allPlayers.map((player) => ({
       _id: player._id,
       playerName: player.nickname || player.discordUsername,
       tier: player.tier || "Unranked",
       status: player.status || "active",
     }));
+
+    return sortByTier(rows, (p) => (p.tier === "Unranked" ? undefined : p.tier), (a, b) =>
+      a.playerName.localeCompare(b.playerName),
+    );
   },
 });

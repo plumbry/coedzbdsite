@@ -17,6 +17,7 @@ import {
 import { playerMatchesSearchTerm } from "./helpers/playerDiscordId";
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 import { matchPlayerForImport } from "./lib/playerIdentity";
+import { sortByTier } from "./helpers/tierSort";
 
 export const getPlayers = query({
   args: {},
@@ -48,7 +49,9 @@ export const getPlayers = query({
       }),
     );
 
-    return enrichedPlayers;
+    return sortByTier(enrichedPlayers, (p) => p.tier, (a, b) =>
+      a.discordUsername.localeCompare(b.discordUsername),
+    );
   },
 });
 
@@ -548,7 +551,7 @@ export const getDiscordMembersAdmin = query({
     );
 
     // Return only the fields the Discord Members page needs
-    return allPlayers.map((player) => ({
+    const rows = allPlayers.map((player) => ({
       _id: player._id,
       _creationTime: player._creationTime,
       discordUsername: player.discordUsername,
@@ -560,6 +563,10 @@ export const getDiscordMembersAdmin = query({
       matchConfidence: player.matchConfidence,
       alternateDiscordUserIds: player.alternateDiscordUserIds,
     }));
+
+    return sortByTier(rows, (p) => p.tier, (a, b) =>
+      a.discordUsername.localeCompare(b.discordUsername),
+    );
   },
 });
 
