@@ -5,6 +5,7 @@ import { internal } from "../_generated/api";
 import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import {
+  COED_ZBD_DISCORD_GUILD_ID,
   getDiscordRoleIdForBanType,
   getDiscordRoleNameForBanType,
   resolveDiscordRoleId,
@@ -35,17 +36,20 @@ function withoutTierRoles(roleIds: string[], roleNameToId: Map<string, string>):
 
 function getDiscordConfig() {
   const token = process.env.DISCORD_BOT_TOKEN;
-  const guildId = process.env.DISCORD_GUILD_ID;
-  if (!token || !guildId) {
+  const guildId = process.env.DISCORD_GUILD_ID ?? COED_ZBD_DISCORD_GUILD_ID;
+  if (!token) {
     throw new ConvexError({
-      message: "DISCORD_BOT_TOKEN and DISCORD_GUILD_ID must be configured",
+      message: "DISCORD_BOT_TOKEN must be configured",
       code: "NOT_IMPLEMENTED",
     });
   }
   return { token, guildId };
 }
 
-async function fetchGuildRoleNameToId(token: string, guildId: string): Promise<Map<string, string>> {
+async function fetchGuildRoles(
+  token: string,
+  guildId: string,
+): Promise<{ roleNameToId: Map<string, string>; roleIds: Set<string> }> {
   const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/roles`, {
     headers: { Authorization: `Bot ${token}` },
   });
@@ -58,7 +62,10 @@ async function fetchGuildRoleNameToId(token: string, guildId: string): Promise<M
   }
 
   const roles: DiscordRole[] = await response.json();
-  return new Map(roles.map((role) => [role.name, role.id]));
+  return {
+    roleNameToId: new Map(roles.map((role) => [role.name, role.id])),
+    roleIds: new Set(roles.map((role) => role.id)),
+  };
 }
 
 async function getMemberRoleIds(
@@ -122,7 +129,7 @@ export const forceRoleSync = action({
       return { rolesAdded: 0, rolesRemoved: 0, errors: 0, errorMessages: [] };
     }
 
-    const roleNameToId = await fetchGuildRoleNameToId(token, guildId);
+    const { roleNameToId, roleIds } = await fetchGuildRoles(token, guildId);
     const acknowledgedAddIds: Id<"eventBans">[] = [];
     const acknowledgedRemovalBanIds: Id<"eventBans">[] = [];
     const acknowledgedQueueIds: Id<"pendingRoleRemovals">[] = [];
@@ -143,6 +150,13 @@ export const forceRoleSync = action({
         if (!roleId) {
           errors++;
           errorMessages.push(`Discord role not found for "${discordRoleName}" (${item.banType})`);
+          continue;
+        }
+        if (!roleIds.has(roleId)) {
+          errors++;
+          errorMessages.push(
+            `Role ID ${roleId} not in guild ${guildId} for "${discordRoleName}" (${item.banType})`,
+          );
           continue;
         }
 
@@ -198,6 +212,13 @@ export const forceRoleSync = action({
         if (!roleId) {
           errors++;
           errorMessages.push(`Discord role not found for "${discordRoleName}" (${item.banType})`);
+          continue;
+        }
+        if (!roleIds.has(roleId)) {
+          errors++;
+          errorMessages.push(
+            `Role ID ${roleId} not in guild ${guildId} for "${discordRoleName}" (${item.banType})`,
+          );
           continue;
         }
 
