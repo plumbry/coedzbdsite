@@ -5,9 +5,21 @@ import { internal } from "../_generated/api";
 import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import {
+  getDiscordRoleIdForBanType,
   getDiscordRoleNameForBanType,
   resolveDiscordRoleId,
 } from "../lib/eventBanDiscordRoles";
+
+function resolveRoleIdForBan(
+  banType: string,
+  discordRoleName: string | null | undefined,
+  roleNameToId: Map<string, string>,
+): string | null {
+  return (
+    getDiscordRoleIdForBanType(banType) ??
+    (discordRoleName ? resolveDiscordRoleId(discordRoleName, roleNameToId) : null)
+  );
+}
 
 const ROLE_SYNC_DELAY_MS = 300;
 const TIER_ROLE_NAMES = ["Tier S", "Tier A", "Tier B", "Tier C"];
@@ -127,10 +139,10 @@ export const forceRoleSync = action({
           continue;
         }
 
-        const roleId = resolveDiscordRoleId(discordRoleName, roleNameToId);
+        const roleId = resolveRoleIdForBan(item.banType, discordRoleName, roleNameToId);
         if (!roleId) {
           errors++;
-          errorMessages.push(`Discord role not found for "${discordRoleName}"`);
+          errorMessages.push(`Discord role not found for "${discordRoleName}" (${item.banType})`);
           continue;
         }
 
@@ -182,10 +194,10 @@ export const forceRoleSync = action({
           continue;
         }
 
-        const roleId = resolveDiscordRoleId(discordRoleName, roleNameToId);
+        const roleId = resolveRoleIdForBan(item.banType, discordRoleName, roleNameToId);
         if (!roleId) {
           errors++;
-          errorMessages.push(`Discord role not found for "${discordRoleName}"`);
+          errorMessages.push(`Discord role not found for "${discordRoleName}" (${item.banType})`);
           continue;
         }
 
