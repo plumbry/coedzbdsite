@@ -1,6 +1,7 @@
-import { query, internalQuery } from "../_generated/server";
+import { query, internalQuery, type QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
+import type { Doc } from "../_generated/dataModel";
 import { requireEventBanAccess } from "../auth_helpers";
 import { requireEventBanReadAccess, viewerTokenArg } from "./viewerAuth";
 import { filterVisibleMembers } from "../helpers/playerAlt";
@@ -9,6 +10,8 @@ import {
   getDiscordRoleNameForBanType,
   requiresDiscordRoleSync,
 } from "../lib/eventBanDiscordRoles";
+
+const TWENTY_EIGHT_DAYS_MS = 28 * 24 * 60 * 60 * 1000;
 
 export const getActiveBans = query({
   args: { viewerToken: viewerTokenArg },
@@ -134,41 +137,10 @@ export const getRoleSyncVisibility = query({
   handler: async (ctx) => {
     await requireEventBanAccess(ctx);
 
-    const unsynced = await ctx.db
-      .query("eventBans")
-      .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", false))
-      .collect();
-    const neverSynced = await ctx.db
-      .query("eventBans")
-      .filter((q) => q.eq(q.field("syncedToDiscord"), undefined))
-      .collect();
-    const pendingRoleAdds = [...unsynced, ...neverSynced].filter((ban) =>
-      requiresDiscordRoleSync(ban.banType),
-    );
-
-    const syncedNotRemoved = await ctx.db
-      .query("eventBans")
-      .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", true))
-      .collect();
+    const pendingRoleAdds = await collectPendingRoleAdds(ctx);
+    const pendingRoleRemovals = await collectPendingRoleRemovalsFromBans(ctx);
     const queuedRemovals = await ctx.db.query("pendingRoleRemovals").collect();
     const now = Date.now();
-    const twentyEightDaysMs = 28 * 24 * 60 * 60 * 1000;
-
-    const pendingRoleRemovals = syncedNotRemoved.filter((ban) => {
-      if (ban.roleRemovedFromDiscord) return false;
-      if (!requiresDiscordRoleSync(ban.banType)) return false;
-      if (ban.banType !== "Probation" && ban.status === "ENDED") return true;
-
-      if (ban.banType === "Probation") {
-        const parts = ban.startDate.split("/");
-        if (parts.length === 3) {
-          const startTime = parseDate(ban.startDate).getTime();
-          return now - startTime >= twentyEightDaysMs;
-        }
-      }
-
-      return false;
-    });
 
     const pendingAddAges = pendingRoleAdds.map((ban) => now - ban._creationTime);
     const pendingRemovalAges = [
@@ -359,6 +331,47 @@ function parseDate(dateStr: string): Date {
   return new Date(0);
 }
 
+function isPendingRoleRemoval(ban: Doc<"eventBans">, now: number): boolean {
+  if (ban.roleRemovedFromDiscord) return false;
+  if (!requiresDiscordRoleSync(ban.banType)) return false;
+  if (ban.banType !== "Probation" && ban.status === "ENDED") return true;
+
+  if (ban.banType === "Probation") {
+    const parts = ban.startDate.split("/");
+    if (parts.length === 3) {
+      const startTime = parseDate(ban.startDate).getTime();
+      return now - startTime >= TWENTY_EIGHT_DAYS_MS;
+    }
+  }
+
+  return false;
+}
+
+/** Includes legacy rows where syncedToDiscord is undefined (not indexed as false). */
+async function collectPendingRoleAdds(ctx: QueryCtx): Promise<Doc<"eventBans">[]> {
+  const unsynced = await ctx.db
+    .query("eventBans")
+    .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", false))
+    .collect();
+  const neverSynced = await ctx.db
+    .query("eventBans")
+    .filter((q) => q.eq(q.field("syncedToDiscord"), undefined))
+    .collect();
+  return [...unsynced, ...neverSynced].filter((ban) => requiresDiscordRoleSync(ban.banType));
+}
+
+/** Includes legacy rows where roleRemovedFromDiscord is undefined. */
+async function collectPendingRoleRemovalsFromBans(
+  ctx: QueryCtx,
+): Promise<Doc<"eventBans">[]> {
+  const now = Date.now();
+  const syncedNotRemoved = await ctx.db
+    .query("eventBans")
+    .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", true))
+    .collect();
+  return syncedNotRemoved.filter((ban) => isPendingRoleRemoval(ban, now));
+}
+
 // Internal query to get a ban by ID (used by delete action)
 export const getBanById = internalQuery({
   args: { banId: v.id("eventBans") },
@@ -373,12 +386,7 @@ export const getBanById = internalQuery({
 export const getPendingRoleSyncs = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const unsynced = await ctx.db
-      .query("eventBans")
-      .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", false))
-      .collect();
-
-    const pending = unsynced.filter((ban) => requiresDiscordRoleSync(ban.banType));
+    const pending = await collectPendingRoleAdds(ctx);
 
     return pending.map((ban) => ({
       _id: ban._id,
@@ -390,45 +398,12 @@ export const getPendingRoleSyncs = internalQuery({
   },
 });
 
-// Get bans where the role should now be removed (indexed pending-only scan).
+// Get bans where the role should now be removed.
 // Bot polls /api/discord/pending-role-removals — fallback polling should stay off in production.
 export const getPendingRoleRemovals = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const now = Date.now();
-    const TWENTY_EIGHT_DAYS_MS = 28 * 24 * 60 * 60 * 1000;
-
-    const syncedNotRemoved = await ctx.db
-      .query("eventBans")
-      .withIndex("by_synced_and_role_removed", (q) =>
-        q.eq("syncedToDiscord", true).eq("roleRemovedFromDiscord", false),
-      )
-      .collect();
-
-    const fromBans = syncedNotRemoved
-      .filter((ban) => {
-        if (!requiresDiscordRoleSync(ban.banType)) return false;
-
-        if (ban.banType !== "Probation" && ban.status === "ENDED") {
-          return true;
-        }
-
-        if (ban.banType === "Probation") {
-          const parts = ban.startDate.split("/");
-          if (parts.length === 3) {
-            const day = parseInt(parts[0], 10);
-            const month = parseInt(parts[1], 10) - 1;
-            const year = parseInt(parts[2], 10);
-            const startTime = new Date(year, month, day).getTime();
-            if (now - startTime >= TWENTY_EIGHT_DAYS_MS) {
-              return true;
-            }
-          }
-        }
-
-        return false;
-      })
-      .map((ban) => ({
+    const fromBans = (await collectPendingRoleRemovalsFromBans(ctx)).map((ban) => ({
         _id: ban._id,
         discordId: ban.discordId,
         banType: ban.banType,

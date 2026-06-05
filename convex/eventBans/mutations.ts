@@ -83,6 +83,8 @@ export const upsertBan = internalMutation({
         status: args.status,
         offenseTrack: args.offenseTrack,
         offenseNumber: args.offenseNumber,
+        syncedToDiscord: false,
+        roleRemovedFromDiscord: false,
       });
       return { action: "inserted" as const, id };
     }
@@ -139,6 +141,8 @@ export const batchUpsertBans = internalMutation({
           status: ban.status,
           offenseTrack: ban.offenseTrack,
           offenseNumber: ban.offenseNumber,
+          syncedToDiscord: false,
+          roleRemovedFromDiscord: false,
         });
         imported++;
       }
@@ -432,6 +436,8 @@ export const createBan = mutation({
         isProbation ? "ACTIVE" : args.originalEvents === 0 ? "ENDED" : "ACTIVE",
       offenseTrack: args.offenseTrack,
       offenseNumber: args.offenseNumber,
+      syncedToDiscord: false,
+      roleRemovedFromDiscord: false,
     });
 
     // Log to Mod Log Google Sheet
