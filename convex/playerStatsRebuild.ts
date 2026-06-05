@@ -86,7 +86,6 @@ async function reconcilePlayerStatsRebuildJobs(ctx: MutationCtx) {
       continue;
     }
 
-    await ctx.db.patch(job._id, { lastProgressAt: now });
     await ctx.scheduler.runAfter(0, internal.playerStatsRebuild.processRebuildStep, {
       jobId: job._id,
     });
@@ -201,6 +200,7 @@ export const getActiveRebuildJob = query({
       totalProcessed: running.totalProcessed,
       tierEvalBatch: running.tierEvalBatch,
       tierEvalBatchCount: running.tierEvalBatchCount,
+      tierEvalInitialized: running.tierEvalInitialized ?? false,
       tierEvalRecentMediansDone: running.tierEvalRecentMediansDone ?? false,
       tierEvalRecentOnly: running.tierEvalRecentOnly,
       startedAt: running.startedAt,
@@ -322,6 +322,8 @@ export const scheduleFullRebuild = internalMutation({
       playersCursor: null,
       tierEvalBatch: 0,
       tierEvalBatchCount: 0,
+      tierEvalClearDone: false,
+      tierEvalMediansDone: false,
       tierEvalInitialized: false,
       includeAggregateStats: aggregateStatsOnly
         ? true
@@ -427,6 +429,8 @@ export const processRebuildStep = internalMutation({
       let playersCursor = job.playersCursor ?? null;
       let tierEvalBatch = job.tierEvalBatch;
       let tierEvalBatchCount = job.tierEvalBatchCount;
+      let tierEvalClearDone = job.tierEvalClearDone ?? false;
+      let tierEvalMediansDone = job.tierEvalMediansDone ?? false;
       let tierEvalInitialized = job.tierEvalInitialized;
       let tierEvalPlayerIds = job.tierEvalPlayerIds ?? [];
       let tierEvalRecentMediansDone = job.tierEvalRecentMediansDone ?? false;
@@ -514,48 +518,124 @@ export const processRebuildStep = internalMutation({
           job.stopAfterPhase === "dca_mutual" ? "completed" : nextPhase(phase);
         processedInPhase = 0;
       } else if (phase === "tier_eval") {
-        if (!tierEvalInitialized) {
-          await ctx.runMutation(internal.tierReEvaluationBatched.clearCache, {});
-          const init = await ctx.runMutation(
-            internal.tierReEvaluationBatched.initializeBatchRebuild,
-            { recentOnly: job.tierEvalRecentOnly },
-          );
-          tierEvalBatchCount = init.batchCount;
-          tierEvalBatch = 0;
-          tierEvalPlayerIds = init.playerIds;
-          tierEvalInitialized = true;
-          tierEvalRecentMediansDone = false;
-          playersCursor = null;
-          processedInPhase = 0;
-        } else if (tierEvalBatch < tierEvalBatchCount) {
-          const batchPlayerIds = tierEvalPlayerIds.slice(
-            tierEvalBatch * HEAVY_PLAYER_CACHE_BATCH,
-            (tierEvalBatch + 1) * HEAVY_PLAYER_CACHE_BATCH,
-          );
-          try {
-            await ctx.runMutation(internal.tierReEvaluationBatched.processBatch, {
-              batchNumber: tierEvalBatch,
-              recentOnly: job.tierEvalRecentOnly,
-              playerIds: batchPlayerIds,
+        if (job.tierEvalBatchCount > 0) {
+          // Legacy in-flight jobs that stored a player-id list on the job document.
+          if (tierEvalBatch < tierEvalBatchCount) {
+            const batchPlayerIds = tierEvalPlayerIds.slice(
+              tierEvalBatch * HEAVY_PLAYER_CACHE_BATCH,
+              (tierEvalBatch + 1) * HEAVY_PLAYER_CACHE_BATCH,
+            );
+            try {
+              await ctx.runMutation(internal.tierReEvaluationBatched.processBatch, {
+                batchNumber: tierEvalBatch,
+                recentOnly: job.tierEvalRecentOnly,
+                playerIds: batchPlayerIds,
+              });
+            } catch (error) {
+              console.error(
+                `[playerStatsRebuild] tier_eval batch ${tierEvalBatch} failed:`,
+                error,
+              );
+            }
+            tierEvalBatch += 1;
+            processedInPhase += 1;
+            totalProcessed += 1;
+          } else if (!tierEvalRecentMediansDone) {
+            const mediansCache = await ctx.db.query("tierMediansCache").first();
+            const partialRecent = mediansCache?.partialRecentHolisticByTier;
+            const hasRecentPartials =
+              partialRecent != null &&
+              (["S", "A", "B", "C"] as const).some(
+                (tier) => (partialRecent[tier]?.length ?? 0) > 0,
+              );
+
+            if (hasRecentPartials) {
+              await ctx.runMutation(
+                internal.tierReEvaluationBatched.finalizeRecentTierMediansFromBuild,
+                {},
+              );
+              tierEvalRecentMediansDone = true;
+              playersCursor = null;
+              processedInPhase = 0;
+            } else {
+              const recentStep = await ctx.runMutation(
+                internal.tierReEvaluationBatched.computeRecentTierMediansStep,
+                { cursor: playersCursor },
+              );
+              if (recentStep.isDone) {
+                tierEvalRecentMediansDone = true;
+                playersCursor = null;
+                processedInPhase = 0;
+              } else {
+                playersCursor = recentStep.continueCursor;
+                processedInPhase += 1;
+                totalProcessed += 1;
+              }
+            }
+          } else {
+            const mediansCache = await ctx.db.query("tierMediansCache").first();
+            const recentMedians = (mediansCache?.recentTierHolisticMedians ?? {}) as Record<
+              string,
+              number | undefined
+            >;
+            const page = await ctx.db.query("tierReEvaluationCache").paginate({
+              numItems: TIER_EVAL_FINALIZE_BATCH,
+              cursor: playersCursor,
             });
-          } catch (error) {
-            console.error(
-              `[playerStatsRebuild] tier_eval batch ${tierEvalBatch} failed:`,
-              error,
-            );
+
+            for (const entry of page.page) {
+              const patch = patchRecentComparisonFields(entry, recentMedians);
+              if (patch) {
+                await ctx.db.patch(entry._id, patch);
+              }
+            }
+
+            processedInPhase += page.page.length;
+            totalProcessed += page.page.length;
+
+            if (!page.isDone) {
+              playersCursor = page.continueCursor;
+            } else {
+              phase =
+                job.stopAfterPhase === "tier_eval" ? "completed" : nextPhase(phase);
+              playersCursor = null;
+              processedInPhase = 0;
+            }
           }
-          tierEvalBatch += 1;
-          processedInPhase += 1;
-          totalProcessed += 1;
+        } else if (!tierEvalClearDone) {
+          const clearStep = await ctx.runMutation(
+            internal.tierReEvaluationBatched.clearCacheBatch,
+            { cursor: playersCursor },
+          );
+          if (clearStep.isDone) {
+            tierEvalClearDone = true;
+            playersCursor = null;
+            await ctx.runMutation(internal.tierReEvaluationBatched.resetRecentMediansBuild, {});
+          } else {
+            playersCursor = clearStep.continueCursor;
+          }
+        } else if (!tierEvalMediansDone) {
+          await ctx.runMutation(internal.tierReEvaluationBatched.calculateTierMedians, {});
+          tierEvalMediansDone = true;
+          playersCursor = null;
+        } else if (!tierEvalInitialized) {
+          const playersStep = await ctx.runMutation(
+            internal.tierReEvaluationBatched.processTierEvalPlayersStep,
+            { cursor: playersCursor, recentOnly: job.tierEvalRecentOnly },
+          );
+          processedInPhase += playersStep.processed;
+          totalProcessed += playersStep.processed;
+          if (playersStep.isDone) {
+            tierEvalInitialized = true;
+            playersCursor = null;
+          } else {
+            playersCursor = playersStep.continueCursor;
+          }
         } else if (!tierEvalRecentMediansDone) {
-          try {
-            await ctx.runMutation(
-              internal.tierReEvaluationBatched.computeRecentTierMedians,
-              {},
-            );
-          } catch (error) {
-            console.error("[playerStatsRebuild] tier_eval recent medians failed:", error);
-          }
+          await ctx.runMutation(
+            internal.tierReEvaluationBatched.finalizeRecentTierMediansFromBuild,
+            {},
+          );
           tierEvalRecentMediansDone = true;
           playersCursor = null;
           processedInPhase = 0;
@@ -610,7 +690,8 @@ export const processRebuildStep = internalMutation({
           playersCursor,
           tierEvalBatch,
           tierEvalBatchCount,
-          tierEvalPlayerIds,
+          tierEvalClearDone,
+          tierEvalMediansDone,
           tierEvalRecentMediansDone,
           tierEvalInitialized,
           processedInPhase,
@@ -626,7 +707,8 @@ export const processRebuildStep = internalMutation({
         playersCursor,
         tierEvalBatch,
         tierEvalBatchCount,
-        tierEvalPlayerIds,
+        tierEvalClearDone,
+        tierEvalMediansDone,
         tierEvalRecentMediansDone,
         tierEvalInitialized,
         processedInPhase,

@@ -140,8 +140,16 @@ export function PlayerStatsRebuildProgress({
           </>
         )}
       {activeRebuildJob.phase === "tier_eval" &&
-        activeRebuildJob.tierEvalBatch >= activeRebuildJob.tierEvalBatchCount &&
-        !activeRebuildJob.tierEvalRecentMediansDone && (
+        activeRebuildJob.tierEvalBatchCount === 0 &&
+        !activeRebuildJob.tierEvalRecentMediansDone &&
+        activeRebuildJob.tierEvalInitialized !== true && (
+          <> (scanning players)</>
+        )}
+      {activeRebuildJob.phase === "tier_eval" &&
+        !activeRebuildJob.tierEvalRecentMediansDone &&
+        (activeRebuildJob.tierEvalBatchCount > 0
+          ? activeRebuildJob.tierEvalBatch >= activeRebuildJob.tierEvalBatchCount
+          : activeRebuildJob.tierEvalInitialized === true) && (
           <> (computing recent tier medians)</>
         )}
       {activeRebuildJob.phase === "tier_eval" &&

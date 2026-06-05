@@ -736,6 +736,8 @@ export default defineSchema({
     tierEvalBatchCount: v.number(),
     tierEvalPlayerIds: v.optional(v.array(v.id("players"))),
     tierEvalRecentMediansDone: v.optional(v.boolean()),
+    tierEvalClearDone: v.optional(v.boolean()),
+    tierEvalMediansDone: v.optional(v.boolean()),
     tierEvalInitialized: v.optional(v.boolean()),
     includeAggregateStats: v.boolean(),
     stopAfterPhase: v.optional(
@@ -1065,6 +1067,16 @@ export default defineSchema({
     })),
     lastUpdated: v.number(),
     hasTCDCAAdjustments: v.optional(v.boolean()), // Deprecated - kept for backward compatibility with old cache data
+    /** Accumulated during tier-eval rebuild; cleared when recent medians are finalized. */
+    partialRecentHolisticByTier: v.optional(
+      v.object({
+        S: v.array(v.number()),
+        A: v.array(v.number()),
+        B: v.array(v.number()),
+        C: v.array(v.number()),
+      }),
+    ),
+    recentMediansCacheCursor: v.optional(v.union(v.string(), v.null())),
   }),
 
   // Player earnings from scrim events
