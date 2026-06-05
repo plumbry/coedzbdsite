@@ -1,7 +1,12 @@
 import { internalMutation, mutation } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { v, ConvexError } from "convex/values";
-import { getCurrentUser, getDisplayName, requireEventBanWriteAccess } from "../auth_helpers";
+import {
+  getCurrentUser,
+  getDisplayName,
+  requireAdmin,
+  requireEventBanWriteAccess,
+} from "../auth_helpers";
 
 const banValidator = v.object({
   discordId: v.string(),
@@ -581,5 +586,37 @@ export const undoEventPassed = mutation({
     }
 
     return { incremented, reactivated };
+  },
+});
+
+/** One-time deploy helper: legacy rows with undefined sync flags are invisible to indexed pending queries. */
+export const backfillEventBanDiscordSyncFlags = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const bans = await ctx.db.query("eventBans").collect();
+    let patched = 0;
+
+    for (const ban of bans) {
+      const patch: {
+        syncedToDiscord?: boolean;
+        roleRemovedFromDiscord?: boolean;
+      } = {};
+
+      if (ban.syncedToDiscord === undefined) {
+        patch.syncedToDiscord = false;
+      }
+      if (ban.roleRemovedFromDiscord === undefined) {
+        patch.roleRemovedFromDiscord = false;
+      }
+
+      if (Object.keys(patch).length > 0) {
+        await ctx.db.patch(ban._id, patch);
+        patched += 1;
+      }
+    }
+
+    return { patched, total: bans.length };
   },
 });
