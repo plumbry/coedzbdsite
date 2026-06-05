@@ -6,6 +6,14 @@ import { logAudit } from "./helpers/audit";
 import { getManualScoreForPlayer } from "./helpers/manualScores";
 import { schedulePublicMemberDirectoryRebuildForPlayer } from "./helpers/publicMemberDirectory";
 
+function hasRealDiscordId(
+  discordUserId: string | undefined,
+): discordUserId is string {
+  return Boolean(
+    discordUserId && !discordUserId.startsWith("placeholder_"),
+  );
+}
+
 // Calculate tier based on total score
 function calculateTier(totalScore: number): string {
   if (totalScore >= 1000) return "S";
@@ -293,6 +301,18 @@ export const createOrUpdateScore = mutation({
       currentMembershipStatus: player.currentMembershipStatus,
       isAlt: player.isAlt,
     });
+
+    if (hasRealDiscordId(player.discordUserId)) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.discord.evaluationRoleSync.notifyEvaluationChanged,
+        {
+          discordId: player.discordUserId,
+          evaluationGender: args.gender,
+          playerId: args.playerId,
+        },
+      );
+    }
     
     return { totalScore, tier };
   },

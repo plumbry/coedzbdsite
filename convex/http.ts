@@ -471,6 +471,8 @@ http.route({
   }),
 });
 
+// Manual / rare reconciliation only — not part of normal bot workflow.
+// Primary paths: guildMemberAdd → GET /api/member; evaluation save → signed webhook to bot.
 // GET endpoint for Discord bot — website-evaluated female members (gender = 50)
 http.route({
   path: "/api/discord/female-evaluated-members",
