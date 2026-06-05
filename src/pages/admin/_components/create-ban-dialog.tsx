@@ -57,7 +57,7 @@ const STEP_QUESTIONS: Record<Exclude<FormStep, "warning">, { title: string; desc
     description: "Search for a member or enter their Discord ID and display name.",
   },
   track: {
-    title: "What offense track applies?",
+    title: "Is this a Minor or Major Incident?",
     description: "Choose minor, major, or probation based on the punishment matrix.",
   },
   penalty: {
