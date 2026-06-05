@@ -154,6 +154,71 @@ export const clearAllBans = internalMutation({
   },
 });
 
+function parseOffenseFromReason(
+  reason: string,
+  banType: string,
+): { offenseTrack?: string; offenseNumber?: number } {
+  const offenseMatch = reason.match(/\[(Minor|Major)\s+offense\s+#(\d+)\]/i);
+  if (offenseMatch) {
+    return {
+      offenseTrack: offenseMatch[1].toLowerCase(),
+      offenseNumber: parseInt(offenseMatch[2], 10),
+    };
+  }
+
+  const banTypeLower = banType.trim().toLowerCase();
+  if (banTypeLower.startsWith("minor")) {
+    return { offenseTrack: "minor" };
+  }
+  if (banTypeLower.startsWith("major")) {
+    return { offenseTrack: "major" };
+  }
+
+  return {};
+}
+
+export const updateBanReasonInternal = internalMutation({
+  args: {
+    banId: v.id("eventBans"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const ban = await ctx.db.get(args.banId);
+    if (!ban) {
+      throw new ConvexError({
+        message: "Ban not found",
+        code: "NOT_FOUND",
+      });
+    }
+
+    const reason = args.reason.trim();
+    if (!reason) {
+      throw new ConvexError({
+        message: "Reason cannot be empty",
+        code: "BAD_REQUEST",
+      });
+    }
+
+    const today = new Date();
+    const todayStr = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
+    const { offenseTrack, offenseNumber } = parseOffenseFromReason(reason, ban.banType);
+
+    await ctx.db.patch(args.banId, {
+      reason,
+      offenseTrack,
+      offenseNumber,
+      lastUpdated: todayStr,
+    });
+
+    return {
+      discordId: ban.discordId,
+      messageId: ban.messageId,
+      startDate: ban.startDate,
+      lastUpdated: todayStr,
+    };
+  },
+});
+
 // Delete a single ban by ID (used by the delete action)
 export const deleteBanById = internalMutation({
   args: { banId: v.id("eventBans") },

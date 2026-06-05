@@ -7,7 +7,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.t
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Input } from "@/components/ui/input.tsx";
-import { Search, Ban, Clock, AlertTriangle, TrendingUp, Trash2, CalendarCheck, Undo2, Lock } from "lucide-react";
+import { Label } from "@/components/ui/label.tsx";
+import { Textarea } from "@/components/ui/textarea.tsx";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.tsx";
+import { Search, Ban, Clock, AlertTriangle, TrendingUp, Trash2, CalendarCheck, Undo2, Lock, Pencil, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import CreateBanDialog from "./create-ban-dialog.tsx";
@@ -66,7 +77,9 @@ export default function EventBansManager({
   const eventPassedMeta = useQuery(api.eventBans.queries.getEventPassedMetadata, queryArgs);
   const eventPassedMutation = useMutation(api.eventBans.mutations.eventPassed);
   const undoEventPassedMutation = useMutation(api.eventBans.mutations.undoEventPassed);
+  const forceRoleSyncAction = useAction(api.eventBans.roleSync.forceRoleSync);
   const [isEventPassing, setIsEventPassing] = useState(false);
+  const [isRoleSyncing, setIsRoleSyncing] = useState(false);
   const [eventPassedCountdown, setEventPassedCountdown] = useState<number | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isUndoing, setIsUndoing] = useState(false);
@@ -137,6 +150,37 @@ export default function EventBansManager({
       }
     };
   }, []);
+
+  const handleForceRoleSync = async () => {
+    setIsRoleSyncing(true);
+    try {
+      const result = await forceRoleSyncAction({});
+      if (result.rolesAdded === 0 && result.rolesRemoved === 0 && result.errors === 0) {
+        toast.info("No pending Discord role syncs");
+        return;
+      }
+
+      const parts = [];
+      if (result.rolesAdded > 0) {
+        parts.push(`${result.rolesAdded} role${result.rolesAdded === 1 ? "" : "s"} added`);
+      }
+      if (result.rolesRemoved > 0) {
+        parts.push(`${result.rolesRemoved} role${result.rolesRemoved === 1 ? "" : "s"} removed`);
+      }
+
+      if (result.errors > 0) {
+        toast.warning(
+          `Role sync partially complete: ${parts.join(", ")}. ${result.errors} error${result.errors === 1 ? "" : "s"}.`,
+        );
+      } else {
+        toast.success(`Role sync complete: ${parts.join(", ")}`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to run role sync");
+    } finally {
+      setIsRoleSyncing(false);
+    }
+  };
 
   const handleUndoEventPassed = () => {
     setPendingConfirm({
@@ -256,6 +300,16 @@ export default function EventBansManager({
                 <Undo2 className={`mr-1 h-3.5 w-3.5 ${isUndoing ? "animate-pulse" : ""}`} />
                 {isUndoing ? "..." : "Undo"}
               </Button>
+              <Button
+                onClick={handleForceRoleSync}
+                disabled={isRoleSyncing}
+                size="sm"
+                variant="outline"
+                className="cursor-pointer h-8 text-xs sm:text-sm"
+              >
+                <RefreshCw className={`mr-1 h-3.5 w-3.5 ${isRoleSyncing ? "animate-spin" : ""}`} />
+                {isRoleSyncing ? "Syncing..." : "Role Sync"}
+              </Button>
             </>
           ) : undefined
         }
@@ -341,7 +395,8 @@ export default function EventBansManager({
         roleSyncVisibility.pendingRoleAdds + roleSyncVisibility.pendingRoleRemovals > 0 && (
           <Card className="border-amber-300 bg-amber-50">
             <CardContent className="p-3 text-sm text-amber-950">
-              <div className="flex items-start gap-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2 min-w-0">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
                 <div>
                   <p className="font-medium">Discord role sync pending</p>
@@ -350,7 +405,7 @@ export default function EventBansManager({
                     {roleSyncVisibility.pendingRoleAdds === 1 ? "" : "s"} and{" "}
                     {roleSyncVisibility.pendingRoleRemovals} removal
                     {roleSyncVisibility.pendingRoleRemovals === 1 ? "" : "s"} are waiting
-                    for the existing bot polling flow. No sync behaviour has changed.
+                    for Discord. Use Role Sync to process them now, or wait for the bot poll.
                     {roleSyncVisibility.oldestPendingAddAgeMs !== null && (
                       <>
                         {" "}
@@ -367,6 +422,17 @@ export default function EventBansManager({
                     )}
                   </p>
                 </div>
+                </div>
+                <Button
+                  onClick={handleForceRoleSync}
+                  disabled={isRoleSyncing}
+                  size="sm"
+                  variant="outline"
+                  className="cursor-pointer shrink-0 border-amber-400 bg-white/80 hover:bg-white"
+                >
+                  <RefreshCw className={`mr-1 h-3.5 w-3.5 ${isRoleSyncing ? "animate-spin" : ""}`} />
+                  {isRoleSyncing ? "Syncing..." : "Role Sync"}
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -500,9 +566,49 @@ function BansTable({
   canDelete: boolean;
 }) {
   const deleteBanAction = useAction(api.eventBans.sync.deleteBan);
+  const updateBanReasonAction = useAction(api.eventBans.sync.updateBanReason);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingBan, setEditingBan] = useState<{
+    _id: string;
+    playerTag: string;
+    reason: string;
+  } | null>(null);
+  const [editReason, setEditReason] = useState("");
+  const [isSavingReason, setIsSavingReason] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const bansPagination = useClientPagination(bans);
+
+  const openEditDialog = (ban: { _id: string; playerTag: string; reason: string }) => {
+    setEditingBan(ban);
+    setEditReason(ban.reason);
+  };
+
+  const handleSaveReason = async () => {
+    if (!editingBan) return;
+    const trimmedReason = editReason.trim();
+    if (!trimmedReason) {
+      toast.error("Reason cannot be empty");
+      return;
+    }
+
+    setIsSavingReason(true);
+    try {
+      const result = await updateBanReasonAction({
+        banId: editingBan._id as Id<"eventBans">,
+        reason: trimmedReason,
+      });
+      if (result.updatedInSheet) {
+        toast.success("Ban reason updated on site and Google Sheet");
+      } else {
+        toast.success("Ban reason updated on site (could not find matching row in sheet)");
+      }
+      setEditingBan(null);
+    } catch {
+      toast.error("Failed to update ban reason");
+    } finally {
+      setIsSavingReason(false);
+    }
+  };
 
   const handleDelete = (ban: { _id: string; playerTag: string }) => {
     setPendingConfirm({
@@ -563,15 +669,25 @@ function BansTable({
                   <p className="text-[10px] text-muted-foreground font-mono">{ban.discordId}</p>
                 </div>
                 {canDelete && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
-                    disabled={deletingId === ban._id}
-                    onClick={() => handleDelete(ban)}
-                  >
-                    <Trash2 className={`h-4 w-4 ${deletingId === ban._id ? "animate-pulse" : ""}`} />
-                  </Button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 cursor-pointer"
+                      onClick={() => openEditDialog(ban)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                      disabled={deletingId === ban._id}
+                      onClick={() => handleDelete(ban)}
+                    >
+                      <Trash2 className={`h-4 w-4 ${deletingId === ban._id ? "animate-pulse" : ""}`} />
+                    </Button>
+                  </div>
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -606,7 +722,7 @@ function BansTable({
                   <th className="text-left p-3 font-medium">Updated</th>
                   <th className="text-left p-3 font-medium">Reason</th>
                   <th className="text-left p-3 font-medium">Moderator</th>
-                  {canDelete && <th className="text-left p-3 font-medium w-10"></th>}
+                  {canDelete && <th className="text-left p-3 font-medium w-20"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -639,15 +755,25 @@ function BansTable({
                     <td className="p-3 whitespace-nowrap">{ban.moderatorTag}</td>
                     {canDelete && (
                       <td className="p-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
-                          disabled={deletingId === ban._id}
-                          onClick={() => handleDelete(ban)}
-                        >
-                          <Trash2 className={`h-4 w-4 ${deletingId === ban._id ? "animate-pulse" : ""}`} />
-                        </Button>
+                        <div className="flex items-center gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 cursor-pointer"
+                            onClick={() => openEditDialog(ban)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                            disabled={deletingId === ban._id}
+                            onClick={() => handleDelete(ban)}
+                          >
+                            <Trash2 className={`h-4 w-4 ${deletingId === ban._id ? "animate-pulse" : ""}`} />
+                          </Button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -667,6 +793,37 @@ function BansTable({
         onPageChange={bansPagination.setPage}
         itemLabel="bans"
       />
+
+      <Dialog open={editingBan !== null} onOpenChange={(open) => !open && setEditingBan(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit ban reason</DialogTitle>
+            <DialogDescription>
+              Update the reason for {editingBan?.playerTag}. Changes sync to the Google Sheet when a matching row is found.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <div className="space-y-2">
+              <Label htmlFor="ban-reason">Reason</Label>
+              <Textarea
+                id="ban-reason"
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                rows={4}
+                placeholder="Enter ban reason..."
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingBan(null)} disabled={isSavingReason}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveReason} disabled={isSavingReason}>
+              {isSavingReason ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={pendingConfirm !== null}
