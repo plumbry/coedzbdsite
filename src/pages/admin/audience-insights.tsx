@@ -207,8 +207,17 @@ function AudienceInsightsContent() {
   ) => {
     navigate(audienceSegmentPath(chartType, segmentKey, options));
   };
-  const eventCoverage = useQuery(api.players.getAcceptedMemberEventCountCoverage);
-  const rebuildJob = useQuery(api.audienceInsights.getRebuildJobStatus);
+  const hasCache = insights !== undefined && insights.totalMembers > 0;
+  const eventsReady = insights?.eventsReady === true;
+  const eventCoverage = useQuery(
+    api.players.getAcceptedMemberEventCountCoverage,
+    insights !== undefined && !eventsReady ? {} : "skip",
+  );
+  const [watchRebuild, setWatchRebuild] = useState(false);
+  const rebuildJob = useQuery(
+    api.audienceInsights.getRebuildJobStatus,
+    watchRebuild ? {} : "skip",
+  );
   const rebuildCache = useMutation(api.audienceInsights.rebuildAudienceInsightsCache);
   const reconcileRebuild = useMutation(api.audienceInsights.cleanupAudienceInsightsRebuildJobs);
   const cancelRebuild = useMutation(api.audienceInsights.cancelAudienceInsightsRebuild);
@@ -219,6 +228,12 @@ function AudienceInsightsContent() {
   const isJobRunning = rebuildJob?.status === "running";
 
   useEffect(() => {
+    if (watchRebuild && rebuildJob === null) {
+      setWatchRebuild(false);
+    }
+  }, [rebuildJob, watchRebuild]);
+
+  useEffect(() => {
     if (!isJobRunning) return;
     void reconcileRebuild({});
     const intervalId = window.setInterval(() => {
@@ -226,8 +241,7 @@ function AudienceInsightsContent() {
     }, 30_000);
     return () => window.clearInterval(intervalId);
   }, [isJobRunning, reconcileRebuild]);
-  const hasCache = insights !== undefined && insights.totalMembers > 0;
-  const eventsReady = insights?.eventsReady === true;
+
   const progressPercent =
     rebuildJob && rebuildJob.totalCount > 0
       ? Math.min(
@@ -239,6 +253,7 @@ function AudienceInsightsContent() {
   const runRebuild = async () => {
     try {
       await rebuildCache({});
+      setWatchRebuild(true);
       toast.success("Rebuild started. Charts update when the job finishes.");
     } catch (error) {
       toast.error(

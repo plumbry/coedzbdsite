@@ -114,39 +114,49 @@ async function fetchAndSyncDiscordMembers(ctx: ActionCtx): Promise<SyncResult> {
       let added = 0;
       let updated = 0;
       const discordUserIds: string[] = [];
+      const syncRunId = crypto.randomUUID();
 
-      for (let i = 0; i < humanMembers.length; i += SYNC_BATCH_SIZE) {
-        const batch = humanMembers.slice(i, i + SYNC_BATCH_SIZE).map((member) => {
-          const username =
-            member.user.discriminator === "0"
-              ? member.user.username
-              : `${member.user.username}#${member.user.discriminator}`;
-          discordUserIds.push(member.user.id);
-          return {
-            discordUsername: username,
-            discordUserId: member.user.id,
-            nickname: member.nick || undefined,
-            serverJoinDate: member.joined_at,
-            roles: (member.roles ?? [])
-              .map((roleId) => {
-                const name = roleNameById.get(roleId);
-                return name ? { id: roleId, name } : null;
-              })
-              .filter((role): role is { id: string; name: string } => role !== null),
-          };
-        });
+      await ctx.runMutation(internal.discord.beginDiscordMemberSyncRun, { syncRunId });
 
-        const result = await ctx.runMutation(internal.discord.syncDiscordMembersBatch, {
-          members: batch,
-        });
-        added += result.added;
-        updated += result.updated;
+      try {
+        for (let i = 0; i < humanMembers.length; i += SYNC_BATCH_SIZE) {
+          const batch = humanMembers.slice(i, i + SYNC_BATCH_SIZE).map((member) => {
+            const username =
+              member.user.discriminator === "0"
+                ? member.user.username
+                : `${member.user.username}#${member.user.discriminator}`;
+            discordUserIds.push(member.user.id);
+            return {
+              discordUsername: username,
+              discordUserId: member.user.id,
+              nickname: member.nick || undefined,
+              serverJoinDate: member.joined_at,
+              roles: (member.roles ?? [])
+                .map((roleId) => {
+                  const name = roleNameById.get(roleId);
+                  return name ? { id: roleId, name } : null;
+                })
+                .filter((role): role is { id: string; name: string } => role !== null),
+            };
+          });
+
+          const result = await ctx.runMutation(internal.discord.syncDiscordMembersBatch, {
+            syncRunId,
+            members: batch,
+          });
+          added += result.added;
+          updated += result.updated;
+        }
+      } finally {
+        await ctx.runMutation(internal.discord.completeDiscordMemberSyncRun, { syncRunId });
       }
 
       const archiveResult: { archived: number } = await ctx.runMutation(
         internal.discord.archiveMissingPlayersInternal,
         { currentDiscordUserIds: discordUserIds },
       );
+
+      await ctx.runMutation(internal.memberManagement.storePublicMemberDirectoryCache, {});
 
       await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
         syncType: "discord",

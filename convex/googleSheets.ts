@@ -1,7 +1,7 @@
 "use node";
 
 import { action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
 import { sheets } from "@googleapis/sheets";
 import { JWT } from "google-auth-library";
@@ -1376,7 +1376,10 @@ export const checkApplicationStatus = action({
       }
 
       // Get all accepted (in-server) players from the database
-      const acceptedPlayers = await ctx.runQuery(api.memberManagement.getAcceptedMembers, {});
+      const acceptedPlayers = await ctx.runQuery(
+        internal.memberManagement.getAcceptedMemberUsernameLookup,
+        {},
+      );
 
       // Build lookup sets for fast matching
       const acceptedUsernamesNormalized = new Set(

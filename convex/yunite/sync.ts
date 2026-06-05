@@ -4,7 +4,6 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
-import { extractRawKillEvents } from "./killCreditHelpers";
 import { matchPlayerForImport } from "../lib/playerIdentity";
 import type { PlayerMatchFields } from "../lib/playerIdentity";
 
@@ -536,37 +535,7 @@ export const syncTournamentMatchData = action({
       
       // Track total match kills (sum of all team kills across all matches)
       let totalMatchKills = 0;
-      
-      // Collect kill events for upset tracking (knocks + eliminations with knockedBy)
-      type KillEventData = {
-        importId: typeof args.importId;
-        sessionId: string;
-        killerDiscordId: string;
-        killerPlayerId: import("../_generated/dataModel.d.ts").Id<"players"> | undefined;
-        killerTier: string | undefined;
-        victimDiscordId: string;
-        victimPlayerId: import("../_generated/dataModel.d.ts").Id<"players"> | undefined;
-        victimTier: string | undefined;
-        eventType: "elimination" | "knock";
-        weapon: string | undefined;
-        timeInMatch: number | undefined;
-        knockedBy?: string;
-      };
-      const killEventsToStore: KillEventData[] = [];
-      
-      // Pre-fetch all players for tier lookup (more efficient than per-event queries)
-      const allPlayers = (await ctx.runQuery(
-        api.players.getPlayers,
-      )) as import("../_generated/dataModel.d.ts").Doc<"players">[];
-      const playerLookupByDiscordId = new Map<
-        string,
-        { playerId: import("../_generated/dataModel.d.ts").Id<"players">; tier?: string }
-      >(
-        allPlayers
-          .filter((p) => p.discordUserId)
-          .map((p) => [p.discordUserId, { playerId: p._id, tier: p.tier }]),
-      );
-      
+
       // Fetch each match's leaderboard
       for (let i = 0; i < matches.length; i++) {
         const match = matches[i];
@@ -625,30 +594,7 @@ export const syncTournamentMatchData = action({
         }
         
         console.log(`  💀 Death counts in match ${i + 1}:`, Object.fromEntries(playerDeathCounts));
-        
-        // === Extract raw killfeed events (knocks + eliminations with knockedBy) ===
-        const rawKillEvents = extractRawKillEvents(matchData);
-        
-        for (const rawEvt of rawKillEvents) {
-          const killerData = playerLookupByDiscordId.get(rawEvt.killerDiscordId);
-          const victimData = playerLookupByDiscordId.get(rawEvt.victimDiscordId);
-          
-          killEventsToStore.push({
-            importId: args.importId,
-            sessionId,
-            killerDiscordId: rawEvt.killerDiscordId,
-            killerPlayerId: killerData?.playerId,
-            killerTier: killerData?.tier,
-            victimDiscordId: rawEvt.victimDiscordId,
-            victimPlayerId: victimData?.playerId,
-            victimTier: victimData?.tier,
-            eventType: rawEvt.eventType,
-            weapon: rawEvt.weapon,
-            timeInMatch: rawEvt.timeInMatch,
-            knockedBy: rawEvt.knockedBy ?? undefined,
-          });
-        }
-        
+
         // SECOND PASS: Process team stats
         for (const entry of matchData) {
           // Get the list of players in this team
@@ -778,35 +724,7 @@ export const syncTournamentMatchData = action({
           }
         }
       }
-      
-      // === Store all kill events for upset tracking ===
-      if (killEventsToStore.length > 0) {
-        console.log(`📊 Storing ${killEventsToStore.length} kill events for upset tracking...`);
-        
-        // First, delete any existing kill events for this import (in case of re-sync)
-        await ctx.runMutation(internal.upsetKills.deleteKillEventsForImport, {
-          importId: args.importId,
-        });
-        
-        // Store in batches of 100 to avoid hitting mutation limits
-        const BATCH_SIZE = 100;
-        for (let i = 0; i < killEventsToStore.length; i += BATCH_SIZE) {
-          const batch = killEventsToStore.slice(i, i + BATCH_SIZE);
-          await ctx.runMutation(internal.upsetKills.storeKillEventsBatch, {
-            events: batch,
-          });
-        }
-        
-        // Count upsets for logging
-        const upsetCount = killEventsToStore.filter(e => {
-          const killerNum = e.killerTier === "S" ? 4 : e.killerTier === "A" ? 3 : e.killerTier === "B" ? 2 : e.killerTier === "C" ? 1 : 0;
-          const victimNum = e.victimTier === "S" ? 4 : e.victimTier === "A" ? 3 : e.victimTier === "B" ? 2 : e.victimTier === "C" ? 1 : 0;
-          return killerNum > 0 && victimNum > 0 && killerNum < victimNum;
-        }).length;
-        
-        console.log(`✅ Stored ${killEventsToStore.length} kill events (${upsetCount} upsets)`);
-      }
-      
+
       console.log(`📊 Aggregated stats for ${playerStats.size} unique players`);
       
       // Log ALL aggregated data for debugging
@@ -909,13 +827,6 @@ export const syncTournamentMatchData = action({
         console.log(`✅ Recalculated CS for ${duoRecalculated} duo partners`);
       }
 
-      if (totalMatchKills > 0) {
-        await ctx.runMutation(
-          internal.helpers.eventDrivenRebuilds.scheduleUpsetKillsCacheRebuild,
-          {},
-        );
-      }
-      
       return {
         success: true,
         matchesFetched: matches.length,

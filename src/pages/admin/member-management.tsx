@@ -33,13 +33,46 @@ import FemaleVerifiedBadge from "@/components/female-verified-badge.tsx";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { compareTierField } from "@/lib/tier-sort.ts";
 
+const ADMIN_TABS = ["applications", "accepted", "rejected", "former", "discord"];
+const MOD_TABS = ["applications", "accepted", "former"];
+
+function resolveMemberManagementTab(
+  tabFromPath: string | undefined,
+  tabFromQuery: string | null,
+  isAdmin: boolean,
+): string {
+  const tab = tabFromPath || tabFromQuery || undefined;
+  const allowed = isAdmin ? ADMIN_TABS : MOD_TABS;
+  if (tab === "discord" && isAdmin) return "discord";
+  if (tab && allowed.includes(tab)) return tab;
+  return "applications";
+}
+
+function filterAcceptedMembersBySearch<
+  T extends { searchText: string; nickname?: string },
+>(members: T[], searchTerm: string): T[] {
+  if (!searchTerm.trim()) return members;
+  const term = searchTerm.toLowerCase();
+  return members.filter(
+    (member) =>
+      member.searchText.includes(term) ||
+      (member.nickname?.toLowerCase().includes(term) ?? false),
+  );
+}
+
 export default function MemberManagement() {
   const { user, isAdmin, isModeratorOrAdmin, isLoading: isRoleLoading } = useUserRole();
   const isAuthenticated = !!user;
   const [searchParams] = useSearchParams();
   const { tab: tabFromPath } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("accepted");
+  const [activeTab, setActiveTab] = useState(() =>
+    resolveMemberManagementTab(
+      tabFromPath,
+      searchParams.get("tab"),
+      false,
+    ),
+  );
   const [roleResolved, setRoleResolved] = useState(false);
 
   const handleTabChange = (tab: string) => {
@@ -345,8 +378,11 @@ export default function MemberManagement() {
   };
 
   // Apply sorting and filtering to data
-  const sortedAcceptedMembers = acceptedMembers 
-    ? filterData(sortData(acceptedMembers, acceptedSort.field, acceptedSort.direction), acceptedSearch)
+  const sortedAcceptedMembers = acceptedMembers
+    ? filterAcceptedMembersBySearch(
+        sortData(acceptedMembers, acceptedSort.field, acceptedSort.direction),
+        acceptedSearch,
+      )
     : [];
   const sortedDiscordMembers = discordMembers 
     ? filterData(sortData(discordMembers, discordSort.field, discordSort.direction), discordSearch)
@@ -1767,7 +1803,7 @@ export default function MemberManagement() {
           <MergeMembersDialog
             open={mergeDialogOpen}
             onOpenChange={setMergeDialogOpen}
-            players={mergePair}
+            playerIds={[mergePair[0]._id, mergePair[1]._id]}
             onMerged={() => setMergeSelectedIds([])}
           />
         )}

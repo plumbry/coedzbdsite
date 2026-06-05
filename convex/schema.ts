@@ -768,6 +768,52 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
   }).index("by_status", ["status"]),
 
+  // Precomputed public home member directory (one row; avoids N full player reads per visitor).
+  publicMemberDirectoryCache: defineTable({
+    members: v.array(
+      v.object({
+        _id: v.id("players"),
+        discordUsername: v.string(),
+        epicUsername: v.string(),
+        nickname: v.optional(v.string()),
+        tier: v.optional(v.string()),
+        avatarUrl: v.optional(v.string()),
+        totalScore: v.optional(v.number()),
+        gender: v.optional(v.number()),
+        femaleVerified: v.boolean(),
+        isActive: v.boolean(),
+      }),
+    ),
+    lastUpdated: v.number(),
+  }),
+
+  // Player snapshot for a single Discord member sync run (reused across batches).
+  discordMemberSyncRuns: defineTable({
+    syncRunId: v.string(),
+    players: v.array(
+      v.object({
+        _id: v.id("players"),
+        discordUserId: v.optional(v.string()),
+        discordUsername: v.string(),
+        epicUsername: v.string(),
+        nickname: v.optional(v.string()),
+        alternateDiscordUserIds: v.optional(v.array(v.string())),
+        tier: v.optional(v.string()),
+        status: v.optional(v.string()),
+        currentMembershipStatus: v.optional(v.string()),
+        discordRoles: v.optional(
+          v.array(
+            v.object({
+              id: v.string(),
+              name: v.string(),
+            }),
+          ),
+        ),
+      }),
+    ),
+    createdAt: v.number(),
+  }).index("by_sync_run_id", ["syncRunId"]),
+
   // Cached audience insights donuts (admin audience-insights page)
   audienceInsightsSnapshot: defineTable({
     insightsCacheVersion: v.optional(v.number()),
@@ -1019,43 +1065,6 @@ export default defineSchema({
     hasTCDCAAdjustments: v.optional(v.boolean()), // Deprecated - kept for backward compatibility with old cache data
   }),
 
-  // Match kill events (cached from Yunite API for analytics)
-  matchKillEvents: defineTable({
-    importId: v.id("thirdPartyImports"), // Link to tournament
-    sessionId: v.string(), // Match session ID
-    // Killer info
-    killerDiscordId: v.string(),
-    killerPlayerId: v.optional(v.id("players")), // Linked player (if matched)
-    killerTier: v.optional(v.string()), // Tier at time of event
-    // Victim info
-    victimDiscordId: v.string(),
-    victimPlayerId: v.optional(v.id("players")), // Linked player (if matched)
-    victimTier: v.optional(v.string()), // Tier at time of event
-    // Event details
-    isUpset: v.boolean(), // True if killer tier < victim tier (lower tier killed higher tier)
-    tierDifference: v.number(), // Numeric tier diff (positive = upset, negative = expected)
-    eventType: v.union(v.literal("elimination"), v.literal("knock")), // Type of event
-    weapon: v.optional(v.string()), // Weapon used
-    timeInMatch: v.optional(v.number()), // Seconds since match start
-    // Knock attribution (for killfeed: knocked/finished/eliminated)
-    knockedBy: v.optional(v.string()), // Discord ID of who originally knocked the victim (for eliminations)
-    // Denormalized display fields (avoid per-row reads on upset kills list)
-    killerName: v.optional(v.string()),
-    killerEpicUsername: v.optional(v.string()),
-    victimName: v.optional(v.string()),
-    victimEpicUsername: v.optional(v.string()),
-    eventName: v.optional(v.string()),
-    eventDate: v.optional(v.string()),
-  })
-    .index("by_import", ["importId"])
-    .index("by_match", ["importId", "sessionId"])
-    .index("by_killer", ["killerDiscordId"])
-    .index("by_victim", ["victimDiscordId"])
-    .index("by_killer_player", ["killerPlayerId"])
-    .index("by_victim_player", ["victimPlayerId"])
-    .index("by_upset", ["isUpset"])
-    .index("by_unique_kill", ["importId", "sessionId", "killerDiscordId", "victimDiscordId"]),
-  
   // Player earnings from scrim events
   playerEarnings: defineTable({
     playerId: v.id("players"),
@@ -1196,29 +1205,6 @@ export default defineSchema({
     computedSectionsUpdatedAt: v.optional(v.number()),
   }).index("by_year", ["year"]),
 
-  // Background job tracking for kill events backfill
-  backfillJobStatus: defineTable({
-    mode: v.union(v.literal("backfill"), v.literal("refresh")),
-    status: v.union(
-      v.literal("running"),
-      v.literal("completed"),
-      v.literal("failed"),
-      v.literal("cancelled")
-    ),
-    processed: v.number(),
-    remaining: v.number(),
-    total: v.number(),
-    alreadyProcessed: v.number(),
-    eventsStored: v.number(),
-    upsetsFound: v.number(),
-    errors: v.array(v.object({
-      eventName: v.string(),
-      error: v.string(),
-    })),
-    startedAt: v.number(),
-    completedAt: v.optional(v.number()),
-  }),
-
   // Scrim random squad pairing events (created via Discord bot)
   scrimEvents: defineTable({
     eventName: v.string(),
@@ -1273,54 +1259,6 @@ export default defineSchema({
     text: v.string(),
   }),
 
-  // Cached upset kills stats (to avoid slow recalculation on every page load)
-  upsetKillsStatsCache: defineTable({
-    totalUpsetKills: v.number(),
-    totalKillEvents: v.number(),
-    upsetPercentage: v.string(),
-    byKillerTier: v.object({
-      S: v.optional(v.number()),
-      A: v.optional(v.number()),
-      B: v.optional(v.number()),
-      C: v.optional(v.number()),
-      D: v.optional(v.number()),
-      Unknown: v.optional(v.number()),
-    }),
-    byVictimTier: v.object({
-      S: v.optional(v.number()),
-      A: v.optional(v.number()),
-      B: v.optional(v.number()),
-      C: v.optional(v.number()),
-      D: v.optional(v.number()),
-      Unknown: v.optional(v.number()),
-    }),
-    byTierDiff: v.record(v.string(), v.number()), // tier diff number -> count
-    topUpsetKillers: v.array(v.object({
-      discordId: v.string(),
-      playerId: v.optional(v.id("players")),
-      upsetKills: v.number(),
-      upsetDeaths: v.number(),
-      playerName: v.string(),
-      tier: v.optional(v.string()),
-    })),
-    topUpsetVictims: v.array(v.object({
-      discordId: v.string(),
-      playerId: v.optional(v.id("players")),
-      upsetKills: v.number(),
-      upsetDeaths: v.number(),
-      playerName: v.string(),
-      tier: v.optional(v.string()),
-    })),
-    lastUpdated: v.number(),
-  }),
-
-  // Running totals for matchKillEvents (avoids full-table scans for counts)
-  matchKillEventsMetadata: defineTable({
-    totalKillEvents: v.number(),
-    totalUpsetKillEvents: v.number(),
-    lastUpdated: v.number(),
-  }),
-
   // Female verifications synced from Mod Log "Girl Role" sheet
   girlRoleVerifications: defineTable({
     discordUserId: v.optional(v.string()),
@@ -1359,7 +1297,8 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_message_id", ["messageId"])
     .index("by_synced_to_discord", ["syncedToDiscord"])
-    .index("by_role_removed", ["roleRemovedFromDiscord"]),
+    .index("by_role_removed", ["roleRemovedFromDiscord"])
+    .index("by_synced_and_role_removed", ["syncedToDiscord", "roleRemovedFromDiscord"]),
 
   // Queued role removals for deleted bans (bot polls and acknowledges these)
   pendingRoleRemovals: defineTable({

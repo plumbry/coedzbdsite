@@ -90,41 +90,6 @@ export const getMatchStatsCount = query({
   },
 });
 
-export const getKillEventsCount = query({
-  args: {},
-  handler: async (ctx) => {
-    const metadata = await ctx.db.query("matchKillEventsMetadata").first();
-    if (metadata) {
-      return {
-        killEventsCount: metadata.totalKillEvents,
-        upsetKillEventsCount: metadata.totalUpsetKillEvents,
-        lastUpdated: metadata.lastUpdated,
-      };
-    }
-
-    let killEventsCount = 0;
-    let upsetKillEventsCount = 0;
-    const page = await ctx.db
-      .query("matchKillEvents")
-      .paginate({ numItems: STATUS_SAMPLE_LIMIT, cursor: null });
-    const latest = await ctx.db.query("matchKillEvents").order("desc").first();
-
-    for (const event of page.page) {
-      killEventsCount++;
-      if (event.isUpset) {
-        upsetKillEventsCount++;
-      }
-    }
-
-    return {
-      killEventsCount,
-      killEventsCountIsSampled: !page.isDone,
-      upsetKillEventsCount,
-      lastUpdated: latest?._creationTime,
-    };
-  },
-});
-
 export const getResultStats = query({
   args: {},
   handler: async (ctx) => {
@@ -580,38 +545,6 @@ export const rebuildAggregateStatsCache = mutation({
   },
 });
 
-export const backfillKillEventsMetadata = mutation({
-  args: {},
-  handler: async (ctx): Promise<{ success: boolean; message: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "User not logged in",
-        code: "UNAUTHENTICATED",
-      });
-    }
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== "admin") {
-      throw new ConvexError({
-        message: "Only admins can backfill kill events metadata",
-        code: "FORBIDDEN",
-      });
-    }
-
-    const result = await ctx.runMutation(api.upsetKills.backfillKillEventsMetadata, {});
-
-    return {
-      success: true,
-      message: `Kill events metadata synced: ${result.totalKillEvents} total, ${result.totalUpsetKillEvents} upsets`,
-    };
-  },
-});
-
 export const backfillPlayerEventParticipationStats = mutation({
   args: {},
   handler: async (ctx): Promise<{ success: boolean; message: string }> => {
@@ -643,38 +576,6 @@ export const backfillPlayerEventParticipationStats = mutation({
     return {
       success: true,
       message: result.message,
-    };
-  },
-});
-
-export const rebuildUpsetKillEventsCache = mutation({
-  args: {},
-  handler: async (ctx): Promise<{ success: boolean; message: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "User not logged in",
-        code: "UNAUTHENTICATED",
-      });
-    }
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== "admin") {
-      throw new ConvexError({
-        message: "Only admins can rebuild upset kill stats",
-        code: "FORBIDDEN",
-      });
-    }
-
-    const result = await ctx.runMutation(api.upsetKills.rebuildStatsCache, {});
-
-    return {
-      success: true,
-      message: `Upset kill stats rebuilt: ${result.totalUpsetKills} upsets across ${result.totalKillEvents} kill events`,
     };
   },
 });

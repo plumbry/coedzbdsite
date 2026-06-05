@@ -63,6 +63,13 @@ function hasGenderValue(gender: number | undefined | null): boolean {
   return gender === 50 || gender === 100;
 }
 
+function resolvePlayerGender(
+  player: Doc<"players">,
+  score: Doc<"manualScores"> | null,
+): number | undefined {
+  return player.gender ?? score?.gender ?? undefined;
+}
+
 async function getReviewablePlayers(ctx: QueryCtx): Promise<Doc<"players">[]> {
   const activePlayers = await ctx.db
     .query("players")
@@ -161,7 +168,8 @@ export const getTierMismatches = query({
 
       if (discordTierRoles.length === 0) {
         if (hasDiscordRole(player.discordRoles, YUNITE_VERIFIED_ROLE_ID)) {
-          const isFemale = score?.gender === 50;
+          const gender = resolvePlayerGender(player, score);
+          const isFemale = gender === 50;
           const lacksWomanVerified =
             isFemale && !hasWomanVerifiedRole(player.discordRoles);
           if (!lacksWomanVerified) {
@@ -175,8 +183,9 @@ export const getTierMismatches = query({
       }
 
       if (mismatchStatus) {
-        const isFemale = score?.gender === 50;
-        const missingGender = !hasGenderValue(score?.gender);
+        const gender = resolvePlayerGender(player, score);
+        const isFemale = gender === 50;
+        const missingGender = !hasGenderValue(gender);
         const { femaleVerified } = getPlayerFemaleVerification(player, femaleLookup);
         const sheetFemaleNotOnSite = femaleVerified && !isFemale;
 
@@ -231,11 +240,16 @@ export const getPlayersMissingGender = query({
     const femaleLookup = await loadFemaleVerificationLookup(ctx);
 
     for (const player of await getReviewablePlayers(ctx)) {
-      const score = await getManualScoreForPlayer(ctx, player._id);
+      if (hasGenderValue(player.gender)) continue;
 
-      if (hasGenderValue(score?.gender)) continue;
+      const score =
+        player.gender === undefined
+          ? await getManualScoreForPlayer(ctx, player._id)
+          : null;
+      const gender = resolvePlayerGender(player, score);
+      if (hasGenderValue(gender)) continue;
 
-      const isFemale = score?.gender === 50;
+      const isFemale = gender === 50;
       const { femaleVerified } = getPlayerFemaleVerification(player, femaleLookup);
 
       missing.push({

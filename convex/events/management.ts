@@ -68,7 +68,7 @@ function computeEventStatus(startDate: string, endDate: string): "upcoming" | "o
   }
 }
 
-// Admin event list — full documents; resolve storage URLs only when needed.
+// Admin event list — linked import counts; image URLs resolved only when requested.
 export const getAllEvents = query({
   args: {
     resolveImageUrls: v.optional(v.boolean()),

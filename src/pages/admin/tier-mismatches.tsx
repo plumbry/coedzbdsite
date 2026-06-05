@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Search, AlertTriangle, AlertCircle, ShieldAlert, ArrowUpDown, ExternalLink, ClipboardEdit, FileWarning, VenusAndMars, Trophy } from "lucide-react";
+import { Search, AlertTriangle, AlertCircle, ShieldAlert, ArrowUpDown, ExternalLink, ClipboardEdit, FileWarning, VenusAndMars, Trophy, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
@@ -79,8 +79,11 @@ function SheetFemaleMismatchBadge() {
   );
 }
 
-function MissingGenderSection() {
-  const missingGender = useQuery(api.discord.tierMismatches.getPlayersMissingGender, {});
+function MissingGenderSection({ enabled }: { enabled: boolean }) {
+  const missingGender = useQuery(
+    api.discord.tierMismatches.getPlayersMissingGender,
+    enabled ? {} : "skip",
+  );
   const [search, setSearch] = useState("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<Id<"players"> | null>(null);
   const [isScoreDialogOpen, setIsScoreDialogOpen] = useState(false);
@@ -220,8 +223,11 @@ function MissingGenderSection() {
   );
 }
 
-function IncompleteEvaluationsSection() {
-  const incomplete = useQuery(api.discord.tierMismatches.getIncompleteEvaluations, {});
+function IncompleteEvaluationsSection({ enabled }: { enabled: boolean }) {
+  const incomplete = useQuery(
+    api.discord.tierMismatches.getIncompleteEvaluations,
+    enabled ? {} : "skip",
+  );
   const [search, setSearch] = useState("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<Id<"players"> | null>(null);
   const [isScoreDialogOpen, setIsScoreDialogOpen] = useState(false);
@@ -392,12 +398,17 @@ function DiscordRoleMismatchSection({
   statusFilter,
   description,
   emptyMessage,
+  enabled,
 }: {
   statusFilter: MismatchStatus[];
   description: string;
   emptyMessage: string;
+  enabled: boolean;
 }) {
-  const mismatches = useQuery(api.discord.tierMismatches.getTierMismatches, {});
+  const mismatches = useQuery(
+    api.discord.tierMismatches.getTierMismatches,
+    enabled ? {} : "skip",
+  );
   const [search, setSearch] = useState("");
   const [filterTier, setFilterTier] = useState<string>("all");
   const [sortField, setSortField] = useState<string>("expectedTier");
@@ -689,9 +700,35 @@ function TabCountBadge({ count }: { count: number | undefined }) {
 }
 
 function TierMismatchesInner() {
-  const mismatches = useQuery(api.discord.tierMismatches.getTierMismatches, {});
-  const incomplete = useQuery(api.discord.tierMismatches.getIncompleteEvaluations, {});
-  const missingGender = useQuery(api.discord.tierMismatches.getPlayersMissingGender, {});
+  const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false);
+
+  const mismatches = useQuery(
+    api.discord.tierMismatches.getTierMismatches,
+    diagnosticsEnabled ? {} : "skip",
+  );
+  const incomplete = useQuery(
+    api.discord.tierMismatches.getIncompleteEvaluations,
+    diagnosticsEnabled ? {} : "skip",
+  );
+  const missingGender = useQuery(
+    api.discord.tierMismatches.getPlayersMissingGender,
+    diagnosticsEnabled ? {} : "skip",
+  );
+
+  if (!diagnosticsEnabled) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-center">
+        <p className="text-sm text-muted-foreground max-w-md">
+          Tier mismatch diagnostics scan all reviewable members and manual scores. Load on
+          demand to avoid a live subscription while you are not using this page.
+        </p>
+        <Button onClick={() => setDiagnosticsEnabled(true)}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Load diagnostics
+        </Button>
+      </div>
+    );
+  }
 
   const roleCount = mismatches?.filter((m) => m.mismatchStatus === "missing_role").length;
   const wrongRoleCount = mismatches?.filter(
@@ -715,6 +752,19 @@ function TierMismatchesInner() {
 
   return (
     <Tabs defaultValue="wrong_role" className="space-y-4">
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setDiagnosticsEnabled(false);
+            setTimeout(() => setDiagnosticsEnabled(true), 0);
+          }}
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Refresh diagnostics
+        </Button>
+      </div>
       <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
         <TabsTrigger value="wrong_role" className="cursor-pointer gap-1 py-2">
           <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
@@ -740,6 +790,7 @@ function TierMismatchesInner() {
 
       <TabsContent value="wrong_role" className="mt-4">
         <DiscordRoleMismatchSection
+          enabled={diagnosticsEnabled}
           statusFilter={["wrong_role", "multiple_roles"]}
           description="Players whose Discord tier role does not match their site evaluation tier. Includes members with the wrong tier role or multiple tier roles."
           emptyMessage="No wrong Discord tier roles found. All assigned roles match site evaluations."
@@ -748,6 +799,7 @@ function TierMismatchesInner() {
 
       <TabsContent value="missing_role" className="mt-4">
         <DiscordRoleMismatchSection
+          enabled={diagnosticsEnabled}
           statusFilter={["missing_role"]}
           description="Yunite-verified players who have a site evaluation tier but no Discord tier role assigned."
           emptyMessage="No missing Discord tier roles found."
@@ -755,11 +807,11 @@ function TierMismatchesInner() {
       </TabsContent>
 
       <TabsContent value="missing_eval" className="mt-4">
-        <IncompleteEvaluationsSection />
+        <IncompleteEvaluationsSection enabled={diagnosticsEnabled} />
       </TabsContent>
 
       <TabsContent value="missing_gender" className="mt-4">
-        <MissingGenderSection />
+        <MissingGenderSection enabled={diagnosticsEnabled} />
       </TabsContent>
     </Tabs>
   );

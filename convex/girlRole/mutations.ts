@@ -1,5 +1,6 @@
 import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
+import { internal } from "../_generated/api";
 
 const verificationValidator = v.object({
   discordUserId: v.optional(v.string()),
@@ -34,6 +35,8 @@ export const replaceAllVerifications = internalMutation({
       });
       inserted++;
     }
+
+    await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
 
     return { inserted, cleared: existing.length };
   },

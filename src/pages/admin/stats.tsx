@@ -5,7 +5,6 @@ import {
   TrendingUp,
   GitCompare,
   DollarSign,
-  Swords,
   Target,
   Brain,
   LineChart,
@@ -92,8 +91,8 @@ const statsSections: StatsSection[] = [
     ],
   },
   {
-    title: "Earnings & combat",
-    description: "Prize tracking and upset-kill analytics.",
+    title: "Earnings",
+    description: "Tournament and in-game prize earnings.",
     links: [
       {
         title: "Earnings",
@@ -106,12 +105,6 @@ const statsSections: StatsSection[] = [
         description: "In-game currency and reward earnings.",
         href: "/admin/in-game-earnings",
         icon: TrendingUp,
-      },
-      {
-        title: "Upset Kills",
-        description: "Lower-tier players eliminating higher-tier opponents.",
-        href: "/admin/upset-kills",
-        icon: Swords,
       },
     ],
   },
@@ -170,7 +163,7 @@ export default function StatsPage() {
     <AdminPageLayout
       requireAdmin
       title="Analytics Hub"
-      description="Tier evaluation, holistic scores, earnings, upsets, and unified stat rebuilds."
+      description="Tier evaluation, holistic scores, earnings, and unified stat rebuilds."
       authTitle="Sign in to access analytics"
     >
       <div className="space-y-8">

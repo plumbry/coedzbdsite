@@ -1,10 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query, internalQuery, internalMutation } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireAdmin, requireModeratorOrAdmin, getDisplayName } from "./auth_helpers";
 import {
   loadFemaleVerificationLookup,
   enrichPlayerWithFemaleVerification,
 } from "./helpers/femaleVerification";
+import { buildPublicMemberDirectory } from "./helpers/publicMemberDirectory";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
@@ -19,6 +21,94 @@ import {
   pickCanonicalManualScore,
 } from "./helpers/manualScores";
 import { sortByTier } from "./helpers/tierSort";
+
+/** Rebuild the public home directory snapshot after membership/display changes. */
+async function schedulePublicMemberDirectoryRebuild(ctx: MutationCtx) {
+  await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
+}
+
+export type AcceptedMemberListRow = {
+  _id: Id<"players">;
+  discordUsername: string;
+  discordUserId?: string;
+  epicUsername: string;
+  nickname?: string;
+  tier?: string;
+  serverJoinDate: string;
+  discordRoles?: Array<{ id: string; name: string }>;
+  femaleVerified: boolean;
+  autoAcceptedByDiscordSync: boolean;
+  searchText: string;
+};
+
+function buildAcceptedMemberSearchText(fields: {
+  discordUsername: string;
+  epicUsername: string;
+  nickname?: string;
+  discordUserId?: string;
+  tier?: string;
+}): string {
+  return [
+    fields.discordUsername,
+    fields.epicUsername,
+    fields.nickname,
+    fields.discordUserId,
+    fields.tier,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+async function buildAcceptedMemberRows(ctx: QueryCtx): Promise<AcceptedMemberListRow[]> {
+  const players = filterVisibleMembers(
+    await ctx.db
+      .query("players")
+      .withIndex("by_membership_status", (q) =>
+        q.eq("currentMembershipStatus", "accepted"),
+      )
+      .order("desc")
+      .collect(),
+  );
+
+  const verificationLookup = await loadFemaleVerificationLookup(ctx);
+
+  const enriched = await Promise.all(
+    players.map(async (player) => {
+      const latestApplication = await ctx.db
+        .query("applications")
+        .withIndex("by_player_id", (q) => q.eq("playerId", player._id))
+        .order("desc")
+        .first();
+
+      const verification = enrichPlayerWithFemaleVerification(player, verificationLookup);
+
+      return {
+        _id: player._id,
+        discordUsername: player.discordUsername,
+        discordUserId: player.discordUserId,
+        epicUsername: player.epicUsername,
+        nickname: player.nickname,
+        tier: player.tier,
+        serverJoinDate: player.serverJoinDate,
+        discordRoles: player.discordRoles,
+        femaleVerified: verification.femaleVerified,
+        autoAcceptedByDiscordSync: latestApplication?.autoAcceptedByDiscordSync ?? false,
+        searchText: buildAcceptedMemberSearchText({
+          discordUsername: player.discordUsername,
+          epicUsername: player.epicUsername,
+          nickname: player.nickname,
+          discordUserId: player.discordUserId,
+          tier: player.tier,
+        }),
+      };
+    }),
+  );
+
+  return sortByTier(enriched, (p) => p.tier, (a, b) =>
+    a.discordUsername.localeCompare(b.discordUsername),
+  );
+}
 
 function sortPlayersForList<T extends { tier?: string; discordUsername: string }>(
   players: T[],
@@ -524,6 +614,8 @@ export const acceptApplication = mutation({
       performedByName: getDisplayName(user),
       isSystemAction: false,
     });
+
+    await schedulePublicMemberDirectoryRebuild(ctx);
     
     return playerId;
   },
@@ -691,50 +783,17 @@ export const createPlayerForApplication = mutation({
   },
 });
 
-// Get accepted members (public + admin)
+// Get accepted members (admin Accepted tab — slim rows only).
 export const getAcceptedMembers = query({
   args: {},
   handler: async (ctx) => {
-    const players = filterVisibleMembers(
-      await ctx.db
-        .query("players")
-        .withIndex("by_membership_status", (q) =>
-          q.eq("currentMembershipStatus", "accepted"),
-        )
-        .order("desc")
-        .collect(),
-    );
-
-    const verificationLookup = await loadFemaleVerificationLookup(ctx);
-
-    const enriched = await Promise.all(
-      players.map(async (player) => {
-        const latestApplication = await ctx.db
-          .query("applications")
-          .withIndex("by_player_id", (q) => q.eq("playerId", player._id))
-          .order("desc")
-          .first();
-
-        return {
-          ...enrichPlayerWithFemaleVerification(
-            {
-              ...player,
-              gender: player.gender,
-            },
-            verificationLookup,
-          ),
-          isActive: player.isRecentlyActive ?? false,
-          autoAcceptedByDiscordSync: latestApplication?.autoAcceptedByDiscordSync ?? false,
-        };
-      }),
-    );
-
-    return sortPlayersForList(enriched);
+    await requireModeratorOrAdmin(ctx);
+    return await buildAcceptedMemberRows(ctx);
   },
 });
 
-// Slim public member directory (home page) — no admin-only fields, no per-player score reads.
-export const getPublicMemberDirectory = query({
+/** Username lookup for Sheets cross-check (non-reactive). */
+export const getAcceptedMemberUsernameLookup = internalQuery({
   args: {},
   handler: async (ctx) => {
     const players = filterVisibleMembers(
@@ -743,33 +802,48 @@ export const getPublicMemberDirectory = query({
         .withIndex("by_membership_status", (q) =>
           q.eq("currentMembershipStatus", "accepted"),
         )
-        .order("desc")
         .collect(),
     );
 
-    const verificationLookup = await loadFemaleVerificationLookup(ctx);
+    return players.map((player) => ({
+      discordUsername: player.discordUsername,
+      epicUsername: player.epicUsername,
+      nickname: player.nickname,
+    }));
+  },
+});
 
-    const directory = players.map((player) => {
-      const verification = enrichPlayerWithFemaleVerification(
-        player,
-        verificationLookup,
-      );
+export const storePublicMemberDirectoryCache = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const members = await buildPublicMemberDirectory(ctx);
+    const payload = { members, lastUpdated: Date.now() };
+    const existing = await ctx.db.query("publicMemberDirectoryCache").first();
+    if (existing) {
+      await ctx.db.patch(existing._id, payload);
+    } else {
+      await ctx.db.insert("publicMemberDirectoryCache", payload);
+    }
+  },
+});
 
-      return {
-        _id: player._id,
-        discordUsername: player.discordUsername,
-        epicUsername: player.epicUsername,
-        nickname: player.nickname,
-        tier: player.tier,
-        avatarUrl: player.avatarUrl,
-        totalScore: player.totalScore,
-        gender: player.gender,
-        femaleVerified: verification.femaleVerified,
-        isActive: player.isRecentlyActive ?? false,
-      };
-    });
+export const rebuildPublicMemberDirectoryCache = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
+  },
+});
 
-    return sortPlayersForList(directory);
+// Public home page — reads precomputed snapshot (rebuilt on cron / membership changes).
+export const getPublicMemberDirectory = query({
+  args: {},
+  handler: async (ctx) => {
+    const cache = await ctx.db.query("publicMemberDirectoryCache").first();
+    if (cache) {
+      return cache.members;
+    }
+    return await buildPublicMemberDirectory(ctx);
   },
 });
 
@@ -819,6 +893,8 @@ export const refreshRecentlyActiveFlags = internalMutation({
         await ctx.db.patch(player._id, { isRecentlyActive: isActive });
       }
     }
+
+    await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
   },
 });
 
@@ -1107,6 +1183,8 @@ export const updateMemberStatus = mutation({
         : "Status changed to accepted",
       isSystemAction: false,
     });
+
+    await schedulePublicMemberDirectoryRebuild(ctx);
   },
 });
 
@@ -1200,6 +1278,8 @@ export const deletePlayer = mutation({
       reason: "Player and all associated data permanently deleted by admin",
       isSystemAction: false,
     });
+
+    await schedulePublicMemberDirectoryRebuild(ctx);
   },
 });
 

@@ -30,11 +30,6 @@ import PlayerEarningsPage from "./pages/admin/player-earnings.tsx";
 import MemberManagement from "./pages/admin/member-management.tsx";
 import WrappedEditorPage from "./pages/admin/wrapped-editor.tsx";
 import WrappedPreviewPage from "./pages/admin/wrapped-preview.tsx";
-import UpsetKillsPage from "./pages/admin/upset-kills.tsx";
-import UpsetKillsSearchPage from "./pages/admin/upset-kills-search.tsx";
-import UpsetKillsH2HPage from "./pages/admin/upset-kills-h2h.tsx";
-import UpsetKillsTopPage from "./pages/admin/upset-kills-top.tsx";
-import EliminationsPage from "./pages/admin/upset-kills-eliminations.tsx";
 import TierImpactPage from "./pages/admin/tier-impact.tsx";
 import StatsPage from "./pages/admin/stats.tsx";
 import AudienceInsightsPage from "./pages/admin/audience-insights.tsx";
@@ -99,11 +94,6 @@ export default function App() {
             <Route path="members/:tab?" element={<MemberManagement />} />
             <Route path="2025-wrapped-editor" element={<WrappedEditorPage />} />
             <Route path="2025-wrapped-preview" element={<WrappedPreviewPage />} />
-            <Route path="upset-kills" element={<UpsetKillsPage />} />
-            <Route path="upset-kills/search" element={<UpsetKillsSearchPage />} />
-            <Route path="upset-kills/h2h" element={<UpsetKillsH2HPage />} />
-            <Route path="upset-kills/top" element={<UpsetKillsTopPage />} />
-            <Route path="upset-kills/eliminations" element={<EliminationsPage />} />
             <Route path="tier-impact" element={<TierImpactPage />} />
             <Route path="stats" element={<StatsPage />} />
             <Route

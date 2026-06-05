@@ -20,11 +20,3 @@ export const scheduleTierEvalRebuild = internalMutation({
     });
   },
 });
-
-/** After match data sync stores kill events — refresh upset kills cache. */
-export const scheduleUpsetKillsCacheRebuild = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    await ctx.scheduler.runAfter(0, internal.upsetKills.rebuildStatsCacheInternal, {});
-  },
-});

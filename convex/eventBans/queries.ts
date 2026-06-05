@@ -367,8 +367,9 @@ export const getBanById = internalQuery({
   },
 });
 
-// Get event bans/probations that haven't been synced to Discord yet
-// Only returns bans that require role sync (event bans and probations, not warnings)
+// Get event bans/probations that haven't been synced to Discord yet.
+// Only returns bans that require role sync (event bans and probations, not warnings).
+// Bot polls /api/discord/pending-role-syncs — keep disabled unless queue has work.
 export const getPendingRoleSyncs = internalQuery({
   args: {},
   handler: async (ctx) => {
@@ -377,14 +378,7 @@ export const getPendingRoleSyncs = internalQuery({
       .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", false))
       .collect();
 
-    const neverSynced = await ctx.db
-      .query("eventBans")
-      .filter((q) => q.eq(q.field("syncedToDiscord"), undefined))
-      .collect();
-
-    const pending = [...unsynced, ...neverSynced].filter((ban) =>
-      requiresDiscordRoleSync(ban.banType),
-    );
+    const pending = unsynced.filter((ban) => requiresDiscordRoleSync(ban.banType));
 
     return pending.map((ban) => ({
       _id: ban._id,
@@ -396,11 +390,8 @@ export const getPendingRoleSyncs = internalQuery({
   },
 });
 
-// Get bans where the role should now be removed:
-// - Event bans with status "ENDED" (events have passed)
-// - Probations older than 28 days
-// - Deleted bans that had roles (from pendingRoleRemovals table)
-// Only returns bans that were synced (role was added) but not yet removed
+// Get bans where the role should now be removed (indexed pending-only scan).
+// Bot polls /api/discord/pending-role-removals — fallback polling should stay off in production.
 export const getPendingRoleRemovals = internalQuery({
   args: {},
   handler: async (ctx) => {
@@ -409,12 +400,13 @@ export const getPendingRoleRemovals = internalQuery({
 
     const syncedNotRemoved = await ctx.db
       .query("eventBans")
-      .withIndex("by_synced_to_discord", (q) => q.eq("syncedToDiscord", true))
+      .withIndex("by_synced_and_role_removed", (q) =>
+        q.eq("syncedToDiscord", true).eq("roleRemovedFromDiscord", false),
+      )
       .collect();
 
     const fromBans = syncedNotRemoved
       .filter((ban) => {
-        if (ban.roleRemovedFromDiscord) return false;
         if (!requiresDiscordRoleSync(ban.banType)) return false;
 
         if (ban.banType !== "Probation" && ban.status === "ENDED") {

@@ -104,7 +104,7 @@ a `users` row and then prompts for a username.
       `/admin/audit`).
 - [ ] `becomeAdmin` path behaves as intended (bootstrap admin).
 - [ ] Representative admin tools load and run: tier re-evaluation/simulation, stats,
-      leaderboard, player comparison, upset kills, data cache status, data backup,
+      leaderboard, player comparison, data cache status, data backup,
       uploads, in-game earnings, event bans, punishment matrix, wrapped editor/preview,
       fuzzy matches, unmatched players, Yunite debug/tournament.
 - [ ] Data backup `/admin/data-backup` (`convex/dataBackup.ts`) export works

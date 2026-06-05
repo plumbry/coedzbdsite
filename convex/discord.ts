@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel.d.ts";
+import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import type { MutationCtx } from "./_generated/server";
 import { getDisplayName, requireAdmin } from "./auth_helpers";
 import { relinkEventResultsForPlayer } from "./helpers/playerResults";
@@ -9,8 +9,38 @@ import {
   syncPlayerDiscordAliases,
 } from "./helpers/playerDiscordAliases";
 import { autoAcceptPendingApplicationForDiscordMember } from "./helpers/discordApplicationSync";
+import { internal } from "./_generated/api";
 
 type SyncMatchConfidence = "exact" | "username" | "fuzzy";
+
+/** Slim player row stored on a Discord sync run and used for batch fuzzy matching. */
+type DiscordBatchSyncPlayer = {
+  _id: Id<"players">;
+  discordUserId?: string;
+  discordUsername: string;
+  epicUsername: string;
+  nickname?: string;
+  alternateDiscordUserIds?: string[];
+  tier?: string;
+  status?: string;
+  currentMembershipStatus?: string;
+  discordRoles?: Array<{ id: string; name: string }>;
+};
+
+function toDiscordBatchSyncPlayer(player: Doc<"players">): DiscordBatchSyncPlayer {
+  return {
+    _id: player._id,
+    discordUserId: player.discordUserId,
+    discordUsername: player.discordUsername,
+    epicUsername: player.epicUsername,
+    nickname: player.nickname,
+    alternateDiscordUserIds: player.alternateDiscordUserIds,
+    tier: player.tier,
+    status: player.status,
+    currentMembershipStatus: player.currentMembershipStatus,
+    discordRoles: player.discordRoles,
+  };
+}
 
 function isDiscordPlaceholderId(id?: string): boolean {
   return !id || id.startsWith("placeholder_") || id === "imported";
@@ -76,9 +106,9 @@ async function resolveExistingPlayerForBatchSync(
     discordUsername: string;
     nickname?: string | null;
   },
-  playersCache: Doc<"players">[],
+  playersCache: DiscordBatchSyncPlayer[],
 ): Promise<{
-  existingPlayer: Doc<"players"> | null;
+  existingPlayer: DiscordBatchSyncPlayer | null;
   matchConfidence: SyncMatchConfidence | null;
 }> {
   const epicUsername = args.nickname || args.discordUsername;
@@ -819,9 +849,36 @@ function getLevenshteinDistance(str1: string, str2: string): number {
   return dp[m][n];
 }
 
-// Batch upsert for daily Discord sync — one players table read per batch (not for webhooks).
+/** Load all players once per daily/manual Discord sync (shared across batches). */
+export const beginDiscordMemberSyncRun = internalMutation({
+  args: { syncRunId: v.string() },
+  handler: async (ctx, args) => {
+    const allPlayers = await ctx.db.query("players").collect();
+    await ctx.db.insert("discordMemberSyncRuns", {
+      syncRunId: args.syncRunId,
+      players: allPlayers.map(toDiscordBatchSyncPlayer),
+      createdAt: Date.now(),
+    });
+  },
+});
+
+export const completeDiscordMemberSyncRun = internalMutation({
+  args: { syncRunId: v.string() },
+  handler: async (ctx, args) => {
+    const run = await ctx.db
+      .query("discordMemberSyncRuns")
+      .withIndex("by_sync_run_id", (q) => q.eq("syncRunId", args.syncRunId))
+      .first();
+    if (run) {
+      await ctx.db.delete(run._id);
+    }
+  },
+});
+
+// Batch upsert for daily Discord sync — reads player cache from sync run when provided.
 export const syncDiscordMembersBatch = internalMutation({
   args: {
+    syncRunId: v.optional(v.string()),
     members: v.array(
       v.object({
         discordUsername: v.string(),
@@ -840,7 +897,20 @@ export const syncDiscordMembersBatch = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
-    const allPlayers = await ctx.db.query("players").collect();
+    let playersCache: DiscordBatchSyncPlayer[];
+    if (args.syncRunId) {
+      const run = await ctx.db
+        .query("discordMemberSyncRuns")
+        .withIndex("by_sync_run_id", (q) => q.eq("syncRunId", args.syncRunId!))
+        .unique();
+      if (!run) {
+        throw new Error(`Discord sync run ${args.syncRunId} not found`);
+      }
+      playersCache = run.players;
+    } else {
+      playersCache = (await ctx.db.query("players").collect()).map(toDiscordBatchSyncPlayer);
+    }
+
     let added = 0;
     let updated = 0;
     const tierRoleNames = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
@@ -848,15 +918,16 @@ export const syncDiscordMembersBatch = internalMutation({
     for (const member of args.members) {
       const epicUsername = member.nickname || member.discordUsername;
       const hasTierRole = member.roles?.some((role) => tierRoleNames.includes(role.name)) || false;
-      const { existingPlayer, matchConfidence } = await resolveExistingPlayerForBatchSync(
+      const { existingPlayer: matchedPlayer, matchConfidence } = await resolveExistingPlayerForBatchSync(
         ctx,
         {
           discordUserId: member.discordUserId,
           discordUsername: member.discordUsername,
           nickname: member.nickname,
         },
-        allPlayers,
+        playersCache,
       );
+      const existingPlayer = matchedPlayer ? await ctx.db.get(matchedPlayer._id) : null;
 
       if (existingPlayer) {
         const updateData: {
@@ -1069,6 +1140,17 @@ export const upsertDiscordMember = internalMutation({
         discordUsername: args.discordUsername,
         playerId: existingPlayer._id,
       });
+
+      if (
+        updateData.tier !== undefined ||
+        updateData.currentMembershipStatus !== undefined
+      ) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.memberManagement.storePublicMemberDirectoryCache,
+          {},
+        );
+      }
       
       return { 
         created: false, 
@@ -1101,6 +1183,14 @@ export const upsertDiscordMember = internalMutation({
         discordUsername: args.discordUsername,
         playerId,
       });
+
+      if (hasTierRole) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.memberManagement.storePublicMemberDirectoryCache,
+          {},
+        );
+      }
       
       return { created: true, playerId, matchConfidence: "exact" };
     }

@@ -97,8 +97,19 @@ export default function EventManager() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const consumedEventDeepLink = useRef(false);
 
+  const editingEventImageUrl = useQuery(
+    api.events.management.getEventImageUrl,
+    editingEvent && currentImageId ? { eventId: editingEvent } : "skip",
+  );
+
+  useEffect(() => {
+    if (editingEventImageUrl) {
+      setCurrentImageUrl(editingEventImageUrl);
+    }
+  }, [editingEventImageUrl]);
+
   const events = useQuery(api.events.management.getAllEvents, {
-    resolveImageUrls: true,
+    resolveImageUrls: false,
   });
   const scrimSeriesOptions = useQuery(api.scrimSeries.queries.listSeries);
   const createEvent = useMutation(api.events.management.createEvent);

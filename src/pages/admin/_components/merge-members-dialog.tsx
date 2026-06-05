@@ -39,7 +39,7 @@ type MergePreviewPlayer = {
 interface MergeMembersDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  players: readonly [MergePreviewPlayer, MergePreviewPlayer];
+  playerIds: readonly [Id<"players">, Id<"players">];
   onMerged?: () => void;
 }
 
@@ -145,14 +145,14 @@ function AspectChoice({
 export default function MergeMembersDialog({
   open,
   onOpenChange,
-  players,
+  playerIds,
   onMerged,
 }: MergeMembersDialogProps) {
   const mergePlayers = useMutation(api.players.mergePlayers);
   const preview = useQuery(
     api.players.getPlayersMergePreview,
     open
-      ? { playerIdA: players[0]._id, playerIdB: players[1]._id }
+      ? { playerIdA: playerIds[0], playerIdB: playerIds[1] }
       : "skip",
   );
 
@@ -161,9 +161,9 @@ export default function MergeMembersDialog({
     return [preview.a, preview.b];
   }, [preview]);
 
-  const [survivingId, setSurvivingId] = useState<Id<"players">>(players[0]._id);
-  const [profileSourceId, setProfileSourceId] = useState<Id<"players">>(players[0]._id);
-  const [evaluationSourceId, setEvaluationSourceId] = useState<Id<"players">>(players[0]._id);
+  const [survivingId, setSurvivingId] = useState<Id<"players">>(playerIds[0]);
+  const [profileSourceId, setProfileSourceId] = useState<Id<"players">>(playerIds[0]);
+  const [evaluationSourceId, setEvaluationSourceId] = useState<Id<"players">>(playerIds[0]);
   const [isMerging, setIsMerging] = useState(false);
 
   useEffect(() => {
@@ -172,30 +172,23 @@ export default function MergeMembersDialog({
     setSurvivingId(suggested._id);
     setProfileSourceId(suggestProfileSource(displayPlayers)._id);
     setEvaluationSourceId(suggestEvaluationSource(displayPlayers)._id);
-  }, [open, preview?.a._id, preview?.b._id]);
-
-  const resolvedPlayers = displayPlayers ?? players;
-  const profileSource =
-    resolvedPlayers.find((p) => p._id === profileSourceId) ?? resolvedPlayers[0];
-  const evaluationSource =
-    resolvedPlayers.find((p) => p._id === evaluationSourceId) ?? resolvedPlayers[0];
-  const removedPlayer =
-    resolvedPlayers.find((p) => p._id !== survivingId) ?? resolvedPlayers[1];
+  }, [open, displayPlayers]);
 
   const handleMerge = async () => {
-    const secondaryId = removedPlayer._id;
+    if (!displayPlayers) return;
+    const removed = displayPlayers.find((p) => p._id !== survivingId) ?? displayPlayers[1];
     setIsMerging(true);
     try {
       await mergePlayers({
         primaryPlayerId: survivingId,
-        secondaryPlayerId: secondaryId,
+        secondaryPlayerId: removed._id,
         selections: {
           profilePlayerId: profileSourceId,
           evaluationPlayerId: evaluationSourceId,
         },
       });
       toast.success(
-        `Merged ${removedPlayer.discordUsername} into ${resolvedPlayers.find((p) => p._id === survivingId)?.discordUsername}`,
+        `Merged ${removed.discordUsername} into ${displayPlayers.find((p) => p._id === survivingId)?.discordUsername}`,
       );
       onOpenChange(false);
       onMerged?.();
@@ -224,6 +217,15 @@ export default function MergeMembersDialog({
             <Skeleton className="h-24 w-full" />
           </div>
         ) : (
+          (() => {
+            const players = displayPlayers;
+            const profileSource =
+              players.find((p) => p._id === profileSourceId) ?? players[0];
+            const evaluationSource =
+              players.find((p) => p._id === evaluationSourceId) ?? players[0];
+            const removedPlayer =
+              players.find((p) => p._id !== survivingId) ?? players[1];
+            return (
           <div className="space-y-4">
             <div className="flex items-start gap-2 p-3 border rounded-md bg-amber-50 dark:bg-amber-950/20 text-sm">
               <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
@@ -238,7 +240,7 @@ export default function MergeMembersDialog({
               description="The player row that remains in the database (all linked data stays on this ID)."
               value={survivingId}
               onValueChange={(id) => setSurvivingId(id as Id<"players">)}
-              players={resolvedPlayers}
+              players={players}
               renderDetails={(p) => formatProfile(p)}
             />
 
@@ -247,7 +249,7 @@ export default function MergeMembersDialog({
               description="Discord username, Epic name, Discord ID, social links, roles, and join date."
               value={profileSourceId}
               onValueChange={(id) => setProfileSourceId(id as Id<"players">)}
-              players={resolvedPlayers}
+              players={players}
               renderDetails={(p) => formatProfile(p)}
             />
 
@@ -256,7 +258,7 @@ export default function MergeMembersDialog({
               description="Tier, holistic score, and manual evaluation (gender, category scores)."
               value={evaluationSourceId}
               onValueChange={(id) => setEvaluationSourceId(id as Id<"players">)}
-              players={resolvedPlayers}
+              players={players}
               renderDetails={(p) => formatEvaluation(p)}
             />
 
@@ -281,6 +283,8 @@ export default function MergeMembersDialog({
               </p>
             </div>
           </div>
+            );
+          })()
         )}
 
         <DialogFooter>
