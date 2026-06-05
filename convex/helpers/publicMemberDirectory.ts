@@ -1,11 +1,34 @@
-import type { QueryCtx } from "../_generated/server";
-import type { Id } from "../_generated/dataModel.d.ts";
+import { internal } from "../_generated/api";
+import type { Doc, Id } from "../_generated/dataModel.d.ts";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
   loadFemaleVerificationLookup,
   enrichPlayerWithFemaleVerification,
 } from "./femaleVerification";
-import { filterVisibleMembers } from "./playerAlt";
+import { filterVisibleMembers, isVisibleInMemberLists } from "./playerAlt";
 import { sortByTier } from "./tierSort";
+
+/** Rebuild the public home directory snapshot (async, full accepted-member scan). */
+export async function schedulePublicMemberDirectoryRebuild(ctx: MutationCtx) {
+  await ctx.scheduler.runAfter(
+    0,
+    internal.memberManagement.storePublicMemberDirectoryCache,
+    {},
+  );
+}
+
+/** Rebuild only when the player can appear on the public member directory. */
+export async function schedulePublicMemberDirectoryRebuildForPlayer(
+  ctx: MutationCtx,
+  player: Pick<Doc<"players">, "currentMembershipStatus" | "isAlt">,
+) {
+  if (
+    player.currentMembershipStatus === "accepted" &&
+    isVisibleInMemberLists(player)
+  ) {
+    await schedulePublicMemberDirectoryRebuild(ctx);
+  }
+}
 
 /** Slim row served to the public home page and stored in publicMemberDirectoryCache. */
 export type PublicMemberDirectoryEntry = {

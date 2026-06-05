@@ -6,7 +6,10 @@ import {
   loadFemaleVerificationLookup,
   enrichPlayerWithFemaleVerification,
 } from "./helpers/femaleVerification";
-import { buildPublicMemberDirectory } from "./helpers/publicMemberDirectory";
+import {
+  buildPublicMemberDirectory,
+  schedulePublicMemberDirectoryRebuild,
+} from "./helpers/publicMemberDirectory";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
@@ -21,11 +24,6 @@ import {
   pickCanonicalManualScore,
 } from "./helpers/manualScores";
 import { sortByTier } from "./helpers/tierSort";
-
-/** Rebuild the public home directory snapshot after membership/display changes. */
-async function schedulePublicMemberDirectoryRebuild(ctx: MutationCtx) {
-  await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
-}
 
 export type AcceptedMemberListRow = {
   _id: Id<"players">;

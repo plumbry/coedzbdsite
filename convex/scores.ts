@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import { requireAdmin } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
 import { getManualScoreForPlayer } from "./helpers/manualScores";
+import { schedulePublicMemberDirectoryRebuildForPlayer } from "./helpers/publicMemberDirectory";
 
 // Calculate tier based on total score
 function calculateTier(totalScore: number): string {
@@ -287,6 +288,11 @@ export const createOrUpdateScore = mutation({
       internal.helpers.eventDrivenRebuilds.scheduleTierEvalRebuild,
       {},
     );
+
+    await schedulePublicMemberDirectoryRebuildForPlayer(ctx, {
+      currentMembershipStatus: player.currentMembershipStatus,
+      isAlt: player.isAlt,
+    });
     
     return { totalScore, tier };
   },

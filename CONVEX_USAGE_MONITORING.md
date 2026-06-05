@@ -46,7 +46,7 @@ Compare **last 7 days** vs the prior 7 days after deploying changes. Monthly win
 ## Public directory cache
 
 - Table: `publicMemberDirectoryCache` (single snapshot document).
-- Rebuilt: daily activity cron, membership/status mutations, girl-role sync, Discord sync end, manual admin rebuild.
+- Rebuilt: daily activity cron, membership/status mutations, manual score/gender updates (`scores.createOrUpdateScore`), girl-role sync, Discord sync end, manual admin rebuild.
 - **First deploy:** run **Admin → Data cache status** or `memberManagement.rebuildPublicMemberDirectoryCache` once if home page falls back to live build.
 
 ## Discord sync
