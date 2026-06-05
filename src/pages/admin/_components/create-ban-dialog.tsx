@@ -206,8 +206,8 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm" className="cursor-pointer">
-          <Plus className="mr-2 h-4 w-4" />
+        <Button size="sm" className="h-8 cursor-pointer text-xs sm:text-sm">
+          <Plus className="mr-1 h-3.5 w-3.5" />
           Create Ban
         </Button>
       </DialogTrigger>

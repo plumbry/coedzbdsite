@@ -261,64 +261,64 @@ export default function EventBansManager({
               )}
             </>
           ) : canEdit ? (
-            <>
-              <div className="flex flex-col items-start gap-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <CreateBanDialog onEventPassed={handleEventPassed} />
-                  <Button
-                    onClick={handleEventPassed}
-                    disabled={isEventPassing}
-                    size="sm"
-                    variant={eventPassedCountdown !== null ? "destructive" : "secondary"}
-                    className="cursor-pointer h-8 text-xs sm:text-sm"
-                  >
-                    <CalendarCheck className={`mr-1 h-3.5 w-3.5 ${isEventPassing ? "animate-pulse" : ""}`} />
-                    {isEventPassing
-                      ? "Processing..."
-                      : eventPassedCountdown !== null
-                        ? `Cancel (${eventPassedCountdown}s)`
-                        : `Event Passed${eventPassedQty > 1 ? ` (×${eventPassedQty})` : ""}`}
-                  </Button>
+            <div className="flex w-full flex-col items-start gap-1.5 sm:w-auto sm:items-end">
+              <div className="flex flex-wrap items-center gap-2">
+                <CreateBanDialog onEventPassed={handleEventPassed} />
+                <Button
+                  onClick={handleEventPassed}
+                  disabled={isEventPassing}
+                  size="sm"
+                  variant={eventPassedCountdown !== null ? "destructive" : "secondary"}
+                  className="cursor-pointer h-8 text-xs sm:text-sm"
+                >
+                  <CalendarCheck className={`mr-1 h-3.5 w-3.5 ${isEventPassing ? "animate-pulse" : ""}`} />
+                  {isEventPassing
+                    ? "Processing..."
+                    : eventPassedCountdown !== null
+                      ? `Cancel (${eventPassedCountdown}s)`
+                      : `Event Passed${eventPassedQty > 1 ? ` (×${eventPassedQty})` : ""}`}
+                </Button>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] sm:text-xs text-muted-foreground">Qty:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={eventPassedQty}
+                    onChange={(e) =>
+                      setEventPassedQty(Math.max(1, Math.min(50, Number(e.target.value) || 1)))
+                    }
+                    className="h-8 w-12 text-center text-xs sm:text-sm"
+                    disabled={isEventPassing || eventPassedCountdown !== null}
+                  />
                 </div>
-                {syncStatus && syncStatus.activeBans > 0 && (
-                  <p className="max-w-[16rem] sm:max-w-xs text-[10px] sm:text-xs leading-snug text-amber-700">
-                    If an event has just finished, click Event Passed before adding a ban.
-                  </p>
-                )}
+                <Button
+                  onClick={handleUndoEventPassed}
+                  disabled={isUndoing}
+                  size="sm"
+                  variant="ghost"
+                  className="cursor-pointer h-8 text-xs sm:text-sm"
+                >
+                  <Undo2 className={`mr-1 h-3.5 w-3.5 ${isUndoing ? "animate-pulse" : ""}`} />
+                  {isUndoing ? "..." : "Undo"}
+                </Button>
+                <Button
+                  onClick={handleForceRoleSync}
+                  disabled={isRoleSyncing}
+                  size="sm"
+                  variant="outline"
+                  className="cursor-pointer h-8 text-xs sm:text-sm"
+                >
+                  <RefreshCw className={`mr-1 h-3.5 w-3.5 ${isRoleSyncing ? "animate-spin" : ""}`} />
+                  {isRoleSyncing ? "Syncing..." : "Role Sync"}
+                </Button>
               </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] sm:text-xs text-muted-foreground">Qty:</span>
-                <Input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={eventPassedQty}
-                  onChange={(e) => setEventPassedQty(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                  className="w-12 h-7 sm:h-8 text-center text-xs sm:text-sm"
-                  disabled={isEventPassing || eventPassedCountdown !== null}
-                />
-              </div>
-              <Button
-                onClick={handleUndoEventPassed}
-                disabled={isUndoing}
-                size="sm"
-                variant="ghost"
-                className="cursor-pointer h-8 text-xs sm:text-sm"
-              >
-                <Undo2 className={`mr-1 h-3.5 w-3.5 ${isUndoing ? "animate-pulse" : ""}`} />
-                {isUndoing ? "..." : "Undo"}
-              </Button>
-              <Button
-                onClick={handleForceRoleSync}
-                disabled={isRoleSyncing}
-                size="sm"
-                variant="outline"
-                className="cursor-pointer h-8 text-xs sm:text-sm"
-              >
-                <RefreshCw className={`mr-1 h-3.5 w-3.5 ${isRoleSyncing ? "animate-spin" : ""}`} />
-                {isRoleSyncing ? "Syncing..." : "Role Sync"}
-              </Button>
-            </>
+              {syncStatus && syncStatus.activeBans > 0 && (
+                <p className="max-w-full text-[10px] leading-snug text-amber-700 sm:max-w-md sm:text-right sm:text-xs">
+                  If an event has just finished, click Event Passed before adding a ban.
+                </p>
+              )}
+            </div>
           ) : undefined
         }
       />
