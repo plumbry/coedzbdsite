@@ -141,6 +141,21 @@ export default defineSchema({
       hasMutualDependency: v.boolean(), // True if both players are each other's consistent duo
       lastUpdated: v.number(), // Timestamp of last calculation
     })),
+    // TODO(remove-after-migration): optional until clearDeprecatedPlayerRankingFields finishes on prod
+    powerScore: v.optional(v.number()),
+    rankingStats: v.optional(
+      v.object({
+        averagePlacement: v.optional(v.number()),
+        averageTeamElims: v.optional(v.number()),
+        averageTeamKD: v.optional(v.number()),
+        top3Finishes: v.optional(v.number()),
+        totalEvents: v.optional(v.number()),
+        totalTeamElims: v.optional(v.number()),
+        totalTeamScore: v.optional(v.number()),
+        unfilteredTotalEvents: v.optional(v.number()),
+        winRate: v.optional(v.number()),
+      }),
+    ),
   })
     .index("by_discord_username", ["discordUsername"])
     .index("by_discord_user_id", ["discordUserId"])
@@ -949,6 +964,9 @@ export default defineSchema({
     recentPromotionDiff: v.optional(v.number()),
     recentDemotionDiff: v.optional(v.number()),
     lastUpdated: v.number(),
+    // TODO(remove-after-migration): optional until clearDeprecatedTierEvalPrFields finishes on prod
+    avgPRPerEvent: v.optional(v.number()),
+    finalPowerScore: v.optional(v.number()),
   })
     .index("by_player", ["playerId"])
     .index("by_tier", ["tier"]),
