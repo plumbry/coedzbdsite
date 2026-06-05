@@ -634,16 +634,16 @@ export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps)
                 </div>
               </div>
             </DialogBody>
-            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button variant="ghost" onClick={() => handleOpenChange(false)} className="cursor-pointer">
-                Cancel
+            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-center">
+              <Button variant="secondary" onClick={handleEventPassedFromWarning} className="cursor-pointer">
+                <CalendarCheck className="mr-2 h-4 w-4" />
+                Event Passed
               </Button>
               <Button variant="outline" onClick={() => setStep("player")} className="cursor-pointer">
                 Not Needed
               </Button>
-              <Button variant="secondary" onClick={handleEventPassedFromWarning} className="cursor-pointer">
-                <CalendarCheck className="mr-2 h-4 w-4" />
-                Event Passed
+              <Button variant="ghost" onClick={() => handleOpenChange(false)} className="cursor-pointer">
+                Cancel
               </Button>
             </DialogFooter>
           </>

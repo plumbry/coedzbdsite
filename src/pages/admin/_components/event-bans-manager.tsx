@@ -261,7 +261,7 @@ export default function EventBansManager({
               )}
             </>
           ) : canEdit ? (
-            <div className="flex w-full flex-col items-start gap-1.5 sm:w-auto sm:items-end">
+            <div className="flex w-full flex-col items-start gap-1.5 sm:w-auto">
               <div className="flex flex-wrap items-center gap-2">
                 <CreateBanDialog onEventPassed={handleEventPassed} />
                 <Button
@@ -314,7 +314,7 @@ export default function EventBansManager({
                 </Button>
               </div>
               {syncStatus && syncStatus.activeBans > 0 && (
-                <p className="max-w-full text-[10px] leading-snug text-amber-700 sm:max-w-md sm:text-right sm:text-xs">
+                <p className="max-w-full text-left text-[10px] leading-snug text-amber-700 sm:max-w-md sm:text-xs">
                   If an event has just finished, click Event Passed before adding a ban.
                 </p>
               )}
