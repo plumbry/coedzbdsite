@@ -16,6 +16,7 @@ import ConfirmDialog from "@/components/confirm-dialog.tsx";
 import {
   PlayerStatsRebuildButton,
   PlayerStatsRebuildProgress,
+  PlayerStatsRebuildRunningAlert,
 } from "@/components/admin/player-stats-rebuild-button.tsx";
 import { PlayerStatsMigrationChecklist } from "@/components/admin/player-stats-migration-checklist.tsx";
 
@@ -49,6 +50,7 @@ export default function DataMaintenanceTools() {
   const clearDeprecatedTierEvalPrFields = useMutation(
     api.clearDeprecatedTierEvalPrFields.clearDeprecatedTierEvalPrFields,
   );
+  const activeStatsRebuild = useQuery(api.playerStatsRebuild.getActiveRebuildJob, {});
 
   const [isDeletingDiscordOnly, setIsDeletingDiscordOnly] = useState(false);
   const [isDeletingAllPlayers, setIsDeletingAllPlayers] = useState(false);
@@ -273,7 +275,10 @@ export default function DataMaintenanceTools() {
           </CardDescription>
         </CardHeader>
         <CardContent className="py-3 space-y-2">
-          <PlayerStatsRebuildProgress className="text-xs text-muted-foreground" />
+          <PlayerStatsRebuildRunningAlert />
+          {!activeStatsRebuild && (
+            <PlayerStatsRebuildProgress className="text-xs text-muted-foreground" />
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <PlayerStatsRebuildButton
               size="sm"

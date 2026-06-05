@@ -1,11 +1,87 @@
-import type { ComponentProps } from "react";
+import { useEffect, type ComponentProps } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { Clock, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+
+function formatPlayerStatsRebuildRelativeTime(timestamp?: number) {
+  if (!timestamp) return "Never";
+  const diff = Date.now() - timestamp;
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}d ago`;
+  if (hours > 0) return `${hours}h ago`;
+  return "< 1h ago";
+}
+
+/** Polls for stalled chains and shows progress with cancel when a rebuild is running. */
+export function PlayerStatsRebuildRunningAlert() {
+  const activeRebuildJob = useQuery(api.playerStatsRebuild.getActiveRebuildJob, {});
+  const reconcileStatsRebuild = useMutation(api.playerStatsRebuild.cleanupPlayerStatsRebuildJobs);
+  const cancelStatsRebuild = useMutation(api.playerStatsRebuild.cancelPlayerStatsRebuild);
+
+  const isRunning = !!activeRebuildJob;
+
+  useEffect(() => {
+    if (!isRunning) return;
+    void reconcileStatsRebuild({});
+    const intervalId = window.setInterval(() => {
+      void reconcileStatsRebuild({});
+    }, 30_000);
+    return () => window.clearInterval(intervalId);
+  }, [isRunning, reconcileStatsRebuild]);
+
+  const runCancelStatsRebuild = async () => {
+    try {
+      const result = await cancelStatsRebuild({});
+      if (result.cancelled > 0) {
+        toast.success("Rebuild cancelled. You can start a new rebuild.");
+      } else {
+        toast.message("No rebuild was running.");
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to cancel player stats rebuild",
+      );
+    }
+  };
+
+  if (!activeRebuildJob) {
+    return null;
+  }
+
+  return (
+    <Alert>
+      <Clock className="h-4 w-4" />
+      <AlertTitle>Rebuild in progress</AlertTitle>
+      <AlertDescription className="space-y-1">
+        <PlayerStatsRebuildProgress />
+        <p className="text-xs text-muted-foreground">
+          Started {formatPlayerStatsRebuildRelativeTime(activeRebuildJob.startedAt)} · last progress{" "}
+          {formatPlayerStatsRebuildRelativeTime(activeRebuildJob.lastProgressAt)}
+          {activeRebuildJob.totalProcessed > 0 &&
+            ` · ${activeRebuildJob.totalProcessed.toLocaleString()} steps`}
+        </p>
+        {activeRebuildJob.appearsStuck && (
+          <p className="text-sm text-muted-foreground">
+            Progress has paused. This page will try to resume automatically every 30 seconds; if
+            nothing changes after a few minutes, cancel and start again.
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button variant="outline" size="sm" onClick={() => void runCancelStatsRebuild()}>
+            Cancel rebuild
+          </Button>
+        </div>
+      </AlertDescription>
+    </Alert>
+  );
+}
 
 type StopAfterPhase =
   | "event_participation"

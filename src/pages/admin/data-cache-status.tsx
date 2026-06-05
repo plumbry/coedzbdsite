@@ -1,4 +1,4 @@
-import { Component, useEffect, useState, type ReactNode } from "react";
+import { Component, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -29,7 +29,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { toast } from "sonner";
 import {
   PlayerStatsRebuildButton,
-  PlayerStatsRebuildProgress,
+  PlayerStatsRebuildRunningAlert,
 } from "@/components/admin/player-stats-rebuild-button.tsx";
 import { PlayerStatsMigrationChecklist } from "@/components/admin/player-stats-migration-checklist.tsx";
 
@@ -74,19 +74,6 @@ function DataCacheStatusContent() {
   const recentEventSyncs = useQuery(api.cacheStatus.getRecentEventSyncs, { limit: 10 });
   const recentImportSyncs = useQuery(api.cacheStatus.getRecentImportSyncs, { limit: 10 });
   const activeStatsRebuild = useQuery(api.playerStatsRebuild.getActiveRebuildJob, {});
-  const reconcileStatsRebuild = useMutation(api.playerStatsRebuild.cleanupPlayerStatsRebuildJobs);
-  const cancelStatsRebuild = useMutation(api.playerStatsRebuild.cancelPlayerStatsRebuild);
-
-  const isStatsRebuildRunning = !!activeStatsRebuild;
-
-  useEffect(() => {
-    if (!isStatsRebuildRunning) return;
-    void reconcileStatsRebuild({});
-    const intervalId = window.setInterval(() => {
-      void reconcileStatsRebuild({});
-    }, 30_000);
-    return () => window.clearInterval(intervalId);
-  }, [isStatsRebuildRunning, reconcileStatsRebuild]);
 
   const rebuildPlayerCache = useMutation(api.cacheStatus.rebuildPlayerCache);
   const rebuildEventCache = useMutation(api.cacheStatus.rebuildEventCache);
@@ -98,21 +85,6 @@ function DataCacheStatusContent() {
   const rebuildUpsetKillEventsCache = useMutation(api.cacheStatus.rebuildUpsetKillEventsCache);
 
   const [rebuildingCache, setRebuildingCache] = useState<string | null>(null);
-
-  const runCancelStatsRebuild = async () => {
-    try {
-      const result = await cancelStatsRebuild({});
-      if (result.cancelled > 0) {
-        toast.success("Rebuild cancelled. You can start a new rebuild.");
-      } else {
-        toast.message("No rebuild was running.");
-      }
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to cancel player stats rebuild",
-      );
-    }
-  };
 
   const handleRebuildCache = async (cacheType: "players" | "events" | "imports" | "matchStats" | "aggregateStats" | "killEventsMetadata" | "upsetKillStats" | "playerEventStats") => {
     setRebuildingCache(cacheType);
@@ -209,34 +181,7 @@ function DataCacheStatusContent() {
             </CardHeader>
             <CardContent className="space-y-3">
               {activeStatsRebuild ? (
-                <Alert>
-                  <Clock className="h-4 w-4" />
-                  <AlertTitle>Rebuild in progress</AlertTitle>
-                  <AlertDescription className="space-y-1">
-                    <PlayerStatsRebuildProgress />
-                    <p className="text-xs text-muted-foreground">
-                      Started {formatRelativeTime(activeStatsRebuild.startedAt)} · last progress{" "}
-                      {formatRelativeTime(activeStatsRebuild.lastProgressAt)}
-                      {activeStatsRebuild.totalProcessed > 0 &&
-                        ` · ${activeStatsRebuild.totalProcessed.toLocaleString()} steps`}
-                    </p>
-                    {activeStatsRebuild.appearsStuck && (
-                      <p className="text-sm text-muted-foreground">
-                        Progress has paused. This page will try to resume automatically every 30
-                        seconds; if nothing changes after a few minutes, cancel and start again.
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void runCancelStatsRebuild()}
-                      >
-                        Cancel rebuild
-                      </Button>
-                    </div>
-                  </AlertDescription>
-                </Alert>
+                <PlayerStatsRebuildRunningAlert />
               ) : (
                 <p className="text-sm text-muted-foreground">
                   No rebuild running. Use after Yunite imports or policy changes.
