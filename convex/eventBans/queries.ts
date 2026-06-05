@@ -5,6 +5,7 @@ import { requireEventBanAccess } from "../auth_helpers";
 import { requireEventBanReadAccess, viewerTokenArg } from "./viewerAuth";
 import { filterVisibleMembers } from "../helpers/playerAlt";
 import {
+  getDiscordRoleIdForBanType,
   getDiscordRoleNameForBanType,
   requiresDiscordRoleSync,
 } from "../lib/eventBanDiscordRoles";
@@ -390,6 +391,7 @@ export const getPendingRoleSyncs = internalQuery({
       discordId: ban.discordId,
       banType: ban.banType,
       discordRoleName: getDiscordRoleNameForBanType(ban.banType),
+      discordRoleId: getDiscordRoleIdForBanType(ban.banType),
     }));
   },
 });
@@ -439,6 +441,7 @@ export const getPendingRoleRemovals = internalQuery({
         discordId: ban.discordId,
         banType: ban.banType,
         discordRoleName: getDiscordRoleNameForBanType(ban.banType),
+        discordRoleId: getDiscordRoleIdForBanType(ban.banType),
         source: "eventBans" as const,
       }));
 
@@ -448,6 +451,7 @@ export const getPendingRoleRemovals = internalQuery({
       discordId: entry.discordId,
       banType: entry.banType,
       discordRoleName: getDiscordRoleNameForBanType(entry.banType),
+      discordRoleId: getDiscordRoleIdForBanType(entry.banType),
       source: "pendingRoleRemovals" as const,
     }));
 

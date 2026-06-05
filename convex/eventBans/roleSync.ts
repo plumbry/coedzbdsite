@@ -4,7 +4,10 @@ import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
-import { getDiscordRoleNameForBanType } from "../lib/eventBanDiscordRoles";
+import {
+  getDiscordRoleNameForBanType,
+  resolveDiscordRoleId,
+} from "../lib/eventBanDiscordRoles";
 
 const ROLE_SYNC_DELAY_MS = 300;
 const TIER_ROLE_NAMES = ["Tier S", "Tier A", "Tier B", "Tier C"];
@@ -124,7 +127,7 @@ export const forceRoleSync = action({
           continue;
         }
 
-        const roleId = roleNameToId.get(discordRoleName);
+        const roleId = resolveDiscordRoleId(discordRoleName, roleNameToId);
         if (!roleId) {
           errors++;
           errorMessages.push(`Discord role not found for "${discordRoleName}"`);
@@ -179,7 +182,7 @@ export const forceRoleSync = action({
           continue;
         }
 
-        const roleId = roleNameToId.get(discordRoleName);
+        const roleId = resolveDiscordRoleId(discordRoleName, roleNameToId);
         if (!roleId) {
           errors++;
           errorMessages.push(`Discord role not found for "${discordRoleName}"`);
