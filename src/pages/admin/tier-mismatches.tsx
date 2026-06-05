@@ -388,11 +388,19 @@ function IncompleteEvaluationsSection() {
   );
 }
 
-function MissingRoleSection() {
+function DiscordRoleMismatchSection({
+  statusFilter,
+  description,
+  emptyMessage,
+}: {
+  statusFilter: MismatchStatus[];
+  description: string;
+  emptyMessage: string;
+}) {
   const mismatches = useQuery(api.discord.tierMismatches.getTierMismatches, {});
   const [search, setSearch] = useState("");
   const [filterTier, setFilterTier] = useState<string>("all");
-  const [sortField, setSortField] = useState<string>("websiteTier");
+  const [sortField, setSortField] = useState<string>("expectedTier");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [selectedPlayerId, setSelectedPlayerId] = useState<Id<"players"> | null>(null);
   const [isScoreDialogOpen, setIsScoreDialogOpen] = useState(false);
@@ -409,14 +417,12 @@ function MissingRoleSection() {
   const filteredMismatches = useMemo(() => {
     if (!mismatches) return [];
 
-    let result = mismatches.filter((m) => m.mismatchStatus === "missing_role");
+    let result = mismatches.filter((m) => statusFilter.includes(m.mismatchStatus));
 
-    // Filter by website tier
     if (filterTier !== "all") {
-      result = result.filter((m) => m.websiteTier === filterTier);
+      result = result.filter((m) => m.expectedTier === filterTier);
     }
 
-    // Search filter
     if (search.trim()) {
       const term = search.toLowerCase();
       result = result.filter(
@@ -428,10 +434,9 @@ function MissingRoleSection() {
       );
     }
 
-    // Sort
     result.sort((a, b) => {
-      if (sortField === "websiteTier") {
-        const tierCmp = compareTierField(a.websiteTier, b.websiteTier, sortDirection);
+      if (sortField === "expectedTier") {
+        const tierCmp = compareTierField(a.expectedTier, b.expectedTier, sortDirection);
         if (tierCmp !== 0) return tierCmp;
         return sortDirection === "asc"
           ? a.discordUsername.localeCompare(b.discordUsername)
@@ -450,16 +455,18 @@ function MissingRoleSection() {
     });
 
     return result;
-  }, [mismatches, filterTier, search, sortField, sortDirection]);
+  }, [mismatches, statusFilter, filterTier, search, sortField, sortDirection]);
 
   const mismatchesPagination = useClientPagination(filteredMismatches, {
-    resetDeps: [filterTier, search, sortField, sortDirection],
+    resetDeps: [filterTier, search, sortField, sortDirection, statusFilter.join(",")],
   });
 
   const handleEvaluatePlayer = (playerId: string) => {
     setSelectedPlayerId(playerId as Id<"players">);
     setIsScoreDialogOpen(true);
   };
+
+  const sectionMismatches = mismatches?.filter((m) => statusFilter.includes(m.mismatchStatus));
 
   if (mismatches === undefined) {
     return (
@@ -472,14 +479,10 @@ function MissingRoleSection() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">
-        Discord tier roles that do not match the player&apos;s website tier, based on cached role data from the last sync.
-      </p>
+      <p className="text-sm text-muted-foreground">{description}</p>
 
-      {/* Filters and table */}
       <Card>
         <CardContent className="space-y-4 pt-6">
-          {/* Filters row */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -490,8 +493,8 @@ function MissingRoleSection() {
                 className="pl-10"
               />
             </div>
-            <div className="flex gap-2">
-              {["all", "S", "A", "B", "C"].map((tier) => (
+            <div className="flex gap-2 flex-wrap">
+              {["all", "S", "A", "B", "C", "D"].map((tier) => (
                 <Button
                   key={tier}
                   variant={filterTier === tier ? "default" : "ghost"}
@@ -505,11 +508,10 @@ function MissingRoleSection() {
             </div>
           </div>
 
-          {/* Results */}
           {filteredMismatches.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              {mismatches.length === 0
-                ? "No tier/role mismatches found. All players are in sync."
+              {(sectionMismatches?.length ?? 0) === 0
+                ? emptyMessage
                 : "No mismatches match your current filters."}
             </div>
           ) : (
@@ -546,10 +548,10 @@ function MissingRoleSection() {
                     </TableHead>
                     <TableHead
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => toggleSort("websiteTier")}
+                      onClick={() => toggleSort("expectedTier")}
                     >
                       <div className="flex items-center gap-1">
-                        Website Tier
+                        Eval Tier
                         <ArrowUpDown className="h-3 w-3" />
                       </div>
                     </TableHead>
@@ -580,31 +582,36 @@ function MissingRoleSection() {
                           </Badge>
                           {m.missingGender && <MissingGenderBadge />}
                           {m.sheetFemaleNotOnSite && <SheetFemaleMismatchBadge />}
+                          {m.evaluationTier && m.playerTier && m.evaluationTier !== m.playerTier && (
+                            <Badge variant="outline" className="text-xs" title="Profile tier differs from evaluation">
+                              Profile: {m.playerTier}
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-1.5">
-                      <Link
-                        to={`/player/${m.discordUsername}`}
-                        className="hover:underline text-primary"
-                      >
-                        {m.nickname || m.discordUsername}
-                      </Link>
-                      {m.isFemale && (
-                        <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-pink-100 dark:bg-pink-950 text-pink-600 dark:text-pink-400 text-[10px] font-bold shrink-0" title="Female">
-                          F
-                        </span>
-                      )}
-                      {m.nickname && (
-                        <span className="text-xs text-muted-foreground">
-                          ({m.discordUsername})
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <Link
+                            to={`/player/${m.discordUsername}`}
+                            className="hover:underline text-primary"
+                          >
+                            {m.nickname || m.discordUsername}
+                          </Link>
+                          {m.isFemale && (
+                            <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-pink-100 dark:bg-pink-950 text-pink-600 dark:text-pink-400 text-[10px] font-bold shrink-0" title="Female">
+                              F
+                            </span>
+                          )}
+                          {m.nickname && (
+                            <span className="text-xs text-muted-foreground">
+                              ({m.discordUsername})
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{m.epicUsername}</TableCell>
                       <TableCell>
-                        <TierBadge tier={m.websiteTier} />
+                        <TierBadge tier={m.expectedTier} />
                       </TableCell>
                       <TableCell>
                         {m.discordTiers.length === 0 ? (
@@ -687,6 +694,9 @@ function TierMismatchesInner() {
   const missingGender = useQuery(api.discord.tierMismatches.getPlayersMissingGender, {});
 
   const roleCount = mismatches?.filter((m) => m.mismatchStatus === "missing_role").length;
+  const wrongRoleCount = mismatches?.filter(
+    (m) => m.mismatchStatus === "wrong_role" || m.mismatchStatus === "multiple_roles",
+  ).length;
   const evalCount = incomplete?.length;
   const genderCount = missingGender?.length;
 
@@ -704,8 +714,13 @@ function TierMismatchesInner() {
   }
 
   return (
-    <Tabs defaultValue="missing_role" className="space-y-4">
-      <TabsList className="grid w-full grid-cols-3 h-auto">
+    <Tabs defaultValue="wrong_role" className="space-y-4">
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
+        <TabsTrigger value="wrong_role" className="cursor-pointer gap-1 py-2">
+          <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+          Wrong Role
+          <TabCountBadge count={wrongRoleCount} />
+        </TabsTrigger>
         <TabsTrigger value="missing_role" className="cursor-pointer gap-1 py-2">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
           Missing Role
@@ -723,8 +738,20 @@ function TierMismatchesInner() {
         </TabsTrigger>
       </TabsList>
 
+      <TabsContent value="wrong_role" className="mt-4">
+        <DiscordRoleMismatchSection
+          statusFilter={["wrong_role", "multiple_roles"]}
+          description="Players whose Discord tier role does not match their site evaluation tier. Includes members with the wrong tier role or multiple tier roles."
+          emptyMessage="No wrong Discord tier roles found. All assigned roles match site evaluations."
+        />
+      </TabsContent>
+
       <TabsContent value="missing_role" className="mt-4">
-        <MissingRoleSection />
+        <DiscordRoleMismatchSection
+          statusFilter={["missing_role"]}
+          description="Yunite-verified players who have a site evaluation tier but no Discord tier role assigned."
+          emptyMessage="No missing Discord tier roles found."
+        />
       </TabsContent>
 
       <TabsContent value="missing_eval" className="mt-4">
@@ -742,7 +769,7 @@ export default function TierMismatchesPage() {
   return (
     <AdminPageLayout requireAdmin
       title="Tier Mismatches"
-      description="Discord tier role mismatches, gender gaps, sheet vs site female verification, and incomplete evaluations"
+      description="Discord tier role mismatches vs site evaluations, gender gaps, sheet vs site female verification, and incomplete evaluations"
       authTitle="Sign in to view tier mismatches"
     >
       <TierMismatchesInner />

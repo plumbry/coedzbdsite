@@ -110,7 +110,10 @@ type TierMismatch = {
   discordUserId: string;
   epicUsername: string;
   nickname: string | undefined;
-  websiteTier: string;
+  /** Tier from site evaluation when available, otherwise player profile tier */
+  expectedTier: string;
+  playerTier: string | undefined;
+  evaluationTier: string | undefined;
   discordTiers: string[];
   mismatchStatus: MismatchStatus;
   currentMembershipStatus: string | undefined;
@@ -134,7 +137,7 @@ type MissingGenderPlayer = {
 };
 
 /**
- * Returns all players whose website tier doesn't match their Discord tier role.
+ * Returns all players whose site evaluation tier doesn't match their Discord tier role.
  * Uses cached discordRoles data (no live Discord API call needed).
  */
 export const getTierMismatches = query({
@@ -146,19 +149,18 @@ export const getTierMismatches = query({
     const femaleLookup = await loadFemaleVerificationLookup(ctx);
 
     for (const player of await getReviewablePlayers(ctx)) {
-      // Skip players without a website tier
-      if (!player.tier) continue;
+      const score = await getManualScoreForPlayer(ctx, player._id);
+      const expectedTier = score?.tier ?? player.tier;
+      if (!expectedTier) continue;
 
       const discordTierRoles = (player.discordRoles ?? [])
         .filter((role) => TIER_ROLE_NAMES.includes(role.name))
         .map((role) => role.name.replace("Tier ", ""));
 
       let mismatchStatus: MismatchStatus | null = null;
-      let score: Awaited<ReturnType<typeof getManualScoreForPlayer>> | null = null;
 
       if (discordTierRoles.length === 0) {
         if (hasDiscordRole(player.discordRoles, YUNITE_VERIFIED_ROLE_ID)) {
-          score = await getManualScoreForPlayer(ctx, player._id);
           const isFemale = score?.gender === 50;
           const lacksWomanVerified =
             isFemale && !hasWomanVerifiedRole(player.discordRoles);
@@ -168,14 +170,11 @@ export const getTierMismatches = query({
         }
       } else if (discordTierRoles.length > 1) {
         mismatchStatus = "multiple_roles";
-      } else if (discordTierRoles[0] !== player.tier) {
+      } else if (discordTierRoles[0] !== expectedTier) {
         mismatchStatus = "wrong_role";
       }
 
       if (mismatchStatus) {
-        if (!score) {
-          score = await getManualScoreForPlayer(ctx, player._id);
-        }
         const isFemale = score?.gender === 50;
         const missingGender = !hasGenderValue(score?.gender);
         const { femaleVerified } = getPlayerFemaleVerification(player, femaleLookup);
@@ -187,7 +186,9 @@ export const getTierMismatches = query({
           discordUserId: player.discordUserId,
           epicUsername: player.epicUsername,
           nickname: player.nickname,
-          websiteTier: player.tier,
+          expectedTier,
+          playerTier: player.tier,
+          evaluationTier: score?.tier,
           discordTiers: discordTierRoles,
           mismatchStatus,
           currentMembershipStatus: player.currentMembershipStatus,
@@ -206,7 +207,7 @@ export const getTierMismatches = query({
       missing_role: 2,
     };
     mismatches.sort((a, b) => {
-      const tierCmp = compareTiers(a.websiteTier, b.websiteTier);
+      const tierCmp = compareTiers(a.expectedTier, b.expectedTier);
       if (tierCmp !== 0) return tierCmp;
       const severityCmp =
         severityOrder[a.mismatchStatus] - severityOrder[b.mismatchStatus];
