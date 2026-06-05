@@ -1734,7 +1734,7 @@ export default function MemberManagement() {
                   <li>All match statistics and performance data</li>
                   <li>All earnings records</li>
                   <li>All applications and status history</li>
-                  <li>All cached calculations and rankings</li>
+                  <li>All cached calculations and stats</li>
                 </ul>
                 <p className="mt-2">Are you absolutely sure you want to proceed?</p>
               </DialogDescription>

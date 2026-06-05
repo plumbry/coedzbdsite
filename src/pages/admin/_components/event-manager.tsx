@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { scrimSeriesAdminPath } from "@/lib/scrim-series-admin-path.ts";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -15,15 +16,18 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Loader2, Plus, Edit, Trash2, Calendar, Upload, X, FileDown, DollarSign, Lock, RefreshCw, ExternalLink, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, Calendar, Upload, X, FileDown, DollarSign, Lock, RefreshCw, ExternalLink, CheckCircle2, AlertCircle, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import ICSImportDialog from "./ics-import-dialog.tsx";
+import ShowdownPenaltiesPanel from "./showdown-penalties-panel.tsx";
 import { DEFAULT_PAGE_SIZE } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
 
 export default function EventManager() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isAdmin } = useUserRole();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Id<"events"> | null>(null);
@@ -32,6 +36,7 @@ export default function EventManager() {
   const [isICSImportOpen, setIsICSImportOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "scrim" | "minicup" | "season" | "mini-season" | "random-squads" | "random-trios" | "solos-meets-duos" | "scrim-series" | "showdown">("all");
   const [eventsTablePage, setEventsTablePage] = useState(1);
+  const [isCreatingSeriesLink, setIsCreatingSeriesLink] = useState(false);
 
   useEffect(() => {
     setEventsTablePage(1);
@@ -53,6 +58,8 @@ export default function EventManager() {
   const [smdTeamSize, setSmdTeamSize] = useState<"duo" | "trio">("duo");
   const [bestNGames, setBestNGames] = useState<number | undefined>(undefined);
   const [seriesDurationWeeks, setSeriesDurationWeeks] = useState<3 | 6>(3);
+  const [showdownBestWeeks, setShowdownBestWeeks] = useState<number>(2);
+  const [penaltyAmount, setPenaltyAmount] = useState<number>(5);
   const [linkedScrimSeriesId, setLinkedScrimSeriesId] = useState<Id<"scrimSeries"> | "none">("none");
   
   // Compute status based on dates
@@ -88,7 +95,8 @@ export default function EventManager() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+  const consumedEventDeepLink = useRef(false);
+
   const events = useQuery(api.events.management.getAllEvents, {
     resolveImageUrls: true,
   });
@@ -99,6 +107,7 @@ export default function EventManager() {
   const generateUploadUrl = useMutation(api.events.management.generateUploadUrl);
   const lockTiers = useMutation(api.events.showdown.lockTiers);
   const syncDiscordEvents = useAction(api.discord.eventSync.syncDiscordEvents);
+  const createAndLinkSeries = useMutation(api.scrimSeries.mutations.createAndLinkToEvent);
   const [isLockingTiers, setIsLockingTiers] = useState(false);
   const [isSyncingDiscord, setIsSyncingDiscord] = useState(false);
   
@@ -133,6 +142,8 @@ export default function EventManager() {
     smdTeamSize?: "duo" | "trio";
     bestNGames?: number;
     seriesDurationWeeks?: 3 | 6;
+    showdownBestWeeks?: number;
+    penaltyAmount?: number;
     image?: Id<"_storage">;
     imageUrl?: string | null;
     linkedImportCount?: number;
@@ -158,6 +169,8 @@ export default function EventManager() {
     setSmdTeamSize(event.smdTeamSize || "duo");
     setBestNGames(event.bestNGames);
     setSeriesDurationWeeks(event.seriesDurationWeeks || 3);
+    setShowdownBestWeeks(event.showdownBestWeeks ?? 2);
+    setPenaltyAmount(event.penaltyAmount ?? 5);
     
     // Set current image info
     setCurrentImageId(event.image || null);
@@ -187,7 +200,33 @@ export default function EventManager() {
     while (finals.length < 4) finals.push("");
     setFinalsLeaderboards(finals);
   };
-  
+
+  const deepLinkEventId = searchParams.get("event");
+
+  useEffect(() => {
+    if (!events || !deepLinkEventId || consumedEventDeepLink.current) {
+      return;
+    }
+
+    const event = events.find((e) => e._id === deepLinkEventId);
+    if (!event) {
+      toast.error("Event not found in Events Manager");
+      consumedEventDeepLink.current = true;
+      return;
+    }
+
+    consumedEventDeepLink.current = true;
+    openEditDialog(event);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("event");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [deepLinkEventId, events, setSearchParams]);
+
   const resetForm = () => {
     setName("");
     setType("scrim");
@@ -204,6 +243,8 @@ export default function EventManager() {
     setSmdTeamSize("duo");
     setBestNGames(undefined);
     setSeriesDurationWeeks(3);
+    setShowdownBestWeeks(2);
+    setPenaltyAmount(5);
     setLinkedScrimSeriesId("none");
     setStandardLeaderboards(["", "", "", ""]);
     setTwoLobbies(false);
@@ -267,17 +308,20 @@ export default function EventManager() {
       filteredQ2.length +
       filteredFinals.length;
 
-    if (totalLeaderboardUrls === 0) {
+    const hasLinkedScrimSeries =
+      type === "scrim-series" && linkedScrimSeriesId !== "none";
+    if (totalLeaderboardUrls === 0 && !hasLinkedScrimSeries) {
       const hasLinkedImports = editingEvent
         ? editingLinkedImportCount > 0
         : false;
       if (!hasLinkedImports) {
-        toast.warning(
-          "No Yunite leaderboard URLs on this event. Add URLs or link imports from Admin → Uploads after Yunite sync.",
+        toast.error(
+          "Add at least one Yunite leaderboard URL, link a Scrim Series, or link a Yunite import from Admin → Uploads before saving.",
         );
+        return;
       }
     }
-    
+
     setIsSubmitting(true);
     
     try {
@@ -311,6 +355,8 @@ export default function EventManager() {
           smdTeamSize: type === "solos-meets-duos" ? smdTeamSize : undefined,
           bestNGames: type === "scrim-series" ? bestNGames : undefined,
           seriesDurationWeeks: type === "scrim-series" ? seriesDurationWeeks : undefined,
+          showdownBestWeeks: type === "showdown" ? showdownBestWeeks : undefined,
+          penaltyAmount: type === "showdown" ? penaltyAmount : undefined,
           linkedScrimSeriesId:
             type === "scrim-series"
               ? linkedScrimSeriesId === "none"
@@ -345,6 +391,8 @@ export default function EventManager() {
           smdTeamSize: type === "solos-meets-duos" ? smdTeamSize : undefined,
           bestNGames: type === "scrim-series" ? bestNGames : undefined,
           seriesDurationWeeks: type === "scrim-series" ? seriesDurationWeeks : undefined,
+          showdownBestWeeks: type === "showdown" ? showdownBestWeeks : undefined,
+          penaltyAmount: type === "showdown" ? penaltyAmount : undefined,
           linkedScrimSeriesId:
             type === "scrim-series" && linkedScrimSeriesId !== "none"
               ? linkedScrimSeriesId
@@ -362,6 +410,39 @@ export default function EventManager() {
     }
   };
   
+  const openScrimSeriesAdmin = (
+    seriesId: Id<"scrimSeries">,
+    tab: "yunite" | "penalties" | "leaderboard" = "yunite",
+  ) => {
+    navigate(scrimSeriesAdminPath(seriesId, tab));
+  };
+
+  const handleCreateAndLinkSeries = async () => {
+    if (!editingEvent) {
+      toast.error("Save the calendar event first, then create & link a series.");
+      return;
+    }
+    setIsCreatingSeriesLink(true);
+    try {
+      const seriesId = await createAndLinkSeries({
+        eventId: editingEvent,
+        bestN: bestNGames,
+        seriesDurationWeeks,
+      });
+      toast.success("Scrim series created and linked — open Scrim Series admin to import.");
+      setIsCreateOpen(false);
+      setEditingEvent(null);
+      resetForm();
+      navigate(scrimSeriesAdminPath(seriesId, "yunite"));
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create linked series",
+      );
+    } finally {
+      setIsCreatingSeriesLink(false);
+    }
+  };
+
   const handleDelete = async (eventId: Id<"events">, eventName: string) => {
     if (!confirm(`Are you sure you want to delete "${eventName}"?`)) {
       return;
@@ -545,6 +626,18 @@ export default function EventManager() {
                         <ExternalLink className="h-3.5 w-3.5" />
                       </Link>
                     </Button>
+                    {event.type === "scrim-series" && event.linkedScrimSeriesId && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          openScrimSeriesAdmin(event.linkedScrimSeriesId!, "yunite")
+                        }
+                        title="Scrim Series admin (imports, penalties, scores)"
+                      >
+                        <Trophy className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="ghost"
@@ -726,7 +819,7 @@ export default function EventManager() {
           )}
         </CardContent>
       </Card>
-      
+
       {/* Create/Edit Dialog */}
       <Dialog open={isCreateOpen || !!editingEvent} onOpenChange={(open) => {
         if (!open) {
@@ -995,7 +1088,7 @@ export default function EventManager() {
                     No Money Event
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Exclude this event from analytics, rankings, and statistics calculations.
+                    Exclude this event from internal player stats and population averages (Yunite imports still appear on the event page).
                   </p>
                 </div>
               </div>
@@ -1033,12 +1126,47 @@ export default function EventManager() {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      When linked, the public event page shows the Admin → Scrim Series leaderboard and Yunite links from imported sessions. Manage scores in{" "}
-                      <a href="/admin/scrim-series" className="underline">
-                        Scrim Series admin
-                      </a>
-                      .
+                      When linked, the public event page shows this series leaderboard and Yunite links from imported sessions.
+                      Import Yunite data, edit penalties, and manage scores in{" "}
+                      <Link to="/admin/scrim-series" className="underline">
+                        Admin → Scrim Series
+                      </Link>
+                      {" "}(use the Trophy action on the event row after linking).
                     </p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {editingEvent && linkedScrimSeriesId === "none" && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleCreateAndLinkSeries}
+                          disabled={isCreatingSeriesLink}
+                        >
+                          {isCreatingSeriesLink ? (
+                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Plus className="mr-1 h-3.5 w-3.5" />
+                          )}
+                          Create &amp; link new series
+                        </Button>
+                      )}
+                      {editingEvent && linkedScrimSeriesId !== "none" && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            openScrimSeriesAdmin(linkedScrimSeriesId, "yunite");
+                            setIsCreateOpen(false);
+                            setEditingEvent(null);
+                            resetForm();
+                          }}
+                        >
+                          <Trophy className="mr-1 h-3.5 w-3.5" />
+                          Open Scrim Series admin
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
@@ -1078,9 +1206,43 @@ export default function EventManager() {
                   </>
                 )}
                 {type === "showdown" && (
-                  <p className="text-sm text-muted-foreground">
-                    Showdown uses total points across all games (no best-N limit).
-                  </p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="showdownBestWeeks">Best Weekly Totals</Label>
+                      <Input
+                        id="showdownBestWeeks"
+                        type="number"
+                        min={1}
+                        max={8}
+                        value={showdownBestWeeks}
+                        onChange={(e) =>
+                          setShowdownBestWeeks(
+                            e.target.value ? parseInt(e.target.value, 10) : 2,
+                          )
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Count each Yunite import as one week; sum the best N weekly totals (default 2 of 4).
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="penaltyAmount">Penalty Amount (pts)</Label>
+                      <Input
+                        id="penaltyAmount"
+                        type="number"
+                        min={0}
+                        value={penaltyAmount}
+                        onChange={(e) =>
+                          setPenaltyAmount(
+                            e.target.value ? parseInt(e.target.value, 10) : 5,
+                          )
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Default deduction per penalty; assign penalties after saving the event.
+                      </p>
+                    </div>
+                  </div>
                 )}
 
                 {/* Showdown: Lock Tiers button */}
@@ -1118,6 +1280,10 @@ export default function EventManager() {
                         Lock Tiers
                       </Button>
                     </div>
+                    <ShowdownPenaltiesPanel
+                      eventId={editingEvent}
+                      penaltyAmount={penaltyAmount}
+                    />
                   </div>
                 )}
               </div>

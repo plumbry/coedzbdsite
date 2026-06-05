@@ -543,14 +543,16 @@ export const syncTournamentMatchData = action({
       const killEventsToStore: KillEventData[] = [];
       
       // Pre-fetch all players for tier lookup (more efficient than per-event queries)
-      const allPlayers = await ctx.runQuery(api.players.getPlayers);
-      const playerLookupByDiscordId = new Map(
+      const allPlayers = (await ctx.runQuery(
+        api.players.getPlayers,
+      )) as import("../_generated/dataModel.d.ts").Doc<"players">[];
+      const playerLookupByDiscordId = new Map<
+        string,
+        { playerId: import("../_generated/dataModel.d.ts").Id<"players">; tier?: string }
+      >(
         allPlayers
-          .filter((p: { discordUserId: string }) => p.discordUserId)
-          .map((p: { discordUserId: string; _id: import("../_generated/dataModel.d.ts").Id<"players">; tier?: string }) => [
-            p.discordUserId, 
-            { playerId: p._id, tier: p.tier }
-          ])
+          .filter((p) => p.discordUserId)
+          .map((p) => [p.discordUserId, { playerId: p._id, tier: p.tier }]),
       );
       
       // Fetch each match's leaderboard
@@ -937,7 +939,13 @@ export const syncPlayerMatchData = action({
     console.log(`📊 Found ${playerResults.length} tournament results for player`);
     
     // Get unique import IDs
-    const uniqueImportIds = [...new Set(playerResults.map((r) => r.importId))];
+    const uniqueImportIds = [
+      ...new Set(
+        (playerResults as Array<{ importId: import("../_generated/dataModel.d.ts").Id<"thirdPartyImports"> }>).map(
+          (r) => r.importId,
+        ),
+      ),
+    ];
     console.log(`📦 Found ${uniqueImportIds.length} unique imports`);
     
     // Check which imports need syncing

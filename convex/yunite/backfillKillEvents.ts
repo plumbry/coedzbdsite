@@ -123,17 +123,16 @@ export const backfillKillEventsBatch = internalAction({
       }
 
       // Pre-fetch all players for tier lookup
-      const allPlayers = await ctx.runQuery(api.players.getPlayers);
-      const playerLookupByDiscordId = new Map(
+      const allPlayers = (await ctx.runQuery(
+        api.players.getPlayers,
+      )) as import("../_generated/dataModel.d.ts").Doc<"players">[];
+      const playerLookupByDiscordId = new Map<
+        string,
+        { playerId: Id<"players">; tier?: string }
+      >(
         allPlayers
-          .filter((p: { discordUserId: string }) => p.discordUserId)
-          .map(
-            (p: {
-              discordUserId: string;
-              _id: Id<"players">;
-              tier?: string;
-            }) => [p.discordUserId, { playerId: p._id, tier: p.tier }]
-          )
+          .filter((p) => p.discordUserId)
+          .map((p) => [p.discordUserId, { playerId: p._id, tier: p.tier }]),
       );
 
       let totalEventsStored = 0;

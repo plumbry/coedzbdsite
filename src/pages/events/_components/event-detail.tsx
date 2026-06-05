@@ -162,9 +162,9 @@ export default function EventDetail() {
               {event.status}
             </Badge>
             {isAdmin && (
-              <Link to={`/admin/events-manager`}>
+              <Link to={`/admin/events-manager?event=${eventId}`}>
                 <Button size="sm" variant="outline">
-                  Edit Event
+                  {event.type === "showdown" ? "Edit & penalties" : "Edit Event"}
                 </Button>
               </Link>
             )}
@@ -262,9 +262,18 @@ export default function EventDetail() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">Format</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm flex items-center gap-2">
-              <Lock className="h-4 w-4 text-muted-foreground" />
-              4-week, tier-locked at start, best 2 weeks count
+            <CardContent className="text-sm space-y-1">
+              <div className="flex items-center gap-2">
+                <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span>
+                  Tier-locked at start · best {event.showdownBestWeeks ?? 2} weekly totals
+                </span>
+              </div>
+              {(event.penaltyAmount ?? 0) > 0 && (
+                <p className="text-xs text-muted-foreground pl-6">
+                  Default penalty: {event.penaltyAmount} pts per infraction
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -339,7 +348,7 @@ export default function EventDetail() {
             <CardTitle>Event Results</CardTitle>
             <CardDescription>
               {eventLeaderboards.isShowdown
-                ? `Showdown — tier-split, best 2 weekly scores of 4`
+                ? `Showdown — tier-split, best ${eventLeaderboards.showdownBestWeeks ?? 2} weekly totals`
                 : eventLeaderboards.isScrimSeries
                 ? `Scrim Series — per-player cumulative${eventLeaderboards.bestNGames ? ` (best ${eventLeaderboards.bestNGames} games)` : ""}`
                 : eventLeaderboards.isSolosMeetsDuos
@@ -353,6 +362,13 @@ export default function EventDetail() {
           </CardHeader>
           <CardContent>
             {eventLeaderboards.isShowdown ? (
+              (() => {
+                const anyShowdownPenalties = [
+                  ...eventLeaderboards.perPlayerLeaderboard,
+                  ...Object.values(eventLeaderboards.showdownTierLeaderboards).flat(),
+                ].some((row) => (row.penaltyTotal ?? 0) > 0);
+
+                return (
               /* Showdown: tier-split per-player leaderboards (S/A/B/C) + overall + week tabs */
               <Tabs defaultValue={
                 Object.values(eventLeaderboards.showdownTierLeaderboards).some(t => t.length > 0) 
@@ -374,7 +390,10 @@ export default function EventDetail() {
                   })}
                   {eventLeaderboards.perPlayerLeaderboard.length > 0 && (
                     <TabsTrigger value="overall">
-                      Overall{eventLeaderboards.bestNGames ? ` (Best ${eventLeaderboards.bestNGames})` : ""}
+                      Overall
+                      {eventLeaderboards.showdownBestWeeks
+                        ? ` (Best ${eventLeaderboards.showdownBestWeeks} weeks)`
+                        : ""}
                     </TabsTrigger>
                   )}
                   {eventLeaderboards.leaderboards.map((leaderboard, index) => (
@@ -411,8 +430,9 @@ export default function EventDetail() {
                               <TableHead>Best Placement</TableHead>
                               <TableHead>Eliminations</TableHead>
                               <TableHead>Games Played</TableHead>
-                              {eventLeaderboards.bestNGames && (
-                                <TableHead>Weeks Counted</TableHead>
+                              <TableHead>Weeks Counted</TableHead>
+                              {anyShowdownPenalties && (
+                                <TableHead>Penalties</TableHead>
                               )}
                             </TableRow>
                           </TableHeader>
@@ -432,8 +452,13 @@ export default function EventDetail() {
                                 <TableCell>{player.bestPlacement}</TableCell>
                                 <TableCell>{player.totalEliminations}</TableCell>
                                 <TableCell>{player.gamesPlayed}</TableCell>
-                                {eventLeaderboards.bestNGames && (
-                                  <TableCell>{player.gamesCountedForPoints}</TableCell>
+                                <TableCell>{player.gamesCountedForPoints}</TableCell>
+                                {anyShowdownPenalties && (
+                                  <TableCell className="text-destructive">
+                                    {player.penaltyTotal
+                                      ? `−${player.penaltyTotal} (${player.penaltyCount})`
+                                      : "—"}
+                                  </TableCell>
                                 )}
                               </TableRow>
                             ))}
@@ -458,8 +483,9 @@ export default function EventDetail() {
                             <TableHead>Best Placement</TableHead>
                             <TableHead>Eliminations</TableHead>
                             <TableHead>Games Played</TableHead>
-                            {eventLeaderboards.bestNGames && (
-                              <TableHead>Weeks Counted</TableHead>
+                            <TableHead>Weeks Counted</TableHead>
+                            {anyShowdownPenalties && (
+                              <TableHead>Penalties</TableHead>
                             )}
                           </TableRow>
                         </TableHeader>
@@ -492,8 +518,13 @@ export default function EventDetail() {
                               <TableCell>{player.bestPlacement}</TableCell>
                               <TableCell>{player.totalEliminations}</TableCell>
                               <TableCell>{player.gamesPlayed}</TableCell>
-                              {eventLeaderboards.bestNGames && (
-                                <TableCell>{player.gamesCountedForPoints}</TableCell>
+                              <TableCell>{player.gamesCountedForPoints}</TableCell>
+                              {anyShowdownPenalties && (
+                                <TableCell className="text-destructive">
+                                  {player.penaltyTotal
+                                    ? `−${player.penaltyTotal} (${player.penaltyCount})`
+                                    : "—"}
+                                </TableCell>
                               )}
                             </TableRow>
                           ))}
@@ -566,6 +597,8 @@ export default function EventDetail() {
                   </TabsContent>
                 ))}
               </Tabs>
+                );
+              })()
             ) : eventLeaderboards.isScrimSeries ? (
               /* Scrim Series: per-player best-N-games cumulative leaderboard with individual week tabs */
               <Tabs defaultValue={eventLeaderboards.perPlayerLeaderboard.length > 0 ? "per-player" : "0"}>

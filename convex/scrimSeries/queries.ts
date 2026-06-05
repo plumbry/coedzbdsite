@@ -12,6 +12,31 @@ export const listSeries = query({
   },
 });
 
+/** Calendar event linked via `events.linkedScrimSeriesId` (at most one). */
+export const getLinkedCalendarEvent = query({
+  args: { seriesId: v.id("scrimSeries") },
+  handler: async (ctx, args) => {
+    const event = await ctx.db
+      .query("events")
+      .withIndex("by_linked_scrim_series", (q) =>
+        q.eq("linkedScrimSeriesId", args.seriesId),
+      )
+      .first();
+
+    if (!event) {
+      return null;
+    }
+
+    return {
+      _id: event._id,
+      name: event.name,
+      startDate: event.startDate,
+      endDate: event.endDate,
+      type: event.type,
+    };
+  },
+});
+
 // Get a single series by ID
 export const getSeries = query({
   args: { seriesId: v.id("scrimSeries") },

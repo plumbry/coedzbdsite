@@ -1,11 +1,10 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { useTierEvaluationCache } from "@/hooks/use-tier-evaluation-cache.ts";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
-import { Spinner } from "@/components/ui/spinner.tsx";
 import { compareTierField } from "@/lib/tier-sort.ts";
 
 // Component to show top 5 results link
@@ -63,7 +62,6 @@ import {
   GitCompare,
   Settings,
   Users,
-  RefreshCw,
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
@@ -91,7 +89,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover.tsx";
 import { toast } from "sonner";
-import ConfirmDialog from "@/components/confirm-dialog.tsx";
+import { PlayerStatsRebuildButton } from "@/components/admin/player-stats-rebuild-button.tsx";
+import { remapTierEvaluationForTcdcView } from "@/lib/tcdc-holistic-view.ts";
 
 type SortField =
   | "playerName"
@@ -114,7 +113,6 @@ function TierReEvaluationContent() {
   const canView = isModeratorOrAdmin;
   
   // ALL HOOKS MUST BE CALLED FIRST (before any conditional returns)
-  const [isRebuilding, setIsRebuilding] = useState(false);
   const [rebuildRecentOnly, setRebuildRecentOnly] = useState(true);
   const [sortField, setSortField] = useState<SortField>("tier");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -132,7 +130,7 @@ function TierReEvaluationContent() {
     tier: true,
     events: true,
     holisticScore: true,
-    rawScores: false, // Raw vs adjusted scores
+    rawScores: true,
     tierGapInfo: false, // Teammate tier and adjustment multiplier
     avgPlacement: false,
     killsPerMatch: true,
@@ -144,35 +142,15 @@ function TierReEvaluationContent() {
   });
   const [displayLimit, setDisplayLimit] = useState(50); // Show 50 rows initially
   const [error, setError] = useState<string | null>(null);
-  const [applyTCDCA, setApplyTCDCA] = useState(false); // Display-time TC/DCA toggle
-  
-  // Only use cached data (no live fallback to prevent timeouts)
+  const [applyTCDCA, setApplyTCDCA] = useState(true);
+
   const cachedData = useTierEvaluationCache(
     canView && !isLoadingUser ? {} : "skip",
   );
   
-  // Fetch player data for TC/DCA when toggle is on
-  const allPlayers = useQuery(
-    api.players.getPlayers,
-    applyTCDCA && cachedData ? {} : "skip"
-  );
-  
-  const rebuildCache = useMutation(api.tierReEvaluation.rebuildTierReEvaluationCache);
-  const initializeBatchRebuild = useMutation(api.tierReEvaluationBatched.initializeBatchRebuild);
-  const clearHolisticCache = useMutation(api.tierReEvaluationBatched.clearCache);
-  const processBatch = useMutation(api.tierReEvaluationBatched.processBatch);
-  const finalizeRecent = useMutation(api.tierReEvaluationBatched.finalizeRecentComparisons);
-  
-  // Top 5 cache rebuild
-  const rebuildTop5Cache = useMutation(api.cacheStatus.rebuildPlayerCache);
-  const [isRebuildingTop5, setIsRebuildingTop5] = useState(false);
-  
-  // TC/DCA recalculation
-  const recalculateAllCS = useMutation(api.calculateContributionScore.recalculateAllCS);
-  const rebuildDCACache = useMutation(api.dcaCache.rebuildDCACache);
-  const [isRecalculatingTCDCA, setIsRecalculatingTCDCA] = useState(false);
-  const [showTCDCAConfirm, setShowTCDCAConfirm] = useState(false);
-  
+  const activeRebuildJob = useQuery(api.playerStatsRebuild.getActiveRebuildJob, {});
+  const isRebuildRunning = !!activeRebuildJob;
+
   // Debug logging
   console.log("TierReEvaluation Debug:", {
     isLoadingUser,
@@ -181,133 +159,10 @@ function TierReEvaluationContent() {
     evaluationsLength: cachedData?.evaluations?.length,
   });
   
-  // Apply TC/DCA multipliers at display time, recalculate tier medians, then re-derive diffs/status
-  const adjustedCachedData = useMemo(() => {
-    if (!applyTCDCA || !allPlayers || !cachedData) return cachedData;
-
-    const tierOrder = ["S", "A", "B", "C"];
-
-    // Helper: calculate median of an array of numbers
-    const calcMedian = (values: number[]): number => {
-      if (values.length === 0) return 0;
-      const sorted = [...values].sort((a, b) => a - b);
-      const mid = Math.floor(sorted.length / 2);
-      return sorted.length % 2 === 0
-        ? (sorted[mid - 1] + sorted[mid]) / 2
-        : sorted[mid];
-    };
-
-    // --- Pass 1: compute adjusted holistic scores for every evaluation ---
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const withAdjusted = cachedData.evaluations.map((evaluation: any) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const player = allPlayers.find((p: any) => p._id === evaluation.playerId);
-      const tc = player?.contributionScore?.score || 1.0;
-      const dca = player?.dcaCache?.dca || 1.0;
-      const multiplier = tc * dca;
-
-      const adjustedHolistic = (evaluation.holisticScore ?? 0) * multiplier;
-      const adjustedRecentHolistic = evaluation.recentHolisticScore != null
-        ? evaluation.recentHolisticScore * multiplier
-        : undefined;
-
-      return { evaluation, adjustedHolistic, adjustedRecentHolistic };
-    });
-
-    // --- Pass 2: build new tier medians from adjusted scores ---
-    const tierAllTimeScores: Record<string, number[]> = { S: [], A: [], B: [], C: [] };
-    const tierRecentScores: Record<string, number[]> = { S: [], A: [], B: [], C: [] };
-
-    for (const { evaluation, adjustedHolistic, adjustedRecentHolistic } of withAdjusted) {
-      if (!tierOrder.includes(evaluation.tier)) continue;
-      // Mirror the ≥5 events filter used by the cache rebuild
-      if ((evaluation.totalEvents ?? 0) >= 5) {
-        tierAllTimeScores[evaluation.tier].push(adjustedHolistic);
-      }
-      if (adjustedRecentHolistic != null) {
-        tierRecentScores[evaluation.tier].push(adjustedRecentHolistic);
-      }
-    }
-
-    const newTierHolisticMedians: Record<string, number> = {};
-    const newRecentMedians: Record<string, number> = {};
-
-    for (const tier of tierOrder) {
-      if (tierAllTimeScores[tier].length > 0) {
-        newTierHolisticMedians[tier] = calcMedian(tierAllTimeScores[tier]);
-      }
-      if (tierRecentScores[tier].length > 0) {
-        newRecentMedians[tier] = calcMedian(tierRecentScores[tier]);
-      }
-    }
-
-    // --- Pass 3: recalculate diffs & statuses against the new medians ---
-    const adjustedEvaluations = withAdjusted.map(({ evaluation, adjustedHolistic, adjustedRecentHolistic }) => {
-      const tierIndex = tierOrder.indexOf(evaluation.tier);
-      const tierAbove = tierIndex > 0 ? tierOrder[tierIndex - 1] : undefined;
-      const tierBelow = tierIndex < tierOrder.length - 1 ? tierOrder[tierIndex + 1] : undefined;
-
-      // All-time diffs against NEW medians
-      const sameTierMed = newTierHolisticMedians[evaluation.tier];
-      const aboveMed = tierAbove ? newTierHolisticMedians[tierAbove] : undefined;
-      const belowMed = tierBelow ? newTierHolisticMedians[tierBelow] : undefined;
-
-      const holisticVsSameTier = sameTierMed != null ? adjustedHolistic - sameTierMed : evaluation.holisticVsSameTier;
-      const promotionDiff = aboveMed != null ? adjustedHolistic - aboveMed : evaluation.promotionDiff;
-      const demotionDiff = belowMed != null ? adjustedHolistic - belowMed : evaluation.demotionDiff;
-
-      // Recalculate evaluation status
-      let evaluationStatus = evaluation.evaluationStatus;
-      if ((evaluation.totalEvents ?? 0) >= 8) {
-        if (promotionDiff != null && promotionDiff > 5) {
-          evaluationStatus = "Strong Promotion Outlier";
-        } else if (promotionDiff != null && promotionDiff > 0) {
-          evaluationStatus = "Eligible for Promotion Evaluation";
-        } else if (demotionDiff != null && demotionDiff < -5) {
-          evaluationStatus = "Strong Demotion Outlier";
-        } else if (demotionDiff != null && demotionDiff < 0) {
-          evaluationStatus = "Eligible for Demotion Evaluation";
-        } else {
-          evaluationStatus = "Stable";
-        }
-      }
-
-      // Recent diffs against NEW recent medians
-      const recentSameMed = newRecentMedians[evaluation.tier];
-      const recentAboveMed = tierAbove ? newRecentMedians[tierAbove] : undefined;
-      const recentBelowMed = tierBelow ? newRecentMedians[tierBelow] : undefined;
-
-      const recentHolisticVsSameTier = (adjustedRecentHolistic != null && recentSameMed != null)
-        ? adjustedRecentHolistic - recentSameMed
-        : evaluation.recentHolisticVsSameTier;
-      const recentPromotionDiff = (adjustedRecentHolistic != null && recentAboveMed != null)
-        ? adjustedRecentHolistic - recentAboveMed
-        : evaluation.recentPromotionDiff;
-      const recentDemotionDiff = (adjustedRecentHolistic != null && recentBelowMed != null)
-        ? adjustedRecentHolistic - recentBelowMed
-        : evaluation.recentDemotionDiff;
-
-      return {
-        ...evaluation,
-        holisticScore: adjustedHolistic,
-        holisticVsSameTier,
-        promotionDiff,
-        demotionDiff,
-        evaluationStatus,
-        recentHolisticScore: adjustedRecentHolistic,
-        recentHolisticVsSameTier,
-        recentPromotionDiff,
-        recentDemotionDiff,
-      };
-    });
-
-    return {
-      ...cachedData,
-      evaluations: adjustedEvaluations,
-      tierHolisticMedians: newTierHolisticMedians,
-      recentTierHolisticMedians: newRecentMedians,
-    };
-  }, [applyTCDCA, allPlayers, cachedData]);
+  const adjustedCachedData = useMemo(
+    () => remapTierEvaluationForTcdcView(cachedData, applyTCDCA) ?? cachedData,
+    [applyTCDCA, cachedData],
+  );
 
   // Use useMemo to cache expensive filtering and sorting operations
   // MUST be called before any conditional returns
@@ -513,99 +368,6 @@ function TierReEvaluationContent() {
   const displayedEvaluations = filteredAndSortedEvaluations.slice(0, displayLimit);
   const hasMore = filteredAndSortedEvaluations.length > displayLimit;
   
-  const handleRebuildCache = async () => {
-    setIsRebuilding(true);
-    try {
-      // Step 1: Clear old cache, then initialize (calculates tier medians)
-      toast.loading("Clearing old cache...", { id: 'tier-rebuild-progress' });
-      await clearHolisticCache({});
-      toast.loading("Initializing cache rebuild...", { id: 'tier-rebuild-progress' });
-      const { totalPlayers, batchCount } = await initializeBatchRebuild({ recentOnly: rebuildRecentOnly });
-      
-      if (totalPlayers === 0) {
-        toast.dismiss('tier-rebuild-progress');
-        toast.warning("No players with match data to process");
-        setIsRebuilding(false);
-        return;
-      }
-      
-      // Step 2: Process batches
-      let processedTotal = 0;
-      for (let i = 0; i < batchCount; i++) {
-        toast.loading(
-          `Rebuilding cache... ${processedTotal}/${totalPlayers} players (batch ${i + 1}/${batchCount})`,
-          { id: 'tier-rebuild-progress' }
-        );
-        
-        const { processed } = await processBatch({ batchNumber: i, recentOnly: rebuildRecentOnly });
-        processedTotal += processed;
-      }
-      
-      // Step 3: Finalize recent (6-week) comparisons using 6-week medians
-      toast.loading("Finalizing 6-week comparisons...", { id: 'tier-rebuild-progress' });
-      await finalizeRecent({});
-      
-      toast.dismiss('tier-rebuild-progress');
-      toast.success(`Cache rebuilt successfully for ${processedTotal} players`);
-    } catch (error) {
-      toast.dismiss('tier-rebuild-progress');
-      toast.error("Failed to rebuild cache: " + (error as Error).message);
-    } finally {
-      setIsRebuilding(false);
-    }
-  };
-  
-  const handleRecalculateTCDCA = async () => {
-    setIsRecalculatingTCDCA(true);
-    const TOAST_ID = "recalculate-tcdca";
-
-    try {
-      // Step 1: TC
-      toast.loading("Recalculating TC...", { id: TOAST_ID, duration: Infinity });
-      let tcDone = 0;
-      let hasMore = true;
-      const tcCutoff = Date.now();
-      while (hasMore) {
-        const r = await recalculateAllCS({ forceRecalculate: true, cutoffTimestamp: tcCutoff });
-        tcDone += r.success + r.failed;
-        if (r.remaining <= 0 || (r.success === 0 && r.failed === 0)) hasMore = false;
-        toast.loading(`TC: ${tcDone} players processed, ${r.remaining} remaining`, { id: TOAST_ID, duration: Infinity });
-        if (hasMore) await new Promise(res => setTimeout(res, 150));
-      }
-
-      // Step 2: DCA
-      toast.loading("Recalculating DCA...", { id: TOAST_ID, duration: Infinity });
-      let dcaDone = 0;
-      hasMore = true;
-      while (hasMore) {
-        const r = await rebuildDCACache({ forceRebuild: true });
-        dcaDone += r.success + r.failed;
-        if (r.remaining <= 0 || (r.success === 0 && r.failed === 0)) hasMore = false;
-        toast.loading(`DCA: ${dcaDone} players processed, ${r.remaining} remaining`, { id: TOAST_ID, duration: Infinity });
-        if (hasMore) await new Promise(res => setTimeout(res, 150));
-      }
-
-      toast.success(`TC/DCA recalculated! TC: ${tcDone} players, DCA: ${dcaDone} players`, { id: TOAST_ID, duration: 5000 });
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`TC/DCA recalculation failed: ${msg}`, { id: TOAST_ID, duration: 8000 });
-    } finally {
-      setIsRecalculatingTCDCA(false);
-    }
-  };
-
-  const handleRebuildTop5Cache = async () => {
-    setIsRebuildingTop5(true);
-    try {
-      const result = await rebuildTop5Cache();
-      toast.success(result.message);
-    } catch (error) {
-      toast.error("Failed to rebuild Top 5 cache: " + (error as Error).message);
-    } finally {
-      setIsRebuildingTop5(false);
-    }
-  };
-
   const evaluationData = adjustedCachedData;
 
   // Show loading while checking permissions
@@ -695,20 +457,13 @@ function TierReEvaluationContent() {
             <p className="text-sm">
               Click the button below to build the cache. This will take approximately 30-60 seconds to compute holistic scores and tier comparisons for all players.
             </p>
-            <Button
-              onClick={handleRebuildCache}
-              disabled={isRebuilding}
+            <PlayerStatsRebuildButton
+              label="Build Cache Now"
+              tierEvalOnly
+              tierEvalRecentOnly={rebuildRecentOnly}
+              linkToDataCache
               className="w-full"
-            >
-              {isRebuilding ? (
-                <>
-                  <Spinner className="mr-2 h-4 w-4" />
-                  Building Cache...
-                </>
-              ) : (
-                "Build Cache Now"
-              )}
-            </Button>
+            />
             <p className="text-xs text-muted-foreground">
               Once built, the cache will be available for future loads and can be refreshed anytime.
             </p>
@@ -734,9 +489,12 @@ function TierReEvaluationContent() {
           </CardHeader>
           <CardContent className="space-y-3 py-3">
             <p className="text-sm">Please check the browser console for more details, then try rebuilding the cache.</p>
-            <Button onClick={handleRebuildCache} disabled={isRebuilding}>
-              {isRebuilding ? "Rebuilding..." : "Rebuild Cache"}
-            </Button>
+            <PlayerStatsRebuildButton
+              label="Rebuild Cache"
+              tierEvalOnly
+              tierEvalRecentOnly={rebuildRecentOnly}
+              linkToDataCache
+            />
           </CardContent>
         </Card>
       </div>
@@ -758,9 +516,12 @@ function TierReEvaluationContent() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={handleRebuildCache} disabled={isRebuilding}>
-              {isRebuilding ? "Rebuilding..." : "Rebuild Cache"}
-            </Button>
+            <PlayerStatsRebuildButton
+              label="Rebuild Cache"
+              tierEvalOnly
+              tierEvalRecentOnly={rebuildRecentOnly}
+              linkToDataCache
+            />
           </CardContent>
         </Card>
       </div>
@@ -882,10 +643,13 @@ function TierReEvaluationContent() {
       />
       <div className="flex items-center gap-4 flex-wrap text-sm">
         <Link to="/admin/stats" className="text-primary hover:underline">
-          View all stats →
+          Analytics hub →
         </Link>
-        <Link to="/admin/tier-re-evaluation" className="text-primary hover:underline">
-          Tier Re-Evaluation →
+        <Link to="/admin/holistic-score-stats" className="text-primary hover:underline">
+          Holistic scores →
+        </Link>
+        <Link to="/admin/data-cache-status" className="text-primary hover:underline">
+          Data cache →
         </Link>
       </div>
       {isAdmin && (
@@ -893,48 +657,33 @@ function TierReEvaluationContent() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div>
-                  <Button
-                    onClick={() => setShowTCDCAConfirm(true)}
-                    disabled={isRecalculatingTCDCA || isRebuilding}
+                <span>
+                  <PlayerStatsRebuildButton
+                    label="Recalculate TC/DCA"
+                    tcDcaOnly
+                    linkToDataCache
                     variant="secondary"
-                  >
-                    {isRecalculatingTCDCA ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Recalculating...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Recalculate TC/DCA
-                      </>
-                    )}
-                  </Button>
-                </div>
+                    disabled={isRebuildRunning}
+                  />
+                </span>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
-                <p>Recalculate Team Contribution and Duo Carry Adjustment scores for all players. Run this before rebuilding the cache if TC/DCA values are stale.</p>
+                <p>Recalculate Team Contribution and Duo Carry Adjustment scores for all players. Run before rebuilding tier-eval cache if TC/DCA values are stale.</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  onClick={handleRebuildTop5Cache}
-                  disabled={isRebuildingTop5 || isRebuilding || isRecalculatingTCDCA}
-                  variant="secondary"
-                >
-                  {isRebuildingTop5 ? (
-                    <>
-                      <Spinner className="mr-2 h-4 w-4" />
-                      Rebuilding Top 5...
-                    </>
-                  ) : (
-                    "Rebuild Top 5 Cache"
-                  )}
-                </Button>
+                <span>
+                  <PlayerStatsRebuildButton
+                    label="Rebuild Top 5 Cache"
+                    topFiveOnly
+                    linkToDataCache
+                    variant="secondary"
+                    disabled={isRebuildRunning}
+                  />
+                </span>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
                 <p>Rebuild the Top 5 placement cache for all players. Updates recent top 5 counts shown in the table.</p>
@@ -966,20 +715,15 @@ function TierReEvaluationContent() {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    onClick={handleRebuildCache}
-                    disabled={isRebuilding || isRecalculatingTCDCA}
-                    variant="default"
-                  >
-                    {isRebuilding ? (
-                      <>
-                        <Spinner className="mr-2 h-4 w-4" />
-                        Rebuilding...
-                      </>
-                    ) : (
-                      "Rebuild Cache"
-                    )}
-                  </Button>
+                  <span>
+                    <PlayerStatsRebuildButton
+                      label="Rebuild Cache"
+                      tierEvalOnly
+                      tierEvalRecentOnly={rebuildRecentOnly}
+                      linkToDataCache
+                      disabled={isRebuildRunning}
+                    />
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <p>{rebuildRecentOnly 
@@ -1384,9 +1128,8 @@ function TierReEvaluationContent() {
                     <span className="text-sm font-medium cursor-help">Apply TC/DCA</span>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">Multiply holistic scores by Team Contribution (TC) and</p>
-                    <p className="text-xs">Duo Carry Adjustment (DCA) factors, recalculate tier</p>
-                    <p className="text-xs">medians from adjusted scores, then re-derive diffs &amp; statuses</p>
+                    <p className="text-xs">Show holistic with cached TC/DCA applied (off = raw composite).</p>
+                    <p className="text-xs">Tier medians, vs-tier diffs, and statuses update with the toggle.</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -1568,7 +1311,7 @@ function TierReEvaluationContent() {
                               </div>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs">
-                              <p className="text-xs">Holistic score before tier-gap adjustment</p>
+                              <p className="text-xs">Holistic without TC/DCA (cached raw composite)</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -2244,23 +1987,6 @@ function TierReEvaluationContent() {
         </CardContent>
       </Card>
 
-      <ConfirmDialog
-        open={showTCDCAConfirm}
-        onOpenChange={setShowTCDCAConfirm}
-        title="Recalculate TC/DCA?"
-        description={
-          <>
-            <p>This will:</p>
-            <ol className="list-decimal list-inside space-y-1 mt-2">
-              <li>Recalculate TC (Team Contribution) for all players</li>
-              <li>Recalculate DCA (Duo Carry Adjustment) for all players</li>
-            </ol>
-            <p className="mt-2">This may take a minute or two.</p>
-          </>
-        }
-        confirmLabel="Recalculate"
-        onConfirm={handleRecalculateTCDCA}
-      />
     </div>
   );
 }

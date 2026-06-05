@@ -1,7 +1,12 @@
 import { v } from "convex/values";
 import { query, mutation, internalQuery } from "./_generated/server";
-import { internal, api } from "./_generated/api";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel.d.ts";
+import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerStats";
+import {
+  applyDcaTcToHolistic,
+  getPlayerDcaCpm,
+} from "./lib/stats/holisticScore";
 
 // Define types for evaluation data
 type PlayerEvaluationData = {
@@ -12,7 +17,6 @@ type PlayerEvaluationData = {
   discordUserId: string;
   tier: string;
   totalEvents: number;
-  finalPowerScore: number;
   killsPerMatch: number;
   deathsPerMatch: number | undefined;
   avgPlacement: number;
@@ -27,6 +31,7 @@ type PlayerEvaluationData = {
   adjustedAvgPlacement?: number;
   rawPlacementScore?: number;
   rawHolisticScore?: number;
+  preTierGapHolisticScore?: number;
   avgTeammateTier?: number;
   tierGapAdjustment?: number;
 };
@@ -39,8 +44,6 @@ type TierEvaluationResult = {
     discordUserId: string;
     tier: string;
     totalEvents: number;
-    avgPRPerEvent: number;
-    finalPowerScore: number;
     killsPerMatch: number;
     deathsPerMatch: number | undefined;
     tierKillsMedian: number | null;
@@ -134,33 +137,16 @@ export const getTierReEvaluationDataInternal = internalQuery({
     // Get ALL players (including archived) for teammate lookups
     const allPlayersForTeammateLookup = Array.from(playerMap.values());
 
-    const applyDuoAdjustment = args.applyDuoAdjustment || false;
-    const applyTCPenalty = args.applyTCPenalty !== false; // Default to true
-
-    // Helper to calculate DCA (same logic as rankings.ts)
-    const calculateDCA = (
-      kdWithDuo: number,
-      kdWithoutDuo: number,
-      elimsWithDuo: number,
-      elimsWithoutDuo: number,
-      placementWithDuo: number,
-      placementWithoutDuo: number
-    ): number => {
-      const rawAdjustment =
-        (kdWithoutDuo - kdWithDuo) * 0.25 +
-        (elimsWithoutDuo - elimsWithDuo) * 0.08 +
-        (placementWithDuo - placementWithoutDuo) * 0.005;
-      const clampedAdjustment = Math.max(-0.25, Math.min(0.25, rawAdjustment));
-      return 1 + clampedAdjustment;
-    };
+    const applyTCPenalty = args.applyTCPenalty !== false;
+    const applyTcdcToHolistic = args.applyTCDCAToHolistic !== false;
 
     // Calculate holistic evaluation data for each player
     
     const playerData: PlayerEvaluationData[] = await Promise.all(
       players.map(async (player): Promise<PlayerEvaluationData> => {
-        const stats = player.rankingStats;
-        
-        if (!stats || stats.totalEvents === 0) {
+        const internal = await computeInternalPlayerStats(ctx, player._id);
+
+        if (internal.eventsPlayed === 0) {
           return {
             playerId: player._id,
             playerName: player.nickname || player.discordUsername,
@@ -169,7 +155,6 @@ export const getTierReEvaluationDataInternal = internalQuery({
             discordUserId: player.discordUserId || "",
             tier: player.tier || "Unranked",
             totalEvents: 0,
-            finalPowerScore: 0,
             holisticScore: 0,
             avgPlacement: 0,
             winRate: 0,
@@ -187,179 +172,15 @@ export const getTierReEvaluationDataInternal = internalQuery({
             tierGapAdjustment: undefined,
           };
         }
-        
-        // Get comprehensive stats for holistic evaluation (use cached rankingStats)
-        const comprehensiveStats: {
-          averagePlacement: number;
-          winRate: number;
-        } = {
-          averagePlacement: stats.averagePlacement || 50,
-          winRate: stats.winRate || 0,
-        };
 
-        // Power score is no longer used in holistic evaluation
-        const rawPowerScore = 0;
-        const displayTotalEvents = stats.totalEvents;
-        
-        let dca = 1.0;
+        const displayTotalEvents = internal.eventsPlayed;
+        const { dca, cpm } = getPlayerDcaCpm(player, { applyTCPenalty });
+        const killsPerMatch = internal.killsPerMatch;
+        const deathsPerMatch =
+          internal.deathsPerMatch > 0 ? internal.deathsPerMatch : undefined;
 
-        // Calculate DCA if enabled
-        if (applyDuoAdjustment) {
-          const playerResults = await ctx.db
-            .query("thirdPartyResults")
-            .withIndex("by_player", (q) => q.eq("playerId", player._id))
-            .collect();
-
-          const teammateCount = new Map<
-            string,
-            { count: number; lastEventTime: number }
-          >();
-
-          for (const result of playerResults) {
-            if (!result.teamMembers || result.teamMembers.length === 0) {
-              continue;
-            }
-
-            for (const teammateEpic of result.teamMembers) {
-              if (teammateEpic === player.epicUsername) {
-                continue;
-              }
-
-              const current = teammateCount.get(teammateEpic) || {
-                count: 0,
-                lastEventTime: 0,
-              };
-              teammateCount.set(teammateEpic, {
-                count: current.count + 1,
-                lastEventTime: Math.max(
-                  current.lastEventTime,
-                  result._creationTime
-                ),
-              });
-            }
-          }
-
-          let consistentDuoEpic: string | null = null;
-          let maxCount = 0;
-          let maxLastEventTime = 0;
-
-          for (const [epicUsername, data] of teammateCount.entries()) {
-            if (
-              data.count > maxCount ||
-              (data.count === maxCount && data.lastEventTime > maxLastEventTime)
-            ) {
-              maxCount = data.count;
-              maxLastEventTime = data.lastEventTime;
-              consistentDuoEpic = epicUsername;
-            }
-          }
-
-          if (consistentDuoEpic && playerResults.length >= 5) {
-            const withDuoEvents = playerResults.filter(
-              (r) => r.teamMembers && r.teamMembers.includes(consistentDuoEpic)
-            );
-
-            // Get all events WITHOUT consistent duo partner
-            // This includes events with no teammates (solo) or teammates that don't include the duo
-            const withoutDuoEvents = playerResults.filter(
-              (r) =>
-                r.teamMembers &&
-                !r.teamMembers.includes(consistentDuoEpic)
-            );
-
-            const calculateGroupStats = (events: typeof playerResults) => {
-              if (events.length === 0) return null;
-
-              const kills = events.map((e) => e.eliminations || 0);
-              const placements = events.map((e) => e.placement);
-
-              const avgKD = kills.reduce((sum, k) => sum + k, 0) / kills.length;
-              const avgElims =
-                kills.reduce((sum, k) => sum + k, 0) / kills.length;
-              const avgPlacement =
-                placements.reduce((sum, p) => sum + p, 0) / placements.length;
-
-              return { avgKD, avgElims, avgPlacement };
-            };
-
-            const withDuoStats = calculateGroupStats(withDuoEvents);
-            const withoutDuoStats = calculateGroupStats(withoutDuoEvents);
-
-            if (withDuoStats && withoutDuoStats) {
-              // Calculate raw DCA
-              const rawDCA = calculateDCA(
-                withDuoStats.avgKD,
-                withoutDuoStats.avgKD,
-                withDuoStats.avgElims,
-                withoutDuoStats.avgElims,
-                withDuoStats.avgPlacement,
-                withoutDuoStats.avgPlacement
-              );
-              
-              // Apply confidence weighting based on number of filtered events
-              const filteredCount = withoutDuoEvents.length;
-              let confidenceWeight = 1.0;
-              
-              if (filteredCount >= 3) {
-                confidenceWeight = 1.0;
-              } else if (filteredCount === 2) {
-                confidenceWeight = 0.6;
-              } else if (filteredCount === 1) {
-                confidenceWeight = 0.3;
-              } else {
-                confidenceWeight = 0.0;
-              }
-              
-              // Apply sample size balancing to prevent skew when games are imbalanced
-              const withDuoCount = withDuoEvents.length;
-              const withoutDuoCount = withoutDuoEvents.length;
-              
-              // Calculate sample size ratio (smaller sample / larger sample)
-              const sampleSizeRatio = Math.min(withDuoCount, withoutDuoCount) / Math.max(withDuoCount, withoutDuoCount);
-              
-              // Apply balancing factor: reduce DCA adjustment when sample sizes are imbalanced
-              const balancingFactor = 0.5 + (sampleSizeRatio * 0.5);
-              
-              // Apply both confidence weighting and balancing factor
-              const dcaAdjustment = rawDCA - 1.0;
-              dca = 1.0 + (dcaAdjustment * confidenceWeight * balancingFactor);
-            }
-          }
-        }
-
-        const powerScoreAfterDCA = applyDuoAdjustment
-          ? rawPowerScore * dca
-          : rawPowerScore;
-
-        // Apply TC penalty if enabled
-        let cpm = 1.0;
-        if (applyTCPenalty && player.contributionScore?.score !== undefined) {
-          const cs = player.contributionScore.score;
-          cpm = 0.65 + 0.35 * cs;
-        }
-
-        const finalPowerScore = powerScoreAfterDCA * cpm;
-        
-        // Get kills per match and deaths per match from actual match-level data
-        const matchStats = await ctx.db
-          .query("matchPlayerStats")
-          .withIndex("by_player", (q) => q.eq("playerId", player._id))
-          .collect();
-        
-        let killsPerMatch = 0;
-        let deathsPerMatch: number | undefined = undefined;
-        
-        if (matchStats.length > 0) {
-          const totalKills = matchStats.reduce((sum, m) => sum + m.eliminations, 0);
-          const totalDeaths = matchStats.reduce((sum, m) => sum + m.deaths, 0);
-          killsPerMatch = totalKills / matchStats.length;
-          deathsPerMatch = totalDeaths / matchStats.length;
-        }
-        
-        // Calculate tier-gap adjustment for C-tier players with >= 8 events
-        // This reduces carry inflation by adjusting placement based on teammate tiers
-        const rawAvgPlacement: number = comprehensiveStats.averagePlacement;
-        const winRate: number = comprehensiveStats.winRate;
+        const rawAvgPlacement: number = internal.averagePlacement;
+        const winRate: number = internal.winRate;
         
         // Helper: Convert tier string to numeric value (C=1, B=2, A=3, S=4)
         const tierToNumeric = (tier: string): number => {
@@ -462,17 +283,18 @@ export const getTierReEvaluationDataInternal = internalQuery({
         const rawScores = [rawPlacementScore, winRateScore, killsScore, deathsScore].filter(
           (s): s is number => s !== undefined
         );
-        const rawHolisticScore = rawScores.reduce((sum, s) => sum + s, 0) / rawScores.length;
-        
-        // Weighted composite score (using adjusted placement)
+        const preTierGapHolisticScore =
+          rawScores.reduce((sum, s) => sum + s, 0) / rawScores.length;
+
         const scores = [placementScore, winRateScore, killsScore, deathsScore].filter(
           (s): s is number => s !== undefined
         );
-        let holisticScore = scores.reduce((sum, s) => sum + s, 0) / scores.length;
-        
-        // Apply TC/DCA adjustments to holistic score if enabled
-        if (args.applyTCDCAToHolistic) {
-          holisticScore = holisticScore * dca * cpm;
+        const baseHolisticScore =
+          scores.reduce((sum, s) => sum + s, 0) / scores.length;
+        let holisticScore = baseHolisticScore;
+
+        if (applyTcdcToHolistic) {
+          holisticScore = applyDcaTcToHolistic(holisticScore, dca, cpm);
         }
 
         return {
@@ -483,7 +305,6 @@ export const getTierReEvaluationDataInternal = internalQuery({
           discordUserId: player.discordUserId,
           tier: player.tier || "Unranked",
           totalEvents: displayTotalEvents,
-          finalPowerScore,
           killsPerMatch,
           deathsPerMatch,
           // Comprehensive stats
@@ -499,7 +320,11 @@ export const getTierReEvaluationDataInternal = internalQuery({
           rawAvgPlacement: rawAvgPlacement !== adjustedAvgPlacement ? rawAvgPlacement : undefined,
           adjustedAvgPlacement: rawAvgPlacement !== adjustedAvgPlacement ? adjustedAvgPlacement : undefined,
           rawPlacementScore: rawAvgPlacement !== adjustedAvgPlacement ? Math.round(rawPlacementScore * 10) / 10 : undefined,
-          rawHolisticScore: rawAvgPlacement !== adjustedAvgPlacement ? Math.round(rawHolisticScore * 10) / 10 : undefined,
+          rawHolisticScore: Math.round(baseHolisticScore * 10) / 10,
+          preTierGapHolisticScore:
+            rawAvgPlacement !== adjustedAvgPlacement
+              ? Math.round(preTierGapHolisticScore * 10) / 10
+              : undefined,
           avgTeammateTier: avgTeammateTier !== undefined ? Math.round(avgTeammateTier * 100) / 100 : undefined,
           tierGapAdjustment: tierGapAdjustment !== 1.0 ? tierGapAdjustment : undefined,
         };
@@ -573,11 +398,7 @@ export const getTierReEvaluationDataInternal = internalQuery({
         continue;
       }
       
-      // At this point, player.tier is guaranteed to be S, A, B, or C
-      const perEventScore = player.totalEvents > 0 
-        ? player.finalPowerScore / player.totalEvents 
-        : 0;
-      tierGroups[player.tier].push(perEventScore);
+      tierGroups[player.tier].push(player.holisticScore);
       tierHolisticScores[player.tier].push(player.holisticScore);
       tierKillsPerMatch[player.tier].push(player.killsPerMatch);
     }
@@ -612,10 +433,6 @@ export const getTierReEvaluationDataInternal = internalQuery({
     const evaluations = await Promise.all(eligiblePlayers.map(async (player: PlayerEvaluationData) => {
       // Get full player document for topFiveCache access
       const fullPlayer = await ctx.db.get(player.playerId);
-      const avgPRPerEvent =
-        player.totalEvents > 0
-          ? player.finalPowerScore / player.totalEvents
-          : 0;
       const currentTierIndex = tierOrder.indexOf(player.tier);
       const tierAbove =
         currentTierIndex > 0 ? tierOrder[currentTierIndex - 1] : null;
@@ -629,15 +446,10 @@ export const getTierReEvaluationDataInternal = internalQuery({
       const tierBelowHolistic = tierBelow ? tierHolisticMedians[tierBelow] : null;
       const sameTierHolistic = tierHolisticMedians[player.tier] || null;
       
-      // Keep legacy PR-based averages for reference
-      const tierAboveAvg = tierAbove ? tierAverages[tierAbove] : null;
-      const tierBelowAvg = tierBelow ? tierAverages[tierBelow] : null;
-      
-      // For S-tier, also compare to S-tier average
-      const sameTierAvg = player.tier === "S" ? tierAverages["S"] : null;
-      const sameTierDiff = sameTierAvg && sameTierAvg > 0
-        ? ((avgPRPerEvent - sameTierAvg) / sameTierAvg) * 100
-        : null;
+      const tierAboveAvg = tierAbove ? tierHolisticMedians[tierAbove] : null;
+      const tierBelowAvg = tierBelow ? tierHolisticMedians[tierBelow] : null;
+      const sameTierAvg = tierHolisticMedians[player.tier] || null;
+      const sameTierDiff = null;
       
       // Calculate holistic score differences
       const holisticVsSameTier = sameTierHolistic && sameTierHolistic !== 0
@@ -839,8 +651,6 @@ export const getTierReEvaluationDataInternal = internalQuery({
         discordUserId: player.discordUserId,
         tier: player.tier,
         totalEvents: player.totalEvents,
-        avgPRPerEvent: Math.round(avgPRPerEvent * 100) / 100,
-        finalPowerScore: Math.round(player.finalPowerScore * 100) / 100,
         killsPerMatch: Math.round(playerKillsPerMatch * 10) / 10,
         deathsPerMatch: Math.round(playerDeathsPerMatch * 10) / 10,
         tierKillsMedian: sameTierKillsMedian ? Math.round(sameTierKillsMedian * 10) / 10 : null,
@@ -910,8 +720,6 @@ export const getTierReEvaluationDataInternal = internalQuery({
       discordUserId: player.discordUserId,
       tier: player.tier,
       totalEvents: player.totalEvents,
-      avgPRPerEvent: 0,
-      finalPowerScore: Math.round(player.finalPowerScore * 100) / 100,
       killsPerMatch: Math.round(player.killsPerMatch * 10) / 10,
       deathsPerMatch: player.deathsPerMatch !== undefined ? Math.round(player.deathsPerMatch * 10) / 10 : undefined,
       tierKillsMedian: null,
@@ -1030,137 +838,3 @@ export const getCachedTierReEvaluationData = query({
   },
 });
 
-// Start tier re-evaluation cache rebuild (synchronous)
-export const startTierReEvaluationCacheRebuild = mutation({
-  args: {
-    applyDuoAdjustment: v.optional(v.boolean()),
-    applyTCPenalty: v.optional(v.boolean()),
-    applyTCDCAToHolistic: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args) => {
-    // Check if user is admin
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-
-    if (!user || user.role !== "admin") {
-      throw new Error("Only admins can rebuild cache");
-    }
-
-    // Clear old cache
-    const oldEvaluations = await ctx.db.query("tierReEvaluationCache").collect();
-    for (const oldEval of oldEvaluations) {
-      await ctx.db.delete(oldEval._id);
-    }
-    
-    const oldMedians = await ctx.db.query("tierMediansCache").collect();
-    for (const oldMedian of oldMedians) {
-      await ctx.db.delete(oldMedian._id);
-    }
-
-    // Get fresh evaluation data (runs with admin auth context)
-    const evaluationData: TierEvaluationResult = await ctx.runQuery(
-      internal.tierReEvaluation.getTierReEvaluationDataInternal,
-      {
-        applyDuoAdjustment: args.applyDuoAdjustment || false,
-        applyTCPenalty: args.applyTCPenalty !== false,
-        applyTCDCAToHolistic: args.applyTCDCAToHolistic || false,
-      },
-    );
-
-    const now = Date.now();
-    
-    // Store tier medians
-    await ctx.db.insert("tierMediansCache", {
-      tierAverages: evaluationData.tierAverages,
-      tierHolisticMedians: evaluationData.tierHolisticMedians,
-      tierKillsMedians: evaluationData.tierKillsMedians,
-      lastUpdated: now,
-    });
-
-    // Store ALL evaluations
-    for (const evaluation of evaluationData.evaluations) {
-      await ctx.db.insert("tierReEvaluationCache", {
-        playerId: evaluation.playerId,
-        playerName: evaluation.playerName,
-        discordUsername: evaluation.discordUsername,
-        discordUserId: evaluation.discordUserId,
-        tier: evaluation.tier,
-        totalEvents: evaluation.totalEvents,
-        avgPRPerEvent: evaluation.avgPRPerEvent,
-        finalPowerScore: evaluation.finalPowerScore,
-        killsPerMatch: evaluation.killsPerMatch,
-        deathsPerMatch: evaluation.deathsPerMatch,
-        tierKillsMedian: evaluation.tierKillsMedian ?? undefined,
-        killsVsTierDiff: evaluation.killsVsTierDiff ?? undefined,
-        holisticScore: evaluation.holisticScore,
-        avgPlacement: evaluation.avgPlacement,
-        winRate: evaluation.winRate,
-        placementScore: evaluation.placementScore,
-        winRateScore: evaluation.winRateScore,
-        killsScore: evaluation.killsScore,
-        deathsScore: evaluation.deathsScore,
-        // Tier-gap adjustment fields
-        rawAvgPlacement: evaluation.rawAvgPlacement,
-        adjustedAvgPlacement: evaluation.adjustedAvgPlacement,
-        rawPlacementScore: evaluation.rawPlacementScore,
-        rawHolisticScore: evaluation.rawHolisticScore,
-        avgTeammateTier: evaluation.avgTeammateTier,
-        tierGapAdjustment: evaluation.tierGapAdjustment,
-        // Tier comparisons
-        tierAbove: evaluation.tierAbove || undefined,
-        tierAboveAvg: evaluation.tierAboveAvg ?? undefined,
-        tierAboveHolistic: evaluation.tierAboveHolistic ?? undefined,
-        tierBelow: evaluation.tierBelow || undefined,
-        tierBelowAvg: evaluation.tierBelowAvg ?? undefined,
-        tierBelowHolistic: evaluation.tierBelowHolistic ?? undefined,
-        sameTierAvg: evaluation.sameTierAvg ?? undefined,
-        sameTierHolistic: evaluation.sameTierHolistic ?? undefined,
-        sameTierDiff: evaluation.sameTierDiff ?? undefined,
-        holisticVsSameTier: evaluation.holisticVsSameTier ?? undefined,
-        promotionDiff: evaluation.promotionDiff ?? undefined,
-        demotionDiff: evaluation.demotionDiff ?? undefined,
-        recentTop5Count: evaluation.recentTop5Count,
-        recentTop4Count: evaluation.recentTop4Count,
-        recentTop3Count: evaluation.recentTop3Count,
-        recentTop5WithTeammate: evaluation.recentTop5WithTeammate,
-        consistentTeammateName: evaluation.consistentTeammateName,
-        lastEventDate: evaluation.lastEventDate || undefined,
-        evaluationStatus: evaluation.evaluationStatus,
-        lastUpdated: now,
-      });
-    }
-
-    console.log(`Stored ${evaluationData.evaluations.length} evaluations in cache`);
-
-    return {
-      success: true,
-      message: `Cache rebuilt successfully with ${evaluationData.evaluations.length} players`,
-    };
-  },
-});
-
-// Legacy function for backwards compatibility
-export const rebuildTierReEvaluationCache = mutation({
-  args: {
-    applyDuoAdjustment: v.optional(v.boolean()),
-    applyTCPenalty: v.optional(v.boolean()),
-    applyTCDCAToHolistic: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args): Promise<{
-    success: boolean;
-    message: string;
-  }> => {
-    return await ctx.runMutation(api.tierReEvaluation.startTierReEvaluationCacheRebuild, {
-      applyDuoAdjustment: args.applyDuoAdjustment,
-      applyTCPenalty: args.applyTCPenalty,
-      applyTCDCAToHolistic: args.applyTCDCAToHolistic,
-    });
-  },
-});

@@ -1,10 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
 import { useTierEvaluationCache } from "@/hooks/use-tier-evaluation-cache.ts";
 import { Button } from "@/components/ui/button.tsx";
-import { Spinner } from "@/components/ui/spinner.tsx";
+import { PlayerStatsRebuildButton } from "@/components/admin/player-stats-rebuild-button.tsx";
 import {
   Card,
   CardContent,
@@ -52,8 +50,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible.tsx";
-import { toast } from "sonner";
 import { compareTierField } from "@/lib/tier-sort.ts";
+import { remapTierEvaluationForTcdcView } from "@/lib/tcdc-holistic-view.ts";
 
 type SortField =
   | "playerName"
@@ -104,25 +102,16 @@ function HolisticScoreStatsContent() {
 
   const cachedData = useTierEvaluationCache(canView ? {} : "skip");
 
-  const rebuildCache = useMutation(api.tierReEvaluation.rebuildTierReEvaluationCache);
-  const initializeBatch = useMutation(api.tierReEvaluationBatched.initializeBatchRebuild);
-  const clearHolisticCache = useMutation(api.tierReEvaluationBatched.clearCache);
-  const processBatch = useMutation(api.tierReEvaluationBatched.processBatch);
-  const finalizeRecent = useMutation(api.tierReEvaluationBatched.finalizeRecentComparisons);
-  const [isRebuilding, setIsRebuilding] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
-
   const [sortField, setSortField] = useState<SortField>("tier");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [hideInsufficientData, setHideInsufficientData] = useState(true);
-  const [applyTCDCA, setApplyTCDCA] = useState(false); // Display-time toggle
+  const [applyTCDCA, setApplyTCDCA] = useState(true);
   const [isExplanationOpen, setIsExplanationOpen] = useState(false);
 
-  // Always fetch players for TC/DCA lookup (skip when toggle is off or no cached data)
-  const allPlayers = useQuery(
-    api.players.getPlayers,
-    applyTCDCA && cachedData ? {} : "skip"
+  const viewData = useMemo(
+    () => remapTierEvaluationForTcdcView(cachedData, applyTCDCA) ?? cachedData,
+    [applyTCDCA, cachedData],
   );
 
   // Column visibility and order
@@ -142,47 +131,13 @@ function HolisticScoreStatsContent() {
     vsSameTier: true,
     vsAbove: true,
     vsBelow: true,
-    rawHolisticScore: false,
+    rawHolisticScore: true,
     rawAvgPlacement: false,
     avgTeammateTier: false,
     tierGapAdjustment: false,
   });
 
 
-
-  const handleRebuildCache = async () => {
-    setIsRebuilding(true);
-    setBatchProgress(null);
-    
-    try {
-      // Always use batched rebuild to store RAW scores
-      // TC/DCA is applied at display time, not during rebuild
-      await clearHolisticCache({});
-      const { totalPlayers, batchCount } = await initializeBatch({});
-
-      toast.success(`Starting rebuild: ${totalPlayers} players in ${batchCount} batches`);
-
-      // Process each batch
-      for (let i = 0; i < batchCount; i++) {
-        setBatchProgress({ current: i + 1, total: batchCount });
-        
-        await processBatch({
-          batchNumber: i,
-        });
-      }
-
-      // Finalize 6-week comparisons
-      await finalizeRecent({});
-
-      setBatchProgress(null);
-      toast.success(`Cache rebuilt successfully! Processed ${totalPlayers} players.`);
-    } catch (error) {
-      toast.error("Failed to rebuild cache: " + (error as Error).message);
-      setBatchProgress(null);
-    } finally {
-      setIsRebuilding(false);
-    }
-  };
 
   // Show loading while checking permissions
   if (isModeratorOrAdmin === undefined) {
@@ -232,21 +187,11 @@ function HolisticScoreStatsContent() {
           </CardHeader>
           <CardContent className="space-y-3 py-3">
             {isAdmin && (
-              <Button
-                onClick={handleRebuildCache}
-                disabled={isRebuilding}
-              >
-                {isRebuilding ? (
-                  <>
-                    <Spinner className="mr-2 h-4 w-4" />
-                    {batchProgress 
-                      ? `Processing Batch ${batchProgress.current}/${batchProgress.total}...`
-                      : "Building Cache..."}
-                  </>
-                ) : (
-                  "Build Cache"
-                )}
-              </Button>
+              <PlayerStatsRebuildButton
+                label="Build Cache"
+                tierEvalOnly
+                linkToDataCache
+              />
             )}
             {!isAdmin && (
               <p className="text-sm text-muted-foreground">
@@ -278,21 +223,11 @@ function HolisticScoreStatsContent() {
           </CardHeader>
           <CardContent className="space-y-3 py-3">
             {isAdmin && (
-              <Button
-                onClick={handleRebuildCache}
-                disabled={isRebuilding}
-              >
-                {isRebuilding ? (
-                  <>
-                    <Spinner className="mr-2 h-4 w-4" />
-                    {batchProgress 
-                      ? `Processing Batch ${batchProgress.current}/${batchProgress.total}...`
-                      : "Rebuilding Cache..."}
-                  </>
-                ) : (
-                  "Rebuild Cache"
-                )}
-              </Button>
+              <PlayerStatsRebuildButton
+                label="Rebuild Cache"
+                tierEvalOnly
+                linkToDataCache
+              />
             )}
           </CardContent>
         </Card>
@@ -300,29 +235,7 @@ function HolisticScoreStatsContent() {
     );
   }
 
-  // Apply TC/DCA multipliers at display time if enabled
-  const displayData = cachedData.evaluations.map((evaluation) => {
-    if (!applyTCDCA || !allPlayers) {
-      return evaluation;
-    }
-
-    // Find player data for TC/DCA
-    const player = allPlayers.find((p) => p._id === evaluation.playerId);
-    // Use || instead of ?? to treat 0 as invalid (defaults to 1.0)
-    const tc = player?.contributionScore?.score || 1.0;
-    const dca = player?.dcaCache?.dca || 1.0;
-    const multiplier = tc * dca;
-
-    // Apply multiplier to holistic score and its components
-    return {
-      ...evaluation,
-      holisticScore: evaluation.holisticScore * multiplier,
-      placementScore: evaluation.placementScore * multiplier,
-      winRateScore: evaluation.winRateScore * multiplier,
-      killsScore: evaluation.killsScore * multiplier,
-      deathsScore: evaluation.deathsScore ? evaluation.deathsScore * multiplier : evaluation.deathsScore,
-    };
-  });
+  const displayData = viewData?.evaluations ?? [];
 
   // Filter by tier
   let filteredData = displayData;
@@ -453,23 +366,13 @@ function HolisticScoreStatsContent() {
               </Badge>
             )}
             {isAdmin && cachedData && (
-              <Button
-                onClick={handleRebuildCache}
-                disabled={isRebuilding}
+              <PlayerStatsRebuildButton
+                label="Rebuild Cache"
+                tierEvalOnly
+                linkToDataCache
                 variant="outline"
                 size="sm"
-              >
-                {isRebuilding ? (
-                  <>
-                    <Spinner className="mr-2 h-3 w-3" />
-                    {batchProgress
-                      ? `Batch ${batchProgress.current}/${batchProgress.total}`
-                      : "Rebuilding..."}
-                  </>
-                ) : (
-                  "Rebuild Cache"
-                )}
-              </Button>
+              />
             )}
           </>
         }
@@ -737,8 +640,8 @@ function HolisticScoreStatsContent() {
                       <span className="cursor-help">Apply TC/DCA</span>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="text-xs">Multiply scores by Team Contribution (TC) and</p>
-                      <p className="text-xs">Duo Carry Adjustment (DCA) factors</p>
+                      <p className="text-xs">Show holistic with TC/DCA applied (off = raw composite).</p>
+                      <p className="text-xs">Use Raw Holistic column to compare both side by side.</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

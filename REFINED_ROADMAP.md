@@ -41,7 +41,7 @@ Product complexity:
 |---:|---|---|---:|---|---|---|
 | 1 | Add a lightweight Admin Operations Dashboard on the existing admin landing surface | Staff need one place to see events needing setup, failed syncs, unmatched imports, stale Discord role tasks, and recent import status without visiting several pages | 10-30 min/admin session | M | Adds lightly | Before migration if using existing data; expand after migration |
 | 2 | Add event readiness/status indicators inside Events Manager | Discord Events remain the schedule source, but website enrichment needs clear "needs setup" signals: missing leaderboard, no linked import, unsynced results, unresolved unmatched players. Event type remains manual | 5-15 min/event | S-M | Removes | Before migration |
-| 3 | Prevent duplicate imports before write | Accidental duplicate CSV/Yunite imports create cleanup work and can distort player stats, rankings, earnings, and event history | 15-60 min/mistake avoided | M | Removes | Before migration |
+| 3 | Prevent duplicate imports before write | Accidental duplicate CSV/Yunite imports create cleanup work and can distort player stats, earnings, and event history | 15-60 min/mistake avoided | M | Removes | Before migration |
 | 4 | Paginate and slim highest-usage Convex queries | Public/admin lists currently pull broad datasets; reducing full collects protects Convex usage as match/import data grows | Ongoing performance savings | M-L | Neutral | Before migration for obvious hotspots; continue after |
 | 5 | Cache/denormalize event and import summary fields | Admin pages need counts/status, not raw result scans. Cached summaries reduce reads and make status indicators cheap | 5-10 min/session plus usage savings | M | Neutral | Before migration if schema-light; after if adding new tables |
 | 6 | Improve Discord sync with event-driven updates plus daily reconciliation | Discord membership and scheduled events are Discord-owned. Bot/webhook updates reduce full Discord API polling and stale website data | 10-20 min/week and fewer stale states | M-L | Neutral | During Cloudflare/bot migration |
@@ -127,7 +127,7 @@ Discord Events should remain the schedule source of truth, but the website enric
 **Rank:** 3
 
 **Why it matters for CoEd ZBD:**  
-Duplicate event imports can inflate player histories, rankings, earnings, participation counts, and admin cleanup time. This is especially important because Yunite, CSV, manual replacement, and event linking are all available.
+Duplicate event imports can inflate player histories, internal stats, earnings, participation counts, and admin cleanup time. This is especially important because Yunite, CSV, manual replacement, and event linking are all available.
 
 **Recommended behavior:**
 
@@ -254,7 +254,7 @@ Discord is where the community schedule and membership live. The website should 
 **Rank:** 7
 
 **Why it matters for CoEd ZBD:**  
-Player identity is the backbone of rankings, tiers, imports, event history, Discord role sync, and applications. Repeated matching logic creates inconsistent outcomes and admin cleanup.
+Player identity is the backbone of stats, tiers, imports, event history, Discord role sync, and applications. Repeated matching logic creates inconsistent outcomes and admin cleanup.
 
 **Recommended approach:**
 

@@ -11,7 +11,6 @@ import { toast } from "sonner";
 const DEFAULT_SPREADSHEET_ID = "1uOlY8PsM4jVyIIlQQ5IYxSdQvjYVcl1_F67DrpRQOqI";
 
 export default function GoogleSheetsManager() {
-  const exportRankingsToSheets = useAction(api.googleSheets.exportRankingsToSheets);
   const exportPlayersToSheets = useAction(api.googleSheets.exportPlayersToSheets);
   const exportArchivedPlayersToSheets = useAction(api.googleSheets.exportArchivedPlayersToSheets);
   const exportRejectedPlayersToSheets = useAction(api.googleSheets.exportRejectedPlayersToSheets);
@@ -22,7 +21,6 @@ export default function GoogleSheetsManager() {
   const updatePlayersFromSheets = useAction(api.googleSheets.updatePlayersFromSheets);
   const checkApplicationStatus = useAction(api.googleSheets.checkApplicationStatus);
   const [spreadsheetId, setSpreadsheetId] = useState(DEFAULT_SPREADSHEET_ID);
-  const [isExportingRankings, setIsExportingRankings] = useState(false);
   const [isExportingPlayers, setIsExportingPlayers] = useState(false);
   const [isExportingArchivedPlayers, setIsExportingArchivedPlayers] = useState(false);
   const [isExportingRejectedPlayers, setIsExportingRejectedPlayers] = useState(false);
@@ -32,33 +30,6 @@ export default function GoogleSheetsManager() {
   const [isImportingApplications, setIsImportingApplications] = useState(false);
   const [isUpdatingPlayers, setIsUpdatingPlayers] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
-
-  const handleExportRankings = async () => {
-    if (!spreadsheetId.trim()) {
-      toast.error("Please enter a Spreadsheet ID");
-      return;
-    }
-    
-    setIsExportingRankings(true);
-    try {
-      const result = await exportRankingsToSheets({
-        spreadsheetId: spreadsheetId.trim(),
-        applyDuoAdjustment: false,
-        applyCSPenalty: true,
-      });
-      
-      toast.success(
-        `Exported ${result.playersExported} players to Google Sheets!`,
-        { duration: 5000 }
-      );
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Export failed: ${errorMessage}`, { duration: 7000 });
-      console.error(error);
-    } finally {
-      setIsExportingRankings(false);
-    }
-  };
 
   const handleExportPlayers = async () => {
     if (!spreadsheetId.trim()) {
@@ -200,20 +171,19 @@ export default function GoogleSheetsManager() {
       if (result.success) {
         const totalExported = 
           (result.results.players?.playersExported || 0) +
-          (result.results.rankings?.playersExported || 0) +
           (result.results.archived?.playersExported || 0) +
           (result.results.rejected?.playersExported || 0) +
           (result.results.reEvaluations?.playersExported || 0) +
           (result.results.holisticScores?.playersExported || 0);
         
         toast.success(
-          `Successfully exported all data! Total: ${totalExported} records across 6 sheets.`,
+          `Successfully exported all data! Total: ${totalExported} records across 5 sheets.`,
           { duration: 7000 }
         );
       } else {
         const successCount = Object.keys(result.results).length;
         toast.warning(
-          `Export completed with ${result.errors.length} error(s). ${successCount} of 6 sheets exported successfully.`,
+          `Export completed with ${result.errors.length} error(s). ${successCount} of 5 sheets exported successfully.`,
           { duration: 7000 }
         );
         console.warn("Export errors:", result.errors);
@@ -411,7 +381,7 @@ export default function GoogleSheetsManager() {
             <div className="mb-1.5">
               <h3 className="text-xs font-medium">Export Data</h3>
               <p className="text-xs text-muted-foreground">
-                Export player data to Google Sheets (Players, Rankings, Archived, Rejected, Re-Evaluations, Holistic Scores)
+                Export player data to Google Sheets (Players, Archived, Rejected, Re-Evaluations, Holistic Scores)
               </p>
             </div>
             <div className="space-y-2">
@@ -433,16 +403,6 @@ export default function GoogleSheetsManager() {
                   {isExportingPlayers ? "Exporting..." : "Export Players"}
                 </Button>
                 <Button
-                  onClick={handleExportRankings}
-                  disabled={isExportingRankings || isExportingAll || !spreadsheetId.trim()}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  {isExportingRankings ? "Exporting..." : "Export Rankings"}
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Button
                   onClick={handleExportReEvaluations}
                   disabled={isExportingReEvaluations || isExportingAll || !spreadsheetId.trim()}
                   variant="outline"
@@ -450,6 +410,8 @@ export default function GoogleSheetsManager() {
                 >
                   {isExportingReEvaluations ? "Exporting..." : "Export Re-Evaluations"}
                 </Button>
+              </div>
+              <div className="flex gap-2">
                 <Button
                   onClick={handleExportHolisticScores}
                   disabled={isExportingHolisticScores || isExportingAll || !spreadsheetId.trim()}

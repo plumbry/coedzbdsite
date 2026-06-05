@@ -211,22 +211,10 @@ export default function AdminHubPage() {
       show: isAdmin,
       links: [
         {
-          title: "Stats Hub",
-          description: "All player and event analytics in one place.",
+          title: "Analytics Hub",
+          description: "Tier evaluation, holistic scores, earnings, upsets, and cache rebuilds.",
           href: "/admin/stats",
           icon: BarChart3,
-        },
-        {
-          title: "Audience Insights",
-          description: "Gender, tier, tenure, and events-played breakdowns.",
-          href: "/admin/audience-insights",
-          icon: Users,
-        },
-        {
-          title: "Tier Re-Evaluation",
-          description: "Automatic tier promotion and demotion suggestions.",
-          href: "/admin/tier-re-evaluation",
-          icon: TrendingUp,
         },
       ],
     },

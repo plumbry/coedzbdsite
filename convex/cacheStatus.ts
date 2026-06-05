@@ -16,14 +16,15 @@ export const getPlayerStats = query({
       ? Math.max(...playersWithSync.map(p => p.lastDiscordSync || 0))
       : undefined;
     
+    const tierEvalCache = await ctx.db.query("tierReEvaluationCache").collect();
+
     return {
       total: allPlayers.length,
       withEpicId: allPlayers.filter(p => p.epicId).length,
       withName: allPlayers.filter(p => p.name).length,
       withAvatarUrl: allPlayers.filter(p => p.avatarUrl).length,
       withLastDiscordSync: playersWithSync.length,
-      withPowerScore: allPlayers.filter(p => p.powerScore).length,
-      withRankingStats: allPlayers.filter(p => p.rankingStats).length,
+      withTierEvalCache: tierEvalCache.length,
       withContributionScore: allPlayers.filter(p => p.contributionScore).length,
       withTopFiveCache: allPlayers.filter(p => p.topFiveCache).length,
       lastUpdated: mostRecentPlayerSync,
@@ -193,14 +194,15 @@ export const getCacheStatus = query({
       ? Math.max(...playersWithSync.map(p => p.lastDiscordSync || 0))
       : undefined;
     
+    const tierEvalCache = await ctx.db.query("tierReEvaluationCache").collect();
+
     const playerStats = {
       total: allPlayers.length,
       withEpicId: allPlayers.filter(p => p.epicId).length,
       withName: allPlayers.filter(p => p.name).length,
       withAvatarUrl: allPlayers.filter(p => p.avatarUrl).length,
       withLastDiscordSync: playersWithSync.length,
-      withPowerScore: allPlayers.filter(p => p.powerScore).length,
-      withRankingStats: allPlayers.filter(p => p.rankingStats).length,
+      withTierEvalCache: tierEvalCache.length,
       withContributionScore: allPlayers.filter(p => p.contributionScore).length,
       withTopFiveCache: allPlayers.filter(p => p.topFiveCache).length,
       lastUpdated: mostRecentPlayerSync,
@@ -336,17 +338,26 @@ export const getRecentPlayerCacheUpdates = query({
       .sort((a, b) => (b.lastDiscordSync || 0) - (a.lastDiscordSync || 0))
       .slice(0, limit);
     
-    return sorted.map(p => ({
-      playerId: p._id,
-      discordUsername: p.discordUsername,
-      name: p.name,
-      epicUsername: p.epicUsername,
-      lastDiscordSync: p.lastDiscordSync,
-      hasEpicId: !!p.epicId,
-      hasAvatar: !!p.avatarUrl,
-      hasPowerScore: !!p.powerScore,
-      hasTopFiveCache: !!p.topFiveCache,
-    }));
+    return Promise.all(
+      sorted.map(async (p) => {
+        const tierCache = await ctx.db
+          .query("tierReEvaluationCache")
+          .withIndex("by_player", (q) => q.eq("playerId", p._id))
+          .first();
+
+        return {
+          playerId: p._id,
+          discordUsername: p.discordUsername,
+          name: p.name,
+          epicUsername: p.epicUsername,
+          lastDiscordSync: p.lastDiscordSync,
+          hasEpicId: !!p.epicId,
+          hasAvatar: !!p.avatarUrl,
+          hasTierEvalCache: tierCache !== null,
+          hasTopFiveCache: !!p.topFiveCache,
+        };
+      }),
+    );
   },
 });
 
@@ -401,10 +412,10 @@ export const getRecentImportSyncs = query({
   },
 });
 
-// Rebuild player cache (triggers Discord sync)
+// Rebuild player cache (Top 5 placement badges via unified rebuild)
 export const rebuildPlayerCache = mutation({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<{ success: boolean; message: string }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new ConvexError({
@@ -425,11 +436,14 @@ export const rebuildPlayerCache = mutation({
       });
     }
     
-    await ctx.scheduler.runAfter(0, internal.topFiveCache.rebuildAllTopFiveCaches);
-    
+    const result = await ctx.runMutation(
+      api.playerStatsRebuild.startFullPlayerStatsRebuild,
+      { topFiveOnly: true },
+    );
+
     return {
       success: true,
-      message: "Player cache rebuild started (Top 5 cache). This may take a few minutes.",
+      message: result.message,
     };
   },
 });
@@ -554,18 +568,14 @@ export const rebuildAggregateStatsCache = mutation({
       });
     }
     
-    const result = await ctx.runMutation(api.aggregateStats.rebuildAggregateStatsCache);
-
-    if (result.completed) {
-      return {
-        success: true,
-        message: `Aggregate stats cache rebuilt (${result.playerCount} players).`,
-      };
-    }
+    const result = await ctx.runMutation(
+      api.playerStatsRebuild.startFullPlayerStatsRebuild,
+      { aggregateStatsOnly: true },
+    );
 
     return {
       success: true,
-      message: `Aggregate stats rebuild started for ${result.playerCount} players. Refresh this page in a few minutes.`,
+      message: result.message,
     };
   },
 });
@@ -625,13 +635,14 @@ export const backfillPlayerEventParticipationStats = mutation({
       });
     }
 
-    const result = await ctx.runMutation(api.players.backfillPlayerEventParticipationStats, {});
+    const result = await ctx.runMutation(
+      api.playerStatsRebuild.startFullPlayerStatsRebuild,
+      { stopAfterPhase: "event_participation" },
+    );
 
     return {
       success: true,
-      message: result.started
-        ? "Player event count backfill started in the background. Wait a few minutes, then refresh Audience Insights."
-        : `Player event participation stats backfilled for ${result.updated} players`,
+      message: result.message,
     };
   },
 });
@@ -668,40 +679,3 @@ export const rebuildUpsetKillEventsCache = mutation({
   },
 });
 
-// Rebuild holistic scores cache (tier re-evaluation)
-export const rebuildHolisticScoresCache = mutation({
-  args: {},
-  handler: async (ctx): Promise<{ success: boolean; message: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "User not logged in",
-        code: "UNAUTHENTICATED",
-      });
-    }
-    
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    
-    if (!user || user.role !== "admin") {
-      throw new ConvexError({
-        message: "Only admins can rebuild holistic scores cache",
-        code: "FORBIDDEN",
-      });
-    }
-    
-    await ctx.runMutation(api.tierReEvaluationBatched.clearCache, {});
-    
-    const result: { success: boolean; message: string } = await ctx.runMutation(api.tierReEvaluation.rebuildTierReEvaluationCache, {
-      applyDuoAdjustment: false,
-      applyTCPenalty: true,
-    });
-    
-    return {
-      success: result.success,
-      message: result.message,
-    };
-  },
-});

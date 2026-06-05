@@ -38,6 +38,7 @@ import {
   LayoutDashboard,
   Wrench,
   PieChart,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
@@ -302,9 +303,9 @@ export default function AdminSidebar() {
         id: "statistics",
         label: "Statistics",
         items: [
-          { path: "/admin/tier-re-evaluation", label: "Re-Evaluation", icon: TrendingUp },
+          { path: "/admin/stats", label: "Analytics Hub", icon: BarChart3 },
+          { path: "/admin/tier-re-evaluation", label: "Tier Re-Evaluation", icon: TrendingUp },
           { path: "/admin/audience-insights", label: "Audience Insights", icon: PieChart },
-          { path: "/admin/stats", label: "Stats", icon: Trophy },
         ],
       });
     }

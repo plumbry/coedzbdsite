@@ -111,12 +111,12 @@ export const WRAPPED_STATS: readonly StatDefinition[] = [
     description: "Total events played by each tier",
   },
   {
-    id: "topPowerScores",
-    displayName: "Top Power Scores",
+    id: "topHolisticScores",
+    displayName: "Top Holistic Scores",
     category: STAT_CATEGORIES.SITE,
     needsPlayerCount: true,
     supportsCustomText: true,
-    description: "Players with the highest power scores",
+    description: "Players with the highest tier-eval holistic scores",
   },
   {
     id: "averageStatsByTier",
@@ -149,5 +149,11 @@ export function getStatsByCategory(category: string): readonly StatDefinition[] 
   return WRAPPED_STATS.filter((stat) => stat.category === category);
 }
 
-// Export valid stat IDs for schema validation
-export const VALID_STAT_IDS = WRAPPED_STATS.map((stat) => stat.id);
+/** TODO(remove-by-2026-09-01): legacy ids still stored on published wrapped sections. */
+export const DEPRECATED_WRAPPED_STAT_IDS = ["topPowerScores"] as const;
+
+// Export valid stat IDs for schema validation (includes deprecated ids for existing content)
+export const VALID_STAT_IDS = [
+  ...WRAPPED_STATS.map((stat) => stat.id),
+  ...DEPRECATED_WRAPPED_STAT_IDS,
+];

@@ -52,7 +52,7 @@ export default function LinkedScrimSeriesResults({
           </EmptyMedia>
           <EmptyTitle>No scores yet</EmptyTitle>
           <EmptyDescription>
-            Import sessions from Admin → Scrim Series to populate this leaderboard.
+            Import Yunite sessions from Admin → Scrim Series (open via Events Manager Trophy link when linked).
           </EmptyDescription>
         </EmptyHeader>
       </Empty>

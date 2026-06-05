@@ -3,7 +3,9 @@
 **Date:** 2026-05-31  
 **Scope:** Full application (Convex backend, React frontend, Discord integration, background jobs)  
 **Goal:** Reduce Convex usage, reduce unnecessary reads/writes, improve responsiveness, and maximize free-tier longevity.  
-**Status:** Audit only — no code changes in this pass.
+**Status:** **ARCHIVED** — point-in-time audit only (2026-05-31). Not a description of current product architecture.
+
+> **Current architecture (2026-06-04):** There is **no global player ranking product**. Power Score and legacy ranking fields (`powerScore`, `rankingStats`, tier-eval PR fields) have been **removed**. Tier evaluation uses **Holistic Score** from `tierReEvaluationCache`, rebuilt via the unified `playerStatsRebuild` pipeline. **Event/season/team leaderboards** are event-scoped displays only. The removed `rankings` module and rankings Google Sheets export are not part of the active system. Sections below may reference removed systems for historical context.
 
 ---
 
@@ -24,15 +26,15 @@ This application is a Convex-backed competitive Fortnite community platform with
 | 7 | `leaderboardStats.getLeaderboardStats` / `getTierImpactStats` | Admin analytics | Full players + all imports + per-import results |
 | 8 | `tierReEvaluation.getCachedTierReEvaluationData` | Admin analytics (3 pages) | Up to 500 large cache documents per subscription |
 | 9 | Discord bot polling (`pending-role-syncs`, `pending-role-removals`) | HTTP polling | Full `eventBans.collect()` on each poll |
-| 10 | `rankings.getPlayerRankings` | Google Sheets export (not UI-subscribed) | Still recomputes from raw data despite cached fields on player docs |
+| 10 | *(removed)* rankings export / Power Rankings | — | **Removed 2026-06.** Was Google Sheets export; replaced by tier-eval exports (`exportHolisticScoresToSheets`, `exportReEvaluationsToSheets`). |
 
 ### Existing good patterns
 
 - **Cache tables:** `aggregateStatsCache`, `tierReEvaluationCache`, `tierMediansCache`, `upsetKillsStatsCache`, `tournamentScanCache`
-- **Embedded player caches:** `rankingStats`, `powerScore`, `contributionScore`, `topFiveCache`, `dcaCache`
+- **Embedded player caches:** `contributionScore`, `topFiveCache`, `dcaCache` (legacy `powerScore` / `rankingStats` **removed** from schema)
 - **Pagination:** `upsetKills.getUpsetKills`, `getAllEliminations`, `thirdPartyQueries.getImportHistory`; `cacheStatus` uses paginated counting for large tables
 - **Convex query deduplication:** Identical `useQuery` calls share one WebSocket subscription
-- **Batch scheduling:** `rankings.updateAllPowerScores` staggers per-player mutations; earnings/kill backfill use job tables
+- **Batch scheduling:** `playerStatsRebuild` unified pipeline; earnings/kill backfill use job tables
 
 ---
 
@@ -139,7 +141,7 @@ This application is a Convex-backed competitive Fortnite community platform with
 | Table | Index | Used by |
 |-------|-------|---------|
 | `players` | Use existing `by_membership_status` consistently | `getPlayers`, `getArchivedPlayers`, home page variants |
-| `players` | `["status", "hasMatchData"]` composite | `rankings.getPlayerRankings` filter-after-index |
+| `players` | `["status", "hasMatchData"]` composite | Internal stats / tier-eval player filters |
 | `thirdPartyResults` | `["epicUsername"]` | Epic lookup, teammate search |
 | `thirdPartyImports` | `["importMethod", "eventDate"]` or `["eventId"]` (exists) + date sort | Recent activity, earnings |
 | `applications` | `["playerId"]` | `deletePlayer` cascade |
@@ -151,7 +153,7 @@ This application is a Convex-backed competitive Fortnite community platform with
 
 ### Expensive filters (post-index JS filtering)
 
-- `rankings.getPlayerRankings`: `hasMatchData` filter after `by_status` — needs composite index
+- Internal stats queries: `hasMatchData` filter after `by_status` — composite index still useful
 - `memberManagement.getRejectedMembers`: filters `currentMembershipStatus` without index
 - `events.management.getEventsByStatus`: status derived from dates but loads all events first
 
@@ -163,7 +165,7 @@ This application is a Convex-backed competitive Fortnite community platform with
 | `getAcceptedMembers` | Per player: manualScores + matchPlayerStats (200 rows) | Critical (public) |
 | `getPlayerDuoPerformance` | Per match: duo lookup query | High |
 | `getTierReEvaluationData` | Per player: results, matches, same-tier score lookups | Critical (live path) |
-| `getPlayerRankings` | Per player: `getPlayerEvents`, thirdPartyResults for S-tier | High |
+| *(removed)* `getPlayerRankings` | Was per-player recompute for rankings export | **Removed** — tier-eval reads cache |
 | `getAllInGameEarnings` | Per row: `db.get(player)` | Medium |
 | `getAllYuniteTournaments` | Per import: all results | Medium |
 | `getTournamentDetails` | Per matched result: `db.get(playerId)` | Low–medium |
@@ -234,7 +236,7 @@ This application is a Convex-backed competitive Fortnite community platform with
 | `isActive` (6-week) | `players.isRecentlyActive` | Nightly cron or post-import mutation |
 | Wrapped stats | `wrappedContent.computedSections` JSON | On publish / admin "recompute" |
 | Leaderboard stats per import | `thirdPartyImports.analyticsDigest` | On import sync |
-| Rankings page export | Read `players.powerScore` + caches only | On PR recalc (already scheduled) |
+| Tier-eval / holistic Sheets export | Read `tierReEvaluationCache` | `playerStatsRebuild` tier_eval phase |
 
 ### Discord API caching
 
@@ -293,7 +295,7 @@ This application is a Convex-backed competitive Fortnite community platform with
 
 Writes to these tables invalidate many subscribers:
 
-- **`players`** — home, member mgmt, all admin player lists, profiles, rankings caches
+- **`players`** — home, member mgmt, all admin player lists, profiles, tier-eval / TC / DCA caches
 - **`events`** — events page, all event managers, accepted members activity check
 - **`chatMessages`** — all open admin chat subscriptions on every message
 - **`thirdPartyResults` / `matchPlayerStats`** — profile tabs, analytics (if subscribed)
@@ -451,11 +453,11 @@ Daily cron (05:00 UTC)
 
 | Job | Trigger | Pattern |
 |-----|---------|---------|
-| Power score bulk update | Admin | `scheduler.runAfter(1000ms)` per player |
+| Player stats rebuild | Admin | `playerStatsRebuild.processRebuildStep` self-schedules phases |
 | In-game earnings bulk fetch | Admin | `processBatch` self-reschedules |
 | Kill events backfill | Admin | `backfillKillEventsBatch` self-schedules |
 | Tier re-eval batched rebuild | Admin | Batch mutations via `tierReEvaluationBatched` |
-| Top-five cache rebuild | After PR update / admin | Scheduled from rankings |
+| Top-five cache rebuild | Admin / pipeline | `playerStatsRebuild` top_five phase |
 
 ### Polling loops (external)
 
@@ -570,7 +572,7 @@ Assumptions: ~300 accepted members today, ~50 events, growing match data from Yu
 | `tierReEvaluationCache` + `tierMediansCache` | Tables | Admin batched rebuild |
 | `upsetKillsStatsCache` | Table | Admin rebuild |
 | `tournamentScanCache` | Table | Daily cron |
-| `players.rankingStats`, `powerScore` | Player doc | PR recalc scheduler |
+| *(removed)* `players.rankingStats`, `powerScore` | — | **Removed** — migration clears legacy docs |
 | `players.contributionScore` | Player doc | Yunite recalc |
 | `players.topFiveCache`, `dcaCache` | Player doc | Admin/cache rebuild |
 | `thirdPartyImports.dataFullyCached` | Import flag | Yunite sync |

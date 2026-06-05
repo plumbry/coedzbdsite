@@ -564,7 +564,7 @@ async function computePlayerMatchStats(ctx: QueryCtx, playerId: Id<"players">) {
   };
 }
 
-/** Rankings / power-score jobs — no role gate. */
+/** Internal match-stats helper — no role gate (rebuild pipeline). */
 export const getPlayerMatchStatsInternal = internalQuery({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => computePlayerMatchStats(ctx, args.playerId),

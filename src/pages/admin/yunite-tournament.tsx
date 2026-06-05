@@ -258,7 +258,7 @@ function YuniteTournamentContent() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">Players by Tier</CardTitle>
               <CardDescription className="text-xs">
-                Breakdown of matched players by tier ranking
+                Breakdown of matched players by tier
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -1,20 +1,14 @@
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import { Button } from "@/components/ui/button.tsx";
+import { PlayerStatsRebuildButton } from "@/components/admin/player-stats-rebuild-button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Calendar, Target, Crosshair, TrendingUp, Activity, Medal, Users, BarChart3, TrendingDown, RefreshCw } from "lucide-react";
+import { Calendar, Target, Crosshair, TrendingUp, Activity, Medal, Users, BarChart3, TrendingDown } from "lucide-react";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
-import { toast } from "sonner";
-import { ConvexError } from "convex/values";
-import { useState } from "react";
-
 function AverageStatsContent() {
   const stats = useQuery(api.aggregateStats.getAveragePlayerStats);
   const rebuildJob = useQuery(api.aggregateStats.getRebuildJobStatus);
-  const rebuildCache = useMutation(api.aggregateStats.rebuildAggregateStatsCache);
-  const [isStartingRebuild, setIsStartingRebuild] = useState(false);
 
   const isJobRunning = rebuildJob?.status === "running";
   const rebuildProgress =
@@ -25,33 +19,6 @@ function AverageStatsContent() {
         )
       : null;
 
-  const handleRebuildCache = async () => {
-    setIsStartingRebuild(true);
-    try {
-      const result = await rebuildCache({});
-      if (result.completed) {
-        toast.success("Aggregate stats cache rebuilt successfully");
-      } else {
-        toast.success(
-          `Rebuild started for ${result.playerCount} players. Stats will update when it finishes.`,
-        );
-      }
-    } catch (error) {
-      if (error instanceof ConvexError) {
-        const { message } = error.data as { code: string; message: string };
-        toast.error(message);
-      } else if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error("Failed to rebuild cache");
-      }
-    } finally {
-      setIsStartingRebuild(false);
-    }
-  };
-
-  const isRebuilding = isStartingRebuild || isJobRunning;
-  
   if (stats === undefined) {
     return (
       <div className="space-y-6">
@@ -69,14 +36,12 @@ function AverageStatsContent() {
           <p className="text-sm text-muted-foreground">
             Click "Rebuild Cache" to generate aggregate statistics
           </p>
-          <Button
-            onClick={handleRebuildCache}
-            disabled={isRebuilding}
-            size="sm"
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRebuilding ? 'animate-spin' : ''}`} />
-            {isRebuilding ? "Rebuilding..." : "Rebuild Cache"}
-          </Button>
+          <PlayerStatsRebuildButton
+            label="Rebuild Cache"
+            aggregateStatsOnly
+            linkToDataCache
+            disabled={isJobRunning}
+          />
         </CardContent>
       </Card>
     );
@@ -98,15 +63,14 @@ function AverageStatsContent() {
             </p>
           )}
         </div>
-        <Button
-          onClick={handleRebuildCache}
-          disabled={isRebuilding}
+        <PlayerStatsRebuildButton
+          label="Rebuild Cache"
+          aggregateStatsOnly
+          linkToDataCache
+          disabled={isJobRunning}
           size="sm"
           variant="outline"
-        >
-          <RefreshCw className={`mr-2 h-4 w-4 ${isRebuilding ? 'animate-spin' : ''}`} />
-          {isRebuilding ? "Rebuilding..." : "Rebuild Cache"}
-        </Button>
+        />
       </div>
       
       {/* Player Count Badge */}

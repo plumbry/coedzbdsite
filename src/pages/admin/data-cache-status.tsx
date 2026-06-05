@@ -27,6 +27,11 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { toast } from "sonner";
+import {
+  PlayerStatsRebuildButton,
+  PlayerStatsRebuildProgress,
+} from "@/components/admin/player-stats-rebuild-button.tsx";
+import { PlayerStatsMigrationChecklist } from "@/components/admin/player-stats-migration-checklist.tsx";
 
 class DataCacheStatusErrorBoundary extends Component<
   { children: ReactNode },
@@ -68,20 +73,20 @@ function DataCacheStatusContent() {
   const recentPlayerSyncs = useQuery(api.cacheStatus.getRecentPlayerCacheUpdates, { limit: 10 });
   const recentEventSyncs = useQuery(api.cacheStatus.getRecentEventSyncs, { limit: 10 });
   const recentImportSyncs = useQuery(api.cacheStatus.getRecentImportSyncs, { limit: 10 });
+  const activeStatsRebuild = useQuery(api.playerStatsRebuild.getActiveRebuildJob, {});
   
   const rebuildPlayerCache = useMutation(api.cacheStatus.rebuildPlayerCache);
   const rebuildEventCache = useMutation(api.cacheStatus.rebuildEventCache);
   const rebuildImportCache = useMutation(api.cacheStatus.rebuildImportCache);
   const rebuildMatchStatsCache = useMutation(api.cacheStatus.rebuildMatchStatsCache);
   const rebuildAggregateStatsCache = useMutation(api.cacheStatus.rebuildAggregateStatsCache);
-  const rebuildHolisticScoresCache = useMutation(api.cacheStatus.rebuildHolisticScoresCache);
   const backfillKillEventsMetadata = useMutation(api.cacheStatus.backfillKillEventsMetadata);
   const backfillPlayerEventStats = useMutation(api.cacheStatus.backfillPlayerEventParticipationStats);
   const rebuildUpsetKillEventsCache = useMutation(api.cacheStatus.rebuildUpsetKillEventsCache);
 
   const [rebuildingCache, setRebuildingCache] = useState<string | null>(null);
 
-  const handleRebuildCache = async (cacheType: "players" | "events" | "imports" | "matchStats" | "aggregateStats" | "holisticScores" | "killEventsMetadata" | "upsetKillStats" | "playerEventStats") => {
+  const handleRebuildCache = async (cacheType: "players" | "events" | "imports" | "matchStats" | "aggregateStats" | "killEventsMetadata" | "upsetKillStats" | "playerEventStats") => {
     setRebuildingCache(cacheType);
     try {
       let result;
@@ -100,9 +105,6 @@ function DataCacheStatusContent() {
           break;
         case "aggregateStats":
           result = await rebuildAggregateStatsCache();
-          break;
-        case "holisticScores":
-          result = await rebuildHolisticScoresCache();
           break;
         case "killEventsMetadata":
           result = await backfillKillEventsMetadata();
@@ -167,6 +169,73 @@ function DataCacheStatusContent() {
         <Skeleton className="h-96 w-full" />
       ) : (
         <div className="space-y-6">
+          <PlayerStatsMigrationChecklist variant="cache" />
+
+          <Card className="border-primary bg-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Unified player stats rebuild</CardTitle>
+              <CardDescription>
+                Event participation → TC → DCA → top-five → tier-eval holistic scores (raw + TC/DCA).
+                Replaces separate per-cache holistic refresh buttons for a full refresh.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {activeStatsRebuild ? (
+                <Alert>
+                  <Clock className="h-4 w-4" />
+                  <AlertTitle>Rebuild in progress</AlertTitle>
+                  <AlertDescription className="space-y-1">
+                    <PlayerStatsRebuildProgress />
+                    <p className="text-xs text-muted-foreground">
+                      Started {formatRelativeTime(activeStatsRebuild.startedAt)} · last progress{" "}
+                      {formatRelativeTime(activeStatsRebuild.lastProgressAt)}
+                      {activeStatsRebuild.totalProcessed > 0 &&
+                        ` · ${activeStatsRebuild.totalProcessed.toLocaleString()} steps`}
+                    </p>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No rebuild running. Use after Yunite imports or policy changes.
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <PlayerStatsRebuildButton size="sm" label="Rebuild all player stats" />
+                <PlayerStatsRebuildButton
+                  size="sm"
+                  variant="outline"
+                  label="TC/DCA only"
+                  tcDcaOnly
+                />
+                <PlayerStatsRebuildButton
+                  size="sm"
+                  variant="outline"
+                  label="Top 5 only"
+                  topFiveOnly
+                />
+                <PlayerStatsRebuildButton
+                  size="sm"
+                  variant="outline"
+                  label="Average stats only"
+                  aggregateStatsOnly
+                />
+                <PlayerStatsRebuildButton
+                  size="sm"
+                  variant="outline"
+                  label="6-week tier eval only"
+                  tierEvalOnly
+                  tierEvalRecentOnly
+                />
+                <PlayerStatsRebuildButton
+                  size="sm"
+                  variant="outline"
+                  stopAfterPhase="event_participation"
+                  showPhaseHint={false}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Players */}
@@ -178,7 +247,7 @@ function DataCacheStatusContent() {
                     size="sm"
                     variant="ghost"
                     onClick={() => handleRebuildCache("players")}
-                    disabled={rebuildingCache === "players"}
+                    disabled={rebuildingCache === "players" || !!activeStatsRebuild}
                   >
                     {rebuildingCache === "players" ? (
                       <Spinner className="h-3 w-3" />
@@ -189,9 +258,9 @@ function DataCacheStatusContent() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    title="Backfill events played counts"
+                    title="Sync Yunite event counts (unified rebuild)"
                     onClick={() => handleRebuildCache("playerEventStats")}
-                    disabled={rebuildingCache === "playerEventStats"}
+                    disabled={rebuildingCache === "playerEventStats" || !!activeStatsRebuild}
                   >
                     {rebuildingCache === "playerEventStats" ? (
                       <Spinner className="h-3 w-3" />
@@ -205,9 +274,9 @@ function DataCacheStatusContent() {
                 <div className="text-2xl font-bold">{playerStats.total}</div>
                 <div className="space-y-1 mt-2 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">PowerScore</span>
+                    <span className="text-muted-foreground">Tier Eval Cache</span>
                     <span className="font-medium">
-                      {getPercentage(playerStats.withPowerScore, playerStats.total)}%
+                      {getPercentage(playerStats.withTierEvalCache, playerStats.total)}%
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -472,8 +541,9 @@ function DataCacheStatusContent() {
                   <Button
                     size="sm"
                     variant="ghost"
+                    title="Population average stats (unified rebuild)"
                     onClick={() => handleRebuildCache("aggregateStats")}
-                    disabled={rebuildingCache === "aggregateStats"}
+                    disabled={rebuildingCache === "aggregateStats" || !!activeStatsRebuild}
                   >
                     {rebuildingCache === "aggregateStats" ? (
                       <Spinner className="h-3 w-3" />
@@ -525,18 +595,6 @@ function DataCacheStatusContent() {
                       Holistic Scores →
                     </CardTitle>
                   </Link>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleRebuildCache("holisticScores")}
-                    disabled={rebuildingCache === "holisticScores"}
-                  >
-                    {rebuildingCache === "holisticScores" ? (
-                      <Spinner className="h-3 w-3" />
-                    ) : (
-                      <RefreshCw className="h-3 w-3" />
-                    )}
-                  </Button>
                 </div>
                 <CardDescription className="text-xs">Tier evaluations & scores</CardDescription>
               </CardHeader>
@@ -630,7 +688,7 @@ function DataCacheStatusContent() {
                       <TableHead>Player</TableHead>
                       <TableHead>Epic ID</TableHead>
                       <TableHead>Avatar</TableHead>
-                      <TableHead>Power Score</TableHead>
+                      <TableHead>Tier Eval Cache</TableHead>
                       <TableHead>Top 5 Cache</TableHead>
                       <TableHead className="text-right">Last Synced</TableHead>
                     </TableRow>
@@ -659,7 +717,7 @@ function DataCacheStatusContent() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {player.hasPowerScore ? (
+                          {player.hasTierEvalCache ? (
                             <CheckCircle2 className="h-4 w-4 text-green-600" />
                           ) : (
                             <XCircle className="h-4 w-4 text-muted-foreground" />

@@ -104,20 +104,6 @@ export default defineSchema({
       v.literal("fuzzy"), // Fuzzy/partial username match
       v.literal("manual") // Manually created/linked
     )),
-    // Admin-only PowerScore for player rankings
-    powerScore: v.optional(v.number()),
-    // Cached ranking stats (updated when PowerScore is recalculated)
-    rankingStats: v.optional(v.object({
-      averageTeamKD: v.number(),
-      averageTeamElims: v.number(),
-      totalTeamElims: v.optional(v.number()),
-      averagePlacement: v.number(),
-      winRate: v.number(),
-      totalEvents: v.number(), // Filtered count (S-tier: post-Aug 4th only; others: all events)
-      unfilteredTotalEvents: v.optional(v.number()), // Unfiltered count (all events regardless of tier)
-      totalTeamScore: v.number(), // Sum of all scores from ZBD events
-      top3Finishes: v.optional(v.number()), // Number of top 3 placements in events
-    })),
     // Cached Team Contribution (TC) - updated when match data changes
     contributionScore: v.optional(v.object({
       score: v.number(), // Overall TC (0.00-1.00)
@@ -425,14 +411,18 @@ export default defineSchema({
     seasonId: v.optional(v.string()),
     // Skip first N weeks of points in cumulative (for seasons)
     skipFirstNWeeksPoints: v.optional(v.number()),
-    // Manual flag to exclude from analytics/rankings (replaces automatic "No Money" name detection)
+    // Manual flag to exclude from analytics and internal stats (replaces automatic "No Money" name detection)
     isNoMoneyEvent: v.optional(v.boolean()),
     // Solos-meets-duos team size: "duo" (2 players) or "trio" (3 players)
     smdTeamSize: v.optional(v.union(v.literal("duo"), v.literal("trio"))),
-    // Scrim Series & Showdown: best N games per player for cumulative leaderboard
+    // Scrim Series: best N games per player for cumulative leaderboard
     bestNGames: v.optional(v.number()),
     // Scrim Series: duration in weeks (3 or 6)
     seriesDurationWeeks: v.optional(v.union(v.literal(3), v.literal(6))),
+    // Showdown: best N weekly totals (default 2 of up to 4 weeks)
+    showdownBestWeeks: v.optional(v.number()),
+    // Showdown: default points deducted per penalty (individual penalties may override)
+    penaltyAmount: v.optional(v.number()),
     // Link to standalone /scrim-series product (admin/scrim-series)
     linkedScrimSeriesId: v.optional(v.id("scrimSeries")),
     createdBy: v.id("users"),
@@ -461,6 +451,18 @@ export default defineSchema({
     eventId: v.id("events"),
     playerId: v.id("players"),
     tier: v.string(), // S, A, B, C
+  })
+    .index("by_event", ["eventId"])
+    .index("by_event_and_player", ["eventId", "playerId"]),
+
+  // Showdown: manual penalties deducted from weekly-best totals
+  eventPenalties: defineTable({
+    eventId: v.id("events"),
+    playerId: v.id("players"),
+    reason: v.string(),
+    amount: v.number(),
+    excluded: v.boolean(),
+    dedupKey: v.optional(v.string()),
   })
     .index("by_event", ["eventId"])
     .index("by_event_and_player", ["eventId", "playerId"]),
@@ -693,6 +695,50 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
   }).index("by_status", ["status"]),
 
+  playerStatsRebuildJobs: defineTable({
+    status: v.union(
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+    ),
+    phase: v.string(),
+    playersCursor: v.union(v.string(), v.null()),
+    tierEvalBatch: v.number(),
+    tierEvalBatchCount: v.number(),
+    tierEvalInitialized: v.optional(v.boolean()),
+    includeAggregateStats: v.boolean(),
+    stopAfterPhase: v.optional(
+      v.union(
+        v.literal("event_participation"),
+        v.literal("dca_mutual"),
+        v.literal("top_five"),
+        v.literal("tier_eval"),
+        v.literal("aggregate_stats"),
+      ),
+    ),
+    tierEvalRecentOnly: v.boolean(),
+    rebuildKind: v.optional(
+      v.union(
+        v.literal("full"),
+        v.literal("through_tier_eval"),
+        v.literal("event_participation"),
+        v.literal("tc_dca"),
+        v.literal("top_five"),
+        v.literal("tier_eval"),
+        v.literal("aggregate_stats"),
+      ),
+    ),
+    applyDuoAdjustment: v.optional(v.boolean()),
+    applyTCPenalty: v.optional(v.boolean()),
+    applyTCDCAToHolistic: v.optional(v.boolean()),
+    processedInPhase: v.number(),
+    totalProcessed: v.number(),
+    startedAt: v.number(),
+    lastProgressAt: v.number(),
+    completedAt: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+  }).index("by_status", ["status"]),
+
   // Cached audience insights donuts (admin audience-insights page)
   audienceInsightsSnapshot: defineTable({
     insightsCacheVersion: v.optional(v.number()),
@@ -845,8 +891,6 @@ export default defineSchema({
     discordUserId: v.optional(v.string()),
     tier: v.string(),
     totalEvents: v.number(),
-    avgPRPerEvent: v.number(),
-    finalPowerScore: v.number(),
     killsPerMatch: v.number(),
     deathsPerMatch: v.optional(v.number()), // Optional for backward compatibility with old cache
     tierKillsMedian: v.optional(v.number()),
@@ -864,7 +908,8 @@ export default defineSchema({
     rawAvgPlacement: v.optional(v.number()), // Raw placement before adjustment
     adjustedAvgPlacement: v.optional(v.number()), // Adjusted placement after tier-gap scaling
     rawPlacementScore: v.optional(v.number()), // Raw placement score before adjustment
-    rawHolisticScore: v.optional(v.number()), // Raw holistic score before tier-gap adjustment
+    rawHolisticScore: v.optional(v.number()), // Holistic before TC/DCA (after tier-gap placement if any)
+    preTierGapHolisticScore: v.optional(v.number()), // Holistic before tier-gap placement adjustment
     avgTeammateTier: v.optional(v.number()), // Average teammate tier (1=C, 2=B, 3=A, 4=S)
     tierGapAdjustment: v.optional(v.number()), // Multiplier applied (1.0, 0.85, 0.70, 0.55)
     // Tier comparisons
@@ -889,6 +934,7 @@ export default defineSchema({
     evaluationStatus: v.string(),
     // Recent (last 6 weeks) holistic score fields
     recentHolisticScore: v.optional(v.number()),
+    recentRawHolisticScore: v.optional(v.number()),
     recentKillsPerMatch: v.optional(v.number()),
     recentDeathsPerMatch: v.optional(v.number()),
     recentAvgPlacement: v.optional(v.number()),
@@ -909,7 +955,7 @@ export default defineSchema({
   
   // Tier medians for re-evaluation
   tierMediansCache: defineTable({
-    // Per-event PR medians
+    // Per-tier placement score medians (legacy field name: tierAverages)
     tierAverages: v.object({
       S: v.optional(v.number()),
       A: v.optional(v.number()),

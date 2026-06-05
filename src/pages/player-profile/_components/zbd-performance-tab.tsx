@@ -574,7 +574,7 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
                     <div>
                       <p className="text-xs font-semibold">Duo Carry Adjustment (DCA)</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Ranking score multiplier
+                        Tier evaluation adjustment
                       </p>
                     </div>
                     <div className="text-right">

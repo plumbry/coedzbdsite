@@ -72,13 +72,15 @@ export const fetchTournamentMatchBreakdown = action({
     }
     
     // Get all players to match Discord IDs
-    const allPlayers = await ctx.runQuery(api.players.getPlayers);
+    const allPlayers = (await ctx.runQuery(
+      api.players.getPlayers,
+    )) as import("../_generated/dataModel.d.ts").Doc<"players">[];
     
     // Create a lookup map for quick Discord ID matching (using discordUserId from player schema)
-    const playerLookup = new Map(
+    const playerLookup = new Map<string, { name: string; tier?: string }>(
       allPlayers
-        .filter((p: typeof allPlayers[number]) => p.discordUserId)
-        .map((p: typeof allPlayers[number]) => [p.discordUserId, { name: p.discordUsername, tier: p.tier }])
+        .filter((p) => p.discordUserId)
+        .map((p) => [p.discordUserId, { name: p.discordUsername, tier: p.tier }]),
     );
     
     // Extract tournament ID from leaderboardId (format: "yunite-{tournamentId}")

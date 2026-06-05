@@ -6,6 +6,26 @@ import { v } from "convex/values";
 import { sheets } from "@googleapis/sheets";
 import { JWT } from "google-auth-library";
 import { ConvexError } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel.d.ts";
+type SheetPlayer = Doc<"players">;
+type SheetScore = {
+  playerId: Id<"players">;
+  totalScore?: number;
+  thirdPartyExperience?: number;
+  thirdPartyPerformance?: number;
+  inGameTourneyPerformance?: number;
+  officialEarnings?: number;
+  rankedPerformance?: number;
+  hoursPlayed?: number;
+  notorietyTeammates?: number;
+  age?: number;
+  gender?: number;
+  ability?: number;
+  region?: number;
+  gameSense?: number;
+  seasonPerformance?: number;
+  modifiers?: number;
+};
 
 // Helper to authenticate with Google Sheets using service account
 async function getGoogleSheetsClient() {
@@ -38,182 +58,6 @@ async function getGoogleSheetsClient() {
   return sheetsClient;
 }
 
-// Export player rankings to Google Sheets
-export const exportRankingsToSheets = action({
-  args: { 
-    spreadsheetId: v.string(),
-    applyDuoAdjustment: v.optional(v.boolean()),
-    applyCSPenalty: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args): Promise<{
-    success: boolean;
-    playersExported: number;
-    timestamp: string;
-    spreadsheetUrl: string;
-  }> => {
-    // Check if user is admin
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "User not logged in",
-        code: "UNAUTHENTICATED",
-      });
-    }
-    
-    // Get rankings data
-    const rankingsData: {
-      rankings: Array<{
-        rank: number;
-        playerName: string;
-        discordUsername: string;
-        epicUsername: string;
-        tier: string;
-        powerScore: number;
-        rawPowerScore: number;
-        dca: number;
-        cs: number | null;
-        cpm: number | undefined;
-        avgPRPerEvent: number;
-        totalEvents: number;
-        averageTeamElims: number;
-        totalTeamElims: number;
-        deathsPerMatch: number;
-        averagePlacement: number;
-        winRate: number;
-        top3Finishes: number;
-        totalTeamScore: number;
-      }>;
-    } = await ctx.runQuery(api.rankings.getPlayerRankings, {
-      applyDuoAdjustment: args.applyDuoAdjustment || false,
-      applyCSPenalty: args.applyCSPenalty !== false,
-    });
-    
-    if (!rankingsData || !rankingsData.rankings) {
-      throw new ConvexError({
-        message: "No rankings data found",
-        code: "NOT_FOUND",
-      });
-    }
-    
-    try {
-      const sheets = await getGoogleSheetsClient();
-      
-      // Prepare data for Google Sheets
-      const headers = [
-        "Rank",
-        "Player Name",
-        "Discord Username",
-        "Epic Username",
-        "Tier",
-        "Final Power Score",
-        "Raw Power Score",
-        "DCA",
-        "Team Contribution",
-        "CPM",
-        "Avg PR per Event",
-        "Total Events",
-        "Avg Kills",
-        "Total Elims",
-        "Deaths/Match",
-        "Avg Placement",
-        "Win Rate %",
-        "Top 3 Finishes",
-        "Total Score",
-      ];
-      
-      const rows = rankingsData.rankings.map((player) => [
-        player.rank,
-        player.playerName,
-        player.discordUsername,
-        player.epicUsername,
-        player.tier,
-        player.powerScore.toFixed(2),
-        player.rawPowerScore.toFixed(2),
-        player.dca.toFixed(3),
-        player.cs !== null && player.cs !== undefined ? player.cs.toFixed(2) : "N/A",
-        player.cpm ? player.cpm.toFixed(3) : "1.000",
-        player.avgPRPerEvent.toFixed(2),
-        player.totalEvents,
-        player.averageTeamElims.toFixed(1),
-        player.totalTeamElims,
-        player.deathsPerMatch?.toFixed(1) || "0.0",
-        player.averagePlacement.toFixed(1),
-        player.winRate.toFixed(1),
-        player.top3Finishes || 0,
-        player.totalTeamScore,
-      ]);
-      
-      // Clear existing data and write new data
-      await sheets.spreadsheets.values.clear({
-        spreadsheetId: args.spreadsheetId,
-        range: "Rankings!A1:Z",
-      });
-      
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: args.spreadsheetId,
-        range: "Rankings!A1",
-        valueInputOption: "RAW",
-        requestBody: {
-          values: [headers, ...rows],
-        },
-      });
-      
-      // Format the header row
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: args.spreadsheetId,
-        requestBody: {
-          requests: [
-            {
-              repeatCell: {
-                range: {
-                  sheetId: 0,
-                  startRowIndex: 0,
-                  endRowIndex: 1,
-                },
-                cell: {
-                  userEnteredFormat: {
-                    backgroundColor: { red: 0.1, green: 0.6, blue: 0.9 },
-                    textFormat: {
-                      bold: true,
-                      foregroundColor: { red: 1, green: 1, blue: 1 },
-                    },
-                    horizontalAlignment: "CENTER",
-                  },
-                },
-                fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
-              },
-            },
-            {
-              autoResizeDimensions: {
-                dimensions: {
-                  sheetId: 0,
-                  dimension: "COLUMNS",
-                  startIndex: 0,
-                  endIndex: headers.length,
-                },
-              },
-            },
-          ],
-        },
-      });
-      
-      const timestamp = new Date().toISOString();
-      return {
-        success: true,
-        playersExported: rankingsData.rankings.length,
-        timestamp,
-        spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${args.spreadsheetId}`,
-      };
-    } catch (error) {
-      console.error("Google Sheets API error:", error);
-      throw new ConvexError({
-        message: `Failed to export to Google Sheets: ${error instanceof Error ? error.message : "Unknown error"}`,
-        code: "EXTERNAL_SERVICE_ERROR",
-      });
-    }
-  },
-});
-
 // Export player list with evaluation stats to Google Sheets
 export const exportPlayersToSheets = action({
   args: { spreadsheetId: v.string() },
@@ -236,11 +80,17 @@ export const exportPlayersToSheets = action({
       const sheets = await getGoogleSheetsClient();
       
       // Use lightweight queries to stay under read limits
-      const allPlayers = await ctx.runQuery(api.players.getPlayersForExport, {});
-      const allScores = await ctx.runQuery(api.scores.getAllScoresMap, {});
+      const allPlayers = (await ctx.runQuery(
+        api.players.getPlayersForExport,
+        {},
+      )) as SheetPlayer[];
+      const allScores = (await ctx.runQuery(
+        api.scores.getAllScoresMap,
+        {},
+      )) as SheetScore[];
       
       // Build a lookup map for scores by playerId
-      const scoresMap = new Map<string, typeof allScores[number]>();
+      const scoresMap = new Map<string, SheetScore>();
       for (const score of allScores) {
         scoresMap.set(score.playerId, score);
       }
@@ -410,11 +260,17 @@ export const exportRejectedPlayersToSheets = action({
       const sheets = await getGoogleSheetsClient();
       
       // Use lightweight queries to stay under read limits
-      const allPlayers = await ctx.runQuery(api.players.getPlayersForExport, {});
-      const allScores = await ctx.runQuery(api.scores.getAllScoresMap, {});
+      const allPlayers = (await ctx.runQuery(
+        api.players.getPlayersForExport,
+        {},
+      )) as SheetPlayer[];
+      const allScores = (await ctx.runQuery(
+        api.scores.getAllScoresMap,
+        {},
+      )) as SheetScore[];
       
       // Build a lookup map for scores by playerId
-      const scoresMap = new Map<string, typeof allScores[number]>();
+      const scoresMap = new Map<string, SheetScore>();
       for (const score of allScores) {
         scoresMap.set(score.playerId, score);
       }
@@ -580,12 +436,26 @@ export const exportArchivedPlayersToSheets = action({
     try {
       const sheets = await getGoogleSheetsClient();
       
-      // Use lightweight queries to stay under read limits
-      const allPlayers = await ctx.runQuery(api.players.getPlayersForExport, {});
-      const allScores = await ctx.runQuery(api.scores.getAllScoresMap, {});
-      
+      const allPlayers = (await ctx.runQuery(
+        api.players.getPlayersForExport,
+        {},
+      )) as SheetPlayer[];
+      const allScores = (await ctx.runQuery(
+        api.scores.getAllScoresMap,
+        {},
+      )) as SheetScore[];
+      const tierEvalCache = (await ctx.runQuery(
+        api.tierReEvaluation.getCachedTierReEvaluationData,
+        {},
+      )) as {
+        evaluations?: Array<{ playerId: Id<"players">; holisticScore: number }>;
+      } | null;
+      const holisticByPlayer = new Map<Id<"players">, number>(
+        (tierEvalCache?.evaluations ?? []).map((e) => [e.playerId, e.holisticScore]),
+      );
+
       // Build a lookup map for scores by playerId
-      const scoresMap = new Map<string, typeof allScores[number]>();
+      const scoresMap = new Map<string, SheetScore>();
       for (const score of allScores) {
         scoresMap.set(score.playerId, score);
       }
@@ -624,7 +494,7 @@ export const exportArchivedPlayersToSheets = action({
         "Epic Username",
         "Tier",
         "Tier Score",
-        "Power Score",
+        "Holistic Score",
         "Has Left Server",
         "Archive Reason",
         // Evaluation Categories
@@ -651,7 +521,9 @@ export const exportArchivedPlayersToSheets = action({
         player.epicUsername,
         player.tier || "Unranked",
         score?.totalScore ? Math.round(score.totalScore).toString() : "",
-        player.powerScore?.toFixed(2) || "0.00",
+        holisticByPlayer.has(player._id)
+          ? holisticByPlayer.get(player._id)!.toFixed(1)
+          : "",
         player.hasLeftServer ? "Yes" : "No",
         player.archiveReason || "",
         // Evaluation Categories
@@ -782,7 +654,6 @@ export const exportReEvaluationsToSheets = action({
         "Discord ID",
         "Current Tier",
         "Events",
-        "Avg PR/Event",
         "Kills/Match",
         "Deaths/Match",
         "Holistic Score",
@@ -806,7 +677,6 @@ export const exportReEvaluationsToSheets = action({
         evaluation.discordUserId || "",
         evaluation.tier,
         evaluation.totalEvents,
-        evaluation.avgPRPerEvent.toFixed(2),
         evaluation.killsPerMatch.toFixed(2),
         evaluation.deathsPerMatch?.toFixed(2) || "0.00",
         evaluation.holisticScore.toFixed(2),
@@ -1046,7 +916,6 @@ export const exportAllToSheets = action({
     success: boolean;
     results: {
       players?: { playersExported: number };
-      rankings?: { playersExported: number };
       archived?: { playersExported: number };
       rejected?: { playersExported: number };
       reEvaluations?: { playersExported: number };
@@ -1067,7 +936,6 @@ export const exportAllToSheets = action({
     
     const results: {
       players?: { playersExported: number };
-      rankings?: { playersExported: number };
       archived?: { playersExported: number };
       rejected?: { playersExported: number };
       reEvaluations?: { playersExported: number };
@@ -1083,18 +951,6 @@ export const exportAllToSheets = action({
       results.players = { playersExported: playersResult.playersExported };
     } catch (error) {
       errors.push(`Players export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-    }
-    
-    // Export Rankings
-    try {
-      const rankingsResult = await ctx.runAction(api.googleSheets.exportRankingsToSheets, {
-        spreadsheetId: args.spreadsheetId,
-        applyDuoAdjustment: false,
-        applyCSPenalty: true,
-      });
-      results.rankings = { playersExported: rankingsResult.playersExported };
-    } catch (error) {
-      errors.push(`Rankings export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
     
     // Export Archived Players
@@ -1838,7 +1694,10 @@ export const updatePlayersFromSheets = action({
       const errors: string[] = [];
       
       // Fetch all players once before the loop using lightweight query
-      const allPlayers = await ctx.runQuery(api.players.getPlayersForExport, {});
+      const allPlayers = (await ctx.runQuery(
+        api.players.getPlayersForExport,
+        {},
+      )) as SheetPlayer[];
       
       // Process each row
       for (const row of dataRows) {

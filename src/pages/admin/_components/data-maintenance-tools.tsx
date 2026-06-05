@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
@@ -7,13 +7,17 @@ import {
   AlertTriangle,
   Archive,
   Database,
-  RefreshCw,
   ShieldOff,
   Trash2,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import ConfirmDialog from "@/components/confirm-dialog.tsx";
+import {
+  PlayerStatsRebuildButton,
+  PlayerStatsRebuildProgress,
+} from "@/components/admin/player-stats-rebuild-button.tsx";
+import { PlayerStatsMigrationChecklist } from "@/components/admin/player-stats-migration-checklist.tsx";
 
 type PendingConfirm = {
   title: string;
@@ -26,6 +30,12 @@ type PendingConfirm = {
 
 export default function DataMaintenanceTools() {
   const players = useQuery(api.players.getPlayers);
+  const deprecatedRankingCounts = useQuery(
+    api.clearDeprecatedPlayerRankingFields.countPlayersWithDeprecatedRankingFields,
+  );
+  const deprecatedTierEvalPrCounts = useQuery(
+    api.clearDeprecatedTierEvalPrFields.countRowsWithDeprecatedTierEvalPrFields,
+  );
 
   const deleteDiscordOnlyMembers = useMutation(api.players.deleteDiscordOnlyMembers);
   const deleteAllPlayers = useMutation(api.players.deleteAllPlayers);
@@ -33,14 +43,12 @@ export default function DataMaintenanceTools() {
   const migrateMembershipStatus = useMutation(api.migrateMembershipStatus.migratePlayerMembershipStatus);
   const fixPlacementsBatch = useAction(api.yunite.fixPlacements.fixPlacementsBatch);
   const removeAllTierRoles = useAction(api.discord.removeAllTierRoles.removeAllTierRoles);
-
-  const recalculateAllCS = useMutation(api.calculateContributionScore.recalculateAllCS);
-  const rebuildDCACache = useMutation(api.dcaCache.rebuildDCACache);
-  const triggerTopFiveRebuild = useMutation(api.topFiveCache.triggerCacheRebuild);
-  const initBatchRebuild = useMutation(api.tierReEvaluationBatched.initializeBatchRebuild);
-  const clearHolisticCache = useMutation(api.tierReEvaluationBatched.clearCache);
-  const processBatch = useMutation(api.tierReEvaluationBatched.processBatch);
-  const finalizeRecent = useMutation(api.tierReEvaluationBatched.finalizeRecentComparisons);
+  const clearDeprecatedRankingFields = useMutation(
+    api.clearDeprecatedPlayerRankingFields.clearDeprecatedPlayerRankingFields,
+  );
+  const clearDeprecatedTierEvalPrFields = useMutation(
+    api.clearDeprecatedTierEvalPrFields.clearDeprecatedTierEvalPrFields,
+  );
 
   const [isDeletingDiscordOnly, setIsDeletingDiscordOnly] = useState(false);
   const [isDeletingAllPlayers, setIsDeletingAllPlayers] = useState(false);
@@ -48,100 +56,46 @@ export default function DataMaintenanceTools() {
   const [isMigrating, setIsMigrating] = useState(false);
   const [isFixingPlacements, setIsFixingPlacements] = useState(false);
   const [isRemovingRoles, setIsRemovingRoles] = useState(false);
+  const [isClearingDeprecatedRanking, setIsClearingDeprecatedRanking] = useState(false);
+  const [isClearingTierEvalPr, setIsClearingTierEvalPr] = useState(false);
   const [fixProgress, setFixProgress] = useState<{ current: number; total: number } | null>(null);
-  const [isRefreshingAll, setIsRefreshingAll] = useState(false);
-  const [refreshStep, setRefreshStep] = useState("");
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
-  const cancelledRef = useRef(false);
 
-  const runRefreshAllStats = async () => {
-    setIsRefreshingAll(true);
-    cancelledRef.current = false;
-    const TOAST_ID = "refresh-all";
-
+  const runClearDeprecatedRankingFields = async () => {
+    setIsClearingDeprecatedRanking(true);
     try {
-      setRefreshStep("TC");
-      toast.loading("Refreshing all stats — Step 1/4: TC...", { id: TOAST_ID, duration: Infinity });
-      let tcDone = 0;
-      let hasMore = true;
-      const tcCutoff = Date.now();
-      while (hasMore && !cancelledRef.current) {
-        const r = await recalculateAllCS({ forceRecalculate: true, cutoffTimestamp: tcCutoff });
-        tcDone += r.success + r.failed;
-        if (r.remaining <= 0 || (r.success === 0 && r.failed === 0)) hasMore = false;
-        toast.loading(`Step 1/4: TC — ${tcDone} players processed, ${r.remaining} remaining`, {
-          id: TOAST_ID,
-          duration: Infinity,
-        });
-        if (hasMore) await new Promise((res) => setTimeout(res, 150));
-      }
-      if (cancelledRef.current) throw new Error("Cancelled");
-
-      setRefreshStep("DCA");
-      toast.loading("Step 2/4: DCA...", { id: TOAST_ID, duration: Infinity });
-      let dcaDone = 0;
-      hasMore = true;
-      while (hasMore && !cancelledRef.current) {
-        const r = await rebuildDCACache({ forceRebuild: true });
-        dcaDone += r.success + r.failed;
-        if (r.remaining <= 0 || (r.success === 0 && r.failed === 0)) hasMore = false;
-        toast.loading(`Step 2/4: DCA — ${dcaDone} players processed, ${r.remaining} remaining`, {
-          id: TOAST_ID,
-          duration: Infinity,
-        });
-        if (hasMore) await new Promise((res) => setTimeout(res, 150));
-      }
-      if (cancelledRef.current) throw new Error("Cancelled");
-
-      setRefreshStep("Top Five");
-      toast.loading("Step 3/4: Top Five Cache...", { id: TOAST_ID, duration: Infinity });
-      let topFiveDone = 0;
-      hasMore = true;
-      while (hasMore && !cancelledRef.current) {
-        const r = await triggerTopFiveRebuild({});
-        topFiveDone += r.success + r.failed;
-        if (r.remaining <= 0 || (r.success === 0 && r.failed === 0)) hasMore = false;
-        toast.loading(`Step 3/4: Top Five — ${topFiveDone} players processed, ${r.remaining} remaining`, {
-          id: TOAST_ID,
-          duration: Infinity,
-        });
-        if (hasMore) await new Promise((res) => setTimeout(res, 150));
-      }
-      if (cancelledRef.current) throw new Error("Cancelled");
-
-      setRefreshStep("Holistic Scores");
-      toast.loading("Step 4/4: Holistic Scores — clearing old cache...", { id: TOAST_ID, duration: Infinity });
-      await clearHolisticCache({});
-      if (cancelledRef.current) throw new Error("Cancelled");
-      toast.loading("Step 4/4: Holistic Scores — initializing...", { id: TOAST_ID, duration: Infinity });
-      const init = await initBatchRebuild({});
-      for (let b = 0; b < init.batchCount && !cancelledRef.current; b++) {
-        toast.loading(`Step 4/4: Holistic Scores — batch ${b + 1}/${init.batchCount}`, {
-          id: TOAST_ID,
-          duration: Infinity,
-        });
-        await processBatch({ batchNumber: b });
-        await new Promise((res) => setTimeout(res, 100));
-      }
-      if (cancelledRef.current) throw new Error("Cancelled");
-
-      toast.loading("Step 4/4: Holistic Scores — finalizing 6-week comparisons...", {
-        id: TOAST_ID,
-        duration: Infinity,
-      });
-      await finalizeRecent({});
-
-      toast.success("All stats refreshed successfully!", { id: TOAST_ID, duration: 5000 });
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Unknown error";
-      if (msg === "Cancelled") {
-        toast.info("Refresh cancelled.", { id: TOAST_ID });
+      const result = await clearDeprecatedRankingFields({});
+      if (result.started) {
+        toast.success(result.message);
       } else {
-        toast.error(`Refresh failed during ${refreshStep}: ${msg}`, { id: TOAST_ID, duration: 8000 });
+        toast.info(result.message);
       }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to clear legacy player stat fields",
+      );
     } finally {
-      setIsRefreshingAll(false);
-      setRefreshStep("");
+      setIsClearingDeprecatedRanking(false);
+    }
+  };
+
+  const runClearDeprecatedTierEvalPrFields = async () => {
+    setIsClearingTierEvalPr(true);
+    try {
+      const result = await clearDeprecatedTierEvalPrFields({});
+      if (result.started) {
+        toast.success(result.message);
+      } else {
+        toast.info(result.message);
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to clear legacy tier-evaluation fields",
+      );
+    } finally {
+      setIsClearingTierEvalPr(false);
     }
   };
 
@@ -282,42 +236,70 @@ export default function DataMaintenanceTools() {
 
   return (
     <div className="space-y-4">
+      <PlayerStatsMigrationChecklist
+        variant="maintenance"
+        clearingPlayerPr={isClearingDeprecatedRanking}
+        clearingTierEvalPr={isClearingTierEvalPr}
+        onRequestClearPlayerPr={() =>
+          setPendingConfirm({
+            title: "Clear legacy player stat fields?",
+            description:
+              deprecatedRankingCounts?.withDeprecatedFields
+                ? `This will unset powerScore and rankingStats on ${deprecatedRankingCounts.withDeprecatedFields} player document(s) in the background.`
+                : "No legacy fields were found. The migration will exit immediately.",
+            confirmLabel: "Clear Legacy Fields",
+            onConfirm: runClearDeprecatedRankingFields,
+          })
+        }
+        onRequestClearTierEvalPr={() =>
+          setPendingConfirm({
+            title: "Clear legacy tier-evaluation fields?",
+            description:
+              deprecatedTierEvalPrCounts?.withDeprecatedFields
+                ? `This will remove avgPRPerEvent and finalPowerScore from ${deprecatedTierEvalPrCounts.withDeprecatedFields} tier-eval cache row(s) in the background.`
+                : "No legacy fields were found. The migration will exit immediately.",
+            confirmLabel: "Clear tier-evaluation fields",
+            onConfirm: runClearDeprecatedTierEvalPrFields,
+          })
+        }
+      />
+
       <Card className="border-primary bg-primary/5">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2 text-primary">
-            <RefreshCw className="h-4 w-4" />
-            Refresh All Stats
-          </CardTitle>
+          <CardTitle className="text-sm text-primary">Rebuild Player Stats</CardTitle>
           <CardDescription className="text-xs">
-            One-click recalculation of TC, DCA, Top Five, and Holistic Scores.
+            Unified pipeline: event participation, TC, DCA, top-five cache, and tier-eval holistic
+            scores (with raw + TC/DCA-adjusted values).
           </CardDescription>
         </CardHeader>
-        <CardContent className="py-3 flex items-center gap-3">
-          <Button
-            size="sm"
-            onClick={() =>
-              setPendingConfirm({
-                title: "Refresh All Stats?",
-                description:
-                  "This will recalculate in order:\n1. TC (Team Contribution)\n2. DCA (Duo Carry Adjustment)\n3. Top Five Cache\n4. Holistic Scores\n\nThis may take several minutes.",
-                confirmLabel: "Refresh All Stats",
-                onConfirm: runRefreshAllStats,
-              })
-            }
-            disabled={isRefreshingAll}
-          >
-            <RefreshCw className={`mr-2 h-3 w-3 ${isRefreshingAll ? "animate-spin" : ""}`} />
-            {isRefreshingAll ? `Running — ${refreshStep}...` : "Refresh All Stats"}
-          </Button>
-          {isRefreshingAll && (
-            <Button size="sm" variant="ghost" onClick={() => { cancelledRef.current = true; }}>
-              Cancel
-            </Button>
-          )}
+        <CardContent className="py-3 space-y-2">
+          <PlayerStatsRebuildProgress className="text-xs text-muted-foreground" />
+          <div className="flex flex-wrap items-center gap-2">
+            <PlayerStatsRebuildButton
+              size="sm"
+              label="Rebuild all player stats"
+              showPhaseHint={false}
+              linkToDataCache
+            />
+            <PlayerStatsRebuildButton size="sm" variant="outline" label="TC/DCA only" tcDcaOnly />
+            <PlayerStatsRebuildButton size="sm" variant="outline" label="Top 5 only" topFiveOnly />
+            <PlayerStatsRebuildButton
+              size="sm"
+              variant="outline"
+              label="Tier-eval only"
+              tierEvalOnly
+            />
+            <PlayerStatsRebuildButton
+              size="sm"
+              variant="outline"
+              label="Average stats only"
+              aggregateStatsOnly
+            />
+          </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         <Card className="border-blue-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-blue-600">

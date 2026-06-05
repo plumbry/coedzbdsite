@@ -5,6 +5,12 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel.d.ts";
 import type { MutationCtx } from "../_generated/server";
 import { appendLeaderboardUrlToEvent } from "../lib/eventLeaderboardLinks";
+import {
+  EVENT_YUNITE_REQUIRED_MESSAGE,
+  eventMeetsYuniteMinimum,
+  eventHasLeaderboardUrls,
+  eventHasLinkedScrimSeries,
+} from "../lib/eventYuniteRequirement";
 import { applyLinkedScrimSeries } from "../lib/scrimSeriesEventLink";
 import { collectEventLeaderboardUrls, extractTournamentIdFromUrl } from "../lib/yunite";
 
@@ -361,28 +367,48 @@ export const createEvent = mutation({
     smdTeamSize: v.optional(v.union(v.literal("duo"), v.literal("trio"))),
     bestNGames: v.optional(v.number()),
     seriesDurationWeeks: v.optional(v.union(v.literal(3), v.literal(6))),
+    showdownBestWeeks: v.optional(v.number()),
+    penaltyAmount: v.optional(v.number()),
     linkedScrimSeriesId: v.optional(v.union(v.id("scrimSeries"), v.null())),
   },
   handler: async (ctx, args) => {
     await requireModeratorOrAdmin(ctx);
-    
+
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Unauthorized");
     }
-    
+
     const user = await ctx.db
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .first();
-    
+
     if (!user) {
       throw new Error("User not found");
     }
-    
+
     // Compute status based on dates
     const computedStatus = computeEventStatus(args.startDate, args.endDate);
-    
+
+    const draftForYuniteCheck = {
+      type: args.type,
+      twoLobbies: args.twoLobbies,
+      standardLeaderboards: args.standardLeaderboards,
+      standardLeaderboardsLobby2: args.standardLeaderboardsLobby2,
+      qualifierLobby1Leaderboards: args.qualifierLobby1Leaderboards,
+      qualifierLobby2Leaderboards: args.qualifierLobby2Leaderboards,
+      finalsLeaderboards: args.finalsLeaderboards,
+      linkedScrimSeriesId:
+        args.type === "scrim-series" ? args.linkedScrimSeriesId ?? undefined : undefined,
+    };
+    if (
+      !eventHasLeaderboardUrls(draftForYuniteCheck) &&
+      !eventHasLinkedScrimSeries(draftForYuniteCheck)
+    ) {
+      throw new Error(EVENT_YUNITE_REQUIRED_MESSAGE);
+    }
+
     const eventId = await ctx.db.insert("events", {
       name: args.name,
       type: args.type,
@@ -409,8 +435,10 @@ export const createEvent = mutation({
       seasonId: args.seasonId,
       skipFirstNWeeksPoints: args.skipFirstNWeeksPoints,
       smdTeamSize: args.type === "solos-meets-duos" ? (args.smdTeamSize ?? "duo") : undefined,
-      bestNGames: (args.type === "scrim-series" || args.type === "showdown") ? args.bestNGames : undefined,
+      bestNGames: args.type === "scrim-series" ? args.bestNGames : undefined,
       seriesDurationWeeks: args.type === "scrim-series" ? args.seriesDurationWeeks : undefined,
+      showdownBestWeeks: args.type === "showdown" ? args.showdownBestWeeks : undefined,
+      penaltyAmount: args.type === "showdown" ? args.penaltyAmount : undefined,
       createdBy: user._id,
     });
     
@@ -509,6 +537,8 @@ export const updateEvent = mutation({
     smdTeamSize: v.optional(v.union(v.literal("duo"), v.literal("trio"))),
     bestNGames: v.optional(v.number()),
     seriesDurationWeeks: v.optional(v.union(v.literal(3), v.literal(6))),
+    showdownBestWeeks: v.optional(v.number()),
+    penaltyAmount: v.optional(v.number()),
     linkedScrimSeriesId: v.optional(v.union(v.id("scrimSeries"), v.null())),
   },
   handler: async (ctx, args) => {
@@ -558,15 +588,26 @@ export const updateEvent = mutation({
       updates.smdTeamSize = undefined;
     }
 
-    // Handle bestNGames and seriesDurationWeeks
-    if (effectiveType === "scrim-series" || effectiveType === "showdown") {
+    // Handle scrim-series / showdown scoring config
+    if (effectiveType === "scrim-series") {
       if (args.bestNGames !== undefined) updates.bestNGames = args.bestNGames;
-      if (effectiveType === "scrim-series" && args.seriesDurationWeeks !== undefined) {
+      if (args.seriesDurationWeeks !== undefined) {
         updates.seriesDurationWeeks = args.seriesDurationWeeks;
       }
+      updates.showdownBestWeeks = undefined;
+      updates.penaltyAmount = undefined;
+    } else if (effectiveType === "showdown") {
+      if (args.showdownBestWeeks !== undefined) {
+        updates.showdownBestWeeks = args.showdownBestWeeks;
+      }
+      if (args.penaltyAmount !== undefined) updates.penaltyAmount = args.penaltyAmount;
+      updates.bestNGames = undefined;
+      updates.seriesDurationWeeks = undefined;
     } else if (args.type !== undefined) {
       updates.bestNGames = undefined;
       updates.seriesDurationWeeks = undefined;
+      updates.showdownBestWeeks = undefined;
+      updates.penaltyAmount = undefined;
     }
 
     if (args.type !== undefined && effectiveTypeEarly !== "scrim-series") {
@@ -605,7 +646,49 @@ export const updateEvent = mutation({
     if (event.needsSetup) {
       updates.needsSetup = false;
     }
-    
+
+    const effectiveTypeForYunite = args.type ?? event.type;
+    const effectiveLinkedScrimSeriesId =
+      args.linkedScrimSeriesId !== undefined
+        ? args.linkedScrimSeriesId === null
+          ? undefined
+          : args.linkedScrimSeriesId
+        : event.linkedScrimSeriesId;
+    const mergedForYuniteCheck = {
+      type: effectiveTypeForYunite,
+      twoLobbies:
+        args.twoLobbies !== undefined ? args.twoLobbies : event.twoLobbies,
+      standardLeaderboards:
+        args.standardLeaderboards !== undefined
+          ? args.standardLeaderboards
+          : event.standardLeaderboards,
+      standardLeaderboardsLobby2:
+        args.standardLeaderboardsLobby2 !== undefined
+          ? args.standardLeaderboardsLobby2
+          : event.standardLeaderboardsLobby2,
+      qualifierLobby1Leaderboards:
+        args.qualifierLobby1Leaderboards !== undefined
+          ? args.qualifierLobby1Leaderboards
+          : event.qualifierLobby1Leaderboards,
+      qualifierLobby2Leaderboards:
+        args.qualifierLobby2Leaderboards !== undefined
+          ? args.qualifierLobby2Leaderboards
+          : event.qualifierLobby2Leaderboards,
+      finalsLeaderboards:
+        args.finalsLeaderboards !== undefined
+          ? args.finalsLeaderboards
+          : event.finalsLeaderboards,
+      linkedScrimSeriesId:
+        effectiveTypeForYunite === "scrim-series"
+          ? effectiveLinkedScrimSeriesId
+          : undefined,
+    };
+    if (
+      !(await eventMeetsYuniteMinimum(ctx, mergedForYuniteCheck, args.eventId))
+    ) {
+      throw new Error(EVENT_YUNITE_REQUIRED_MESSAGE);
+    }
+
     await ctx.db.patch(args.eventId, updates);
 
     if (args.linkedScrimSeriesId !== undefined) {

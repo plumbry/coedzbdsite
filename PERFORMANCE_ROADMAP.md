@@ -2,7 +2,10 @@
 
 **Date:** 2026-05-31  
 **Companion doc:** [PERFORMANCE_AND_USAGE_AUDIT.md](./PERFORMANCE_AND_USAGE_AUDIT.md)  
-**Goal:** Minimize Convex usage, minimize Discord API usage, reduce page load times, reduce unnecessary subscriptions, extend free-tier viability.
+**Goal:** Minimize Convex usage, minimize Discord API usage, reduce page load times, reduce unnecessary subscriptions, extend free-tier viability.  
+**Status:** **ARCHIVED** — planning doc from 2026-05-31. Validate against current code before executing items.
+
+> **Current architecture (2026-06-04):** No global player ranking product. Power Score removed. Tier evaluation uses Holistic Score from `tierReEvaluationCache` via `playerStatsRebuild`. Event leaderboards are event-scoped only. **P3.1 (rankings export)** is **cancelled** — the `rankings` module and rankings Sheets export were deleted.
 
 Priorities:
 
@@ -265,15 +268,9 @@ Priorities:
 
 ## P3 — Future optimization
 
-### P3.1 Rankings export reads cached fields only
+### P3.1 ~~Rankings export reads cached fields only~~ — **CANCELLED (2026-06-04)**
 
-**Problem:** `rankings.getPlayerRankings` recomputes despite `powerScore`/`rankingStats`/`dcaCache`/`topFiveCache` on player docs.
-
-**Actions:** Refactor to sort/filter cached fields; live `getPlayerEvents` only in single-player refresh mutation.
-
-**Est. impact:** Google Sheets export and any future rankings UI — **80%+** read reduction.
-
-**Effort:** Large (3–5 days)
+> **ARCHIVED / historical:** This item targeted the removed Power Rankings / `rankings.getPlayerRankings` / rankings Google Sheets export. Those surfaces were deleted. Tier-eval data is exported via `exportHolisticScoresToSheets` and `exportReEvaluationsToSheets` (cache-backed). No global player ranking product is planned.
 
 ---
 
@@ -396,7 +393,7 @@ Ongoing / as data grows (P2–P3)
 ├── P2.7  Kill events paginated maintenance
 ├── P2.8  Batch Discord sync
 ├── P3.2  Match data digest tables (before 1M kill events)
-└── P3.1  Rankings cached-only refactor
+└── ~~P3.1~~  (cancelled — rankings export removed)
 ```
 
 ---

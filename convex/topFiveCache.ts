@@ -387,8 +387,7 @@ export const updateSinglePlayerCache = internalMutation({
   },
 });
 
-// Internal mutation to rebuild cache for all players
-// Called by scheduler after power score updates complete
+// Internal mutation to rebuild cache for all players with match data
 export const rebuildAllTopFiveCaches = internalMutation({
   args: {},
   handler: async (ctx) => {

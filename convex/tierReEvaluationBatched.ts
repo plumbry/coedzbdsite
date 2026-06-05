@@ -3,6 +3,14 @@ import { v } from "convex/values";
 import type { Id, Doc } from "./_generated/dataModel.d.ts";
 import { api } from "./_generated/api";
 import { filterVisibleMembers } from "./helpers/playerAlt";
+import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerStats";
+import {
+  applyDcaTcToHolistic,
+  averageHolisticComponents,
+  computeHolisticComponentScores,
+  getPlayerDcaCpm,
+  roundHolisticScore,
+} from "./lib/stats/holisticScore";
 
 const BATCH_SIZE = 10; // Process 10 players per batch
 
@@ -86,36 +94,31 @@ export const calculateTierMedians = mutation({
     const playerScores: Array<{ tier: string; holisticScore: number; killsPerMatch: number }> = [];
 
     for (const player of playersWithMatchData) {
-      const stats = player.rankingStats;
-      
-      if (!stats || stats.totalEvents === 0) continue;
+      const internal = await computeInternalPlayerStats(ctx, player._id);
+      if (internal.eventsPlayed === 0) continue;
 
-      // Only include players with valid tiers (S, A, B, C)
       const playerTier = player.tier || "Unranked";
       if (!["S", "A", "B", "C"].includes(playerTier)) {
-        continue; // Skip players with invalid tiers
+        continue;
       }
 
-      // Use cached ranking stats (no expensive queries)
-      const avgPlacement = stats.averagePlacement || 50;
-      const winRate = stats.winRate || 0;
-      
-      // Use cached kills per match from TC calculation (Step 1 of refresh)
-      // Prefer profileKillsPerMatch (from thirdPartyResults, matches player profile)
-      // over averageKillsPerMatch (from matchPlayerStats, often undercounts)
-      const killsPerMatch = player.contributionScore?.profileKillsPerMatch
-        ?? player.contributionScore?.averageKillsPerMatch
-        ?? 0;
+      const avgPlacement = internal.averagePlacement || 50;
+      const winRate = internal.winRate || 0;
+      const killsPerMatch = internal.killsPerMatch;
+      const deathsPerMatch = internal.deathsPerMatch;
 
-      const placementScore = Math.max(0, Math.min(100, (50 - avgPlacement) * 2));
-      const winRateScore = Math.min(100, winRate * 7.5);
-      const killsScore = Math.min(100, (killsPerMatch / 5) * 100);
-
-      // Calculate holistic score from placement, winRate, and kills only
-      const holisticScore = (placementScore + winRateScore + killsScore) / 3;
+      const components = computeHolisticComponentScores({
+        avgPlacement,
+        winRate,
+        killsPerMatch,
+        deathsPerMatch,
+      });
+      const baseHolistic = averageHolisticComponents(components);
+      const { dca, cpm } = getPlayerDcaCpm(player);
+      const holisticScore = applyDcaTcToHolistic(baseHolistic, dca, cpm);
 
       playerScores.push({
-        tier: playerTier, // Already validated to be S, A, B, or C
+        tier: playerTier,
         holisticScore,
         killsPerMatch,
       });
@@ -310,41 +313,38 @@ export const processBatch = mutation({
         await ctx.db.delete(existingEntry._id);
       }
 
-      const stats = player.rankingStats;
+      const internal = await computeInternalPlayerStats(ctx, player._id);
+      if (internal.eventsPlayed === 0) continue;
 
-      if (!stats || stats.totalEvents === 0) continue;
-
-      // Only process players with valid tiers (S, A, B, C)
       const playerTier = player.tier || "Unranked";
       if (!["S", "A", "B", "C"].includes(playerTier)) {
-        continue; // Skip players with invalid tiers (Unranked, ironman, etc.)
+        continue;
       }
 
-      const totalEvents = stats.totalEvents;
+      const totalEvents = internal.eventsPlayed;
+      const avgPlacement = internal.averagePlacement || 50;
+      const winRate = internal.winRate || 0;
+      const killsPerMatch = internal.killsPerMatch;
+      const deathsPerMatch =
+        internal.deathsPerMatch > 0 ? internal.deathsPerMatch : undefined;
 
-      // Calculate scores using cached ranking stats
-      const avgPlacement = stats.averagePlacement || 50;
-      const winRate = stats.winRate || 0;
-      
-      // Use cached kills/deaths per match from TC calculation (no matchPlayerStats queries)
-      // Prefer profileKillsPerMatch (from thirdPartyResults, matches player profile)
-      // over averageKillsPerMatch (from matchPlayerStats, often undercounts)
-      const killsPerMatch = player.contributionScore?.profileKillsPerMatch
-        ?? player.contributionScore?.averageKillsPerMatch
-        ?? 0;
-      const deathsPerMatch = player.contributionScore?.averageDeathsPerMatch;
-
-      const placementScore = Math.max(0, Math.min(100, (50 - avgPlacement) * 2));
-      const winRateScore = Math.min(100, winRate * 7.5);
-      const killsScore = Math.min(100, (killsPerMatch / 5) * 100);
-      const deathsScore = deathsPerMatch !== undefined
-        ? Math.max(0, Math.min(100, (3 - deathsPerMatch) * 33.33))
-        : undefined;
-
-      const scores = [placementScore, winRateScore, killsScore, deathsScore].filter(
-        (s): s is number => s !== undefined
+      const components = computeHolisticComponentScores({
+        avgPlacement,
+        winRate,
+        killsPerMatch,
+        deathsPerMatch,
+      });
+      const placementScore = components.placementScore;
+      const winRateScore = components.winRateScore;
+      const killsScore = components.killsScore;
+      const deathsScore = components.deathsScore;
+      const rawHolisticScore = roundHolisticScore(
+        averageHolisticComponents(components),
       );
-      const holisticScore = scores.reduce((sum, s) => sum + s, 0) / scores.length;
+      const { dca, cpm } = getPlayerDcaCpm(player);
+      const holisticScore = roundHolisticScore(
+        applyDcaTcToHolistic(rawHolisticScore, dca, cpm),
+      );
 
       // Calculate tier comparisons (playerTier is guaranteed to be S, A, B, or C at this point)
       const tierOrder = ["S", "A", "B", "C"];
@@ -479,6 +479,7 @@ export const processBatch = mutation({
       });
       
       let recentHolisticScore: number | undefined;
+      let recentRawHolisticScore: number | undefined;
       let recentKillsPerMatch: number | undefined;
       let recentDeathsPerMatch: number | undefined;
       let recentAvgPlacement: number | undefined;
@@ -530,9 +531,13 @@ export const processBatch = mutation({
         const recentScores = [recentPlacementScore, recentWinRateScore, recentKillsScore, recentDeathsScore].filter(
           (s): s is number => s !== undefined
         );
-        recentHolisticScore = recentScores.length > 0
-          ? Math.round((recentScores.reduce((sum, s) => sum + s, 0) / recentScores.length) * 10) / 10
-          : undefined;
+        if (recentScores.length > 0) {
+          const recentBase = recentScores.reduce((sum, s) => sum + s, 0) / recentScores.length;
+          recentRawHolisticScore = roundHolisticScore(recentBase);
+          recentHolisticScore = roundHolisticScore(
+            applyDcaTcToHolistic(recentBase, dca, cpm),
+          );
+        }
       }
 
       // Compute recent comparison diffs (recentHolisticScore vs tier medians)
@@ -554,8 +559,6 @@ export const processBatch = mutation({
         discordUserId: player.discordUserId || "",
         tier: playerTier,
         totalEvents,
-        avgPRPerEvent: 0,
-        finalPowerScore: 0,
         killsPerMatch,
         deathsPerMatch,
         tierKillsMedian,
@@ -570,7 +573,7 @@ export const processBatch = mutation({
         rawAvgPlacement: avgPlacement,
         adjustedAvgPlacement: avgPlacement,
         rawPlacementScore: placementScore,
-        rawHolisticScore: holisticScore,
+        rawHolisticScore,
         avgTeammateTier: avgTeammateTierNumeric,
         tierGapAdjustment: undefined,
         tierAbove,
@@ -593,6 +596,7 @@ export const processBatch = mutation({
         lastEventDate,
         evaluationStatus,
         recentHolisticScore,
+        recentRawHolisticScore,
         recentKillsPerMatch,
         recentDeathsPerMatch,
         recentAvgPlacement,

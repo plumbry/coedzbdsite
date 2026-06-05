@@ -2,7 +2,9 @@
 
 **Audit date:** 2026-06-01  
 **Scope:** Event operations, Yunite/import pipelines, Discord/bot workflows, admin processes, source-of-truth boundaries, automation, visibility, and efficiency.  
-**Status:** Read-only audit. No code, data, or feature behavior changed.
+**Status:** **ARCHIVED** — read-only audit (2026-06-01). No code changes in that pass.
+
+> **Current architecture (2026-06-04):** No global player ranking product. Power Score and legacy ranking fields removed. Tier evaluation uses Holistic Score from `tierReEvaluationCache`. Event/season/team **leaderboards** are event-scoped standings, separate from tier evaluation.
 
 ---
 
@@ -24,7 +26,7 @@ The recommended direction is to move from "many admin tools" to "one operational
 2. Attach one or more source artifacts: Discord scheduled event, Yunite leaderboard IDs, CSV, replay, Spin link, Scrim Series session.
 3. Run validation/import/sync jobs with idempotency keys.
 4. Show status, failures, unmatched players, duplicate risks, and next actions in one admin operations dashboard.
-5. Derive public displays, rankings, earnings, tiers, and Discord role tasks from that source state.
+5. Derive public displays, event standings, earnings, tiers, and Discord role tasks from that source state.
 
 ---
 
@@ -203,12 +205,12 @@ Manual step counts are approximate happy-path counts from the current UI/code.
 | Concept | Current places | Recommended source of truth | Store | Derive/sync | Deprecate/delete later |
 |---|---|---|---|---|---|
 | Events | `events`, `scrimEvents`, `scrimSeries`, imports by name/date | `events` as operational shell for calendarable events | Event metadata, template ID, source attachments, archived flag | Public calendar, import jobs, earnings jobs, Discord schedule sync | Deprecated event fields after migration: `apiLeaderboards`, `dynamicPairDetection`, old earnings literals |
-| Results | `eventResults`, `thirdPartyResults`, `matchPlayerStats`, `matchKillEvents` | `thirdPartyImports` + normalized result tables for imported competitive results | Raw import rows and normalized player/match stats | Event summaries, rankings, profile stats | Legacy `eventResults` if all manual results migrate or become `manualResultImport` |
+| Results | `eventResults`, `thirdPartyResults`, `matchPlayerStats`, `matchKillEvents` | `thirdPartyImports` + normalized result tables for imported competitive results | Raw import rows and normalized player/match stats | Event summaries, event leaderboards, profile stats | Legacy `eventResults` if all manual results migrate or become `manualResultImport` |
 | Players | `players`, `applications`, `users`, Discord member sync | Convex `players` for member record | Stable player profile, membership status, linked account IDs | Public directory, Discord role tasks, exports | Placeholder Discord IDs after identity migration |
 | Discord users | `players.discordUserId`, alternates, `users.discordUserId`, Discord roles cache | Discord for live account/role membership; Convex for linked identity | Primary and alternate Discord IDs, last sync, match confidence | Display username/avatar/roles from sync | Username-only matching as an automatic final match |
 | Epic accounts | `players.epicUsername`, `epicId`, `previousEpicIds`, import rows | Epic ID where available; Epic username as display/search | Current Epic ID/name and history | Matching suggestions, profile links | Treat username as canonical once Epic ID coverage improves |
 | Tiers | `players.tier`, `manualScores.tier`, `tierHistory`, Discord roles, re-eval caches | Convex score/tier decision | Current tier on player, score snapshot, tier history | Discord role sync, mismatch views | Discord role as source for website tier |
-| Scores | `manualScores`, cached `players.totalScore`, `players.powerScore`, ranking/TC/DCA caches | `manualScores` for evaluation score; cache tables for derived analytics | Score inputs, total, tier, evaluator | Player display fields, re-evaluation, exports | Duplicate score formulas in UI components |
+| Scores | `manualScores`, cached `players.totalScore`, `tierReEvaluationCache`, TC/DCA caches | `manualScores` for evaluation score; `tierReEvaluationCache` for Holistic Score / tier-eval | Score inputs, total, tier, evaluator | Player display fields, tier re-evaluation, tier-eval exports | Duplicate score formulas in UI components; legacy `powerScore` **removed** |
 | Bans | Google Sheet, `eventBans`, `pendingRoleRemovals`, Discord roles | Convex offense/ban ledger after migration | Offense records, remaining events, role sync state | Google Sheet export, Discord role tasks | Google Sheet as primary store |
 | Applications | `applications`, `players` temporary rejected records, `statusEvents` | `applications` until accepted; `players` after promotion | Candidate identity, decisions, audit | Player creation/linking, score prefill | Temporary rejected player as evaluation candidate if replaced by candidate score record |
 | Signups | Not found in repo | Future `eventSignups` or external signup source imported into Convex | Signup identity, event ID, validation status | Yunite registration checks, Discord notifications | Manual signup validation spreadsheets |
@@ -275,7 +277,7 @@ High-friction/usage patterns found:
 | Per-import/per-player loops through actions/mutations | Yunite imports and match sync | Batch internal mutations and job state; avoid many action-query-mutation round trips |
 | Discord daily full member polling | `discord/sync.ts` | Event-driven bot updates plus daily reconciliation |
 | Bot polling role queues | `http.ts` pending role endpoints | Push/long-poll with durable ack state; index queue fields |
-| Repeated calculations | Player activity, top-five, rankings, TC/DCA | Queue recalculation for affected players/imports only |
+| Repeated calculations | Player activity, top-five, tier-eval stats, TC/DCA | Unified `playerStatsRebuild` for affected players/imports |
 | Manual refreshes | Yunite dashboard, cache/status pages | Background jobs with visible status and automatic invalidation |
 
 ---

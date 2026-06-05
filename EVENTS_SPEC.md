@@ -3,7 +3,7 @@
 **Status:** Canonical product/operations spec (aligned with codebase as of 2026-06).  
 **Purpose:** Describe how events and leaderboards work today, what is policy vs enforced in code, and what is planned for rebuild.
 
-**Related code:** `convex/schema.ts`, `convex/events/`, `convex/lib/eventLeaderboardLinks.ts`, `convex/thirdPartyMutations.ts`, `convex/yunite/sync.ts`, `src/pages/admin/_components/event-manager.tsx`, `src/pages/admin/_components/import-third-party.tsx`, `src/pages/events/_components/event-detail.tsx`.
+**Related code:** `convex/schema.ts`, `convex/events/`, `convex/lib/eventLeaderboardLinks.ts`, `convex/thirdPartyMutations.ts`, `convex/yunite/sync.ts`, `convex/playerStatsRebuild.ts`, `convex/lib/stats/`, `src/pages/admin/_components/event-manager.tsx`, `src/pages/admin/_components/import-third-party.tsx`, `src/pages/events/_components/event-detail.tsx`, `src/pages/admin/data-cache-status.tsx`, `src/pages/admin/_components/data-maintenance-tools.tsx`.
 
 **Out of scope here:** Spin (`scrimEvents`, `/spin`) — pairing tool, not calendar events. See operations audit for that system.
 
@@ -71,7 +71,7 @@ Leaderboard behavior is driven by `events.type` and flags (`twoLobbies`, `exclud
 | **Public labels** | Import **order** (by date): index 0 → **Qualifier Lobby 1**, 1 → **Qualifier Lobby 2**, 2+ → **Finals**. |
 | **Consolation** | **Not a first-class type.** Model as a 4th+ linked import; public UI labels import index 3+ as **Consolation** (index 2 = Finals). |
 | **Cumulative** | Same **team cumulative** path as season/scrim (not a separate mini-season engine). Shown when multiple imports exist (or two-lobby mode). There is **no** separate “enable cumulative” toggle. |
-| **Rankings** | Mini-season results use **0.7×** weight in `rankings.ts`. |
+| **Internal stats** | Mini-season imports count like other Yunite events in internal/holistic stats (same weight as other Yunite events; legacy PR weighting removed). |
 | **Duration** | “Typically 2 weeks” is operational — not enforced in code. |
 
 ### Random Squads
@@ -109,7 +109,7 @@ Leaderboard behavior is driven by `events.type` and flags (`twoLobbies`, `exclud
 | **Intent** | Multi-week series on the **events** calendar. |
 | **Leaderboards** | Per-player **best `bestNGames`** individual games across all linked Yunite imports; week tabs + overall on `/events/:id`. |
 | **Config** | `bestNGames`, optional `seriesDurationWeeks` (3 or 6). |
-| **Linked standalone series** | Set **`linkedScrimSeriesId`** in Events Manager (scrim-series type). Public `/events/:id` shows the **`/scrim-series` leaderboard** (scores, penalties, best N from `scrimSeries` config) and Yunite links from `scrimSeriesImportLog`. Manage data in **Admin → Scrim Series**; `/scrim-series` remains unchanged. |
+| **Linked standalone series** | Set **`linkedScrimSeriesId`** in Events Manager, or **Create & link new series** on a saved scrim-series event. Public `/events/:id` shows the series leaderboard and Yunite links from `scrimSeriesImportLog`. **Yunite import, scores, and penalties** are always managed in **Admin → Scrim Series** (`/admin/scrim-series?series=…`); Events Manager Trophy link deep-links there with the linked series selected. `/scrim-series` public page unchanged. |
 | **Yunite fallback** | If no link, `bestNGames` + linked `thirdPartyImports` still drive the legacy per-player Yunite table on the event page. |
 
 ### Showdown
@@ -117,10 +117,10 @@ Leaderboard behavior is driven by `events.type` and flags (`twoLobbies`, `exclud
 | | |
 |--|--|
 | **Intent** | Tier-based multi-week competition (S/A/B/C). |
-| **Scoring** | **Best 2 weekly totals** out of up to 4 weeks (each import ≈ one week). **`bestWeeks = 2` is hardcoded** in `getEventLeaderboards` (not driven by `bestNGames`). |
+| **Scoring** | **Best N weekly totals** out of up to 4 weeks (each import ≈ one week). Configurable via **`events.showdownBestWeeks`** (default 2). |
 | **Tiers** | Snapshotted at event **create** for all players with a tier (`showdownTierSnapshots`). Tier-split leaderboards use **locked** tiers, not live tier. |
 | **Admin** | Showdown tier tools; tier re-lock via `events.showdown`. |
-| **Penalties** | **Target (rebuild):** Configurable penalties — **not built** on `events`. Penalties today exist only on **standalone** `scrimSeries` (`scrimSeriesPenalties`). |
+| **Penalties** | **`eventPenalties`** table + **`events.penaltyAmount`** (default 5). Managed in Events Manager when editing a Showdown event. Deducted from best-weekly totals on the public leaderboard. |
 
 ### Legacy: `random`
 
@@ -172,9 +172,52 @@ All Yunite and CSV paths write to **`thirdPartyImports`** + **`thirdPartyResults
 | `thirdPartyResults` | Per-player rows per import (source of truth for embedded leaderboards). |
 | `eventDuoPairs` | Pre-assigned groups (solos-meets-duos). |
 | `showdownTierSnapshots` | Tiers locked at showdown create. |
+| `eventPenalties` | Showdown manual penalties (`eventId`, `playerId`, `reason`, `amount`, `excluded`). |
 | `eventResults` | Legacy/manual per-player results (still used in some paths). |
 | `scrimSeries*` | Standalone scrim series product (separate from `events.type === "scrim-series"`). |
 | `playerEarnings` | Derived payout rows (separate job; mirrors much of LB grouping logic). |
+
+---
+
+## Internal player stats (Yunite-only)
+
+Holistic scores, tier re-evaluation, population averages, and related caches are driven by a **single rebuild pipeline** (`convex/playerStatsRebuild.ts`). Event imports feed this system; external CSV does not. There is **no global player ranking product** — tier evaluation reads from `tierReEvaluationCache`. Event/season/team leaderboards are **event-scoped** standings, separate from tier evaluation.
+
+### Policy (locked)
+
+| Topic | Rule |
+|--------|------|
+| External CSV | Third Party tab only — **excluded** from internal / holistic / tier-eval |
+| Events played | `eventsPlayedCount` = **one per Yunite import** (`syncInternalEventParticipation`) |
+| Wins / K/D | Match-level from `matchPlayerStats` |
+| Global player ranking | **None** — no global player ranking product exists |
+| Tier evaluation / Holistic Score | Reads `tierReEvaluationCache`; rebuilt via `playerStatsRebuild` |
+| Holistic display | Base composite × **DCA** × **CPM** when TC/DCA toggle is on (UI: `tcdc-holistic-view.ts`) |
+| Scrim series ops | Events Manager **links only**; Yunite import / penalties / scores on **Admin → Scrim Series** |
+
+### Rebuild pipeline (phases)
+
+`event_participation` → `contribution_score` → `dca` → `dca_mutual` → `top_five` → `tier_eval` → `aggregate_stats`
+
+Jobs record **`rebuildKind`**: `full`, `through_tier_eval`, `event_participation`, `tc_dca`, `top_five`, `tier_eval`, `aggregate_stats`.
+
+### Admin surfaces
+
+| Surface | Role |
+|---------|------|
+| **Data Cache** (`/admin/data-cache-status`) | Unified rebuild card + per-cache status; partial rebuild shortcuts |
+| **Data Maintenance** (`/admin/data-maintenance`) | Migration checklist (clear legacy stat fields → full rebuild) + destructive tools |
+| **Tier Re-Evaluation / Holistic Score Stats** | Tier-eval rebuild via `PlayerStatsRebuildButton` (`tierEvalOnly`) |
+| **Average Stats** | `aggregateStatsOnly` rebuild |
+
+### Legacy stat field cleanup (one-time)
+
+1. **Data Maintenance** → clear legacy **player** stat fields (`powerScore`, `rankingStats`) if count &gt; 0.
+2. Clear legacy **tier-evaluation** fields (`avgPRPerEvent`, `finalPowerScore`) on tier-eval cache rows if count &gt; 0.
+3. **Rebuild all player stats** (full pipeline).
+4. After Yunite imports: use **Data Cache** full or partial rebuild as needed.
+
+**Key code:** `convex/lib/stats/`, `convex/playerStatsRebuild.ts`, `convex/lib/stats/rebuildKind.ts`, `src/components/admin/player-stats-rebuild-button.tsx`, `src/components/admin/player-stats-migration-checklist.tsx`.
 
 ---
 
@@ -194,10 +237,11 @@ All Yunite and CSV paths write to **`thirdPartyImports`** + **`thirdPartyResults
 
 | Requirement | Current state |
 |-------------|----------------|
-| Single admin surface for `events` + standalone Scrim Series | Scores/penalties still edited in Scrim Series admin; Events Manager only links |
-| Showdown configurable penalties | Not on `events` |
-| Enforce minimum one Yunite URL or import (hard block) | Soft warning in Events Manager on save only |
-| Unify scrim-series Yunite import into Events Manager | Import stays in Scrim Series admin; event page reads linked series |
+| Single admin surface for `events` + standalone Scrim Series | Events Manager links calendar events; **Admin → Scrim Series** is the sole surface for imports, penalties, and scores (including when linked) |
+| Showdown configurable penalties | **Shipped** — `showdownBestWeeks`, `penaltyAmount`, `eventPenalties` |
+| Enforce minimum one Yunite URL or import (hard block) | **Shipped** — Events Manager + `createEvent` / `updateEvent` reject save without URL, linked import, or linked Scrim Series |
+| Unify scrim-series Yunite import into Events Manager | **Not shipped** — imports/penalties stay on Admin → Scrim Series; Events Manager links + deep-link only |
+| Unified internal stats rebuild (replace fragmented cache buttons) | **Shipped** — `playerStatsRebuild` + Data Cache / Data Maintenance / tier-eval UIs |
 
 ### Shipped alignment (2026-06-04)
 
@@ -209,6 +253,9 @@ All Yunite and CSV paths write to **`thirdPartyImports`** + **`thirdPartyResults
 | Accurate Yunite sync copy | Admin Uploads / Yunite dashboard (admin-triggered, not cron) |
 | CSV default source | `External` in import UI |
 | Edit event deep link | `/admin/events-manager` from public event page |
+| Unified player stats rebuild | `playerStatsRebuild.ts`, `rebuildKind`, `PlayerStatsRebuildButton`, migration checklist |
+| Tier-eval cache writers | `tierReEvaluationBatched` via pipeline only; legacy sync rebuild removed |
+| Yunite-only `eventsPlayedCount` | `syncInternalEventParticipation` (replaces all-events backfill) |
 
 ---
 
@@ -232,3 +279,11 @@ All Yunite and CSV paths write to **`thirdPartyImports`** + **`thirdPartyResults
 | 2026-06-04 | Initial spec from events/leaderboard audit; corrections applied (Yunite sync trigger, random trios duo/solo, mini-season, visibility, target vs shipped). |
 | 2026-06-04 | Code aligned: auto-link URL append, public leaderboard links, mini-season consolation label, admin copy, CSV default source, Events Manager save warning. |
 | 2026-06-04 | `events.linkedScrimSeriesId` links calendar events to standalone Scrim Series; event page shows series LB + import-log Yunite URLs. |
+| 2026-06-04 | Hard block on Events Manager save + `createEvent` / `updateEvent` when no Yunite URL, linked import, or linked Scrim Series. |
+| 2026-06-04 | Showdown penalties + configurable `showdownBestWeeks`; `getEventLeaderboards` delegates to `computeEventLeaderboards`. |
+| 2026-06-04 | Schema narrow: removed deprecated `players.powerScore` / `rankingStats`. |
+| 2026-06-04 | Scrim series ↔ Events Manager: `createAndLinkToEvent`, deep-link to `/admin/scrim-series?series=&tab=`, linked-event banner on series admin; imports/penalties remain on Scrim Series page only. |
+| 2026-06-04 | Unified `playerStatsRebuild` pipeline; partial modes (TC/DCA, top-five, tier-eval, averages, event counts); `rebuildKind` on jobs. |
+| 2026-06-04 | Admin: Data Cache + Data Maintenance migration checklist; tier-eval / holistic / average-stats pages use shared rebuild button; legacy `rebuildTierReEvaluationCache` removed. |
+| 2026-06-04 | `eventsPlayedCount` backfill routes through pipeline; Yunite-only sync (`syncInternalEventParticipation`). |
+| 2026-06-04 | Tier-eval cache schema narrow: removed `avgPRPerEvent` / `finalPowerScore`; maintenance batched clear mutations. |

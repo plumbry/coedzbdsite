@@ -2,7 +2,7 @@
 
 import { action } from "./_generated/server";
 import { api } from "./_generated/api";
-import type { Id } from "./_generated/dataModel.d.ts";
+import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { v } from "convex/values";
 
 interface BackfillResult {
@@ -20,8 +20,10 @@ interface BackfillResult {
 export const resetAllSyncFlags = action({
   args: {},
   handler: async (ctx): Promise<{ resetCount: number }> => {
-    const allImports = await ctx.runQuery(api.thirdPartyQueries.getAllImports);
-    const yuniteImports = allImports.filter(imp => imp.source === "Yunite");
+    const allImports = (await ctx.runQuery(
+      api.thirdPartyQueries.getAllImports,
+    )) as Doc<"thirdPartyImports">[];
+    const yuniteImports = allImports.filter((imp) => imp.source === "Yunite");
     
     let resetCount = 0;
     for (const imp of yuniteImports) {

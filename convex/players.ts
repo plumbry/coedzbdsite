@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
 import {
@@ -8,7 +8,8 @@ import {
   enrichPlayerWithFemaleVerification,
 } from "./helpers/femaleVerification";
 import { logAudit } from "./helpers/audit";
-import { internal } from "./_generated/api";
+import { api } from "./_generated/api";
+import { syncInternalEventParticipation } from "./lib/stats/syncInternalEventParticipation";
 import {
   filterVisibleMembers,
   isAltAccount,
@@ -352,48 +353,6 @@ export const getAllPlayersAdmin = query({
   },
 });
 
-const EVENT_COUNT_BACKFILL_BATCH = 6;
-
-async function syncPlayerEventParticipationStats(
-  ctx: MutationCtx,
-  playerId: Id<"players">,
-) {
-  const player = await ctx.db.get(playerId);
-  if (!player) {
-    return;
-  }
-
-  const eventResults = await ctx.db
-    .query("eventResults")
-    .withIndex("by_player", (q) => q.eq("playerId", playerId))
-    .collect();
-  const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
-
-  const uniqueEventNames = new Set([
-    ...eventResults.map((e) => e.eventName),
-    ...thirdPartyResults.map((e) => e.eventName),
-  ]);
-
-  let lastEventDate: string | undefined;
-  for (const result of eventResults) {
-    if (result.eventDate && (!lastEventDate || result.eventDate > lastEventDate)) {
-      lastEventDate = result.eventDate;
-    }
-  }
-  for (const result of thirdPartyResults) {
-    const importRecord = await ctx.db.get(result.importId);
-    const eventDate = importRecord?.eventDate;
-    if (eventDate && (!lastEventDate || eventDate > lastEventDate)) {
-      lastEventDate = eventDate;
-    }
-  }
-
-  await ctx.db.patch(playerId, {
-    eventsPlayedCount: uniqueEventNames.size,
-    lastEventDate,
-  });
-}
-
 /** How many accepted members already have eventsPlayedCount populated. */
 export const getAcceptedMemberEventCountCoverage = query({
   args: {},
@@ -428,59 +387,37 @@ export const getAcceptedMemberEventCountCoverage = query({
   },
 });
 
-export const backfillPlayerEventParticipationBatch = internalMutation({
-  args: {
-    playersCursor: v.union(v.string(), v.null()),
-    updated: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const page = await ctx.db.query("players").paginate({
-      numItems: EVENT_COUNT_BACKFILL_BATCH,
-      cursor: args.playersCursor,
-    });
+type EventParticipationBackfillResult = {
+  updated: number;
+  started: boolean;
+  done: boolean;
+  message?: string;
+};
 
-    let updated = args.updated;
-    for (const player of page.page) {
-      await syncPlayerEventParticipationStats(ctx, player._id);
-      updated += 1;
-    }
-
-    if (!page.isDone) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.players.backfillPlayerEventParticipationBatch,
-        {
-          playersCursor: page.continueCursor,
-          updated,
-        },
-      );
-      return { done: false, updated };
-    }
-
-    return { done: true, updated };
-  },
-});
-
-/** Backfill eventsPlayedCount from result tables (batched; safe for all players). */
+/** Backfill Yunite-only eventsPlayedCount via the unified player stats rebuild job. */
 export const backfillPlayerEventParticipationStats = mutation({
   args: {
     playerId: v.optional(v.id("players")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<EventParticipationBackfillResult> => {
     await requireAdmin(ctx);
 
     if (args.playerId) {
-      await syncPlayerEventParticipationStats(ctx, args.playerId);
+      await syncInternalEventParticipation(ctx, args.playerId);
       return { updated: 1, started: false, done: true };
     }
 
-    await ctx.scheduler.runAfter(
-      0,
-      internal.players.backfillPlayerEventParticipationBatch,
-      { playersCursor: null, updated: 0 },
-    );
+    const result: { jobId: Id<"playerStatsRebuildJobs">; message: string } =
+      await ctx.runMutation(api.playerStatsRebuild.startFullPlayerStatsRebuild, {
+        stopAfterPhase: "event_participation",
+      });
 
-    return { updated: 0, started: true, done: false };
+    return {
+      updated: 0,
+      started: true,
+      done: false,
+      message: result.message,
+    };
   },
 });
 

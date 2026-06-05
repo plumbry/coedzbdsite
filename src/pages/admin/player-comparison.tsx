@@ -37,8 +37,7 @@ function PlayerComparisonContent() {
   
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<Id<"players">[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [applyDuoAdjustment, setApplyDuoAdjustment] = useState(false);
-  const [applyCSPenalty, setApplyCSPenalty] = useState(true);
+  const [applyTcdcToHolistic, setApplyTcdcToHolistic] = useState(true);
   const [baselinePlayerIndex, setBaselinePlayerIndex] = useState(0);
   
   const allPlayers = useQuery(
@@ -49,10 +48,9 @@ function PlayerComparisonContent() {
   const comparisonData = useQuery(
     api.playerComparison.getPlayerComparisonData,
     canView && selectedPlayerIds.length > 0
-      ? { 
+      ? {
           playerIds: selectedPlayerIds,
-          applyDuoAdjustment,
-          applyCSPenalty,
+          applyTcdcToHolistic,
         }
       : "skip"
   );
@@ -119,38 +117,24 @@ function PlayerComparisonContent() {
   return (
     <div className="space-y-4">
 
-      {/* Adjustment Controls */}
       <Card>
         <CardHeader>
-          <CardTitle>Adjustment Options</CardTitle>
+          <CardTitle>Holistic Score View</CardTitle>
           <CardDescription>
-            Toggle DCA and TC adjustments to see their impact on Power Scores
+            Compare raw holistic (no TC/DCA) vs adjusted holistic from tier-eval cache
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <div className="flex items-center space-x-2">
-            <Checkbox 
-              id="dca-toggle" 
-              checked={applyDuoAdjustment}
-              onCheckedChange={(checked) => setApplyDuoAdjustment(checked === true)}
+            <Checkbox
+              id="tcdc-holistic-toggle"
+              checked={applyTcdcToHolistic}
+              onCheckedChange={(checked) => setApplyTcdcToHolistic(checked === true)}
             />
-            <Label htmlFor="dca-toggle" className="cursor-pointer">
-              Apply DCA (Duo Carry Adjustment)
+            <Label htmlFor="tcdc-holistic-toggle" className="cursor-pointer">
+              Apply TC/DCA to holistic
               <span className="text-sm text-muted-foreground block">
-                Adjusts Power Score based on performance with vs without consistent duo partner
-              </span>
-            </Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox 
-              id="tc-toggle" 
-              checked={applyCSPenalty}
-              onCheckedChange={(checked) => setApplyCSPenalty(checked === true)}
-            />
-            <Label htmlFor="tc-toggle" className="cursor-pointer">
-              Apply TC (Tier Coefficient / Carry Penalty Multiplier)
-              <span className="text-sm text-muted-foreground block">
-                Adjusts Power Score based on Contribution Score (CPM = 0.65 + 0.35 × CS)
+                Off shows raw composite; on uses cached DCA × CPM adjusted holistic
               </span>
             </Label>
           </div>
@@ -430,47 +414,60 @@ function PlayerComparisonContent() {
                     ))}
                   </TableRow>
 
-                  {/* Power Scores */}
                   <TableRow className="bg-muted/30">
                     <TableCell className="font-bold sticky left-0 bg-muted/30 z-10" colSpan={comparisonData.length + 1}>
-                      Power Scores
+                      Holistic Evaluation
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="font-medium sticky left-0 bg-background z-10">Avg Power Score</TableCell>
+                    <TableCell className="font-medium sticky left-0 bg-background z-10">
+                      {applyTcdcToHolistic ? "Holistic (TC/DCA)" : "Holistic (raw)"}
+                    </TableCell>
                     {comparisonData.map((player, idx) => (
                       <TableCell key={player.playerId} className="text-center">
-                        <div className="font-mono font-semibold">{player.avgPRPerEvent.toFixed(2)}</div>
-                        {idx !== baselinePlayerIndex && (
-                          <div className={`text-xs ${getColorClass(calculatePercentageDiff(player.avgPRPerEvent, comparisonData[baselinePlayerIndex].avgPRPerEvent))}`}>
-                            {calculatePercentageDiff(player.avgPRPerEvent, comparisonData[baselinePlayerIndex].avgPRPerEvent)}
-                          </div>
+                        {player.holisticScore !== null ? (
+                          <>
+                            <div className="font-mono font-semibold">{player.holisticScore.toFixed(1)}</div>
+                            {idx !== baselinePlayerIndex && comparisonData[baselinePlayerIndex].holisticScore !== null && (
+                              <div className={`text-xs ${getColorClass(calculatePercentageDiff(player.holisticScore, comparisonData[baselinePlayerIndex].holisticScore!))}`}>
+                                {calculatePercentageDiff(player.holisticScore, comparisonData[baselinePlayerIndex].holisticScore!)}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">N/A</span>
                         )}
                       </TableCell>
                     ))}
                   </TableRow>
                   <TableRow>
-                    <TableCell className="font-medium sticky left-0 bg-background z-10">Power Score</TableCell>
-                    {comparisonData.map((player, idx) => (
-                      <TableCell key={player.playerId} className="text-center">
-                        <div className="font-mono font-semibold">{player.powerScore.toFixed(2)}</div>
-                        {idx !== baselinePlayerIndex && (
-                          <div className={`text-xs ${getColorClass(calculatePercentageDiff(player.powerScore, comparisonData[baselinePlayerIndex].powerScore))}`}>
-                            {calculatePercentageDiff(player.powerScore, comparisonData[baselinePlayerIndex].powerScore)}
-                          </div>
-                        )}
-                      </TableCell>
-                    ))}
+                    <TableCell className="font-medium sticky left-0 bg-background z-10">
+                      {applyTcdcToHolistic ? "Holistic (raw)" : "Holistic (TC/DCA)"}
+                    </TableCell>
+                    {comparisonData.map((player) => {
+                      const alternate =
+                        applyTcdcToHolistic
+                          ? player.rawHolisticScore
+                          : player.adjustedHolisticScore;
+                      return (
+                        <TableCell key={player.playerId} className="text-center">
+                          {alternate !== null ? (
+                            <div className="font-mono text-sm text-muted-foreground">{alternate.toFixed(1)}</div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">N/A</span>
+                          )}
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                   <TableRow>
-                    <TableCell className="font-medium sticky left-0 bg-background z-10">Raw Power Score</TableCell>
-                    {comparisonData.map((player, idx) => (
+                    <TableCell className="font-medium sticky left-0 bg-background z-10">vs Same Tier</TableCell>
+                    {comparisonData.map((player) => (
                       <TableCell key={player.playerId} className="text-center">
-                        <div className="font-mono text-sm text-muted-foreground">{player.rawPowerScore.toFixed(2)}</div>
-                        {idx !== baselinePlayerIndex && (
-                          <div className={`text-xs ${getColorClass(calculatePercentageDiff(player.rawPowerScore, comparisonData[baselinePlayerIndex].rawPowerScore))}`}>
-                            {calculatePercentageDiff(player.rawPowerScore, comparisonData[baselinePlayerIndex].rawPowerScore)}
-                          </div>
+                        {player.holisticVsSameTier !== null ? (
+                          <div className="font-mono">{player.holisticVsSameTier.toFixed(1)}</div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">N/A</span>
                         )}
                       </TableCell>
                     ))}
@@ -486,25 +483,16 @@ function PlayerComparisonContent() {
                     <TableCell className="font-medium sticky left-0 bg-background z-10">DCA (Duo Carry Adjustment)</TableCell>
                     {comparisonData.map((player) => (
                       <TableCell key={player.playerId} className="text-center">
-                        {applyDuoAdjustment ? (
-                          <div>
-                            <div className={`font-mono ${player.dca < 1 ? 'text-orange-600' : player.dca > 1 ? 'text-green-600' : ''}`}>
-                              {player.dca.toFixed(2)}x
-                            </div>
-                            {player.consistentDuoEpic && (
-                              <div className="text-xs text-muted-foreground">
-                                Duo: {player.consistentDuoEpic}
-                              </div>
-                            )}
-                            {player.withoutDuoCount > 0 && (
-                              <div className="text-xs text-muted-foreground">
-                                {player.withoutDuoCount} games solo
-                              </div>
-                            )}
+                        <div>
+                          <div className={`font-mono ${player.dca < 1 ? 'text-orange-600' : player.dca > 1 ? 'text-green-600' : ''}`}>
+                            {player.dca.toFixed(2)}x
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Not applied</span>
-                        )}
+                          {player.consistentDuoEpic && (
+                            <div className="text-xs text-muted-foreground">
+                              Duo: {player.consistentDuoEpic}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                     ))}
                   </TableRow>
@@ -531,12 +519,12 @@ function PlayerComparisonContent() {
                     <TableCell className="font-medium sticky left-0 bg-background z-10">CPM (Carry Penalty Multiplier)</TableCell>
                     {comparisonData.map((player) => (
                       <TableCell key={player.playerId} className="text-center">
-                        {applyCSPenalty && player.cs !== null ? (
+                        {player.cs !== null ? (
                           <div className={`font-mono ${player.cpm < 0.95 ? 'text-orange-600' : ''}`}>
                             {player.cpm.toFixed(2)}x
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Not applied</span>
+                          <span className="text-xs text-muted-foreground">N/A</span>
                         )}
                       </TableCell>
                     ))}
@@ -621,7 +609,7 @@ function PlayerComparisonContent() {
           <CardHeader>
             <CardTitle>Player vs Player Matrix</CardTitle>
             <CardDescription>
-              Head-to-head comparison of Avg Power Score between all selected players (row vs column)
+              Head-to-head holistic comparison (uses TC/DCA toggle above)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -638,7 +626,7 @@ function PlayerComparisonContent() {
                             Tier {player.tier}
                           </div>
                           <div className="text-xs font-mono text-muted-foreground">
-                            {player.avgPRPerEvent.toFixed(2)}
+                            {player.holisticScore !== null ? player.holisticScore.toFixed(1) : "N/A"}
                           </div>
                         </div>
                       </TableHead>
@@ -655,7 +643,7 @@ function PlayerComparisonContent() {
                             Tier {rowPlayer.tier}
                           </div>
                           <div className="text-xs font-mono text-muted-foreground">
-                            {rowPlayer.avgPRPerEvent.toFixed(2)}
+                            {rowPlayer.holisticScore !== null ? rowPlayer.holisticScore.toFixed(1) : "N/A"}
                           </div>
                         </div>
                       </TableCell>
@@ -668,9 +656,12 @@ function PlayerComparisonContent() {
                           );
                         }
                         
-                        const diff = colPlayer.avgPRPerEvent > 0
-                          ? ((rowPlayer.avgPRPerEvent - colPlayer.avgPRPerEvent) / colPlayer.avgPRPerEvent) * 100
-                          : 0;
+                        const rowHolistic = rowPlayer.holisticScore;
+                        const colHolistic = colPlayer.holisticScore;
+                        const diff =
+                          rowHolistic !== null && colHolistic !== null && colHolistic > 0
+                            ? ((rowHolistic - colHolistic) / colHolistic) * 100
+                            : 0;
                         
                         return (
                           <TableCell key={colPlayer.playerId} className="text-center">

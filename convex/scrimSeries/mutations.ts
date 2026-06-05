@@ -1,6 +1,7 @@
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
+import { applyLinkedScrimSeries } from "../lib/scrimSeriesEventLink";
 
 // ─── Series CRUD ────────────────────────────────────────────────────────────
 
@@ -11,6 +12,69 @@ function generateSlug(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 }
+
+/** Create a scrim series from a calendar scrim-series event and link it (one-time). */
+export const createAndLinkToEvent = mutation({
+  args: {
+    eventId: v.id("events"),
+    bestN: v.optional(v.number()),
+    seriesDurationWeeks: v.optional(v.union(v.literal(3), v.literal(6))),
+    gamesPerScrim: v.optional(v.number()),
+    penaltyAmount: v.optional(v.number()),
+    participationThreshold: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
+    }
+
+    const event = await ctx.db.get(args.eventId);
+    if (!event) {
+      throw new ConvexError({ message: "Event not found", code: "NOT_FOUND" });
+    }
+    if (event.type !== "scrim-series") {
+      throw new ConvexError({
+        message: "Only scrim-series calendar events can link a series",
+        code: "INVALID_TYPE",
+      });
+    }
+    if (event.linkedScrimSeriesId) {
+      throw new ConvexError({
+        message: "This event already has a linked scrim series",
+        code: "ALREADY_LINKED",
+      });
+    }
+
+    const sessionCount =
+      args.seriesDurationWeeks ?? event.seriesDurationWeeks ?? 3;
+    const gamesPerScrim = args.gamesPerScrim ?? 6;
+    const gamesPerSession = Array.from({ length: sessionCount }, () => gamesPerScrim);
+    const bestN = args.bestN ?? event.bestNGames ?? 18;
+
+    const eventPatches: Record<string, unknown> = {};
+    if (args.bestN !== undefined) eventPatches.bestNGames = args.bestN;
+    if (args.seriesDurationWeeks !== undefined) {
+      eventPatches.seriesDurationWeeks = args.seriesDurationWeeks;
+    }
+    if (Object.keys(eventPatches).length > 0) {
+      await ctx.db.patch(args.eventId, eventPatches);
+    }
+
+    const seriesId = await ctx.db.insert("scrimSeries", {
+      name: event.name,
+      slug: generateSlug(event.name),
+      bestN,
+      gamesPerSession,
+      penaltyAmount: args.penaltyAmount ?? 5,
+      participationThreshold: args.participationThreshold ?? 60,
+      isActive: true,
+    });
+
+    await applyLinkedScrimSeries(ctx, args.eventId, seriesId);
+    return seriesId;
+  },
+});
 
 export const createSeries = mutation({
   args: {

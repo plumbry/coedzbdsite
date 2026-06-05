@@ -2,13 +2,14 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { sortByTier } from "./helpers/tierSort";
+import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerStats";
+import { getPlayerDcaCpm } from "./lib/stats/holisticScore";
 
 // Get comprehensive player data for comparison
 export const getPlayerComparisonData = query({
   args: {
     playerIds: v.array(v.id("players")),
-    applyDuoAdjustment: v.optional(v.boolean()),
-    applyCSPenalty: v.optional(v.boolean()),
+    applyTcdcToHolistic: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     // Check if user is admin or moderator
@@ -26,28 +27,9 @@ export const getPlayerComparisonData = query({
       return [];
     }
 
-    const applyDuoAdjustment = args.applyDuoAdjustment || false;
-    const applyCSPenalty = args.applyCSPenalty !== false; // Default to true
+    const applyTcdcToHolistic = args.applyTcdcToHolistic !== false;
 
-    // Helper function to calculate DCA
-    const calculateDCA = (
-      kdWithDuo: number,
-      kdWithoutDuo: number,
-      elimsWithDuo: number,
-      elimsWithoutDuo: number,
-      placementWithDuo: number,
-      placementWithoutDuo: number
-    ): number => {
-      const rawAdjustment = 
-        (kdWithoutDuo - kdWithDuo) * 0.25 +
-        (elimsWithoutDuo - elimsWithDuo) * 0.08 +
-        (placementWithDuo - placementWithoutDuo) * 0.005;
-      
-      const clampedAdjustment = Math.max(-0.25, Math.min(0.25, rawAdjustment));
-      return 1 + clampedAdjustment;
-    };
-
-    // Get all players for DCA calculation context
+    // Get all players for teammate tier lookups
     const allPlayers = await ctx.db.query("players").collect();
 
     // Fetch all requested players
@@ -147,156 +129,25 @@ export const getPlayerComparisonData = query({
           }
         }
 
-        // Get ranking stats
-        const rankingStats = player.rankingStats || {
-          totalEvents: 0,
-          averagePlacement: 0,
-          averageTeamElims: 0,
-          averageTeamKD: 0,
-          totalTeamElims: 0,
-          winRate: 0,
-          top3Finishes: 0,
-          totalTeamScore: 0,
-        };
+        const internal = await computeInternalPlayerStats(ctx, playerId);
+        const tierCache = await ctx.db
+          .query("tierReEvaluationCache")
+          .withIndex("by_player", (q) => q.eq("playerId", playerId))
+          .first();
 
-        // Calculate DCA if enabled
-        let dca = 1.00;
-        let consistentDuoEpic: string | null = null;
-        let withoutDuoCount = 0;
+        const { dca, cpm } = getPlayerDcaCpm(player);
+        const cs =
+          player.contributionScore?.score !== undefined
+            ? player.contributionScore.score
+            : null;
+        const consistentDuoEpic = player.dcaCache?.consistentDuoEpic ?? null;
 
-        if (applyDuoAdjustment) {
-          const playerResults = await ctx.db
-            .query("thirdPartyResults")
-            .withIndex("by_player", (q) => q.eq("playerId", player._id))
-            .collect();
-
-          // Find consistent duo
-          const teammateCount = new Map<string, { count: number; lastEventTime: number }>();
-          
-          for (const result of playerResults) {
-            if (!result.teamMembers || result.teamMembers.length === 0) continue;
-            
-            for (const teammateEpic of result.teamMembers) {
-              if (teammateEpic === player.epicUsername) continue;
-              
-              const current = teammateCount.get(teammateEpic) || { count: 0, lastEventTime: 0 };
-              teammateCount.set(teammateEpic, {
-                count: current.count + 1,
-                lastEventTime: Math.max(current.lastEventTime, result._creationTime),
-              });
-            }
-          }
-
-          // Find most consistent duo
-          let maxCount = 0;
-          let maxLastEventTime = 0;
-          
-          for (const [epicUsername, data] of teammateCount.entries()) {
-            if (data.count > maxCount || (data.count === maxCount && data.lastEventTime > maxLastEventTime)) {
-              maxCount = data.count;
-              maxLastEventTime = data.lastEventTime;
-              consistentDuoEpic = epicUsername;
-            }
-          }
-
-          if (consistentDuoEpic && playerResults.length >= 5) {
-            // Store in const to help TypeScript understand it's non-null in this block
-            const duoEpic: string = consistentDuoEpic;
-            
-            const withDuoEvents = playerResults.filter(r => 
-              r.teamMembers && r.teamMembers.includes(duoEpic)
-            );
-            
-            const consistentDuoPlayer = allPlayers.find(p => p.epicUsername === duoEpic);
-            const consistentDuoTier = consistentDuoPlayer?.tier;
-            const consistentDuoPowerScore = consistentDuoPlayer?.powerScore || 0;
-            
-            const getTierScore = (tier: string | undefined): number => {
-              if (!tier) return 0;
-              const scores: Record<string, number> = { S: 92.5, A: 77, B: 62, C: 47 };
-              return scores[tier] || 0;
-            };
-            
-            const playerTierScore = getTierScore(player.tier);
-            const duoTierScore = getTierScore(consistentDuoTier);
-            
-            // Get all events WITHOUT consistent duo partner
-            // This includes events with no teammates (solo) or teammates that don't include the duo
-            const withoutDuoEvents = playerResults.filter(r => 
-              r.teamMembers && 
-              !r.teamMembers.includes(duoEpic)
-            );
-            
-            withoutDuoCount = withoutDuoEvents.length;
-            
-            const calculateGroupStats = (events: typeof playerResults) => {
-              if (events.length === 0) return null;
-              
-              const kills = events.map(e => e.eliminations || 0);
-              const placements = events.map(e => e.placement);
-              
-              const avgKD = kills.reduce((sum, k) => sum + k, 0) / kills.length;
-              const avgElims = kills.reduce((sum, k) => sum + k, 0) / kills.length;
-              const avgPlacement = placements.reduce((sum, p) => sum + p, 0) / placements.length;
-              
-              return { avgKD, avgElims, avgPlacement };
-            };
-            
-            const withDuoStats = calculateGroupStats(withDuoEvents);
-            const withoutDuoStats = calculateGroupStats(withoutDuoEvents);
-            
-            if (withDuoStats && withoutDuoStats) {
-              const rawDCA = calculateDCA(
-                withDuoStats.avgKD,
-                withoutDuoStats.avgKD,
-                withDuoStats.avgElims,
-                withoutDuoStats.avgElims,
-                withDuoStats.avgPlacement,
-                withoutDuoStats.avgPlacement
-              );
-              
-              const filteredCount = withoutDuoEvents.length;
-              let confidenceWeight = 1.0;
-              
-              if (filteredCount >= 3) {
-                confidenceWeight = 1.0;
-              } else if (filteredCount === 2) {
-                confidenceWeight = 0.6;
-              } else if (filteredCount === 1) {
-                confidenceWeight = 0.3;
-              } else {
-                confidenceWeight = 0.0;
-              }
-              
-              const withDuoCount = withDuoEvents.length;
-              const sampleSizeRatio = Math.min(withDuoCount, withoutDuoCount) / Math.max(withDuoCount, withoutDuoCount);
-              const balancingFactor = 0.5 + (sampleSizeRatio * 0.5);
-              
-              const dcaAdjustment = rawDCA - 1.0;
-              dca = 1.0 + (dcaAdjustment * confidenceWeight * balancingFactor);
-            }
-          }
-        }
-
-        // Calculate power scores with adjustments
-        const rawPowerScore = player.powerScore || 0;
-        const powerScoreAfterDCA = applyDuoAdjustment ? rawPowerScore * dca : rawPowerScore;
-        
-        let cpm = 1.00;
-        let cs: number | null = null;
-        
-        if (applyCSPenalty && player.contributionScore?.score !== undefined) {
-          cs = player.contributionScore.score;
-          cpm = 0.65 + (0.35 * cs);
-        }
-        
-        const finalPowerScore = powerScoreAfterDCA * cpm;
-
-        // Calculate avg PR per event using final power score
-        const avgPRPerEvent =
-          rankingStats.totalEvents > 0
-            ? finalPowerScore / rankingStats.totalEvents
-            : 0;
+        const rawHolisticScore =
+          tierCache?.rawHolisticScore ?? tierCache?.holisticScore ?? null;
+        const adjustedHolisticScore = tierCache?.holisticScore ?? null;
+        const displayHolisticScore = applyTcdcToHolistic
+          ? adjustedHolisticScore
+          : rawHolisticScore;
 
         // Get Discord tier roles
         const tierRoleNames = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
@@ -389,27 +240,27 @@ export const getPlayerComparisonData = query({
           // Discord info
           discordTierRoles,
           
-          // ZBD Performance stats
-          totalEvents: rankingStats.totalEvents,
-          avgPlacement: rankingStats.averagePlacement,
-          avgTeamEliminations: rankingStats.averageTeamElims,
-          avgTeamKD: rankingStats.averageTeamKD,
-          totalTeamEliminations: rankingStats.totalTeamElims || 0,
-          winRate: rankingStats.winRate,
-          topThreeCount: rankingStats.top3Finishes || 0,
-          totalTeamScore: rankingStats.totalTeamScore,
-          avgPRPerEvent,
-          rawPowerScore,
+          totalEvents: internal.eventsPlayed,
+          totalMatches: internal.totalMatches,
+          matchWins: internal.matchWins,
+          avgPlacement: internal.averagePlacement,
+          avgTeamEliminations: internal.killsPerMatch,
+          deathsPerMatch: internal.deathsPerMatch,
+          averageKd: internal.averageKd,
+          totalTeamEliminations: internal.totalEliminations,
+          winRate: internal.winRate,
+          topThreeCount: internal.top3Finishes,
+          rawHolisticScore,
+          adjustedHolisticScore,
+          holisticScore: displayHolisticScore,
+          holisticVsSameTier: tierCache?.holisticVsSameTier ?? null,
           dca,
           cs,
           cpm,
-          powerScore: finalPowerScore,
-          
-          // Advanced stats
+          consistentDuoEpic,
+
           contributionScore: player.contributionScore?.score || 0,
           duoPartner: player.contributionScore?.duoPartner || null,
-          consistentDuoEpic,
-          withoutDuoCount,
           
           // Recent performance
           recentTop5Count,

@@ -202,7 +202,7 @@ function DataBackupContent() {
                   <ul className="space-y-1 text-sm text-muted-foreground">
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      All player data with cached PowerScores, TC, DCA, and Top 5 flags
+                      All player data with cached holistic scores, TC, DCA, and Top 5 flags
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-green-600" />

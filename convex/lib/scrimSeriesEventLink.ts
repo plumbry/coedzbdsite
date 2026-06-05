@@ -29,6 +29,11 @@ export async function applyLinkedScrimSeries(
     }
 
     await ctx.db.patch(eventId, { linkedScrimSeriesId: seriesId });
+
+    const event = await ctx.db.get(eventId);
+    if (event?.bestNGames != null && event.bestNGames > 0) {
+      await ctx.db.patch(seriesId, { bestN: event.bestNGames });
+    }
     return;
   }
 

@@ -157,13 +157,14 @@ export const importYuniteScores = action({
 
     // ─── Get existing penalties for dedup ─────────────────────────────────────
 
-    const existingPenalties = await ctx.runQuery(api.scrimSeries.queries.getPenalties, {
-      seriesId: args.seriesId,
-    });
+    const existingPenalties = (await ctx.runQuery(
+      api.scrimSeries.queries.getPenalties,
+      { seriesId: args.seriesId },
+    )) as Array<{ dedupKey?: string }>;
     const existingDedupKeys = new Set(
       existingPenalties
         .filter((p) => p.dedupKey)
-        .map((p) => p.dedupKey)
+        .map((p) => p.dedupKey as string),
     );
 
     // ─── Process teams ────────────────────────────────────────────────────────

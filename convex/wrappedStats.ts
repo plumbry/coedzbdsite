@@ -110,15 +110,7 @@ export const storeComputedSections = internalMutation({
 });
 
 async function calculateIndividualStat(
-  ctx: {
-    db: {
-      query: (table: "eventResults" | "thirdPartyResults" | "players" | "playerEarnings" | "aggregateStatsCache" | "events") => {
-        collect: () => Promise<unknown[]>;
-        first?: () => Promise<unknown | null>;
-      };
-      get: (id: Id<"thirdPartyImports">) => Promise<Doc<"thirdPartyImports"> | null>;
-    };
-  },
+  ctx: QueryCtx | MutationCtx,
   stat: { type: string; customText: string; playerCount?: number; customValue?: string },
   eventIdsInYear: Set<Id<"events">>,
   eventsInYear: Array<Doc<"events">>
@@ -213,24 +205,33 @@ async function calculateIndividualStat(
       };
     }
 
+    case "topHolisticScores":
+    // TODO(remove-by-2026-09-01): legacy wrapped stat id before Power Score naming cleanup.
     case "topPowerScores": {
-      const allPlayers = (await ctx.db.query("players").collect()) as Array<{
-        currentMembershipStatus?: string;
-        powerScore?: number;
-        name?: string;
-        discordUsername: string;
-        _id: Id<"players">;
-      }>;
-      const playersWithScores = allPlayers
-        .filter((p) => p.currentMembershipStatus === "accepted" && p.powerScore)
-        .sort((a, b) => (b.powerScore || 0) - (a.powerScore || 0))
+      const cacheRows = await ctx.db.query("tierReEvaluationCache").collect();
+      const playerIds = new Set<Id<"players">>();
+      const topRows = [...cacheRows]
+        .sort(
+          (a, b) =>
+            (b as Doc<"tierReEvaluationCache">).holisticScore -
+            (a as Doc<"tierReEvaluationCache">).holisticScore,
+        )
+        .filter((row) => {
+          const cacheRow = row as Doc<"tierReEvaluationCache">;
+          if (playerIds.has(cacheRow.playerId)) return false;
+          playerIds.add(cacheRow.playerId);
+          return true;
+        })
         .slice(0, stat.playerCount || 5);
 
-      const players = playersWithScores.map((player) => ({
-        name: player.name || player.discordUsername,
-        value: Math.round(player.powerScore || 0),
-        metric: "power score",
-      }));
+      const players = topRows.map((row) => {
+        const cacheRow = row as Doc<"tierReEvaluationCache">;
+        return {
+          name: cacheRow.playerName || cacheRow.discordUsername,
+          value: Math.round(cacheRow.holisticScore * 10) / 10,
+          metric: "holistic score",
+        };
+      });
 
       return {
         type: stat.type,
