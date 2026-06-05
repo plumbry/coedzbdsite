@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
-import { AlertTriangle, Plus, Search, User } from "lucide-react";
+import { AlertTriangle, CalendarCheck, Plus, Search, User } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce.ts";
 import {
@@ -49,13 +49,13 @@ const TRACK_SUGGESTIONS: Record<
   },
 };
 
-type EventPassedConfirmation = "no_event" | "already_passed";
+type CreateBanDialogProps = {
+  onEventPassed?: () => void;
+};
 
-export default function CreateBanDialog() {
+export default function CreateBanDialog({ onEventPassed }: CreateBanDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"warning" | "form">("form");
-  const [eventPassedConfirmation, setEventPassedConfirmation] =
-    useState<EventPassedConfirmation | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [playerSearch, setPlayerSearch] = useState("");
@@ -139,7 +139,6 @@ export default function CreateBanDialog() {
     setPenaltyKind("warning");
     setOriginalEvents("0");
     setReason("");
-    setEventPassedConfirmation(null);
     setStep("form");
   };
 
@@ -149,12 +148,12 @@ export default function CreateBanDialog() {
       resetForm();
       return;
     }
-    if (hasActiveBans) {
-      setStep("warning");
-      setEventPassedConfirmation(null);
-    } else {
-      setStep("form");
-    }
+    setStep(hasActiveBans ? "warning" : "form");
+  };
+
+  const handleEventPassedFromWarning = () => {
+    handleOpenChange(false);
+    onEventPassed?.();
   };
 
   const handleSubmit = async () => {
@@ -218,7 +217,7 @@ export default function CreateBanDialog() {
             <DialogHeader>
               <DialogTitle>Check Event Passed first</DialogTitle>
               <DialogDescription>
-                Active bans are on the list. Confirm Event Passed status before creating a new ban.
+                Active bans are on the list. Run Event Passed or confirm it is not needed before creating a new ban.
               </DialogDescription>
             </DialogHeader>
             <DialogBody className="space-y-4">
@@ -234,50 +233,25 @@ export default function CreateBanDialog() {
                   </p>
                 </div>
               </div>
-              <div className="space-y-3">
-                <p className="text-sm font-medium">Confirm one of the following to continue:</p>
-                <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/40">
-                  <input
-                    type="radio"
-                    name="event-passed-check"
-                    className="mt-1"
-                    checked={eventPassedConfirmation === "no_event"}
-                    onChange={() => setEventPassedConfirmation("no_event")}
-                  />
-                  <span className="text-sm">
-                    <span className="font-medium">No event has finished</span>
-                    <span className="block text-muted-foreground">
-                      These active bans do not need Event Passed right now.
-                    </span>
-                  </span>
-                </label>
-                <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/40">
-                  <input
-                    type="radio"
-                    name="event-passed-check"
-                    className="mt-1"
-                    checked={eventPassedConfirmation === "already_passed"}
-                    onChange={() => setEventPassedConfirmation("already_passed")}
-                  />
-                  <span className="text-sm">
-                    <span className="font-medium">Event Passed is already done</span>
-                    <span className="block text-muted-foreground">
-                      I have already clicked Event Passed for the latest finished event.
-                    </span>
-                  </span>
-                </label>
-              </div>
             </DialogBody>
-            <DialogFooter>
+            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
               <Button variant="ghost" onClick={() => handleOpenChange(false)} className="cursor-pointer">
                 Cancel
               </Button>
               <Button
+                variant="outline"
                 onClick={() => setStep("form")}
-                disabled={eventPassedConfirmation === null}
                 className="cursor-pointer"
               >
-                Continue
+                Not Needed
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleEventPassedFromWarning}
+                className="cursor-pointer"
+              >
+                <CalendarCheck className="mr-2 h-4 w-4" />
+                Event Passed
               </Button>
             </DialogFooter>
           </>

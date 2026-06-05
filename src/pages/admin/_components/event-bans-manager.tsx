@@ -264,7 +264,7 @@ export default function EventBansManager({
             <>
               <div className="flex flex-col items-start gap-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <CreateBanDialog />
+                  <CreateBanDialog onEventPassed={handleEventPassed} />
                   <Button
                     onClick={handleEventPassed}
                     disabled={isEventPassing}
