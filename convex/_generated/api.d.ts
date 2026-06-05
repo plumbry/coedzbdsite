@@ -29,6 +29,7 @@ import type * as debugCS from "../debugCS.js";
 import type * as deleteWeek3 from "../deleteWeek3.js";
 import type * as discord from "../discord.js";
 import type * as discord_archiveNoTierRole from "../discord/archiveNoTierRole.js";
+import type * as discord_evaluationRoleSync from "../discord/evaluationRoleSync.js";
 import type * as discord_eventSync from "../discord/eventSync.js";
 import type * as discord_eventSyncMutations from "../discord/eventSyncMutations.js";
 import type * as discord_femaleEvaluatedMembers from "../discord/femaleEvaluatedMembers.js";
@@ -185,6 +186,7 @@ declare const fullApi: ApiFromModules<{
   deleteWeek3: typeof deleteWeek3;
   discord: typeof discord;
   "discord/archiveNoTierRole": typeof discord_archiveNoTierRole;
+  "discord/evaluationRoleSync": typeof discord_evaluationRoleSync;
   "discord/eventSync": typeof discord_eventSync;
   "discord/eventSyncMutations": typeof discord_eventSyncMutations;
   "discord/femaleEvaluatedMembers": typeof discord_femaleEvaluatedMembers;
