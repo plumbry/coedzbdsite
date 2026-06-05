@@ -282,7 +282,7 @@ export default function EventBansManager({
                 </div>
                 {syncStatus && syncStatus.activeBans > 0 && (
                   <p className="max-w-[16rem] sm:max-w-xs text-[10px] sm:text-xs leading-snug text-amber-700">
-                    Click Event Passed before adding a ban.
+                    If an event has just finished, click Event Passed before adding a ban.
                   </p>
                 )}
               </div>
