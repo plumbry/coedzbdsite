@@ -214,6 +214,52 @@ export const getActiveRebuildJob = query({
   },
 });
 
+/** Latest completed or failed rebuild — used for outcome toasts after a running job disappears. */
+export const getLatestFinishedRebuildJob = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+
+    if (!user || user.role !== "admin") return null;
+
+    const [completed, failed] = await Promise.all([
+      ctx.db
+        .query("playerStatsRebuildJobs")
+        .withIndex("by_status", (q) => q.eq("status", "completed"))
+        .collect(),
+      ctx.db
+        .query("playerStatsRebuildJobs")
+        .withIndex("by_status", (q) => q.eq("status", "failed"))
+        .collect(),
+    ]);
+
+    const latest = [...completed, ...failed]
+      .filter((job) => job.completedAt != null)
+      .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0))[0];
+
+    if (!latest) {
+      return null;
+    }
+
+    const rebuildKind = latest.rebuildKind;
+    return {
+      jobId: latest._id,
+      status: latest.status,
+      phase: latest.phase,
+      phaseLabel: phaseLabel(latest.phase),
+      rebuildKindLabel: rebuildKind ? rebuildKindLabel(rebuildKind) : undefined,
+      errorMessage: latest.errorMessage,
+      completedAt: latest.completedAt,
+    };
+  },
+});
+
 /** Fails timed-out jobs and re-kicks stalled background chains (safe while viewing admin pages). */
 export const cleanupPlayerStatsRebuildJobs = mutation({
   args: {},

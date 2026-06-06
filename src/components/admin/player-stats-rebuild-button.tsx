@@ -8,6 +8,72 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { Clock, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
+/** Avoid duplicate outcome toasts when multiple notifier instances mount on one page. */
+const toastedRebuildJobIds = new Set<string>();
+let watchedRebuildJobId: string | null = null;
+
+function claimRebuildJobToast(jobId: string) {
+  if (toastedRebuildJobIds.has(jobId)) {
+    return false;
+  }
+  toastedRebuildJobIds.add(jobId);
+  return true;
+}
+
+function watchRebuildJob(jobId: string) {
+  watchedRebuildJobId = jobId;
+}
+
+/** Toast when a watched rebuild completes or fails (including stale-job auto-fail). */
+export function PlayerStatsRebuildOutcomeNotifier() {
+  const activeRebuildJob = useQuery(api.playerStatsRebuild.getActiveRebuildJob, {});
+  const finishedRebuildJob = useQuery(api.playerStatsRebuild.getLatestFinishedRebuildJob, {});
+
+  useEffect(() => {
+    if (activeRebuildJob?.jobId) {
+      watchedRebuildJobId = activeRebuildJob.jobId;
+    }
+  }, [activeRebuildJob?.jobId]);
+
+  useEffect(() => {
+    if (activeRebuildJob || !finishedRebuildJob) {
+      return;
+    }
+
+    if (!watchedRebuildJobId || finishedRebuildJob.jobId !== watchedRebuildJobId) {
+      return;
+    }
+
+    const jobId = watchedRebuildJobId;
+    watchedRebuildJobId = null;
+
+    if (!claimRebuildJobToast(jobId)) {
+      return;
+    }
+
+    const label = finishedRebuildJob.rebuildKindLabel ?? "Player stats rebuild";
+
+    if (finishedRebuildJob.status === "completed") {
+      toast.success(`${label} completed.`);
+      return;
+    }
+
+    const errorMessage = finishedRebuildJob.errorMessage?.trim();
+    if (errorMessage?.toLowerCase().includes("cancelled")) {
+      return;
+    }
+
+    toast.error(
+      errorMessage
+        ? `${label} failed during ${finishedRebuildJob.phaseLabel}: ${errorMessage}`
+        : `${label} failed during ${finishedRebuildJob.phaseLabel}.`,
+      { duration: 10_000 },
+    );
+  }, [activeRebuildJob, finishedRebuildJob]);
+
+  return null;
+}
+
 function formatPlayerStatsRebuildRelativeTime(timestamp?: number) {
   if (!timestamp) return "Never";
   const diff = Date.now() - timestamp;
@@ -37,6 +103,10 @@ export function PlayerStatsRebuildRunningAlert() {
   }, [isRunning, reconcileStatsRebuild]);
 
   const runCancelStatsRebuild = async () => {
+    if (activeRebuildJob?.jobId) {
+      claimRebuildJobToast(activeRebuildJob.jobId);
+      watchedRebuildJobId = null;
+    }
     try {
       const result = await cancelStatsRebuild({});
       if (result.cancelled > 0) {
@@ -52,11 +122,13 @@ export function PlayerStatsRebuildRunningAlert() {
   };
 
   if (!activeRebuildJob) {
-    return null;
+    return <PlayerStatsRebuildOutcomeNotifier />;
   }
 
   return (
-    <Alert>
+    <>
+      <PlayerStatsRebuildOutcomeNotifier />
+      <Alert>
       <Clock className="h-4 w-4" />
       <AlertTitle>Rebuild in progress</AlertTitle>
       <AlertDescription className="space-y-1">
@@ -80,6 +152,7 @@ export function PlayerStatsRebuildRunningAlert() {
         </div>
       </AlertDescription>
     </Alert>
+    </>
   );
 }
 
@@ -205,6 +278,7 @@ export function PlayerStatsRebuildButton({
         aggregateStatsOnly,
         tierEvalRecentOnly,
       });
+      watchRebuildJob(result.jobId);
       toast.success(result.message);
     } catch (error) {
       toast.error(
@@ -234,7 +308,9 @@ export function PlayerStatsRebuildButton({
           : label;
 
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+    <>
+      <PlayerStatsRebuildOutcomeNotifier />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
       {showPhaseHint && <PlayerStatsRebuildProgress />}
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -258,5 +334,6 @@ export function PlayerStatsRebuildButton({
         )}
       </div>
     </div>
+    </>
   );
 }
