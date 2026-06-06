@@ -739,6 +739,8 @@ export default defineSchema({
     tierEvalClearDone: v.optional(v.boolean()),
     tierEvalMediansDone: v.optional(v.boolean()),
     tierEvalInitialized: v.optional(v.boolean()),
+    /** Resume index within the current players-table page during tier-eval scan. */
+    tierEvalPageIndex: v.optional(v.number()),
     includeAggregateStats: v.boolean(),
     stopAfterPhase: v.optional(
       v.union(

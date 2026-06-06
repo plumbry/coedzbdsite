@@ -325,6 +325,7 @@ export const scheduleFullRebuild = internalMutation({
       tierEvalClearDone: false,
       tierEvalMediansDone: false,
       tierEvalInitialized: false,
+      tierEvalPageIndex: 0,
       includeAggregateStats: aggregateStatsOnly
         ? true
         : partialOnly
@@ -432,6 +433,7 @@ export const processRebuildStep = internalMutation({
       let tierEvalClearDone = job.tierEvalClearDone ?? false;
       let tierEvalMediansDone = job.tierEvalMediansDone ?? false;
       let tierEvalInitialized = job.tierEvalInitialized;
+      let tierEvalPageIndex = job.tierEvalPageIndex ?? 0;
       let tierEvalPlayerIds = job.tierEvalPlayerIds ?? [];
       let tierEvalRecentMediansDone = job.tierEvalRecentMediansDone ?? false;
       let totalProcessed = job.totalProcessed;
@@ -620,16 +622,22 @@ export const processRebuildStep = internalMutation({
           playersCursor = null;
         } else if (!tierEvalInitialized) {
           const playersStep = await ctx.runMutation(
-            internal.tierReEvaluationBatched.processTierEvalPlayersStep,
-            { cursor: playersCursor, recentOnly: job.tierEvalRecentOnly },
+            internal.tierReEvaluationBatched.processOneTierEvalPlayerStep,
+            {
+              cursor: playersCursor,
+              pageIndex: tierEvalPageIndex,
+              recentOnly: job.tierEvalRecentOnly,
+            },
           );
           processedInPhase += playersStep.processed;
-          totalProcessed += playersStep.processed;
+          totalProcessed += 1;
           if (playersStep.isDone) {
             tierEvalInitialized = true;
             playersCursor = null;
+            tierEvalPageIndex = 0;
           } else {
             playersCursor = playersStep.continueCursor;
+            tierEvalPageIndex = playersStep.nextPageIndex;
           }
         } else if (!tierEvalRecentMediansDone) {
           await ctx.runMutation(
@@ -694,6 +702,7 @@ export const processRebuildStep = internalMutation({
           tierEvalMediansDone,
           tierEvalRecentMediansDone,
           tierEvalInitialized,
+          tierEvalPageIndex,
           processedInPhase,
           totalProcessed,
           lastProgressAt: Date.now(),
@@ -711,6 +720,7 @@ export const processRebuildStep = internalMutation({
         tierEvalMediansDone,
         tierEvalRecentMediansDone,
         tierEvalInitialized,
+        tierEvalPageIndex,
         processedInPhase,
         totalProcessed,
         lastProgressAt: Date.now(),

@@ -761,7 +761,86 @@ export const processBatch = internalMutation({
   },
 });
 
-/** Paginate the players table; process every eligible player on each page per call. */
+/** Process at most one eligible player per call to avoid mutation timeouts. */
+export const processOneTierEvalPlayerStep = internalMutation({
+  args: {
+    cursor: v.union(v.string(), v.null()),
+    pageIndex: v.number(),
+    recentOnly: v.boolean(),
+  },
+  handler: async (ctx, args): Promise<{
+    isDone: boolean;
+    continueCursor: string | null;
+    nextPageIndex: number;
+    processed: number;
+  }> => {
+    const mediansCache = await ctx.db.query("tierMediansCache").first();
+    if (!mediansCache) {
+      throw new Error("Tier medians not calculated. Run the medians step first.");
+    }
+
+    const page = await ctx.db.query("players").paginate({
+      numItems: 20,
+      cursor: args.cursor,
+    });
+
+    for (let i = args.pageIndex; i < page.page.length; i++) {
+      const player = page.page[i];
+      if (!isEligibleForTierEvalPlayer(player, args.recentOnly)) {
+        continue;
+      }
+
+      await ctx.runMutation(internal.tierReEvaluationBatched.processBatch, {
+        batchNumber: 0,
+        recentOnly: args.recentOnly,
+        playerIds: [player._id],
+      });
+
+      const nextPageIndex = i + 1;
+      if (nextPageIndex >= page.page.length) {
+        if (page.isDone) {
+          return {
+            isDone: true,
+            continueCursor: null,
+            nextPageIndex: 0,
+            processed: 1,
+          };
+        }
+        return {
+          isDone: false,
+          continueCursor: page.continueCursor,
+          nextPageIndex: 0,
+          processed: 1,
+        };
+      }
+
+      return {
+        isDone: false,
+        continueCursor: args.cursor,
+        nextPageIndex,
+        processed: 1,
+      };
+    }
+
+    if (page.isDone) {
+      return {
+        isDone: true,
+        continueCursor: null,
+        nextPageIndex: 0,
+        processed: 0,
+      };
+    }
+
+    return {
+      isDone: false,
+      continueCursor: page.continueCursor,
+      nextPageIndex: 0,
+      processed: 0,
+    };
+  },
+});
+
+/** @deprecated Prefer processOneTierEvalPlayerStep (one player per scheduler step). */
 export const processTierEvalPlayersStep = internalMutation({
   args: {
     cursor: v.union(v.string(), v.null()),

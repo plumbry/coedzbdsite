@@ -143,7 +143,11 @@ export function PlayerStatsRebuildProgress({
         activeRebuildJob.tierEvalBatchCount === 0 &&
         !activeRebuildJob.tierEvalRecentMediansDone &&
         activeRebuildJob.tierEvalInitialized !== true && (
-          <> (scanning players)</>
+          <>
+            {" "}
+            (tier-eval: {activeRebuildJob.processedInPhase.toLocaleString()} players,{" "}
+            {activeRebuildJob.totalProcessed.toLocaleString()} steps)
+          </>
         )}
       {activeRebuildJob.phase === "tier_eval" &&
         !activeRebuildJob.tierEvalRecentMediansDone &&
