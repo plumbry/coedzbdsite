@@ -1079,6 +1079,24 @@ export default defineSchema({
       }),
     ),
     recentMediansCacheCursor: v.optional(v.union(v.string(), v.null())),
+    /** In-progress all-time tier median rebuild (cleared when medians are finalized). */
+    partialHolisticByTier: v.optional(
+      v.object({
+        S: v.array(v.number()),
+        A: v.array(v.number()),
+        B: v.array(v.number()),
+        C: v.array(v.number()),
+      }),
+    ),
+    partialKillsByTier: v.optional(
+      v.object({
+        S: v.array(v.number()),
+        A: v.array(v.number()),
+        B: v.array(v.number()),
+        C: v.array(v.number()),
+      }),
+    ),
+    mediansPlayersCursor: v.optional(v.union(v.string(), v.null())),
   }),
 
   // Player earnings from scrim events

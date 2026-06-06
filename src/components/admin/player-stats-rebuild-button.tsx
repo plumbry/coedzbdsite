@@ -141,12 +141,21 @@ export function PlayerStatsRebuildProgress({
         )}
       {activeRebuildJob.phase === "tier_eval" &&
         activeRebuildJob.tierEvalBatchCount === 0 &&
+        !activeRebuildJob.tierEvalClearDone && <> (clearing tier-eval cache)</>}
+      {activeRebuildJob.phase === "tier_eval" &&
+        activeRebuildJob.tierEvalBatchCount === 0 &&
+        activeRebuildJob.tierEvalClearDone &&
+        !activeRebuildJob.tierEvalMediansDone && (
+          <> (computing tier medians: {activeRebuildJob.processedInPhase} scored)</>
+        )}
+      {activeRebuildJob.phase === "tier_eval" &&
+        activeRebuildJob.tierEvalBatchCount === 0 &&
+        activeRebuildJob.tierEvalMediansDone &&
         !activeRebuildJob.tierEvalRecentMediansDone &&
         activeRebuildJob.tierEvalInitialized !== true && (
           <>
             {" "}
-            (tier-eval: {activeRebuildJob.processedInPhase.toLocaleString()} active players,{" "}
-            {activeRebuildJob.totalProcessed.toLocaleString()} active-player steps)
+            (evaluating {activeRebuildJob.processedInPhase.toLocaleString()} active players)
           </>
         )}
       {activeRebuildJob.phase === "tier_eval" &&

@@ -203,6 +203,8 @@ export const getActiveRebuildJob = query({
       tierEvalBatch: running.tierEvalBatch,
       tierEvalBatchCount: running.tierEvalBatchCount,
       tierEvalInitialized: running.tierEvalInitialized ?? false,
+      tierEvalClearDone: running.tierEvalClearDone ?? false,
+      tierEvalMediansDone: running.tierEvalMediansDone ?? false,
       tierEvalRecentMediansDone: running.tierEvalRecentMediansDone ?? false,
       tierEvalRecentOnly: running.tierEvalRecentOnly,
       startedAt: running.startedAt,
@@ -612,14 +614,23 @@ export const processRebuildStep = internalMutation({
           if (clearStep.isDone) {
             tierEvalClearDone = true;
             playersCursor = null;
-            await ctx.runMutation(internal.tierReEvaluationBatched.resetRecentMediansBuild, {});
+            await ctx.runMutation(internal.tierReEvaluationBatched.resetTierMediansBuild, {});
           } else {
             playersCursor = clearStep.continueCursor;
           }
+          totalProcessed += 1;
         } else if (!tierEvalMediansDone) {
-          await ctx.runMutation(internal.tierReEvaluationBatched.calculateTierMedians, {});
-          tierEvalMediansDone = true;
-          playersCursor = null;
+          const mediansStep = await ctx.runMutation(
+            internal.tierReEvaluationBatched.calculateTierMediansStep,
+            {},
+          );
+          processedInPhase += mediansStep.processed;
+          totalProcessed += 1;
+          if (mediansStep.isDone) {
+            tierEvalMediansDone = true;
+            playersCursor = null;
+            tierEvalPageIndex = 0;
+          }
         } else if (!tierEvalInitialized) {
           const playersStep = await ctx.runMutation(
             internal.tierReEvaluationBatched.processOneTierEvalPlayerStep,
@@ -630,7 +641,7 @@ export const processRebuildStep = internalMutation({
             },
           );
           processedInPhase += playersStep.processed;
-          totalProcessed += playersStep.processed > 0 ? 1 : 0;
+          totalProcessed += 1;
           if (playersStep.isDone) {
             tierEvalInitialized = true;
             playersCursor = null;

@@ -4,8 +4,11 @@ import { v } from "convex/values";
 import type { Id, Doc } from "./_generated/dataModel.d.ts";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./auth_helpers";
-import { filterVisibleMembers, isAltAccount } from "./helpers/playerAlt";
-import { paginateActivePlayers } from "./lib/stats/listEligiblePlayers";
+import { filterVisibleMembers } from "./helpers/playerAlt";
+import {
+  isActivePlayerWithMatchData,
+  paginateActivePlayers,
+} from "./lib/stats/listEligiblePlayers";
 import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerStats";
 import {
   applyDcaTcToHolistic,
@@ -18,6 +21,7 @@ import {
 const BATCH_SIZE = 1; // One player per batch — heavy per-player reads (results, imports, match stats)
 const CACHE_CLEAR_BATCH = 50;
 const RECENT_MEDIANS_CACHE_BATCH = 100;
+const TIER_MEDIANS_PLAYER_BATCH = 4;
 
 const VALID_TIERS = ["S", "A", "B", "C"] as const;
 type ValidTier = (typeof VALID_TIERS)[number];
@@ -37,13 +41,7 @@ function isEligibleForTierEvalPlayer(
   player: Doc<"players">,
   recentOnly: boolean,
 ): boolean {
-  if (player.status !== "active") {
-    return false;
-  }
-  if (player.hasMatchData !== true) {
-    return false;
-  }
-  if (isAltAccount(player)) {
+  if (!isActivePlayerWithMatchData(player)) {
     return false;
   }
 
@@ -57,6 +55,72 @@ function isEligibleForTierEvalPlayer(
   return mostRecent !== undefined && mostRecent >= cutoff;
 }
 
+function appendTierMedianScore(
+  partialHolistic: Record<ValidTier, number[]>,
+  partialKills: Record<ValidTier, number[]>,
+  tier: ValidTier,
+  holisticScore: number,
+  killsPerMatch: number,
+) {
+  partialHolistic[tier].push(holisticScore);
+  partialKills[tier].push(killsPerMatch);
+}
+
+function finalizeTierMediansFromPartials(
+  partialHolistic: Record<ValidTier, number[]>,
+  partialKills: Record<ValidTier, number[]>,
+) {
+  const tierHolisticMedians: { S?: number; A?: number; B?: number; C?: number } = {};
+  const tierKillsMedians: { S?: number; A?: number; B?: number; C?: number } = {};
+  const tierAverages: { S?: number; A?: number; B?: number; C?: number } = {};
+
+  for (const tier of VALID_TIERS) {
+    const tierScores = [...partialHolistic[tier]].sort((a, b) => a - b);
+    const tierKills = [...partialKills[tier]].sort((a, b) => a - b);
+    if (tierScores.length === 0) {
+      continue;
+    }
+
+    tierHolisticMedians[tier] = medianFromSorted(tierScores);
+    tierKillsMedians[tier] = medianFromSorted(tierKills);
+    tierAverages[tier] =
+      tierScores.reduce((sum, score) => sum + score, 0) / tierScores.length;
+  }
+
+  return { tierAverages, tierHolisticMedians, tierKillsMedians };
+}
+
+async function scorePlayerForTierMedians(
+  ctx: MutationCtx,
+  player: Doc<"players">,
+): Promise<{ tier: ValidTier; holisticScore: number; killsPerMatch: number } | null> {
+  const internal = await computeInternalPlayerStats(ctx, player._id);
+  if (internal.eventsPlayed === 0) {
+    return null;
+  }
+
+  const playerTier = player.tier || "Unranked";
+  if (!VALID_TIERS.includes(playerTier as ValidTier)) {
+    return null;
+  }
+
+  const components = computeHolisticComponentScores({
+    avgPlacement: internal.averagePlacement || 50,
+    winRate: internal.winRate || 0,
+    killsPerMatch: internal.killsPerMatch,
+    deathsPerMatch: internal.deathsPerMatch,
+  });
+  const baseHolistic = averageHolisticComponents(components);
+  const { dca, cpm } = getPlayerDcaCpm(player);
+  const holisticScore = applyDcaTcToHolistic(baseHolistic, dca, cpm);
+
+  return {
+    tier: playerTier as ValidTier,
+    holisticScore,
+    killsPerMatch: internal.killsPerMatch,
+  };
+}
+
 async function getOrCreateMediansBuildCache(ctx: MutationCtx) {
   const existing = await ctx.db.query("tierMediansCache").first();
   if (existing) {
@@ -68,6 +132,9 @@ async function getOrCreateMediansBuildCache(ctx: MutationCtx) {
     tierHolisticMedians: {},
     tierKillsMedians: {},
     lastUpdated: Date.now(),
+    partialHolisticByTier: emptyTierNumberArrays(),
+    partialKillsByTier: emptyTierNumberArrays(),
+    mediansPlayersCursor: null,
     partialRecentHolisticByTier: emptyTierNumberArrays(),
     recentMediansCacheCursor: null,
   });
@@ -153,99 +220,143 @@ const numericToTier = (value: number): string => {
   return "Low C";
 };
 
-// Step 1: Calculate and cache tier medians
+// Step 1: Calculate and cache tier medians (legacy single-shot — prefer batched step in rebuild).
 export const calculateTierMedians = internalMutation({
   args: {},
   handler: async (ctx): Promise<{ success: boolean; tiersCalculated: number; totalPlayers: number }> => {
-    // Clear old medians
-    const oldMedians = await ctx.db.query("tierMediansCache").collect();
-    for (const oldMedian of oldMedians) {
-      await ctx.db.delete(oldMedian._id);
+    await resetTierMediansBuildHandler(ctx);
+    let isDone = false;
+    let totalPlayers = 0;
+    while (!isDone) {
+      const step = await calculateTierMediansStepHandler(ctx);
+      isDone = step.isDone;
+      totalPlayers = step.totalPlayersScored;
     }
 
-    // Active members with match data only (excludes archived, discord_member, rejected, alts).
-    const activePlayers = await ctx.db
-      .query("players")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .collect();
-    const playersWithMatchData = filterVisibleMembers(
-      activePlayers.filter((p) => p.hasMatchData === true),
-    );
+    const mediansCache = await ctx.db.query("tierMediansCache").first();
+    return {
+      success: true,
+      tiersCalculated: mediansCache
+        ? Object.keys(mediansCache.tierHolisticMedians).length
+        : 0,
+      totalPlayers,
+    };
+  },
+});
 
-    // Calculate holistic scores for all players using CACHED data only
-    // (no per-player matchPlayerStats queries — uses contributionScore.profileKillsPerMatch)
-    const playerScores: Array<{ tier: string; holisticScore: number; killsPerMatch: number }> = [];
+async function resetTierMediansBuildHandler(ctx: MutationCtx): Promise<{ ok: true }> {
+  const oldMedians = await ctx.db.query("tierMediansCache").collect();
+  for (const oldMedian of oldMedians) {
+    await ctx.db.delete(oldMedian._id);
+  }
 
-    for (const player of playersWithMatchData) {
-      const internal = await computeInternalPlayerStats(ctx, player._id);
-      if (internal.eventsPlayed === 0) continue;
+  await ctx.db.insert("tierMediansCache", {
+    tierAverages: {},
+    tierHolisticMedians: {},
+    tierKillsMedians: {},
+    lastUpdated: Date.now(),
+    partialHolisticByTier: emptyTierNumberArrays(),
+    partialKillsByTier: emptyTierNumberArrays(),
+    mediansPlayersCursor: null,
+    partialRecentHolisticByTier: emptyTierNumberArrays(),
+    recentMediansCacheCursor: null,
+  });
 
-      const playerTier = player.tier || "Unranked";
-      if (!["S", "A", "B", "C"].includes(playerTier)) {
+  return { ok: true };
+}
+
+export const resetTierMediansBuild = internalMutation({
+  args: {},
+  handler: resetTierMediansBuildHandler,
+});
+
+async function calculateTierMediansStepHandler(
+  ctx: MutationCtx,
+): Promise<{ isDone: boolean; processed: number; totalPlayersScored: number }> {
+  const cache = await getOrCreateMediansBuildCache(ctx);
+  const partialHolistic = {
+    ...emptyTierNumberArrays(),
+    ...(cache.partialHolisticByTier ?? {}),
+  };
+  const partialKills = {
+    ...emptyTierNumberArrays(),
+    ...(cache.partialKillsByTier ?? {}),
+  };
+
+  let cursor = cache.mediansPlayersCursor ?? null;
+  let processed = 0;
+  let playersTableDone = false;
+
+  while (processed < TIER_MEDIANS_PLAYER_BATCH) {
+    const page = await paginateActivePlayers(ctx, cursor, 20);
+
+    for (const player of page.page) {
+      if (!isActivePlayerWithMatchData(player)) {
         continue;
       }
 
-      const avgPlacement = internal.averagePlacement || 50;
-      const winRate = internal.winRate || 0;
-      const killsPerMatch = internal.killsPerMatch;
-      const deathsPerMatch = internal.deathsPerMatch;
+      const scored = await scorePlayerForTierMedians(ctx, player);
+      if (!scored) {
+        continue;
+      }
 
-      const components = computeHolisticComponentScores({
-        avgPlacement,
-        winRate,
-        killsPerMatch,
-        deathsPerMatch,
-      });
-      const baseHolistic = averageHolisticComponents(components);
-      const { dca, cpm } = getPlayerDcaCpm(player);
-      const holisticScore = applyDcaTcToHolistic(baseHolistic, dca, cpm);
-
-      playerScores.push({
-        tier: playerTier,
-        holisticScore,
-        killsPerMatch,
-      });
+      appendTierMedianScore(
+        partialHolistic,
+        partialKills,
+        scored.tier,
+        scored.holisticScore,
+        scored.killsPerMatch,
+      );
+      processed += 1;
+      if (processed >= TIER_MEDIANS_PLAYER_BATCH) {
+        break;
+      }
     }
 
-    // Calculate tier medians (only for valid tiers: S, A, B, C)
-    const tierAverages: { S?: number; A?: number; B?: number; C?: number } = {};
-    const tierHolisticMedians: { S?: number; A?: number; B?: number; C?: number } = {};
-    const tierKillsMedians: { S?: number; A?: number; B?: number; C?: number } = {};
-
-    // Only process S, A, B, C tiers (filter out Unranked, ironman, or any other tier values)
-    for (const tier of ["S", "A", "B", "C"] as const) {
-      const tierPlayers = playerScores.filter((p) => p.tier === tier);
-      if (tierPlayers.length === 0) continue;
-
-      const tierScores = tierPlayers.map((p) => p.holisticScore).sort((a, b) => a - b);
-      const tierKills = tierPlayers.map((p) => p.killsPerMatch).sort((a, b) => a - b);
-
-      const medianIndex = Math.floor(tierScores.length / 2);
-      tierHolisticMedians[tier] = tierScores.length % 2 === 0
-        ? (tierScores[medianIndex - 1] + tierScores[medianIndex]) / 2
-        : tierScores[medianIndex];
-
-      tierKillsMedians[tier] = tierKills.length % 2 === 0
-        ? (tierKills[medianIndex - 1] + tierKills[medianIndex]) / 2
-        : tierKills[medianIndex];
-
-      tierAverages[tier] = tierScores.reduce((sum, s) => sum + s, 0) / tierScores.length;
+    if (page.isDone) {
+      playersTableDone = true;
+      cursor = null;
+      break;
     }
 
-    // Store medians
-    await ctx.db.insert("tierMediansCache", {
-      tierAverages,
-      tierHolisticMedians,
-      tierKillsMedians,
+    cursor = page.continueCursor;
+    if (processed >= TIER_MEDIANS_PLAYER_BATCH) {
+      break;
+    }
+  }
+
+  const totalPlayersScored = VALID_TIERS.reduce(
+    (sum, tier) => sum + partialHolistic[tier].length,
+    0,
+  );
+
+  if (playersTableDone) {
+    const finalized = finalizeTierMediansFromPartials(partialHolistic, partialKills);
+    await ctx.db.patch(cache._id, {
+      tierAverages: finalized.tierAverages,
+      tierHolisticMedians: finalized.tierHolisticMedians,
+      tierKillsMedians: finalized.tierKillsMedians,
       lastUpdated: Date.now(),
+      partialHolisticByTier: undefined,
+      partialKillsByTier: undefined,
+      mediansPlayersCursor: undefined,
     });
+    return { isDone: true, processed, totalPlayersScored };
+  }
 
-    return { 
-      success: true, 
-      tiersCalculated: Object.keys(tierHolisticMedians).length,
-      totalPlayers: playerScores.length,
-    };
-  },
+  await ctx.db.patch(cache._id, {
+    partialHolisticByTier: partialHolistic,
+    partialKillsByTier: partialKills,
+    mediansPlayersCursor: cursor,
+    lastUpdated: Date.now(),
+  });
+
+  return { isDone: false, processed, totalPlayersScored };
+}
+
+export const calculateTierMediansStep = internalMutation({
+  args: {},
+  handler: calculateTierMediansStepHandler,
 });
 
 // Step 2a: Clear existing cache in batched pages (safe for large caches).
