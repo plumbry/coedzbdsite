@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import type { Id, Doc } from "./_generated/dataModel.d.ts";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./auth_helpers";
-import { filterVisibleMembers } from "./helpers/playerAlt";
+import { filterVisibleMembers, isAltAccount } from "./helpers/playerAlt";
 import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerStats";
 import {
   applyDcaTcToHolistic,
@@ -36,7 +36,13 @@ function isEligibleForTierEvalPlayer(
   player: Doc<"players">,
   recentOnly: boolean,
 ): boolean {
-  if (player.hasMatchData !== true || player.status === "archived") {
+  if (player.status !== "active") {
+    return false;
+  }
+  if (player.hasMatchData !== true) {
+    return false;
+  }
+  if (isAltAccount(player)) {
     return false;
   }
 
@@ -48,6 +54,17 @@ function isEligibleForTierEvalPlayer(
   const cutoff = Date.now() - SIX_WEEKS_MS;
   const mostRecent = player.topFiveCache?.mostRecentEventTime;
   return mostRecent !== undefined && mostRecent >= cutoff;
+}
+
+async function paginateActivePlayers(
+  ctx: MutationCtx,
+  cursor: string | null,
+  numItems: number,
+) {
+  return await ctx.db
+    .query("players")
+    .withIndex("by_status", (q) => q.eq("status", "active"))
+    .paginate({ numItems, cursor });
 }
 
 async function getOrCreateMediansBuildCache(ctx: MutationCtx) {
@@ -156,25 +173,13 @@ export const calculateTierMedians = internalMutation({
       await ctx.db.delete(oldMedian._id);
     }
 
-    // Get only active players with match data (exclude former/archived)
+    // Active members with match data only (excludes archived, discord_member, rejected, alts).
     const activePlayers = await ctx.db
       .query("players")
       .withIndex("by_status", (q) => q.eq("status", "active"))
       .collect();
-    const acceptedMembers = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
-      .collect();
-
-    // Combine and deduplicate
-    const playerMap = new Map<string, typeof activePlayers[0]>();
-    for (const p of [...activePlayers, ...acceptedMembers]) {
-      playerMap.set(p._id, p);
-    }
     const playersWithMatchData = filterVisibleMembers(
-      Array.from(playerMap.values()).filter(
-        (p) => p.hasMatchData === true && p.status !== "archived",
-      ),
+      activePlayers.filter((p) => p.hasMatchData === true),
     );
 
     // Calculate holistic scores for all players using CACHED data only
@@ -326,25 +331,13 @@ export const initializeBatchRebuild = internalMutation({
     // Calculate tier medians (separate from clearing)
     await ctx.runMutation(internal.tierReEvaluationBatched.calculateTierMedians, {});
 
-    // Get only active players using existing indexes (exclude former/archived)
+    // Active members with match data only.
     const activePlayers = await ctx.db
       .query("players")
       .withIndex("by_status", (q) => q.eq("status", "active"))
       .collect();
-    const acceptedMembers = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
-      .collect();
-
-    // Combine and deduplicate
-    const playerMap = new Map<string, typeof activePlayers[0]>();
-    for (const p of [...activePlayers, ...acceptedMembers]) {
-      playerMap.set(p._id, p);
-    }
     let eligiblePlayers = filterVisibleMembers(
-      Array.from(playerMap.values()).filter(
-        (p) => p.hasMatchData === true && p.status !== "archived",
-      ),
+      activePlayers.filter((p) => p.hasMatchData === true),
     );
 
     // Filter to only players active in the last 6 weeks if recentOnly is enabled
@@ -403,21 +396,8 @@ export const processBatch = internalMutation({
         .query("players")
         .withIndex("by_status", (q) => q.eq("status", "active"))
         .collect();
-      const acceptedMembers = await ctx.db
-        .query("players")
-        .withIndex("by_membership_status", (q) =>
-          q.eq("currentMembershipStatus", "accepted"),
-        )
-        .collect();
-
-      const playerMap = new Map<string, (typeof activePlayers)[0]>();
-      for (const p of [...activePlayers, ...acceptedMembers]) {
-        playerMap.set(p._id, p);
-      }
       let eligiblePlayers = filterVisibleMembers(
-        Array.from(playerMap.values()).filter(
-          (p) => p.hasMatchData === true && p.status !== "archived",
-        ),
+        activePlayers.filter((p) => p.hasMatchData === true),
       );
 
       if (args.recentOnly) {
@@ -779,10 +759,7 @@ export const processOneTierEvalPlayerStep = internalMutation({
       throw new Error("Tier medians not calculated. Run the medians step first.");
     }
 
-    const page = await ctx.db.query("players").paginate({
-      numItems: 20,
-      cursor: args.cursor,
-    });
+    const page = await paginateActivePlayers(ctx, args.cursor, 20);
 
     for (let i = args.pageIndex; i < page.page.length; i++) {
       const player = page.page[i];
@@ -856,10 +833,7 @@ export const processTierEvalPlayersStep = internalMutation({
       throw new Error("Tier medians not calculated. Run the medians step first.");
     }
 
-    const page = await ctx.db.query("players").paginate({
-      numItems: 20,
-      cursor: args.cursor,
-    });
+    const page = await paginateActivePlayers(ctx, args.cursor, 20);
 
     let processed = 0;
     for (const player of page.page) {

@@ -145,7 +145,7 @@ export function PlayerStatsRebuildProgress({
         activeRebuildJob.tierEvalInitialized !== true && (
           <>
             {" "}
-            (tier-eval: {activeRebuildJob.processedInPhase.toLocaleString()} players,{" "}
+            (tier-eval: {activeRebuildJob.processedInPhase.toLocaleString()} active players,{" "}
             {activeRebuildJob.totalProcessed.toLocaleString()} steps)
           </>
         )}
