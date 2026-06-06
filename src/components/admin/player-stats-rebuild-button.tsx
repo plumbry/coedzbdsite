@@ -65,7 +65,7 @@ export function PlayerStatsRebuildRunningAlert() {
           Started {formatPlayerStatsRebuildRelativeTime(activeRebuildJob.startedAt)} · last progress{" "}
           {formatPlayerStatsRebuildRelativeTime(activeRebuildJob.lastProgressAt)}
           {activeRebuildJob.totalProcessed > 0 &&
-            ` · ${activeRebuildJob.totalProcessed.toLocaleString()} steps`}
+            ` · ${activeRebuildJob.totalProcessed.toLocaleString()} active-player steps`}
         </p>
         {activeRebuildJob.appearsStuck && (
           <p className="text-sm text-muted-foreground">
@@ -146,7 +146,7 @@ export function PlayerStatsRebuildProgress({
           <>
             {" "}
             (tier-eval: {activeRebuildJob.processedInPhase.toLocaleString()} active players,{" "}
-            {activeRebuildJob.totalProcessed.toLocaleString()} steps)
+            {activeRebuildJob.totalProcessed.toLocaleString()} active-player steps)
           </>
         )}
       {activeRebuildJob.phase === "tier_eval" &&

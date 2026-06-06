@@ -1,6 +1,28 @@
 import type { QueryCtx, MutationCtx } from "../../_generated/server";
-import type { Id } from "../../_generated/dataModel.d.ts";
-import { filterVisibleMembers } from "../../helpers/playerAlt";
+import type { Doc, Id } from "../../_generated/dataModel.d.ts";
+import { filterVisibleMembers, isAltAccount } from "../../helpers/playerAlt";
+
+/** Paginate only public active members (excludes discord_member, archived, rejected). */
+export async function paginateActivePlayers(
+  ctx: QueryCtx | MutationCtx,
+  cursor: string | null,
+  numItems: number,
+) {
+  return ctx.db
+    .query("players")
+    .withIndex("by_status", (q) => q.eq("status", "active"))
+    .paginate({ numItems, cursor });
+}
+
+export function isActivePlayerWithMatchData(
+  player: Pick<Doc<"players">, "status" | "hasMatchData" | "isAlt">,
+): boolean {
+  return (
+    player.status === "active" &&
+    player.hasMatchData === true &&
+    !isAltAccount(player)
+  );
+}
 
 const isValidDiscordId = (id: string | undefined): boolean => {
   if (!id || id === "") return false;
@@ -9,7 +31,7 @@ const isValidDiscordId = (id: string | undefined): boolean => {
   return true;
 };
 
-/** Active/accepted members with match data used for TC, DCA, top-five, and tier-eval caches. */
+/** Active members with match data used for TC, DCA, top-five, and tier-eval caches. */
 export async function listEligibleMatchDataPlayerIds(
   ctx: QueryCtx | MutationCtx,
 ): Promise<Id<"players">[]> {
@@ -17,24 +39,10 @@ export async function listEligibleMatchDataPlayerIds(
     .query("players")
     .withIndex("by_status", (q) => q.eq("status", "active"))
     .collect();
-  const acceptedMembers = await ctx.db
-    .query("players")
-    .withIndex("by_membership_status", (q) =>
-      q.eq("currentMembershipStatus", "accepted"),
-    )
-    .collect();
-
-  const playerMap = new Map<string, (typeof activePlayers)[0]>();
-  for (const p of [...activePlayers, ...acceptedMembers]) {
-    playerMap.set(p._id, p);
-  }
 
   return filterVisibleMembers(
-    Array.from(playerMap.values()).filter(
-      (p) =>
-        p.hasMatchData === true &&
-        p.status !== "archived" &&
-        isValidDiscordId(p.discordUserId),
+    activePlayers.filter(
+      (p) => isActivePlayerWithMatchData(p) && isValidDiscordId(p.discordUserId),
     ),
   ).map((p) => p._id);
 }

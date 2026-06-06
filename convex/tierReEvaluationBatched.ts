@@ -5,6 +5,7 @@ import type { Id, Doc } from "./_generated/dataModel.d.ts";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./auth_helpers";
 import { filterVisibleMembers, isAltAccount } from "./helpers/playerAlt";
+import { paginateActivePlayers } from "./lib/stats/listEligiblePlayers";
 import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerStats";
 import {
   applyDcaTcToHolistic,
@@ -54,17 +55,6 @@ function isEligibleForTierEvalPlayer(
   const cutoff = Date.now() - SIX_WEEKS_MS;
   const mostRecent = player.topFiveCache?.mostRecentEventTime;
   return mostRecent !== undefined && mostRecent >= cutoff;
-}
-
-async function paginateActivePlayers(
-  ctx: MutationCtx,
-  cursor: string | null,
-  numItems: number,
-) {
-  return await ctx.db
-    .query("players")
-    .withIndex("by_status", (q) => q.eq("status", "active"))
-    .paginate({ numItems, cursor });
 }
 
 async function getOrCreateMediansBuildCache(ctx: MutationCtx) {

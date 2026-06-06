@@ -10,7 +10,9 @@ import type { Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin } from "./auth_helpers";
 import { syncInternalEventParticipation } from "./lib/stats/syncInternalEventParticipation";
 import {
+  isActivePlayerWithMatchData,
   listEligibleMatchDataPlayerIds,
+  paginateActivePlayers,
   phaseLabel,
 } from "./lib/stats/listEligiblePlayers";
 import {
@@ -439,10 +441,7 @@ export const processRebuildStep = internalMutation({
       let totalProcessed = job.totalProcessed;
 
       if (phase === "event_participation") {
-        const page = await ctx.db.query("players").paginate({
-          numItems: EVENT_BATCH,
-          cursor: playersCursor,
-        });
+        const page = await paginateActivePlayers(ctx, playersCursor, EVENT_BATCH);
 
         for (const player of page.page) {
           await syncInternalEventParticipation(ctx, player._id);
@@ -466,13 +465,14 @@ export const processRebuildStep = internalMutation({
         phase === "dca" ||
         phase === "top_five"
       ) {
-        const page = await ctx.db.query("players").paginate({
-          numItems: playerCacheBatchForPhase(phase),
-          cursor: playersCursor,
-        });
+        const page = await paginateActivePlayers(
+          ctx,
+          playersCursor,
+          playerCacheBatchForPhase(phase),
+        );
 
         for (const player of page.page) {
-          if (!player.hasMatchData) continue;
+          if (!isActivePlayerWithMatchData(player)) continue;
 
           try {
             if (phase === "contribution_score") {
@@ -630,7 +630,7 @@ export const processRebuildStep = internalMutation({
             },
           );
           processedInPhase += playersStep.processed;
-          totalProcessed += 1;
+          totalProcessed += playersStep.processed > 0 ? 1 : 0;
           if (playersStep.isDone) {
             tierEvalInitialized = true;
             playersCursor = null;
