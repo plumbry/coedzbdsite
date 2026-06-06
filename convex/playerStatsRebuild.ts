@@ -614,6 +614,7 @@ export const processRebuildStep = internalMutation({
           if (clearStep.isDone) {
             tierEvalClearDone = true;
             playersCursor = null;
+            processedInPhase = 0;
             await ctx.runMutation(internal.tierReEvaluationBatched.resetTierMediansBuild, {});
           } else {
             playersCursor = clearStep.continueCursor;
@@ -624,12 +625,13 @@ export const processRebuildStep = internalMutation({
             internal.tierReEvaluationBatched.calculateTierMediansStep,
             {},
           );
-          processedInPhase += mediansStep.processed;
+          processedInPhase = mediansStep.totalPlayersScored;
           totalProcessed += 1;
           if (mediansStep.isDone) {
             tierEvalMediansDone = true;
             playersCursor = null;
             tierEvalPageIndex = 0;
+            processedInPhase = 0;
           }
         } else if (!tierEvalInitialized) {
           const playersStep = await ctx.runMutation(
@@ -646,6 +648,7 @@ export const processRebuildStep = internalMutation({
             tierEvalInitialized = true;
             playersCursor = null;
             tierEvalPageIndex = 0;
+            processedInPhase = 0;
           } else {
             playersCursor = playersStep.continueCursor;
             tierEvalPageIndex = playersStep.nextPageIndex;
@@ -741,10 +744,17 @@ export const processRebuildStep = internalMutation({
         jobId: args.jobId,
       });
     } catch (error) {
+      const jobAtFail = await ctx.db.get(args.jobId);
+      console.error(
+        `[playerStatsRebuild] step failed in phase ${jobAtFail?.phase ?? "unknown"}:`,
+        error,
+      );
       await ctx.db.patch(args.jobId, {
         status: "failed",
         errorMessage:
-          error instanceof Error ? error.message : "Unknown rebuild error",
+          error instanceof Error
+            ? `${jobAtFail?.phase ?? "rebuild"}: ${error.message}`
+            : "Unknown rebuild error",
         completedAt: Date.now(),
         lastProgressAt: Date.now(),
       });

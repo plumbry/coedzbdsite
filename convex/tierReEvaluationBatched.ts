@@ -21,7 +21,6 @@ import {
 const BATCH_SIZE = 1; // One player per batch — heavy per-player reads (results, imports, match stats)
 const CACHE_CLEAR_BATCH = 50;
 const RECENT_MEDIANS_CACHE_BATCH = 100;
-const TIER_MEDIANS_PLAYER_BATCH = 4;
 
 const VALID_TIERS = ["S", "A", "B", "C"] as const;
 type ValidTier = (typeof VALID_TIERS)[number];
@@ -135,6 +134,7 @@ async function getOrCreateMediansBuildCache(ctx: MutationCtx) {
     partialHolisticByTier: emptyTierNumberArrays(),
     partialKillsByTier: emptyTierNumberArrays(),
     mediansPlayersCursor: null,
+    mediansPageIndex: 0,
     partialRecentHolisticByTier: emptyTierNumberArrays(),
     recentMediansCacheCursor: null,
   });
@@ -258,6 +258,7 @@ async function resetTierMediansBuildHandler(ctx: MutationCtx): Promise<{ ok: tru
     partialHolisticByTier: emptyTierNumberArrays(),
     partialKillsByTier: emptyTierNumberArrays(),
     mediansPlayersCursor: null,
+    mediansPageIndex: 0,
     partialRecentHolisticByTier: emptyTierNumberArrays(),
     recentMediansCacheCursor: null,
   });
@@ -283,54 +284,14 @@ async function calculateTierMediansStepHandler(
     ...(cache.partialKillsByTier ?? {}),
   };
 
-  let cursor = cache.mediansPlayersCursor ?? null;
-  let processed = 0;
-  let playersTableDone = false;
+  const cursor = cache.mediansPlayersCursor ?? null;
+  let pageIndex = cache.mediansPageIndex ?? 0;
+  const page = await paginateActivePlayers(ctx, cursor, 20);
 
-  while (processed < TIER_MEDIANS_PLAYER_BATCH) {
-    const page = await paginateActivePlayers(ctx, cursor, 20);
+  const countScored = () =>
+    VALID_TIERS.reduce((sum, tier) => sum + partialHolistic[tier].length, 0);
 
-    for (const player of page.page) {
-      if (!isActivePlayerWithMatchData(player)) {
-        continue;
-      }
-
-      const scored = await scorePlayerForTierMedians(ctx, player);
-      if (!scored) {
-        continue;
-      }
-
-      appendTierMedianScore(
-        partialHolistic,
-        partialKills,
-        scored.tier,
-        scored.holisticScore,
-        scored.killsPerMatch,
-      );
-      processed += 1;
-      if (processed >= TIER_MEDIANS_PLAYER_BATCH) {
-        break;
-      }
-    }
-
-    if (page.isDone) {
-      playersTableDone = true;
-      cursor = null;
-      break;
-    }
-
-    cursor = page.continueCursor;
-    if (processed >= TIER_MEDIANS_PLAYER_BATCH) {
-      break;
-    }
-  }
-
-  const totalPlayersScored = VALID_TIERS.reduce(
-    (sum, tier) => sum + partialHolistic[tier].length,
-    0,
-  );
-
-  if (playersTableDone) {
+  const finalizeAndReturn = async () => {
     const finalized = finalizeTierMediansFromPartials(partialHolistic, partialKills);
     await ctx.db.patch(cache._id, {
       tierAverages: finalized.tierAverages,
@@ -340,18 +301,65 @@ async function calculateTierMediansStepHandler(
       partialHolisticByTier: undefined,
       partialKillsByTier: undefined,
       mediansPlayersCursor: undefined,
+      mediansPageIndex: undefined,
     });
-    return { isDone: true, processed, totalPlayersScored };
+    return { isDone: true as const, processed: 1, totalPlayersScored: countScored() };
+  };
+
+  if (pageIndex >= page.page.length) {
+    if (page.isDone) {
+      return finalizeAndReturn();
+    }
+    await ctx.db.patch(cache._id, {
+      partialHolisticByTier: partialHolistic,
+      partialKillsByTier: partialKills,
+      mediansPlayersCursor: page.continueCursor,
+      mediansPageIndex: 0,
+      lastUpdated: Date.now(),
+    });
+    return { isDone: false, processed: 0, totalPlayersScored: countScored() };
+  }
+
+  const player = page.page[pageIndex];
+  pageIndex += 1;
+
+  if (isActivePlayerWithMatchData(player)) {
+    const scored = await scorePlayerForTierMedians(ctx, player);
+    if (scored) {
+      appendTierMedianScore(
+        partialHolistic,
+        partialKills,
+        scored.tier,
+        scored.holisticScore,
+        scored.killsPerMatch,
+      );
+    }
+  }
+
+  const totalPlayersScored = countScored();
+
+  if (pageIndex >= page.page.length) {
+    if (page.isDone) {
+      return finalizeAndReturn();
+    }
+    await ctx.db.patch(cache._id, {
+      partialHolisticByTier: partialHolistic,
+      partialKillsByTier: partialKills,
+      mediansPlayersCursor: page.continueCursor,
+      mediansPageIndex: 0,
+      lastUpdated: Date.now(),
+    });
+    return { isDone: false, processed: 1, totalPlayersScored };
   }
 
   await ctx.db.patch(cache._id, {
     partialHolisticByTier: partialHolistic,
     partialKillsByTier: partialKills,
     mediansPlayersCursor: cursor,
+    mediansPageIndex: pageIndex,
     lastUpdated: Date.now(),
   });
-
-  return { isDone: false, processed, totalPlayersScored };
+  return { isDone: false, processed: 1, totalPlayersScored };
 }
 
 export const calculateTierMediansStep = internalMutation({
@@ -473,7 +481,17 @@ export const processBatch = internalMutation({
     recentOnly: v.optional(v.boolean()),
     playerIds: v.optional(v.array(v.id("players"))),
   },
-  handler: async (ctx, args): Promise<{ processed: number; playersInBatch: string[] }> => {
+  handler: processBatchHandler,
+});
+
+async function processBatchHandler(
+  ctx: MutationCtx,
+  args: {
+    batchNumber: number;
+    recentOnly?: boolean;
+    playerIds?: Id<"players">[];
+  },
+): Promise<{ processed: number; playersInBatch: string[] }> {
     // Get cached tier medians
     const mediansCache = await ctx.db.query("tierMediansCache").first();
     if (!mediansCache) {
@@ -839,8 +857,7 @@ export const processBatch = internalMutation({
       processed: processedNames.length,
       playersInBatch: processedNames,
     };
-  },
-});
+}
 
 /** Process at most one eligible player per call to avoid mutation timeouts. */
 export const processOneTierEvalPlayerStep = internalMutation({
@@ -861,59 +878,67 @@ export const processOneTierEvalPlayerStep = internalMutation({
     }
 
     const page = await paginateActivePlayers(ctx, args.cursor, 20);
+    let pageIndex = args.pageIndex;
 
-    for (let i = args.pageIndex; i < page.page.length; i++) {
-      const player = page.page[i];
-      if (!isEligibleForTierEvalPlayer(player, args.recentOnly)) {
-        continue;
-      }
-
-      await ctx.runMutation(internal.tierReEvaluationBatched.processBatch, {
-        batchNumber: 0,
-        recentOnly: args.recentOnly,
-        playerIds: [player._id],
-      });
-
-      const nextPageIndex = i + 1;
-      if (nextPageIndex >= page.page.length) {
-        if (page.isDone) {
-          return {
-            isDone: true,
-            continueCursor: null,
-            nextPageIndex: 0,
-            processed: 1,
-          };
-        }
+    if (pageIndex >= page.page.length) {
+      if (page.isDone) {
         return {
-          isDone: false,
-          continueCursor: page.continueCursor,
+          isDone: true,
+          continueCursor: null,
           nextPageIndex: 0,
-          processed: 1,
+          processed: 0,
         };
       }
-
       return {
         isDone: false,
-        continueCursor: args.cursor,
-        nextPageIndex,
-        processed: 1,
-      };
-    }
-
-    if (page.isDone) {
-      return {
-        isDone: true,
-        continueCursor: null,
+        continueCursor: page.continueCursor,
         nextPageIndex: 0,
         processed: 0,
       };
     }
 
+    const player = page.page[pageIndex];
+    pageIndex += 1;
+    let processed = 0;
+
+    if (isEligibleForTierEvalPlayer(player, args.recentOnly)) {
+      try {
+        const result = await processBatchHandler(ctx, {
+          batchNumber: 0,
+          recentOnly: args.recentOnly,
+          playerIds: [player._id],
+        });
+        processed = result.processed;
+      } catch (error) {
+        console.error(
+          `[tierReEvaluationBatched] player eval failed for ${player.discordUsername}:`,
+          error,
+        );
+      }
+    }
+
+    if (pageIndex >= page.page.length) {
+      if (page.isDone) {
+        return {
+          isDone: true,
+          continueCursor: null,
+          nextPageIndex: 0,
+          processed,
+        };
+      }
+      return {
+        isDone: false,
+        continueCursor: page.continueCursor,
+        nextPageIndex: 0,
+        processed,
+      };
+    }
+
     return {
       isDone: false,
-      continueCursor: page.continueCursor,
-      nextPageIndex: 0,
-      processed: 0,
+      continueCursor: args.cursor,
+      nextPageIndex: pageIndex,
+      processed,
     };
   },
 });

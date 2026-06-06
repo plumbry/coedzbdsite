@@ -1097,6 +1097,7 @@ export default defineSchema({
       }),
     ),
     mediansPlayersCursor: v.optional(v.union(v.string(), v.null())),
+    mediansPageIndex: v.optional(v.number()),
   }),
 
   // Player earnings from scrim events
