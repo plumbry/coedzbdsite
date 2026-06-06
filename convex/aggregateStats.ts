@@ -307,55 +307,63 @@ export const getRebuildJobStatus = query({
 });
 
 // Starts a batched background rebuild; returns immediately.
+async function scheduleAggregateStatsRebuildHandler(ctx: MutationCtx) {
+  await failStaleRunningJobs(ctx);
+
+  const running = await ctx.db
+    .query("aggregateStatsJobs")
+    .withIndex("by_status", (q) => q.eq("status", "running"))
+    .first();
+
+  if (running) {
+    throw new ConvexError({
+      message: "An aggregate stats rebuild is already running",
+      code: "CONFLICT",
+    });
+  }
+
+  const activePlayers = await listActivePlayersWithMatchData(ctx);
+  const players = activePlayers.map((p) => ({
+    playerId: p._id,
+    tier: p.tier,
+  }));
+
+  const now = Date.now();
+
+  if (players.length === 0) {
+    const statsData = buildCachePayload([]);
+    await writeAggregateStatsCache(ctx, statsData);
+    return { started: false, playerCount: 0, completed: true };
+  }
+
+  const jobId = await ctx.db.insert("aggregateStatsJobs", {
+    status: "running",
+    totalCount: players.length,
+    processedCount: 0,
+    nextPlayerIndex: 0,
+    players,
+    accumulatedStats: [],
+    startedAt: now,
+    lastProgressAt: now,
+  });
+
+  await ctx.scheduler.runAfter(0, internal.aggregateStats.processRebuildBatch, {
+    jobId,
+  });
+
+  return { started: true, playerCount: players.length, jobId };
+}
+
+export const scheduleAggregateStatsRebuild = internalMutation({
+  args: {},
+  handler: scheduleAggregateStatsRebuildHandler,
+});
+
 export const rebuildAggregateStatsCache = mutation({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-
-    await failStaleRunningJobs(ctx);
-
-    const running = await ctx.db
-      .query("aggregateStatsJobs")
-      .withIndex("by_status", (q) => q.eq("status", "running"))
-      .first();
-
-    if (running) {
-      throw new ConvexError({
-        message: "An aggregate stats rebuild is already running",
-        code: "CONFLICT",
-      });
-    }
-
-    const activePlayers = await listActivePlayersWithMatchData(ctx);
-    const players = activePlayers.map((p) => ({
-      playerId: p._id,
-      tier: p.tier,
-    }));
-
-    const now = Date.now();
-
-    if (players.length === 0) {
-      const statsData = buildCachePayload([]);
-      await writeAggregateStatsCache(ctx, statsData);
-      return { started: false, playerCount: 0, completed: true };
-    }
-
-    const jobId = await ctx.db.insert("aggregateStatsJobs", {
-      status: "running",
-      totalCount: players.length,
-      processedCount: 0,
-      nextPlayerIndex: 0,
-      players,
-      accumulatedStats: [],
-      startedAt: now,
-      lastProgressAt: now,
-    });
-
-    await ctx.scheduler.runAfter(0, internal.aggregateStats.processRebuildBatch, {
-      jobId,
-    });
-
-    return { started: true, playerCount: players.length, jobId };
+    return scheduleAggregateStatsRebuildHandler(ctx);
   },
 });
 

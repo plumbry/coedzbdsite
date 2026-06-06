@@ -5,7 +5,7 @@ import {
   query,
   type MutationCtx,
 } from "./_generated/server";
-import { internal, api } from "./_generated/api";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin } from "./auth_helpers";
 import { syncInternalEventParticipation } from "./lib/stats/syncInternalEventParticipation";
@@ -745,7 +745,7 @@ export const processRebuildStep = internalMutation({
             .first();
 
           if (!aggRunning) {
-            await ctx.runMutation(api.aggregateStats.rebuildAggregateStatsCache, {});
+            await ctx.runMutation(internal.aggregateStats.scheduleAggregateStatsRebuild, {});
           }
         }
         phase = "completed";
