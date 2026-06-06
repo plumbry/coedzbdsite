@@ -1202,7 +1202,10 @@ export default function ImportThirdParty() {
                                 }
                               }}
                             >
-                              <div className="flex-shrink-0">
+                              <div
+                                className="flex-shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 {t.alreadyImported ? (
                                   <Badge variant="secondary" className="text-xs">
                                     Imported
