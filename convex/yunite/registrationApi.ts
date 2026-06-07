@@ -1,51 +1,45 @@
 /**
- * Yunite registration API helper.
- * Centralizes endpoint URL, request shape, and response parsing so only this file
- * needs updating if Yunite changes their API.
+ * Yunite "Get User Links" API helper.
  *
- * Primary endpoint (yuniteapi.js): POST /api/v3/guild/{guildId}/registration/links
- * Body: { type: "DISCORD", userIds: string[] }
+ * Primary: POST /api/v3/guild/{guildId}/registration/links
+ *   Body: { type: "DISCORD", userIds: string[] }
+ *   Response users[]: { discord: { id }, epic: { epicID, epicName }, dateVerified }
  *
- * Fallbacks used when POST returns no parseable match:
- * - GET  /guild/{guildId}/links/{discordId}
- * - GET  /guild/{guildId}/registration/links (full list, filter client-side)
+ * Fallback: GET same URL (flat users[] with discordId / epicId — used by platform sync)
  */
 
 const YUNITE_API_BASE = "https://yunite.xyz/api/v3";
 
 export interface YuniteRegistrationEntry {
   discordId?: string;
-  userId?: string;
+  discordName?: string;
+  /** Hex Epic account ID — from users[].epic.epicID (POST) or epicId/epicID (GET) */
   epicId?: string;
   epicName?: string;
-  name?: string;
-  username?: string;
-  displayName?: string;
-  epicUsername?: string;
+  dateVerified?: string;
   verified?: boolean;
 }
 
-export interface YuniteRegistrationFetchResult {
+export interface YuniteUserLinksResult {
   ok: boolean;
   status: number;
   entries: YuniteRegistrationEntry[];
+  notLinked: string[];
+  notFound: string[];
   errorText?: string;
-  source?: "post" | "link_by_id" | "get_all";
+  source?: "post" | "get_all";
 }
 
 function buildRegistrationLinksUrl(guildId: string): string {
   return `${YUNITE_API_BASE}/guild/${guildId}/registration/links`;
 }
 
-function buildRegistrationLinkByDiscordIdUrl(
-  guildId: string,
-  discordUserId: string,
-): string {
-  return `${YUNITE_API_BASE}/guild/${guildId}/links/${discordUserId}`;
-}
-
-function isDiscordSnowflake(value: string): boolean {
-  return /^\d{17,20}$/.test(value);
+function normalizeId(value: unknown): string | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  const normalized = String(value).trim();
+  return normalized || undefined;
 }
 
 function pickString(
@@ -61,122 +55,164 @@ function pickString(
   return undefined;
 }
 
-function normalizeDiscordId(value: unknown): string | undefined {
-  if (value === null || value === undefined) {
-    return undefined;
-  }
-  const normalized = String(value).trim();
-  return normalized || undefined;
-}
-
-function normalizeRegistrationEntry(raw: unknown): YuniteRegistrationEntry {
+/** POST response item: users[].epic.epicID + users[].epic.epicName */
+function parsePostUserLinkEntry(raw: unknown): YuniteRegistrationEntry | null {
   if (!raw || typeof raw !== "object") {
-    return {};
+    return null;
   }
 
   const record = raw as Record<string, unknown>;
-  const discordId =
-    normalizeDiscordId(record.discordId) ??
-    normalizeDiscordId(record.userId) ??
-    normalizeDiscordId(record.id);
+  const discord =
+    record.discord && typeof record.discord === "object"
+      ? (record.discord as Record<string, unknown>)
+      : null;
+  const epic =
+    record.epic && typeof record.epic === "object"
+      ? (record.epic as Record<string, unknown>)
+      : null;
 
+  if (!epic) {
+    return null;
+  }
+
+  const epicId = normalizeId(epic.epicID);
+  if (!epicId) {
+    return null;
+  }
+
+  const dateVerified = pickString(record, ["dateVerified"]);
   return {
-    discordId,
-    userId: normalizeDiscordId(record.userId),
-    epicId: normalizeDiscordId(record.epicId),
-    epicName: pickString(record, [
-      "epicName",
-      "name",
-      "username",
-      "displayName",
-      "epicUsername",
-    ]),
-    name: pickString(record, ["name"]),
-    username: pickString(record, ["username"]),
-    displayName: pickString(record, ["displayName"]),
-    epicUsername: pickString(record, ["epicUsername"]),
-    verified: typeof record.verified === "boolean" ? record.verified : undefined,
+    discordId: normalizeId(discord?.id),
+    discordName: pickString(discord ?? {}, ["name"]),
+    epicId,
+    epicName: pickString(epic, ["epicName"]),
+    dateVerified,
+    verified: Boolean(dateVerified),
   };
 }
 
-function extractFromKeyedObject(
-  record: Record<string, unknown>,
-): YuniteRegistrationEntry[] {
-  const entries: YuniteRegistrationEntry[] = [];
-
-  for (const [key, value] of Object.entries(record)) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      continue;
-    }
-
-    const entry = normalizeRegistrationEntry(value);
-    if (!entry.discordId && isDiscordSnowflake(key)) {
-      entry.discordId = key;
-    }
-    entries.push(entry);
+/** GET list item: flat discordId + epicId/epicID (platform sync shape) */
+function parseGetListEntry(raw: unknown): YuniteRegistrationEntry | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
   }
 
-  return entries;
+  const record = raw as Record<string, unknown>;
+
+  if (record.epic && typeof record.epic === "object") {
+    return parsePostUserLinkEntry(raw);
+  }
+
+  const epicId = normalizeId(record.epicID ?? record.epicId);
+  if (!epicId) {
+    return null;
+  }
+
+  const discordObj =
+    record.discord && typeof record.discord === "object"
+      ? (record.discord as Record<string, unknown>)
+      : null;
+
+  return {
+    discordId: normalizeId(record.discordId ?? discordObj?.id),
+    epicId,
+    epicName: pickString(record, ["epicName", "name"]),
+    dateVerified: pickString(record, ["dateVerified"]),
+    verified: Boolean(epicId),
+  };
 }
 
-function extractRegistrationEntries(data: unknown): YuniteRegistrationEntry[] {
-  if (Array.isArray(data)) {
-    return data.map(normalizeRegistrationEntry);
+function parsePostUserLinksResponse(data: unknown): Pick<
+  YuniteUserLinksResult,
+  "entries" | "notLinked" | "notFound"
+> {
+  if (!data || typeof data !== "object") {
+    return { entries: [], notLinked: [], notFound: [] };
   }
 
+  const record = data as Record<string, unknown>;
+  const users = Array.isArray(record.users) ? record.users : [];
+  const notLinked = Array.isArray(record.notLinked)
+    ? record.notLinked.map((id) => String(id))
+    : [];
+  const notFound = Array.isArray(record.notFound)
+    ? record.notFound.map((id) => String(id))
+    : [];
+
+  const entries = users
+    .map(parsePostUserLinkEntry)
+    .filter((entry): entry is YuniteRegistrationEntry => entry !== null);
+
+  return { entries, notLinked, notFound };
+}
+
+function parseGetAllRegistrationsResponse(data: unknown): YuniteRegistrationEntry[] {
   if (!data || typeof data !== "object") {
     return [];
   }
 
   const record = data as Record<string, unknown>;
+  const users = Array.isArray(record.users)
+    ? record.users
+    : Array.isArray(data)
+      ? data
+      : [];
 
-  for (const key of ["users", "links", "registrations", "results", "data"]) {
-    const value = record[key];
-    if (Array.isArray(value)) {
-      return value.map(normalizeRegistrationEntry);
-    }
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      const nested = extractFromKeyedObject(value as Record<string, unknown>);
-      if (nested.length > 0) {
-        return nested;
-      }
-    }
-  }
-
-  if (Object.keys(record).some(isDiscordSnowflake)) {
-    return extractFromKeyedObject(record);
-  }
-
-  if (record.discordId != null || record.userId != null || record.epicId != null) {
-    return [normalizeRegistrationEntry(record)];
-  }
-
-  return [];
+  return users
+    .map(parseGetListEntry)
+    .filter((entry): entry is YuniteRegistrationEntry => entry !== null);
 }
 
-async function fetchYuniteJson(
+async function yuniteFetch(
   url: string,
   apiKey: string,
   init: RequestInit,
-): Promise<YuniteRegistrationFetchResult> {
-  let response: Response;
+): Promise<{ response: Response } | { error: string }> {
   try {
-    response = await fetch(url, {
+    const response = await fetch(url, {
       ...init,
       headers: {
-        "Content-Type": "application/json",
-        "Y-Api-Token": apiKey,
+        "Y-Api-Token": apiKey.trim(),
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
         ...(init.headers ?? {}),
       },
     });
+    return { response };
   } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/** POST Get User Links for Discord user IDs. */
+export async function fetchYuniteUserLinksByDiscordIds(
+  discordUserIds: string[],
+  apiKey: string,
+  guildId: string,
+): Promise<YuniteUserLinksResult> {
+  const url = buildRegistrationLinksUrl(guildId.trim());
+  const fetched = await yuniteFetch(url, apiKey, {
+    method: "POST",
+    body: JSON.stringify({
+      type: "DISCORD",
+      userIds: discordUserIds,
+    }),
+  });
+
+  if ("error" in fetched) {
     return {
       ok: false,
       status: 0,
       entries: [],
-      errorText: error instanceof Error ? error.message : String(error),
+      notLinked: [],
+      notFound: [],
+      errorText: fetched.error,
+      source: "post",
     };
   }
+
+  const { response } = fetched;
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -184,7 +220,67 @@ async function fetchYuniteJson(
       ok: false,
       status: response.status,
       entries: [],
+      notLinked: [],
+      notFound: [],
       errorText,
+      source: "post",
+    };
+  }
+
+  try {
+    const data = await response.json();
+    const parsed = parsePostUserLinksResponse(data);
+    return {
+      ok: true,
+      status: response.status,
+      ...parsed,
+      source: "post",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: response.status,
+      entries: [],
+      notLinked: [],
+      notFound: [],
+      errorText: error instanceof Error ? error.message : String(error),
+      source: "post",
+    };
+  }
+}
+
+/** GET full registration list (fallback — same endpoint used by platform sync). */
+export async function fetchAllYuniteRegistrations(
+  apiKey: string,
+  guildId: string,
+): Promise<YuniteUserLinksResult> {
+  const url = buildRegistrationLinksUrl(guildId.trim());
+  const fetched = await yuniteFetch(url, apiKey, { method: "GET" });
+
+  if ("error" in fetched) {
+    return {
+      ok: false,
+      status: 0,
+      entries: [],
+      notLinked: [],
+      notFound: [],
+      errorText: fetched.error,
+      source: "get_all",
+    };
+  }
+
+  const { response } = fetched;
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    return {
+      ok: false,
+      status: response.status,
+      entries: [],
+      notLinked: [],
+      notFound: [],
+      errorText,
+      source: "get_all",
     };
   }
 
@@ -193,151 +289,137 @@ async function fetchYuniteJson(
     return {
       ok: true,
       status: response.status,
-      entries: extractRegistrationEntries(data),
+      entries: parseGetAllRegistrationsResponse(data),
+      notLinked: [],
+      notFound: [],
+      source: "get_all",
     };
   } catch (error) {
     return {
       ok: false,
       status: response.status,
       entries: [],
+      notLinked: [],
+      notFound: [],
       errorText: error instanceof Error ? error.message : String(error),
+      source: "get_all",
     };
   }
-}
-
-export async function fetchYuniteRegistrationByDiscordIds(
-  discordUserIds: string[],
-  apiKey: string,
-  guildId: string,
-): Promise<YuniteRegistrationFetchResult> {
-  const result = await fetchYuniteJson(
-    buildRegistrationLinksUrl(guildId),
-    apiKey,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        type: "DISCORD",
-        userIds: discordUserIds,
-      }),
-    },
-  );
-
-  return { ...result, source: "post" };
-}
-
-export async function fetchYuniteRegistrationLinkByDiscordId(
-  discordUserId: string,
-  apiKey: string,
-  guildId: string,
-): Promise<YuniteRegistrationFetchResult> {
-  const result = await fetchYuniteJson(
-    buildRegistrationLinkByDiscordIdUrl(guildId, discordUserId),
-    apiKey,
-    { method: "GET" },
-  );
-
-  return { ...result, source: "link_by_id" };
-}
-
-export async function fetchAllYuniteRegistrations(
-  apiKey: string,
-  guildId: string,
-): Promise<YuniteRegistrationFetchResult> {
-  const result = await fetchYuniteJson(
-    buildRegistrationLinksUrl(guildId),
-    apiKey,
-    { method: "GET" },
-  );
-
-  return { ...result, source: "get_all" };
-}
-
-export function getEntryDiscordId(entry: YuniteRegistrationEntry): string | undefined {
-  return normalizeDiscordId(entry.discordId ?? entry.userId);
 }
 
 export function findRegistrationForDiscordId(
   entries: YuniteRegistrationEntry[],
   discordUserId: string,
 ): YuniteRegistrationEntry | null {
-  const target = normalizeDiscordId(discordUserId);
+  const target = normalizeId(discordUserId);
   if (!target) {
     return null;
   }
 
-  const match = entries.find((entry) => getEntryDiscordId(entry) === target);
-  if (!match) {
-    return null;
+  return (
+    entries.find(
+      (entry) => normalizeId(entry.discordId) === target && entry.epicId,
+    ) ?? null
+  );
+}
+
+export function isDiscordIdInList(ids: string[], discordUserId: string): boolean {
+  const target = normalizeId(discordUserId);
+  if (!target) {
+    return false;
   }
-
-  const epicAccountId = match.epicId?.trim();
-  const epicDisplayName = getEpicDisplayName(match);
-
-  if (!epicAccountId && !epicDisplayName) {
-    return null;
-  }
-
-  return match;
+  return ids.some((id) => normalizeId(id) === target);
 }
 
 export function getEpicDisplayName(entry: YuniteRegistrationEntry): string | undefined {
-  return (
-    entry.epicName ??
-    entry.name ??
-    entry.username ??
-    entry.displayName ??
-    entry.epicUsername ??
-    entry.epicId
-  )?.trim() || undefined;
+  return entry.epicName?.trim() || undefined;
+}
+
+/** Returns users[].epic.epicID (or GET list epicId) */
+export function getEpicAccountId(entry: YuniteRegistrationEntry): string | undefined {
+  return entry.epicId?.trim() || undefined;
 }
 
 export function isYuniteVerifiedRegistration(entry: YuniteRegistrationEntry): boolean {
-  if (typeof entry.verified === "boolean") {
-    return entry.verified;
+  return Boolean(entry.epicId?.trim() && entry.dateVerified);
+}
+
+function buildLookupErrorMessage(results: YuniteUserLinksResult[]): string {
+  const failed = results.filter((result) => !result.ok);
+  if (failed.length === 0) {
+    return "Could not fetch Yunite registration. Check API key, endpoint, or Yunite permissions.";
   }
-  return Boolean(entry.epicId?.trim());
+
+  const statuses = [...new Set(failed.map((result) => result.status).filter(Boolean))];
+  const statusHint = statuses.length > 0 ? ` (HTTP ${statuses.join(", ")})` : "";
+
+  if (statuses.includes(401) || statuses.includes(403)) {
+    return `Could not fetch Yunite registration${statusHint}. Verify YUNITE_API_KEY has Get User Links permission for this guild.`;
+  }
+
+  if (statuses.includes(429)) {
+    return `Yunite Get User Links quota exceeded${statusHint}. Try again after the quota resets.`;
+  }
+
+  return `Could not fetch Yunite registration${statusHint}. Check API key, endpoint, or Yunite permissions.`;
 }
 
 /**
- * Try POST lookup first, then per-user GET, then full GET list filtered by Discord ID.
+ * Discord User ID → POST Get User Links → users[].epic.epicID
+ * Falls back to GET registration list if POST is unavailable.
  */
 export async function lookupYuniteRegistrationForDiscordId(
   discordUserId: string,
   apiKey: string,
   guildId: string,
 ): Promise<{
-  fetchResult: YuniteRegistrationFetchResult;
+  linksResult: YuniteUserLinksResult;
   registration: YuniteRegistrationEntry | null;
+  attemptedResults: YuniteUserLinksResult[];
 }> {
-  const strategies: Array<() => Promise<YuniteRegistrationFetchResult>> = [
-    () => fetchYuniteRegistrationByDiscordIds([discordUserId], apiKey, guildId),
-    () => fetchYuniteRegistrationLinkByDiscordId(discordUserId, apiKey, guildId),
-    () => fetchAllYuniteRegistrations(apiKey, guildId),
-  ];
+  const attemptedResults: YuniteUserLinksResult[] = [];
 
-  let lastResult: YuniteRegistrationFetchResult = {
-    ok: false,
-    status: 0,
-    entries: [],
-    errorText: "No lookup strategies ran.",
-  };
+  const postResult = await fetchYuniteUserLinksByDiscordIds(
+    [discordUserId],
+    apiKey,
+    guildId,
+  );
+  attemptedResults.push(postResult);
 
-  for (const runStrategy of strategies) {
-    const fetchResult = await runStrategy();
-    lastResult = fetchResult;
-
-    if (!fetchResult.ok) {
-      continue;
-    }
-
+  if (postResult.ok) {
     const registration = findRegistrationForDiscordId(
-      fetchResult.entries,
+      postResult.entries,
       discordUserId,
     );
     if (registration) {
-      return { fetchResult, registration };
+      return { linksResult: postResult, registration, attemptedResults };
+    }
+
+    if (
+      isDiscordIdInList(postResult.notLinked, discordUserId) ||
+      isDiscordIdInList(postResult.notFound, discordUserId)
+    ) {
+      return { linksResult: postResult, registration: null, attemptedResults };
     }
   }
 
-  return { fetchResult: lastResult, registration: null };
+  const getResult = await fetchAllYuniteRegistrations(apiKey, guildId);
+  attemptedResults.push(getResult);
+
+  if (getResult.ok) {
+    const registration = findRegistrationForDiscordId(
+      getResult.entries,
+      discordUserId,
+    );
+    return { linksResult: getResult, registration, attemptedResults };
+  }
+
+  const linksResult = postResult.ok ? postResult : getResult;
+  return { linksResult, registration: null, attemptedResults };
+}
+
+export function formatYuniteLookupError(
+  attemptedResults: YuniteUserLinksResult[],
+): string {
+  return buildLookupErrorMessage(attemptedResults);
 }

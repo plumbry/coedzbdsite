@@ -4,6 +4,8 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { requireAdminAction } from "../auth_helpers";
 import {
+  formatYuniteLookupError,
+  getEpicAccountId,
   getEpicDisplayName,
   isYuniteVerifiedRegistration,
   lookupYuniteRegistrationForDiscordId,
@@ -20,7 +22,7 @@ export type YuniteEpicLookupResult = {
 };
 
 /**
- * Look up a Discord user's Yunite-verified Epic registration.
+ * Look up a Discord user's Yunite-verified Epic registration via Get User Links.
  * Read-only: does not mutate player records.
  */
 export const lookupEpicRegistrationByDiscordId = action({
@@ -38,66 +40,75 @@ export const lookupEpicRegistrationByDiscordId = action({
       };
     }
 
-    const yuniteApiKey = process.env.YUNITE_API_KEY;
-    const yuniteGuildId = process.env.YUNITE_GUILD_ID;
+    const yuniteApiKey = process.env.YUNITE_API_KEY?.trim();
+    const yuniteGuildId = process.env.YUNITE_GUILD_ID?.trim();
 
-    if (!yuniteApiKey || !yuniteGuildId) {
+    if (!yuniteApiKey) {
       return {
         status: "error",
         errorMessage:
-          "Could not fetch Yunite registration. Check API key, endpoint, or Yunite permissions.",
+          "YUNITE_API_KEY is not set in Convex environment variables.",
       };
     }
 
-    const { fetchResult, registration } =
+    if (!yuniteGuildId) {
+      return {
+        status: "error",
+        errorMessage:
+          "YUNITE_GUILD_ID is not set in Convex environment variables.",
+      };
+    }
+
+    const { linksResult, registration, attemptedResults } =
       await lookupYuniteRegistrationForDiscordId(
         discordUserId,
         yuniteApiKey,
         yuniteGuildId,
       );
 
-    if (!fetchResult.ok) {
-      console.error("Yunite registration lookup failed:", {
-        status: fetchResult.status,
-        error: fetchResult.errorText,
-        source: fetchResult.source,
+    if (!linksResult.ok) {
+      console.error("Yunite Get User Links failed:", {
         discordUserId,
+        attempts: attemptedResults.map((result) => ({
+          source: result.source,
+          status: result.status,
+          error: result.errorText?.slice(0, 300),
+        })),
       });
       return {
         status: "error",
-        errorMessage:
-          "Could not fetch Yunite registration. Check API key, endpoint, or Yunite permissions.",
+        errorMessage: formatYuniteLookupError(attemptedResults),
       };
     }
 
-    if (!registration) {
-      console.log("Yunite registration not found:", {
+    if (registration?.epicId) {
+      const epicAccountId = getEpicAccountId(registration);
+      const epicDisplayName = getEpicDisplayName(registration);
+
+      console.log("Yunite registration match:", {
         discordUserId,
-        lastSource: fetchResult.source,
-        entryCount: fetchResult.entries.length,
+        source: linksResult.source,
+        epicID: epicAccountId,
+        epicName: epicDisplayName,
       });
-      return { status: "not_found" };
+
+      return {
+        status: "success",
+        epicDisplayName,
+        epicAccountId,
+        verified: isYuniteVerifiedRegistration(registration),
+      };
     }
 
-    console.log("Yunite registration found:", {
+    console.log("Yunite registration not found:", {
       discordUserId,
-      source: fetchResult.source,
-      epicId: registration.epicId,
+      source: linksResult.source,
+      notLinked: linksResult.notLinked,
+      notFound: linksResult.notFound,
+      entryCount: linksResult.entries.length,
     });
 
-    const epicAccountId = registration.epicId?.trim();
-    const epicDisplayName = getEpicDisplayName(registration);
-
-    if (!epicAccountId && !epicDisplayName) {
-      return { status: "not_found" };
-    }
-
-    return {
-      status: "success",
-      epicDisplayName,
-      epicAccountId,
-      verified: isYuniteVerifiedRegistration(registration),
-    };
+    return { status: "not_found" };
   },
 });
 
