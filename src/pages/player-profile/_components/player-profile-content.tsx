@@ -16,6 +16,7 @@ import EditPlayerDialog from "./edit-player-dialog.tsx";
 import ZBDPerformanceTab from "./zbd-performance-tab.tsx";
 import InGameStatsTab from "./ingame-stats-tab.tsx";
 import ThirdPartiesTab from "./third-parties-tab.tsx";
+import YuniteEpicLookupCard from "@/components/admin/yunite-epic-lookup-card.tsx";
 
 interface PlayerProfileContentProps {
   playerId: Id<"players">;
@@ -199,6 +200,10 @@ export default function PlayerProfileContent({ playerId }: PlayerProfileContentP
           )}
         </CardContent>
       </Card>
+
+      {isAdmin && (
+        <YuniteEpicLookupCard discordUserId={player.discordUserId} />
+      )}
       
       {/* Performance Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
