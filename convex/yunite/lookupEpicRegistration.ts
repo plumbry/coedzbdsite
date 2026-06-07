@@ -4,10 +4,9 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { requireAdminAction } from "../auth_helpers";
 import {
-  fetchYuniteRegistrationByDiscordIds,
-  findRegistrationForDiscordId,
   getEpicDisplayName,
   isYuniteVerifiedRegistration,
+  lookupYuniteRegistrationForDiscordId,
 } from "./registrationApi";
 
 export type YuniteEpicLookupStatus = "success" | "not_found" | "error";
@@ -50,16 +49,18 @@ export const lookupEpicRegistrationByDiscordId = action({
       };
     }
 
-    const fetchResult = await fetchYuniteRegistrationByDiscordIds(
-      [discordUserId],
-      yuniteApiKey,
-      yuniteGuildId,
-    );
+    const { fetchResult, registration } =
+      await lookupYuniteRegistrationForDiscordId(
+        discordUserId,
+        yuniteApiKey,
+        yuniteGuildId,
+      );
 
     if (!fetchResult.ok) {
       console.error("Yunite registration lookup failed:", {
         status: fetchResult.status,
         error: fetchResult.errorText,
+        source: fetchResult.source,
         discordUserId,
       });
       return {
@@ -69,14 +70,20 @@ export const lookupEpicRegistrationByDiscordId = action({
       };
     }
 
-    const registration = findRegistrationForDiscordId(
-      fetchResult.entries,
-      discordUserId,
-    );
-
     if (!registration) {
+      console.log("Yunite registration not found:", {
+        discordUserId,
+        lastSource: fetchResult.source,
+        entryCount: fetchResult.entries.length,
+      });
       return { status: "not_found" };
     }
+
+    console.log("Yunite registration found:", {
+      discordUserId,
+      source: fetchResult.source,
+      epicId: registration.epicId,
+    });
 
     const epicAccountId = registration.epicId?.trim();
     const epicDisplayName = getEpicDisplayName(registration);
