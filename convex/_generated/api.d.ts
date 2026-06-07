@@ -150,12 +150,14 @@ import type * as yunite_debug from "../yunite/debug.js";
 import type * as yunite_eliminationOverrides from "../yunite/eliminationOverrides.js";
 import type * as yunite_fixPlacements from "../yunite/fixPlacements.js";
 import type * as yunite_fixPlacementsHelpers from "../yunite/fixPlacementsHelpers.js";
+import type * as yunite_lookupEpicRegistration from "../yunite/lookupEpicRegistration.js";
 import type * as yunite_lookupPlatform from "../yunite/lookupPlatform.js";
 import type * as yunite_matchData from "../yunite/matchData.js";
 import type * as yunite_platformMutations from "../yunite/platformMutations.js";
 import type * as yunite_platforms from "../yunite/platforms.js";
 import type * as yunite_populateTeamMembers from "../yunite/populateTeamMembers.js";
 import type * as yunite_recalculateStats from "../yunite/recalculateStats.js";
+import type * as yunite_registrationApi from "../yunite/registrationApi.js";
 import type * as yunite_sync from "../yunite/sync.js";
 
 import type {
@@ -307,12 +309,14 @@ declare const fullApi: ApiFromModules<{
   "yunite/eliminationOverrides": typeof yunite_eliminationOverrides;
   "yunite/fixPlacements": typeof yunite_fixPlacements;
   "yunite/fixPlacementsHelpers": typeof yunite_fixPlacementsHelpers;
+  "yunite/lookupEpicRegistration": typeof yunite_lookupEpicRegistration;
   "yunite/lookupPlatform": typeof yunite_lookupPlatform;
   "yunite/matchData": typeof yunite_matchData;
   "yunite/platformMutations": typeof yunite_platformMutations;
   "yunite/platforms": typeof yunite_platforms;
   "yunite/populateTeamMembers": typeof yunite_populateTeamMembers;
   "yunite/recalculateStats": typeof yunite_recalculateStats;
+  "yunite/registrationApi": typeof yunite_registrationApi;
   "yunite/sync": typeof yunite_sync;
 }>;
 
