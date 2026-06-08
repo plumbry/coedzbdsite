@@ -481,7 +481,8 @@ export const importSingleGameScores = mutation({
     fileName: v.optional(v.string()),
     entries: v.array(
       v.object({
-        epicId: v.string(),
+        playerId: v.optional(v.id("scrimSeriesPlayers")),
+        epicId: v.optional(v.string()),
         playerName: v.optional(v.string()),
         score: v.number(),
         teamId: v.optional(v.string()),
@@ -517,6 +518,7 @@ export const importSingleGameScores = mutation({
       .withIndex("by_series", (q) => q.eq("seriesId", args.seriesId))
       .collect();
 
+    const playerById = new Map(seriesPlayers.map((p) => [p._id, p]));
     const epicIdToPlayer = new Map<
       string,
       { _id: typeof seriesPlayers[number]["_id"]; playerName: string }
@@ -530,7 +532,7 @@ export const importSingleGameScores = mutation({
 
     let playersUpdated = 0;
     let playersAdded = 0;
-    const processedEpicIds = new Set<string>();
+    const processedPlayerIds = new Set<string>();
     const affectedScores: Array<{
       scoreId: Id<"scrimSeriesScores">;
       hadPreviousScore: boolean;
@@ -538,23 +540,46 @@ export const importSingleGameScores = mutation({
     }> = [];
 
     for (const entry of args.entries) {
-      const epicIdLower = entry.epicId.trim().toLowerCase();
-      if (!epicIdLower || processedEpicIds.has(epicIdLower)) continue;
-      processedEpicIds.add(epicIdLower);
+      let matchedPlayer: { _id: Id<"scrimSeriesPlayers">; playerName: string } | undefined;
 
-      let matchedPlayer = epicIdToPlayer.get(epicIdLower);
-      if (!matchedPlayer) {
-        const playerName = entry.playerName?.trim() || entry.epicId.trim();
-        const newPlayerId = await ctx.db.insert("scrimSeriesPlayers", {
-          seriesId: args.seriesId,
-          playerName,
-          epicId: entry.epicId.trim(),
-          teamId: entry.teamId,
-        });
-        matchedPlayer = { _id: newPlayerId, playerName };
-        epicIdToPlayer.set(epicIdLower, matchedPlayer);
-        playersAdded++;
-      } else if (entry.teamId) {
+      if (entry.playerId) {
+        const linked = playerById.get(entry.playerId);
+        if (!linked || linked.seriesId !== args.seriesId) {
+          throw new ConvexError({
+            message: "Linked player not found in this series",
+            code: "BAD_REQUEST",
+          });
+        }
+        matchedPlayer = { _id: linked._id, playerName: linked.playerName };
+      } else {
+        const epicId = entry.epicId?.trim();
+        if (!epicId) {
+          throw new ConvexError({
+            message: "Each CSV row must link to a series player or include an Epic Username",
+            code: "BAD_REQUEST",
+          });
+        }
+
+        const epicIdLower = epicId.toLowerCase();
+        matchedPlayer = epicIdToPlayer.get(epicIdLower);
+        if (!matchedPlayer) {
+          const playerName = entry.playerName?.trim() || epicId;
+          const newPlayerId = await ctx.db.insert("scrimSeriesPlayers", {
+            seriesId: args.seriesId,
+            playerName,
+            epicId,
+            teamId: entry.teamId,
+          });
+          matchedPlayer = { _id: newPlayerId, playerName };
+          epicIdToPlayer.set(epicIdLower, matchedPlayer);
+          playersAdded++;
+        }
+      }
+
+      if (processedPlayerIds.has(matchedPlayer._id)) continue;
+      processedPlayerIds.add(matchedPlayer._id);
+
+      if (entry.teamId) {
         const existingPlayer = await ctx.db.get(matchedPlayer._id);
         if (existingPlayer && !existingPlayer.teamId) {
           await ctx.db.patch(matchedPlayer._id, { teamId: entry.teamId });

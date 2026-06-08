@@ -17,7 +17,12 @@ import { Link } from "react-router-dom";
 import {
   parseScrimSeriesGameCsv,
   scrimSeriesGameCsvTemplate,
+  buildCsvImportPreview,
+  type CsvImportPreviewRow,
 } from "@/lib/scrim-series-game-csv.ts";
+
+const CSV_LINK_NEW = "__new__";
+const CSV_LINK_PENDING = "__pending__";
 
 // ─── Series Selector ─────────────────────────────────────────────────────────
 
@@ -570,6 +575,7 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
 
 function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const series = useQuery(api.scrimSeries.queries.getSeries, { seriesId });
+  const players = useQuery(api.scrimSeries.queries.getPlayers, { seriesId });
   const importHistory = useQuery(api.scrimSeries.queries.getImportHistory, { seriesId });
   const importYuniteScores = useAction(api.scrimSeries.importFromYunite.importYuniteScores);
   const importSingleGameScores = useMutation(api.scrimSeries.mutations.importSingleGameScores);
@@ -584,10 +590,12 @@ function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const [csvGameIndex, setCsvGameIndex] = useState("0");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvImporting, setCsvImporting] = useState(false);
+  const [csvReviewOpen, setCsvReviewOpen] = useState(false);
+  const [csvPreviewRows, setCsvPreviewRows] = useState<CsvImportPreviewRow[]>([]);
 
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
-  if (!series) return <Skeleton className="h-40 w-full" />;
+  if (!series || !players) return <Skeleton className="h-40 w-full" />;
 
   const csvSessionIdx = parseInt(csvSessionIndex, 10);
   const gamesInCsvSession = series.gamesPerSession[csvSessionIdx] ?? 0;
@@ -636,11 +644,30 @@ function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
     URL.revokeObjectURL(url);
   };
 
-  const handleCsvImport = async () => {
+  const handleCsvReview = async () => {
     if (!csvFile) {
       toast.error("Please select a CSV file");
       return;
     }
+
+    try {
+      const text = await csvFile.text();
+      const entries = parseScrimSeriesGameCsv(text);
+      const preview = buildCsvImportPreview(entries, players);
+      setCsvPreviewRows(preview);
+      setCsvReviewOpen(true);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to parse CSV";
+      toast.error(msg);
+    }
+  };
+
+  const unresolvedCsvRows = csvPreviewRows.filter(
+    (row) => !row.linkedPlayerId && !row.addAsNew,
+  ).length;
+
+  const handleCsvImportConfirm = async () => {
+    if (!csvFile) return;
 
     const session = parseInt(csvSessionIndex, 10);
     const game = parseInt(csvGameIndex, 10);
@@ -653,16 +680,33 @@ function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
       return;
     }
 
+    if (csvPreviewRows.some((row) => !row.linkedPlayerId && !row.addAsNew)) {
+      toast.error("Link every CSV row to a series player before importing");
+      return;
+    }
+
     setCsvImporting(true);
     try {
-      const text = await csvFile.text();
-      const entries = parseScrimSeriesGameCsv(text);
       const result = await importSingleGameScores({
         seriesId,
         sessionIndex: session,
         gameIndex: game,
         fileName: csvFile.name,
-        entries,
+        entries: csvPreviewRows.map((row) => {
+          if (row.linkedPlayerId) {
+            return {
+              playerId: row.linkedPlayerId,
+              score: row.score,
+              teamId: row.teamId,
+            };
+          }
+          return {
+            epicId: row.epicId || row.csvLabel,
+            playerName: row.playerName || row.csvLabel,
+            score: row.score,
+            teamId: row.teamId,
+          };
+        }),
       });
 
       const parts: string[] = [`${result.playersUpdated} scores saved`];
@@ -671,12 +715,36 @@ function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
         `Link ${result.sessionNumber}, Game ${result.gameNumber}: ${parts.join(", ")}.`,
       );
       setCsvFile(null);
+      setCsvReviewOpen(false);
+      setCsvPreviewRows([]);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to import CSV";
       toast.error(msg);
     } finally {
       setCsvImporting(false);
     }
+  };
+
+  const setCsvRowLink = (rowIndex: number, value: string) => {
+    setCsvPreviewRows((prev) =>
+      prev.map((row) => {
+        if (row.rowIndex !== rowIndex) return row;
+        if (value === CSV_LINK_NEW) {
+          return {
+            ...row,
+            linkedPlayerId: undefined,
+            addAsNew: true,
+            matchStatus: "unmatched",
+          };
+        }
+        return {
+          ...row,
+          linkedPlayerId: value as Id<"scrimSeriesPlayers">,
+          addAsNew: false,
+          matchStatus: "matched",
+        };
+      }),
+    );
   };
 
   const handleDeleteYuniteImport = async (log: {
@@ -819,8 +887,9 @@ function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
             <FileUp className="h-4 w-4" /> Import Single Game (CSV)
           </CardTitle>
           <CardDescription className="text-xs">
-            Upload scores for one game when Yunite did not register it. CSV needs Epic Username and
-            Score columns; Player Name and Team ID are optional.
+            Upload scores for one game when Yunite did not register it. Use a Players or Epic
+            Username column plus Points/Score. Unmatched rows can be linked to existing Yunite
+            roster players before import.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -871,7 +940,7 @@ function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
-              onClick={handleCsvImport}
+              onClick={handleCsvReview}
               disabled={csvImporting || !csvFile}
               className="cursor-pointer"
             >
@@ -883,7 +952,7 @@ function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
-                  Import Scores
+                  Review &amp; Import
                 </>
               )}
             </Button>
@@ -898,6 +967,110 @@ function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
               Download Template
             </Button>
           </div>
+
+          <Dialog open={csvReviewOpen} onOpenChange={setCsvReviewOpen}>
+            <DialogContent size="lg" className="max-h-[85vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle>Link CSV scores to series players</DialogTitle>
+              </DialogHeader>
+              <p className="text-xs text-muted-foreground">
+                Match each CSV row to a player already on the series roster (from Yunite or manual
+                entry). {unresolvedCsvRows > 0
+                  ? `${unresolvedCsvRows} row(s) still need a link.`
+                  : "All rows are linked."}
+              </p>
+              <div className="flex-1 overflow-y-auto min-h-0 border rounded-md">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-background border-b">
+                    <tr>
+                      <th className="text-left py-2 px-3 font-medium text-muted-foreground">CSV name</th>
+                      <th className="text-center py-2 px-2 font-medium text-muted-foreground w-16">Score</th>
+                      <th className="text-left py-2 px-3 font-medium text-muted-foreground">Link to player</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {csvPreviewRows.map((row) => {
+                      const selectValue = row.addAsNew
+                        ? CSV_LINK_NEW
+                        : (row.linkedPlayerId ?? CSV_LINK_PENDING);
+                      const linkedPlayer = row.linkedPlayerId
+                        ? players.find((p) => p._id === row.linkedPlayerId)
+                        : null;
+
+                      return (
+                        <tr key={row.rowIndex} className="border-b border-muted/30">
+                          <td className="py-2 px-3">
+                            <div className="font-medium truncate max-w-[180px]">{row.csvLabel}</div>
+                            {row.matchStatus === "suggested" && row.linkedPlayerId && (
+                              <span className="text-xs text-amber-600 dark:text-amber-500">Suggested match</span>
+                            )}
+                            {row.addAsNew && (
+                              <span className="text-xs text-muted-foreground">Will add as new player</span>
+                            )}
+                            {!row.linkedPlayerId && !row.addAsNew && (
+                              <span className="text-xs text-destructive">Needs link</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-2 text-center font-medium">{row.score}</td>
+                          <td className="py-2 px-3">
+                            <Select
+                              value={selectValue}
+                              onValueChange={(v) => setCsvRowLink(row.rowIndex, v)}
+                              disabled={csvImporting}
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue placeholder="Select player" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={CSV_LINK_PENDING} disabled>
+                                  Select a player…
+                                </SelectItem>
+                                <SelectItem value={CSV_LINK_NEW}>Add as new player</SelectItem>
+                                {players.map((player) => (
+                                  <SelectItem key={player._id} value={player._id}>
+                                    {`${player.playerName} (${player.epicId})`}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {linkedPlayer && (
+                              <p className="text-xs text-muted-foreground mt-1 truncate">
+                                Epic: {linkedPlayer.epicId}
+                              </p>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => setCsvReviewOpen(false)}
+                  disabled={csvImporting}
+                  className="cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCsvImportConfirm}
+                  disabled={csvImporting || unresolvedCsvRows > 0}
+                  className="cursor-pointer"
+                >
+                  {csvImporting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    "Import linked scores"
+                  )}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
 
