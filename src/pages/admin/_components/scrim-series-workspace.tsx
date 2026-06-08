@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
+import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { toast } from "sonner";
 import { Plus, Trash2, Settings, Users, Trophy, AlertTriangle, X, Upload, History, Loader2, ExternalLink, Copy, FileUp, Download } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -432,6 +433,12 @@ function PlayerManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
 function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const series = useQuery(api.scrimSeries.queries.getSeries, { seriesId });
   const leaderboard = useQuery(api.scrimSeries.queries.getLeaderboard, { seriesId });
+  const [minGamesOnly, setMinGamesOnly] = useState(false);
+
+  const displayedLeaderboard = useMemo(
+    () => (leaderboard && minGamesOnly ? leaderboard.filter((e) => e.meetsMinGames) : leaderboard ?? []),
+    [leaderboard, minGamesOnly],
+  );
 
   if (!series || !leaderboard) return <Skeleton className="h-60 w-full" />;
 
@@ -451,17 +458,31 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Trophy className="h-4 w-4" /> Best {series.bestN} Leaderboard
           </CardTitle>
-          <Badge variant="secondary">{leaderboard.length} players</Badge>
+          <Badge variant="secondary">
+            {displayedLeaderboard.length} of {leaderboard.length} players
+          </Badge>
         </div>
         <CardDescription className="text-xs">
-          Ranked by Best {series.bestN} score minus penalties.
+          Ranked by Best {series.bestN} score minus penalties. Amber = below min games, red = below participation %.
         </CardDescription>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none pt-1">
+          <Checkbox
+            checked={minGamesOnly}
+            onCheckedChange={(checked) => setMinGamesOnly(checked === true)}
+          />
+          Min {series.bestN} games only
+        </label>
       </CardHeader>
       <CardContent>
+        {displayedLeaderboard.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            No players have played the minimum {series.bestN} games yet.
+          </p>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -475,7 +496,7 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
               </tr>
             </thead>
             <tbody>
-              {leaderboard.map((entry, idx) => (
+              {displayedLeaderboard.map((entry, idx) => (
                 <tr
                   key={entry.playerId}
                   className="border-b border-muted/30 hover:bg-muted/20"
@@ -486,7 +507,15 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
                     <div className="text-xs text-muted-foreground truncate max-w-[160px]">{entry.epicId}</div>
                   </td>
                   <td className="py-1.5 px-2 text-center">
-                    <span className={entry.isValid ? "text-foreground" : "text-destructive"}>
+                    <span
+                      className={
+                        !entry.meetsMinGames
+                          ? "text-amber-600 dark:text-amber-500"
+                          : entry.isValid
+                            ? "text-foreground"
+                            : "text-destructive"
+                      }
+                    >
                       {entry.gamesPlayed}/{entry.totalGames}
                     </span>
                     <div className="text-xs text-muted-foreground">
@@ -509,6 +538,7 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
             </tbody>
           </table>
         </div>
+        )}
       </CardContent>
     </Card>
   );

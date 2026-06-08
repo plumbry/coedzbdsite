@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button.tsx";
+import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Columns3, EyeOff } from "lucide-react";
 
 export type ScrimSeriesLeaderboardEntry = {
@@ -11,6 +12,7 @@ export type ScrimSeriesLeaderboardEntry = {
   totalGames: number;
   bestNTotal: number;
   isValid: boolean;
+  meetsMinGames: boolean;
   penaltyTotal: number;
   penaltyCount: number;
   finalTotal: number;
@@ -28,6 +30,12 @@ export default function ScrimSeriesLeaderboardTable({
   gamesPerSession: number[];
 }) {
   const [showDetails, setShowDetails] = useState(false);
+  const [minGamesOnly, setMinGamesOnly] = useState(false);
+
+  const displayedEntries = useMemo(
+    () => (minGamesOnly ? entries.filter((e) => e.meetsMinGames) : entries),
+    [entries, minGamesOnly],
+  );
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const topSpacerRef = useRef<HTMLDivElement>(null);
@@ -81,27 +89,44 @@ export default function ScrimSeriesLeaderboardTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowDetails(!showDetails)}
-          className="gap-2 cursor-pointer"
-        >
-          {showDetails ? (
-            <>
-              <EyeOff className="h-4 w-4" />
-              Hide Details
-            </>
-          ) : (
-            <>
-              <Columns3 className="h-4 w-4" />
-              Show Details
-            </>
-          )}
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+          <Checkbox
+            checked={minGamesOnly}
+            onCheckedChange={(checked) => setMinGamesOnly(checked === true)}
+          />
+          Min {bestN} games only
+        </label>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">
+            {displayedEntries.length} of {entries.length} players
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowDetails(!showDetails)}
+            className="gap-2 cursor-pointer"
+          >
+            {showDetails ? (
+              <>
+                <EyeOff className="h-4 w-4" />
+                Hide Details
+              </>
+            ) : (
+              <>
+                <Columns3 className="h-4 w-4" />
+                Show Details
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
+      {displayedEntries.length === 0 ? (
+        <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+          No players have played the minimum {bestN} games yet.
+        </div>
+      ) : (
       <div className="rounded-lg border bg-card overflow-hidden">
         <div
           ref={topScrollRef}
@@ -155,7 +180,7 @@ export default function ScrimSeriesLeaderboardTable({
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry, rank) => {
+              {displayedEntries.map((entry, rank) => {
                 const isTopThree = rank < 3;
                 const rankDisplay = rank + 1;
 
@@ -203,9 +228,19 @@ export default function ScrimSeriesLeaderboardTable({
                     })}
 
                     {showDetails && (
-                      <td className="px-3 py-2.5 text-center text-muted-foreground font-mono text-xs">
-                        {entry.gamesPlayed}/{entry.totalGames}
-                        <div className="text-xs">
+                      <td className="px-3 py-2.5 text-center font-mono text-xs">
+                        <span
+                          className={
+                            !entry.meetsMinGames
+                              ? "text-amber-600 dark:text-amber-500"
+                              : entry.isValid
+                                ? "text-muted-foreground"
+                                : "text-destructive"
+                          }
+                        >
+                          {entry.gamesPlayed}/{entry.totalGames}
+                        </span>
+                        <div className="text-xs text-muted-foreground">
                           {entry.totalGames > 0
                             ? Math.round((entry.gamesPlayed / entry.totalGames) * 100)
                             : 0}
@@ -240,6 +275,7 @@ export default function ScrimSeriesLeaderboardTable({
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

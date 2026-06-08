@@ -117,6 +117,8 @@ type LeaderboardEntry = {
   bestNTotal: number;
   // Whether player meets participation threshold
   isValid: boolean;
+  // Whether player has played enough games for official best-N ranking
+  meetsMinGames: boolean;
   // Total penalty deduction (only non-excluded penalties)
   penaltyTotal: number;
   // Number of active (non-excluded) penalties
@@ -193,6 +195,7 @@ export const getLeaderboard = query({
       // Participation check
       const participationPct = totalGames > 0 ? (gamesPlayed / totalGames) * 100 : 0;
       const isValid = participationPct >= series.participationThreshold;
+      const meetsMinGames = gamesPlayed >= series.bestN;
 
       // Penalties (only non-excluded count) — use count * series penalty amount
       const activePenalties = playerPenalties.filter((p) => !p.excluded);
@@ -211,6 +214,7 @@ export const getLeaderboard = query({
         totalGames,
         bestNTotal,
         isValid,
+        meetsMinGames,
         penaltyTotal,
         penaltyCount,
         finalTotal,
@@ -220,7 +224,7 @@ export const getLeaderboard = query({
     // Sort by finalTotal descending, then fewer penalties as tiebreaker, then bestNTotal
     leaderboard.sort((a, b) => b.finalTotal - a.finalTotal || a.penaltyCount - b.penaltyCount || b.bestNTotal - a.bestNTotal);
 
-    // Only show players who played at least N (bestN) games
-    return leaderboard.filter((entry) => entry.gamesPlayed >= series.bestN);
+    // Show all players with at least one score (best N uses however many games they have so far)
+    return leaderboard.filter((entry) => entry.gamesPlayed > 0);
   },
 });
