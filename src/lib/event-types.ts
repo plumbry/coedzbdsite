@@ -1,5 +1,22 @@
+export type AdminFormEventType =
+  | "scrim"
+  | "season"
+  | "mini-season"
+  | "random"
+  | "random-squads"
+  | "random-trios"
+  | "solos-meets-duos"
+  | "scrim-series"
+  | "showdown";
+
 export function isScrimLikeEventType(type: string): boolean {
   return type === "scrim" || type === "minicup";
+}
+
+/** Map stored event types (incl. legacy minicup) to admin form select values. */
+export function toAdminFormEventType(type: string): AdminFormEventType {
+  if (isScrimLikeEventType(type)) return "scrim";
+  return type as AdminFormEventType;
 }
 
 export function getPublicEventTypeLabel(type: string): string {

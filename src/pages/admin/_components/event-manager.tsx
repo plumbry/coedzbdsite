@@ -65,7 +65,11 @@ import ICSImportDialog from "./ics-import-dialog.tsx";
 import ShowdownPenaltiesPanel from "./showdown-penalties-panel.tsx";
 import { DEFAULT_PAGE_SIZE } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
-import { isScrimLikeEventType } from "@/lib/event-types.ts";
+import {
+  type AdminFormEventType,
+  isScrimLikeEventType,
+  toAdminFormEventType,
+} from "@/lib/event-types.ts";
 
 const EVENT_TYPE_META: Record<
   string,
@@ -257,7 +261,7 @@ export default function EventManager() {
   
   // Form state
   const [name, setName] = useState("");
-  const [type, setType] = useState<"scrim" | "season" | "mini-season" | "random" | "random-squads" | "random-trios" | "solos-meets-duos" | "scrim-series" | "showdown">("scrim");
+  const [type, setType] = useState<AdminFormEventType>("scrim");
   const [mode, setMode] = useState<"ZB Main Map" | "Reload">("ZB Main Map");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -379,7 +383,7 @@ export default function EventManager() {
     setEditingLinkedImportCount(event.linkedImportCount ?? 0);
     setLinkedScrimSeriesId(event.linkedScrimSeriesId ?? "none");
     setName(event.name);
-    setType(isScrimLikeEventType(event.type) ? "scrim" : event.type);
+    setType(toAdminFormEventType(event.type));
     setMode(event.mode);
     setStartDate(event.startDate);
     setEndDate(event.endDate);
