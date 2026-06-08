@@ -89,7 +89,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover.tsx";
 import { toast } from "sonner";
-import { PlayerStatsRebuildButton } from "@/components/admin/player-stats-rebuild-button.tsx";
+import {
+  PlayerStatsRebuildButton,
+  PlayerStatsRebuildRunningAlert,
+} from "@/components/admin/player-stats-rebuild-button.tsx";
 import { remapTierEvaluationForTcdcView } from "@/lib/tcdc-holistic-view.ts";
 
 type SortField =
@@ -617,106 +620,119 @@ function TierReEvaluationContent() {
         description="Automatic tier re-evaluation suggestions based on holistic scoring (placement, win rate, kills per match) and recent performance"
         variant="compact"
         actions={
-          evaluationData && "lastUpdated" in evaluationData ? (
-            <Badge variant="outline" className="text-xs">
-              Cached: {new Date(evaluationData.lastUpdated).toLocaleString()}
-            </Badge>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-1.5">
+            {evaluationData && "lastUpdated" in evaluationData && (
+              <Badge variant="outline" className="text-xs">
+                Cached: {new Date(evaluationData.lastUpdated).toLocaleString()}
+              </Badge>
+            )}
+            <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" asChild>
+              <Link to="/admin/stats">Analytics hub</Link>
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" asChild>
+              <Link to="/admin/holistic-score-stats">Holistic scores</Link>
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" asChild>
+              <Link to="/admin/data-cache-status">Data cache</Link>
+            </Button>
+          </div>
         }
       />
-      <div className="flex items-center gap-4 flex-wrap text-sm">
-        <Link to="/admin/stats" className="text-primary hover:underline">
-          Analytics hub →
-        </Link>
-        <Link to="/admin/holistic-score-stats" className="text-primary hover:underline">
-          Holistic scores →
-        </Link>
-        <Link to="/admin/data-cache-status" className="text-primary hover:underline">
-          Data cache →
-        </Link>
-      </div>
       {isAdmin && (
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-3">
+          <PlayerStatsRebuildRunningAlert />
           <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <PlayerStatsRebuildButton
-                    label="Recalculate TC/DCA"
-                    tcDcaOnly
-                    linkToDataCache
-                    variant="secondary"
-                    disabled={isRebuildRunning}
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                <p>Recalculate Team Contribution and Duo Carry Adjustment scores for all players. Run before rebuilding tier-eval cache if TC/DCA values are stale.</p>
-              </TooltipContent>
-            </Tooltip>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <PlayerStatsRebuildButton
+                        label="Recalculate TC/DCA"
+                        tcDcaOnly
+                        size="sm"
+                        variant="outline"
+                        disabled={isRebuildRunning}
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p>
+                      Recalculate Team Contribution and Duo Carry Adjustment scores for all
+                      players. Run before rebuilding tier-eval cache if TC/DCA values are stale.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <PlayerStatsRebuildButton
+                        label="Rebuild Top 5 Cache"
+                        topFiveOnly
+                        size="sm"
+                        variant="outline"
+                        disabled={isRebuildRunning}
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p>
+                      Rebuild the Top 5 placement cache for all players. Updates recent top 5
+                      counts shown in the table.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                      <Checkbox
+                        checked={rebuildRecentOnly}
+                        onCheckedChange={(checked) => setRebuildRecentOnly(checked === true)}
+                      />
+                      6W only
+                    </label>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p>
+                      {rebuildRecentOnly
+                        ? "Rebuild cache for players active in the last 6 weeks only (faster)."
+                        : "Rebuild cache for ALL players with match data (slower, 400+ players)."}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <PlayerStatsRebuildButton
+                        label="Rebuild Cache"
+                        tierEvalOnly
+                        tierEvalRecentOnly={rebuildRecentOnly}
+                        size="sm"
+                        disabled={isRebuildRunning}
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p>
+                      {rebuildRecentOnly
+                        ? "Rebuild cache for players active in the last 6 weeks only (faster)."
+                        : "Rebuild cache for ALL players with match data (slower, 400+ players)."}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-8 px-0 text-muted-foreground"
+                  asChild
+                >
+                  <Link to="/admin/data-cache-status">View progress</Link>
+                </Button>
+              </div>
+            </div>
           </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <PlayerStatsRebuildButton
-                    label="Rebuild Top 5 Cache"
-                    topFiveOnly
-                    linkToDataCache
-                    variant="secondary"
-                    disabled={isRebuildRunning}
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                <p>Rebuild the Top 5 placement cache for all players. Updates recent top 5 counts shown in the table.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <div className="ml-auto flex items-center gap-2">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={rebuildRecentOnly}
-                      onChange={(e) => setRebuildRecentOnly(e.target.checked)}
-                      className="cursor-pointer"
-                    />
-                    6W only
-                  </label>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
-                  <p>{rebuildRecentOnly 
-                    ? "Rebuild cache for players active in the last 6 weeks only (faster)." 
-                    : "Rebuild cache for ALL players with match data (slower, 400+ players)."
-                  }</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <PlayerStatsRebuildButton
-                      label="Rebuild Cache"
-                      tierEvalOnly
-                      tierEvalRecentOnly={rebuildRecentOnly}
-                      linkToDataCache
-                      disabled={isRebuildRunning}
-                    />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
-                  <p>{rebuildRecentOnly 
-                    ? "Rebuild cache for players active in the last 6 weeks only (faster)." 
-                    : "Rebuild cache for ALL players with match data (slower, 400+ players)."
-                  }</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
         </div>
       )}
 

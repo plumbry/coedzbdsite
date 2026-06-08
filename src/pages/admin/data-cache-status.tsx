@@ -156,6 +156,23 @@ function DataCacheStatusContent() {
     return `${covered} / ${pool} (${getPercentage(covered, pool)}%)`;
   };
 
+  const aggregateCoverage = cacheMetadata?.aggregateStatsCache
+    ? {
+        included: cacheMetadata.aggregateStatsCache.playerCount,
+        matchDataPool:
+          cacheMetadata.aggregateStatsCache.rebuildPoolCount ??
+          cacheMetadata.competitivePool.eligibleMatchDataPool,
+        excludedNoYuniteEvents:
+          cacheMetadata.aggregateStatsCache.excludedNoYuniteEvents ??
+          Math.max(
+            0,
+            (cacheMetadata.aggregateStatsCache.rebuildPoolCount ??
+              cacheMetadata.competitivePool.eligibleMatchDataPool) -
+              cacheMetadata.aggregateStatsCache.playerCount,
+          ),
+      }
+    : null;
+
   const formatCount = (count: number, sampled?: boolean) =>
     `${count.toLocaleString()}${sampled ? "+" : ""}`;
 
@@ -325,7 +342,7 @@ function DataCacheStatusContent() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">With Teams/Players</span>
                     <span className="font-medium">
-                      {getPercentage(eventStats.withTotalPlayers, eventStats.total)}%
+                      {getPercentage(eventStats.withTeamsOrPlayers, eventStats.total)}%
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -486,17 +503,20 @@ function DataCacheStatusContent() {
                     </Badge>
                   )}
                 </div>
-                {cacheMetadata.aggregateStatsCache && (
+                {cacheMetadata.aggregateStatsCache && aggregateCoverage && (
                   <div className="space-y-1 mt-2 text-xs">
                     <div className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">Pool coverage</span>
+                      <span className="text-muted-foreground">Yunite event coverage</span>
                       <span className="font-medium text-right">
-                        {poolCoverageLabel(
-                          cacheMetadata.aggregateStatsCache.playerCount,
-                          cacheMetadata.competitivePool.eligibleMatchDataPool,
-                        )}
+                        {aggregateCoverage.included.toLocaleString()} players
                       </span>
                     </div>
+                    {aggregateCoverage.excludedNoYuniteEvents > 0 && (
+                      <p className="text-muted-foreground">
+                        {aggregateCoverage.matchDataPool} match-data pool ·{" "}
+                        {aggregateCoverage.excludedNoYuniteEvents} without Yunite import events
+                      </p>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Last Updated</span>
                       <span className="font-medium">

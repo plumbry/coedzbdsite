@@ -5,6 +5,7 @@ import { internal, api } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel.d.ts";
 import { filterVisibleMembers } from "./helpers/playerAlt";
 import { isActivePlayerWithMatchData } from "./lib/stats/listEligiblePlayers";
+import { refreshEventCache } from "./lib/eventCache";
 
 // Split into focused queries to avoid exceeding Convex scan limits
 const STATUS_SAMPLE_LIMIT = 1000;
@@ -85,6 +86,7 @@ export const getEventStats = query({
       withLastYunitSync: eventsWithSync.length,
       withTotalTeams: allEvents.filter(e => e.totalTeams).length,
       withTotalPlayers: allEvents.filter(e => e.totalPlayers).length,
+      withTeamsOrPlayers: allEvents.filter((e) => e.totalTeams || e.totalPlayers).length,
       completed: allEvents.filter(e => e.status === "completed").length,
       lastUpdated: mostRecentEventSync,
     };
@@ -181,6 +183,8 @@ export const getCacheMetadata = query({
       aggregateStatsCache: aggregateStatsCache ? {
         lastUpdated: aggregateStatsCache.lastUpdated,
         playerCount: aggregateStatsCache.playerCount,
+        rebuildPoolCount: aggregateStatsCache.rebuildPoolCount,
+        excludedNoYuniteEvents: aggregateStatsCache.excludedNoYuniteEvents,
       } : null,
       tierReEvaluationCache: {
         evaluationCount: tierReEvaluationCache.length,
@@ -233,6 +237,7 @@ export const getCacheStatus = query({
       withLastYunitSync: eventsWithSync.length,
       withTotalTeams: allEvents.filter(e => e.totalTeams).length,
       withTotalPlayers: allEvents.filter(e => e.totalPlayers).length,
+      withTeamsOrPlayers: allEvents.filter((e) => e.totalTeams || e.totalPlayers).length,
       completed: allEvents.filter(e => e.status === "completed").length,
       lastUpdated: mostRecentEventSync,
     };
@@ -324,6 +329,8 @@ export const getCacheStatus = query({
       aggregateStatsCache: aggregateStatsCache ? {
         lastUpdated: aggregateStatsCache.lastUpdated,
         playerCount: aggregateStatsCache.playerCount,
+        rebuildPoolCount: aggregateStatsCache.rebuildPoolCount,
+        excludedNoYuniteEvents: aggregateStatsCache.excludedNoYuniteEvents,
       } : null,
       tierReEvaluationCache: {
         evaluationCount: tierReEvaluationCache.length,
@@ -461,7 +468,7 @@ export const rebuildPlayerCache = mutation({
   },
 });
 
-// Rebuild event cache (no-op)
+// Rebuild event cache from linked imports
 export const rebuildEventCache = mutation({
   args: {},
   handler: async (ctx) => {
@@ -484,11 +491,19 @@ export const rebuildEventCache = mutation({
         code: "FORBIDDEN",
       });
     }
+
+    const allEvents = await ctx.db.query("events").collect();
+    let updated = 0;
+    for (const event of allEvents) {
+      const result = await refreshEventCache(ctx, event._id);
+      if (result.updated) {
+        updated += 1;
+      }
+    }
     
     return {
       success: true,
-      message:
-        "Event records are created in Events Manager or via Discord cron. Yunite results are imported manually from Admin → Uploads.",
+      message: `Refreshed event cache for ${updated} of ${allEvents.length} events from linked imports.`,
     };
   },
 });

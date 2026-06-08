@@ -6,6 +6,10 @@ import { api, internal } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
 import { matchPlayerForImport } from "../lib/playerIdentity";
 import type { PlayerMatchFields } from "../lib/playerIdentity";
+import {
+  normalizeYuniteLeaderboardPayload,
+  yuniteTournamentHasImportableData,
+} from "../lib/yunite";
 
 interface YuniteTournament {
   id: string;
@@ -206,8 +210,17 @@ export const syncYuniteTournaments = action({
           continue;
         }
         
+        const leaderboardPayload = await leaderboardResponse.json();
+        leaderboard = normalizeYuniteLeaderboardPayload(leaderboardPayload);
+
+        if (!yuniteTournamentHasImportableData(tournament, leaderboardPayload)) {
+          console.log(
+            `⏭️  Skipping tournament with no player or tournament data: ${tournament.name || tournament.id}`,
+          );
+          continue;
+        }
+
         successfulTournaments++;
-        leaderboard = await leaderboardResponse.json();
         
         console.log(`✓ Successfully fetched tournament: ${tournament.name} with ${leaderboard.length} entries`);
         
@@ -973,6 +986,7 @@ export const listRecentTournaments = action({
       region?: string;
       alreadyImported: boolean;
     }>;
+    skippedEmpty: number;
   }> => {
     await requireAdminAction(ctx);
 
@@ -984,6 +998,7 @@ export const listRecentTournaments = action({
         success: false,
         error: "YUNITE_API_KEY is not set in Convex environment variables.",
         tournaments: [],
+        skippedEmpty: 0,
       };
     }
     if (!yuniteGuildId) {
@@ -991,6 +1006,7 @@ export const listRecentTournaments = action({
         success: false,
         error: "YUNITE_GUILD_ID is not set in Convex environment variables.",
         tournaments: [],
+        skippedEmpty: 0,
       };
     }
 
@@ -1016,9 +1032,35 @@ export const listRecentTournaments = action({
       return dateB - dateA;
     });
 
-    // Check which tournaments have already been imported
+    // Check import status and leaderboard data; skip empty tournaments.
     const results = [];
-    for (const t of tournaments) {
+    let skippedEmpty = 0;
+
+    for (let i = 0; i < tournaments.length; i++) {
+      const t = tournaments[i];
+
+      if (i > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+
+      let leaderboardPayload: unknown = [];
+      try {
+        const leaderboardUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${t.id}/leaderboard`;
+        const leaderboardResponse = await fetch(leaderboardUrl, {
+          headers: { "Y-Api-Token": yuniteApiKey },
+        });
+        if (leaderboardResponse.ok) {
+          leaderboardPayload = await leaderboardResponse.json();
+        }
+      } catch (error) {
+        console.warn(`Could not fetch leaderboard for tournament ${t.id}:`, error);
+      }
+
+      if (!yuniteTournamentHasImportableData(t, leaderboardPayload)) {
+        skippedEmpty++;
+        continue;
+      }
+
       const leaderboardId = `yunite-${t.id}`;
       const existing = await ctx.runQuery(api.thirdParty.checkExistingImport, {
         leaderboardId,
@@ -1034,6 +1076,10 @@ export const listRecentTournaments = action({
       });
     }
 
-    return { success: true, tournaments: results };
+    console.log(
+      `Listed ${results.length} importable tournaments (${skippedEmpty} empty tournaments skipped)`,
+    );
+
+    return { success: true, tournaments: results, skippedEmpty };
   },
 });

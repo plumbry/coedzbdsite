@@ -11,6 +11,7 @@ import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
 import { matchPlayerForImport } from "./lib/playerIdentity";
 import { appendLeaderboardUrlToEvent } from "./lib/eventLeaderboardLinks";
+import { refreshEventCache, refreshEventCacheForImport } from "./lib/eventCache";
 import {
   collectEventLeaderboardUrls,
   extractTournamentIdFromLeaderboardId,
@@ -149,6 +150,8 @@ async function tryAutoLinkImport(
   for (const result of eventResults) {
     await ctx.db.patch(result._id, { eventId });
   }
+
+  await refreshEventCache(ctx, eventId);
 
   return { linked: true, eventId, reason: "auto_linked" as const };
 }
@@ -486,6 +489,10 @@ export const completeJob = internalMutation({
     }
 
     await ctx.db.patch(job.importId, importPatch);
+
+    if (args.status === "completed" && args.pipelineStatus === "Finalized") {
+      await refreshEventCacheForImport(ctx, job.importId);
+    }
   },
 });
 

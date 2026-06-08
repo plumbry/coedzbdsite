@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { scrimSeriesAdminPath } from "@/lib/scrim-series-admin-path.ts";
 import { useQuery, useMutation, useAction } from "convex/react";
@@ -16,21 +16,226 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Loader2, Plus, Edit, Trash2, Calendar, Upload, X, FileDown, DollarSign, Lock, RefreshCw, ExternalLink, CheckCircle2, AlertCircle, Trophy, Check } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Edit,
+  Trash2,
+  Calendar,
+  Upload,
+  X,
+  FileDown,
+  DollarSign,
+  Lock,
+  RefreshCw,
+  ExternalLink,
+  CheckCircle2,
+  AlertCircle,
+  Trophy,
+  Check,
+  Archive,
+  CalendarClock,
+  ClipboardList,
+  Download,
+  FilePenLine,
+  Layers,
+  ListChecks,
+  MessageSquare,
+  PenLine,
+  Radio,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   WORKFLOW_STATUS_LABELS,
-  formatSetupReasons,
-  workflowStatusBadgeVariant,
+  SETUP_REASON_LABELS,
   type EventWorkflowStatus,
   type SetupReasonCode,
 } from "@/lib/event-workflow.ts";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils.ts";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import ICSImportDialog from "./ics-import-dialog.tsx";
 import ShowdownPenaltiesPanel from "./showdown-penalties-panel.tsx";
 import { DEFAULT_PAGE_SIZE } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
+
+const EVENT_TYPE_META: Record<
+  string,
+  { abbr: string; label: string; className: string }
+> = {
+  scrim: { abbr: "SC", label: "Scrim", className: "bg-muted text-muted-foreground" },
+  minicup: { abbr: "MC", label: "Mini Cup", className: "bg-primary/15 text-primary" },
+  season: { abbr: "SN", label: "Season", className: "bg-purple-500/15 text-purple-700 dark:text-purple-300" },
+  "mini-season": {
+    abbr: "MS",
+    label: "Mini Season",
+    className: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300",
+  },
+  random: { abbr: "RN", label: "Random", className: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  "random-squads": {
+    abbr: "RS",
+    label: "Random Squads",
+    className: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  },
+  "random-trios": {
+    abbr: "RT",
+    label: "Random Trios",
+    className: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  },
+  "solos-meets-duos": {
+    abbr: "SD",
+    label: "Solos Meets Duos",
+    className: "bg-teal-500/15 text-teal-700 dark:text-teal-300",
+  },
+  "scrim-series": {
+    abbr: "SS",
+    label: "Scrim Series",
+    className: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+  },
+  showdown: {
+    abbr: "SH",
+    label: "Showdown",
+    className: "bg-red-500/15 text-red-700 dark:text-red-300",
+  },
+};
+
+const SCHEDULE_STATUS_META: Record<
+  string,
+  { icon: LucideIcon; label: string; className: string }
+> = {
+  upcoming: {
+    icon: CalendarClock,
+    label: "Upcoming",
+    className: "bg-muted text-muted-foreground",
+  },
+  ongoing: {
+    icon: Radio,
+    label: "Ongoing",
+    className: "bg-primary/15 text-primary",
+  },
+  completed: {
+    icon: CheckCircle2,
+    label: "Completed",
+    className: "bg-muted/60 text-muted-foreground",
+  },
+};
+
+const WORKFLOW_STATUS_META: Record<
+  EventWorkflowStatus,
+  { icon: LucideIcon; className: string }
+> = {
+  draft: { icon: FilePenLine, className: "bg-destructive/15 text-destructive" },
+  awaiting_import: { icon: Download, className: "bg-muted text-muted-foreground" },
+  manual_results_pending: {
+    icon: ClipboardList,
+    className: "bg-destructive/15 text-destructive",
+  },
+  ready_for_results: { icon: ListChecks, className: "bg-muted text-foreground" },
+  complete: { icon: CheckCircle2, className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+  archived: { icon: Archive, className: "bg-muted/60 text-muted-foreground" },
+};
+
+function IconIndicator({
+  icon: Icon,
+  label,
+  className,
+  iconClassName,
+}: {
+  icon: LucideIcon;
+  label: ReactNode;
+  className?: string;
+  iconClassName?: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            "inline-flex h-6 w-6 shrink-0 cursor-default items-center justify-center rounded-md",
+            className,
+          )}
+        >
+          <Icon className={cn("h-3.5 w-3.5", iconClassName)} />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs text-xs">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function TypeAbbrIndicator({ type, mode }: { type: string; mode: string }) {
+  const meta = EVENT_TYPE_META[type] ?? {
+    abbr: type.slice(0, 2).toUpperCase(),
+    label: type,
+    className: "bg-muted text-muted-foreground",
+  };
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            "inline-flex h-6 min-w-6 px-1 shrink-0 cursor-default items-center justify-center rounded-md text-[10px] font-semibold leading-none",
+            meta.className,
+          )}
+        >
+          {meta.abbr}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        {meta.label} · {mode}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function formatEventDateRange(startDate: number, endDate: number) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (format(start, "yyyy-MM-dd") === format(end, "yyyy-MM-dd")) {
+    return format(start, "MMM d, yyyy");
+  }
+
+  if (format(start, "yyyy-MM") === format(end, "yyyy-MM")) {
+    return `${format(start, "MMM d")}–${format(end, "d, yyyy")}`;
+  }
+
+  return `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`;
+}
+
+function getLeaderboardTooltip(
+  event: {
+    standardLeaderboards?: string[] | null;
+    qualifierLobby1Leaderboards?: string[] | null;
+    qualifierLobby2Leaderboards?: string[] | null;
+    finalsLeaderboards?: string[] | null;
+  },
+  leaderboardCount: number,
+) {
+  if (leaderboardCount > 0) {
+    return `${leaderboardCount} leaderboard link${leaderboardCount === 1 ? "" : "s"}`;
+  }
+
+  if (
+    event.qualifierLobby1Leaderboards ||
+    event.qualifierLobby2Leaderboards ||
+    event.finalsLeaderboards
+  ) {
+    return "Mini season leaderboard structure";
+  }
+
+  return "No leaderboards configured";
+}
 
 export default function EventManager() {
   const navigate = useNavigate();
@@ -490,46 +695,6 @@ export default function EventManager() {
     }
   };
   
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "upcoming":
-        return <Badge variant="secondary">Upcoming</Badge>;
-      case "ongoing":
-        return <Badge variant="default">Ongoing</Badge>;
-      case "completed":
-        return <Badge variant="outline">Completed</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
-    }
-  };
-  
-  const getTypeBadge = (type: string) => {
-    switch (type) {
-      case "scrim":
-        return <Badge variant="secondary">Scrim</Badge>;
-      case "minicup":
-        return <Badge variant="default">Mini Cup</Badge>;
-      case "season":
-        return <Badge className="bg-purple-600">Season</Badge>;
-      case "mini-season":
-        return <Badge className="bg-indigo-600">Mini Season</Badge>;
-      case "random":
-        return <Badge className="bg-amber-600">Random</Badge>;
-      case "random-squads":
-        return <Badge className="bg-amber-600">Random Squads</Badge>;
-      case "random-trios":
-        return <Badge className="bg-amber-600">Random Trios</Badge>;
-      case "solos-meets-duos":
-        return <Badge className="bg-teal-600">Solos Meets Duos</Badge>;
-      case "scrim-series":
-        return <Badge className="bg-blue-600">Scrim Series</Badge>;
-      case "showdown":
-        return <Badge className="bg-red-600">Showdown</Badge>;
-      default:
-        return <Badge>{type}</Badge>;
-    }
-  };
-
   const getLeaderboardCount = (event: NonNullable<typeof events>[number]) => {
     return [
       event.standardLeaderboards,
@@ -541,65 +706,78 @@ export default function EventManager() {
     ].reduce((total, list) => total + (list?.filter((url) => url.trim()).length || 0), 0);
   };
 
-  const getWorkflowStatusBadge = (workflowStatus: EventWorkflowStatus | null | undefined) => {
-    if (!workflowStatus) {
-      return null;
-    }
-    return (
-      <Badge
-        variant={workflowStatusBadgeVariant(workflowStatus)}
-        className="text-[10px] px-1.5 py-0"
-      >
-        {WORKFLOW_STATUS_LABELS[workflowStatus]}
-      </Badge>
-    );
-  };
-
-  const getReadinessBadges = (event: NonNullable<typeof events>[number]) => {
-    const badges = [];
+  const getReadinessIndicators = (event: NonNullable<typeof events>[number]) => {
+    const indicators: ReactNode[] = [];
     const leaderboardCount = getLeaderboardCount(event);
     const setupReasons = (event.setupReasons ?? []) as SetupReasonCode[];
 
     if (setupReasons.length > 0) {
-      badges.push(
-        <div key="setup" className="space-y-0.5 max-w-[220px]">
-          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-            <AlertCircle className="mr-1 h-3 w-3" />
-            Needs Setup
-          </Badge>
-          <p className="text-[10px] text-muted-foreground leading-snug">
-            {formatSetupReasons(setupReasons)}
-          </p>
-        </div>,
+      indicators.push(
+        <IconIndicator
+          key="setup"
+          icon={AlertCircle}
+          className="bg-destructive/15 text-destructive"
+          label={
+            <div className="space-y-1">
+              <p className="font-medium">Needs setup</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                {setupReasons.map((reason) => (
+                  <li key={reason}>{SETUP_REASON_LABELS[reason]}</li>
+                ))}
+              </ul>
+            </div>
+          }
+        />,
       );
     } else if (event.isManualScoring) {
-      badges.push(
-        <Badge key="manual" variant="secondary" className="text-[10px] px-1.5 py-0">
-          Manual scoring
-        </Badge>,
+      indicators.push(
+        <IconIndicator
+          key="manual"
+          icon={PenLine}
+          className="bg-muted text-muted-foreground"
+          label="Manual scoring"
+        />,
       );
     }
 
     if (leaderboardCount > 0) {
-      badges.push(
-        <Badge key="leaderboards" variant="outline" className="text-[10px] px-1.5 py-0">
-          <CheckCircle2 className="mr-1 h-3 w-3" />
-          {leaderboardCount} leaderboard{leaderboardCount === 1 ? "" : "s"}
-        </Badge>,
+      indicators.push(
+        <IconIndicator
+          key="leaderboards"
+          icon={Trophy}
+          className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+          label={getLeaderboardTooltip(event, leaderboardCount)}
+        />,
+      );
+    } else if (
+      event.qualifierLobby1Leaderboards ||
+      event.qualifierLobby2Leaderboards ||
+      event.finalsLeaderboards
+    ) {
+      indicators.push(
+        <IconIndicator
+          key="mini-season"
+          icon={Layers}
+          className="bg-indigo-500/15 text-indigo-700 dark:text-indigo-300"
+          label={getLeaderboardTooltip(event, leaderboardCount)}
+        />,
       );
     }
 
     if (event.discordEventId) {
-      badges.push(
-        <Badge key="discord" variant="secondary" className="text-[10px] px-1.5 py-0">
-          Discord
-        </Badge>,
+      indicators.push(
+        <IconIndicator
+          key="discord"
+          icon={MessageSquare}
+          className="bg-muted text-muted-foreground"
+          label="Synced from Discord"
+        />,
       );
     }
 
-    return badges;
+    return indicators;
   };
-  
+
   const renderEventTable = (filteredEvents: typeof events) => {
     if (!filteredEvents || filteredEvents.length === 0) {
       return (
@@ -618,133 +796,159 @@ export default function EventManager() {
     
     return (
       <>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Mode</TableHead>
-              <TableHead>Dates</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Leaderboards</TableHead>
-              <TableHead>Readiness</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {pageEvents.map((event) => (
-              <TableRow key={event._id}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="truncate">{event.name}</span>
-                    {(event.placementEarningsTopN || event.matchWinEarnings || event.duoPlacementEarningsTopN || event.soloPlacementEarningsTopN) && (
-                      <span title="Earnings tracking enabled">
-                        <DollarSign className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>{getTypeBadge(event.type)}</TableCell>
-                <TableCell className="text-sm">{event.mode}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {format(new Date(event.startDate), "MMM d")} - {format(new Date(event.endDate), "MMM d, yyyy")}
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col gap-1">
-                    {getStatusBadge(event.status)}
-                    {getWorkflowStatusBadge(event.workflowStatus)}
-                  </div>
-                </TableCell>
-                <TableCell className="text-sm">
-                  {event.standardLeaderboards && event.standardLeaderboards.length > 0 ? (
-                    <span>{event.standardLeaderboards.length} Links</span>
-                  ) : event.qualifierLobby1Leaderboards || event.qualifierLobby2Leaderboards || event.finalsLeaderboards ? (
-                    <span>Mini Season</span>
-                  ) : (
-                    <span className="text-muted-foreground">No leaderboards</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {getReadinessBadges(event).length > 0 ? (
-                      getReadinessBadges(event)
-                    ) : (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        Basic details
-                      </Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" asChild title="Open imports">
-                      <Link to="/admin/uploads">
-                        <Upload className="h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
-                    <Button size="sm" variant="ghost" asChild title="Open event results">
-                      <Link to="/admin/event-results">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
-                    {event.type === "scrim-series" && event.linkedScrimSeriesId && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() =>
-                          openScrimSeriesAdmin(event.linkedScrimSeriesId!, "imports")
-                        }
-                        title="Scrim Series admin (imports, penalties, scores)"
-                      >
-                        <Trophy className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    {event.needsAttention && event.workflowStatus !== "complete" && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleMarkComplete(event._id, event.name)}
-                        disabled={markingCompleteId === event._id}
-                        title="Mark event complete"
-                      >
-                        {markingCompleteId === event._id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Check className="h-3.5 w-3.5 text-green-600" />
-                        )}
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => openEditDialog(event)}
-                      title="Edit event"
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                    </Button>
-                    {isAdmin && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDelete(event._id, event.name)}
-                        disabled={deletingEvent === event._id}
-                        title="Delete event"
-                      >
-                        {deletingEvent === event._id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
+      <TooltipProvider delayDuration={200}>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[140px] max-w-[220px]">Name</TableHead>
+                <TableHead className="w-10 px-1 text-center">Type</TableHead>
+                <TableHead className="w-28">Dates</TableHead>
+                <TableHead className="w-16 px-1 text-center">Status</TableHead>
+                <TableHead className="w-24 px-1">Signals</TableHead>
+                <TableHead className="w-28 px-1 text-right">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+            </TableHeader>
+            <TableBody>
+              {pageEvents.map((event) => {
+                const scheduleMeta =
+                  SCHEDULE_STATUS_META[event.status] ?? SCHEDULE_STATUS_META.upcoming;
+                const ScheduleIcon = scheduleMeta.icon;
+                const workflowStatus = event.workflowStatus as EventWorkflowStatus | undefined;
+                const workflowMeta = workflowStatus
+                  ? WORKFLOW_STATUS_META[workflowStatus]
+                  : null;
+
+                return (
+                  <TableRow key={event._id}>
+                    <TableCell className="py-1.5 font-medium max-w-[220px]">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="truncate text-sm">{event.name}</span>
+                        {(event.placementEarningsTopN ||
+                          event.matchWinEarnings ||
+                          event.duoPlacementEarningsTopN ||
+                          event.soloPlacementEarningsTopN) && (
+                          <IconIndicator
+                            icon={DollarSign}
+                            className="h-5 w-5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                            iconClassName="h-3 w-3"
+                            label="Earnings tracking enabled"
+                          />
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-1.5 px-1 text-center">
+                      <TypeAbbrIndicator type={event.type} mode={event.mode} />
+                    </TableCell>
+                    <TableCell className="py-1.5 text-xs text-muted-foreground">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-default">
+                            {formatEventDateRange(event.startDate, event.endDate)}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          {format(new Date(event.startDate), "MMM d, yyyy")} –{" "}
+                          {format(new Date(event.endDate), "MMM d, yyyy")}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell className="py-1.5 px-1">
+                      <div className="flex items-center justify-center gap-1">
+                        <IconIndicator
+                          icon={ScheduleIcon}
+                          className={scheduleMeta.className}
+                          label={scheduleMeta.label}
+                        />
+                        {workflowMeta && workflowStatus && (
+                          <IconIndicator
+                            icon={workflowMeta.icon}
+                            className={workflowMeta.className}
+                            label={WORKFLOW_STATUS_LABELS[workflowStatus]}
+                          />
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-1.5 px-1">
+                      <div className="flex items-center gap-1">
+                        {getReadinessIndicators(event)}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-1.5 px-1">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" asChild>
+                          <Link to="/admin/uploads" title="Open imports">
+                            <Upload className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" asChild>
+                          <Link to="/admin/event-results" title="Open event results">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                        {event.type === "scrim-series" && event.linkedScrimSeriesId && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() =>
+                              openScrimSeriesAdmin(event.linkedScrimSeriesId!, "imports")
+                            }
+                            title="Scrim Series admin (imports, penalties, scores)"
+                          >
+                            <Trophy className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {event.needsAttention && event.workflowStatus !== "complete" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => handleMarkComplete(event._id, event.name)}
+                            disabled={markingCompleteId === event._id}
+                            title="Mark event complete"
+                          >
+                            {markingCompleteId === event._id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5 text-green-600" />
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => openEditDialog(event)}
+                          title="Edit event"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        {isAdmin && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => handleDelete(event._id, event.name)}
+                            disabled={deletingEvent === event._id}
+                            title="Delete event"
+                          >
+                            {deletingEvent === event._id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </TooltipProvider>
       <TablePagination
         page={safePage}
         totalPages={totalPages}

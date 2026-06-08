@@ -5,6 +5,7 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel.d.ts";
 import type { MutationCtx } from "../_generated/server";
 import { appendLeaderboardUrlToEvent } from "../lib/eventLeaderboardLinks";
+import { refreshEventCache } from "../lib/eventCache";
 import { applyLinkedScrimSeries } from "../lib/scrimSeriesEventLink";
 import {
   summarizeEventWorkflow,
@@ -44,6 +45,7 @@ async function autoLinkImportsToEvent(
         eventId,
         matchingImport.leaderboardUrl,
       );
+      await refreshEventCache(ctx, eventId);
       linked++;
     }
   }
@@ -552,6 +554,7 @@ export const createEvent = mutation({
       const allUrls = collectEventLeaderboardUrls(newEvent);
       if (allUrls.length > 0) {
         await autoLinkImportsToEvent(ctx, eventId, allUrls);
+        await refreshEventCache(ctx, eventId);
       }
     }
     

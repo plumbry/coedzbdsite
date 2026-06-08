@@ -220,7 +220,10 @@ function emptyTierStats() {
 
 async function writeAggregateStatsCache(
   ctx: MutationCtx,
-  statsData: ReturnType<typeof buildCachePayload>,
+  statsData: ReturnType<typeof buildCachePayload> & {
+    rebuildPoolCount?: number;
+    excludedNoYuniteEvents?: number;
+  },
 ) {
   const existingCache = await ctx.db.query("aggregateStatsCache").first();
   if (existingCache) {
@@ -545,7 +548,12 @@ export const processRebuildBatch = internalMutation({
 
       const accumulatedStats = await loadRebuildRows(ctx, args.jobId);
       const playersWithEvents = accumulatedStats.filter((s) => s.totalGames > 0);
-      const statsData = buildCachePayload(playersWithEvents);
+      const withoutYuniteEvents = accumulatedStats.filter((s) => s.totalGames === 0);
+      const statsData = {
+        ...buildCachePayload(playersWithEvents),
+        rebuildPoolCount: job.totalCount,
+        excludedNoYuniteEvents: withoutYuniteEvents.length,
+      };
       await writeAggregateStatsCache(ctx, statsData);
       await deleteRebuildRows(ctx, args.jobId);
 
@@ -662,7 +670,12 @@ async function finalizeAggregateJobHandler(
 
   const accumulatedStats = await loadRebuildRows(ctx, jobId);
   const playersWithEvents = accumulatedStats.filter((s) => s.totalGames > 0);
-  const statsData = buildCachePayload(playersWithEvents);
+  const withoutYuniteEvents = accumulatedStats.filter((s) => s.totalGames === 0);
+  const statsData = {
+    ...buildCachePayload(playersWithEvents),
+    rebuildPoolCount: job.totalCount,
+    excludedNoYuniteEvents: withoutYuniteEvents.length,
+  };
   await writeAggregateStatsCache(ctx, statsData);
   await deleteRebuildRows(ctx, jobId);
 

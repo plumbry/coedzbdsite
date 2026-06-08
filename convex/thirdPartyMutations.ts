@@ -6,6 +6,10 @@ import { touchPlayerEventParticipationOnInsert } from "./helpers/playerEventStat
 import type { Id } from "./_generated/dataModel.d.ts";
 import { appendLeaderboardUrlToEvent } from "./lib/eventLeaderboardLinks";
 import {
+  refreshEventCache,
+  refreshEventCacheForImport,
+} from "./lib/eventCache";
+import {
   collectEventLeaderboardUrls,
   extractTournamentIdFromLeaderboardId,
   extractTournamentIdFromUrl,
@@ -323,6 +327,10 @@ export const importFromCSV = mutation({
       internal.helpers.eventDrivenRebuilds.scheduleEventParticipationRebuild,
       {},
     );
+
+    if (args.eventId) {
+      await refreshEventCache(ctx, args.eventId);
+    }
     
     return {
       success: true,
@@ -992,6 +1000,13 @@ export const linkImportToEvent = mutation({
         }),
       });
     }
+
+    if (oldEventId) {
+      await refreshEventCache(ctx, oldEventId);
+    }
+    if (args.eventId) {
+      await refreshEventCache(ctx, args.eventId);
+    }
     
     return { success: true };
   },
@@ -1205,6 +1220,7 @@ export const createImportRecord = mutation({
 
     if (matchedEventId) {
       await appendLeaderboardUrlToEvent(ctx, matchedEventId, args.leaderboardUrl);
+      await refreshEventCache(ctx, matchedEventId);
     }
 
     return importId;
@@ -1297,16 +1313,22 @@ export const updateImportMatchDataSynced = mutation({
     
     const updates: {
       matchDataSynced: boolean;
+      matchDataSyncedAt?: number;
       totalMatchKills?: number;
     } = {
       matchDataSynced: args.matchDataSynced,
     };
+
+    if (args.matchDataSynced) {
+      updates.matchDataSyncedAt = Date.now();
+    }
     
     if (args.totalMatchKills !== undefined) {
       updates.totalMatchKills = args.totalMatchKills;
     }
     
     await ctx.db.patch(args.importId, updates);
+    await refreshEventCacheForImport(ctx, args.importId);
   },
 });
 

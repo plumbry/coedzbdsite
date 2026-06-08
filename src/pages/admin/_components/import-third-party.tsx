@@ -402,7 +402,13 @@ export default function ImportThirdParty() {
       setHasFetchedRecent(true);
       
       const importable = result.tournaments.filter(t => !t.alreadyImported).length;
-      toast.success(`Found ${result.tournaments.length} tournaments (${importable} not yet imported)`);
+      const skippedNote =
+        result.skippedEmpty > 0
+          ? `; ${result.skippedEmpty} empty tournament${result.skippedEmpty === 1 ? "" : "s"} hidden`
+          : "";
+      toast.success(
+        `Found ${result.tournaments.length} tournaments (${importable} not yet imported)${skippedNote}`,
+      );
     } catch (error) {
       console.error("Fetch recent error:", error);
       toast.error(error instanceof Error ? error.message : "Failed to fetch tournaments");

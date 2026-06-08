@@ -727,6 +727,10 @@ export default defineSchema({
         medianAverageKD: v.number(),
       }),
     }),
+    /** Match-data pool size when this cache was last rebuilt. */
+    rebuildPoolCount: v.optional(v.number()),
+    /** Pool members processed but excluded (match data, no Yunite import events). */
+    excludedNoYuniteEvents: v.optional(v.number()),
     lastUpdated: v.number(),
     formulaVersion: v.optional(v.number()),
   }),
