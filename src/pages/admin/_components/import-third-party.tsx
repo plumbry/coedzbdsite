@@ -22,6 +22,73 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { importPipelineStatusVariant } from "@/lib/import-pipeline-display.ts";
+import type { ConvexReactClient } from "convex/react";
+
+const PROCESS_IMPORT_POLL_MS = 2000;
+const PROCESS_IMPORT_MAX_WAIT_MS = 30 * 60 * 1000;
+const PROCESS_IMPORT_GAP_MS = 1000;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isYuniteImportRecord(imp: {
+  source: string;
+  importMethod?: string;
+}) {
+  return (
+    imp.source === "Yunite" ||
+    imp.source === "Yunite API" ||
+    imp.importMethod === "api"
+  );
+}
+
+function isEligibleForBatchProcessImport(imp: {
+  source: string;
+  importMethod?: string;
+  pipelineStatus?: string;
+  pipelineLocked?: boolean;
+}) {
+  if (!isYuniteImportRecord(imp)) return false;
+  if (imp.pipelineStatus === "Ignored") return false;
+  if (imp.pipelineStatus === "Finalized" && imp.pipelineLocked) return false;
+  return true;
+}
+
+type ImportJobOutcome = "completed" | "failed" | "waiting" | "aborted" | "timeout";
+
+async function waitForImportProcessingJob(
+  convex: ConvexReactClient,
+  importId: Id<"thirdPartyImports">,
+  shouldAbort: () => boolean,
+): Promise<ImportJobOutcome> {
+  const started = Date.now();
+
+  while (Date.now() - started < PROCESS_IMPORT_MAX_WAIT_MS) {
+    if (shouldAbort()) {
+      return "aborted";
+    }
+
+    const state = await convex.query(api.importProcessing.getImportProcessingJob, {
+      importId,
+    });
+    const job = state?.job;
+
+    if (job?.status === "completed") {
+      return "completed";
+    }
+    if (job?.status === "failed") {
+      return "failed";
+    }
+    if (job?.status === "waiting") {
+      return "waiting";
+    }
+
+    await sleep(PROCESS_IMPORT_POLL_MS);
+  }
+
+  return "timeout";
+}
 
 export default function ImportThirdParty() {
   const { isAdmin } = useUserRole();
@@ -110,6 +177,8 @@ export default function ImportThirdParty() {
   );
 
   useEffect(() => {
+    if (processAllActiveRef.current) return;
+
     const job = importProcessingState?.job;
     if (!processingImportId || !job) return;
     if (job.status === "completed") {
@@ -159,8 +228,12 @@ export default function ImportThirdParty() {
   const [populateProgress, setPopulateProgress] = useState({ current: 0, total: 0, failed: 0 });
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [syncAllProgress, setSyncAllProgress] = useState({ current: 0, total: 0 });
+  const [isProcessingAll, setIsProcessingAll] = useState(false);
+  const [processAllProgress, setProcessAllProgress] = useState({ current: 0, total: 0 });
   const [isBackfilling, setIsBackfilling] = useState(false);
   const populateAbortRef = useRef(false);
+  const processAllAbortRef = useRef(false);
+  const processAllActiveRef = useRef(false);
   
   // Yunite actions
   const fetchLeaderboard = useAction(api.yunite.debug.fetchTournamentLeaderboard);
@@ -588,6 +661,110 @@ export default function ImportThirdParty() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to start Process Import");
       setProcessingImportId(null);
+    }
+  };
+
+  const handleProcessAllImports = async () => {
+    const allImports = await convex.query(api.thirdPartyQueries.getAllImports, {});
+    const eligible = allImports.filter(isEligibleForBatchProcessImport);
+
+    if (eligible.length === 0) {
+      toast.error("No Yunite imports need processing");
+      return;
+    }
+
+    if (
+      !confirm(
+        `Process ${eligible.length} Yunite import(s) one at a time? Finalized imports are skipped. The queue stops if an import needs admin action or fails.`,
+      )
+    ) {
+      return;
+    }
+
+    processAllActiveRef.current = true;
+    processAllAbortRef.current = false;
+    setIsProcessingAll(true);
+    setProcessAllProgress({ current: 0, total: eligible.length });
+
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      for (let i = 0; i < eligible.length; i++) {
+        if (processAllAbortRef.current) {
+          break;
+        }
+
+        const imp = eligible[i];
+        setProcessAllProgress({ current: i + 1, total: eligible.length });
+        setProcessingImportId(imp._id);
+
+        try {
+          await startProcessImport({ importId: imp._id });
+        } catch (error) {
+          failCount += 1;
+          toast.error(
+            `${imp.eventName}: ${error instanceof Error ? error.message : "Failed to start"}`,
+          );
+          break;
+        }
+
+        const outcome = await waitForImportProcessingJob(
+          convex,
+          imp._id,
+          () => processAllAbortRef.current,
+        );
+
+        if (outcome === "aborted") {
+          break;
+        }
+
+        if (outcome === "completed") {
+          successCount += 1;
+        } else {
+          failCount += 1;
+          const state = await convex.query(api.importProcessing.getImportProcessingJob, {
+            importId: imp._id,
+          });
+          const message =
+            state?.job?.errorMessage ||
+            (outcome === "timeout"
+              ? "Timed out waiting for the pipeline to finish."
+              : "Import processing did not complete.");
+
+          if (outcome === "waiting") {
+            toast.info(`Queue paused at ${imp.eventName}: ${message}`);
+          } else {
+            toast.error(`Queue stopped at ${imp.eventName}: ${message}`);
+          }
+          break;
+        }
+
+        if (i < eligible.length - 1 && !processAllAbortRef.current) {
+          await sleep(PROCESS_IMPORT_GAP_MS);
+        }
+      }
+
+      if (processAllAbortRef.current) {
+        toast.info(
+          `Batch aborted after ${successCount} of ${eligible.length} import(s) finalized.`,
+        );
+      } else if (successCount === eligible.length) {
+        toast.success(`Batch complete — ${successCount} import(s) processed.`);
+      } else if (successCount > 0) {
+        toast.info(
+          `Batch stopped — ${successCount} finalized, ${eligible.length - successCount - failCount} remaining.`,
+        );
+      }
+    } catch (error) {
+      console.error("Process all imports error:", error);
+      toast.error(error instanceof Error ? error.message : "Batch processing interrupted");
+    } finally {
+      processAllActiveRef.current = false;
+      setIsProcessingAll(false);
+      setProcessingImportId(null);
+      setProcessAllProgress({ current: 0, total: 0 });
+      processAllAbortRef.current = false;
     }
   };
 
@@ -1573,8 +1750,48 @@ export default function ImportThirdParty() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
+                  onClick={handleProcessAllImports}
+                  disabled={
+                    isProcessingAll ||
+                    isSyncingAll ||
+                    isPopulatingTeamMembers ||
+                    isRefreshingAll
+                  }
+                  variant="default"
+                  size="sm"
+                >
+                  {isProcessingAll ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processing {processAllProgress.current}/{processAllProgress.total}...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="mr-2 h-4 w-4" />
+                      Process All Imports
+                    </>
+                  )}
+                </Button>
+                {isProcessingAll && (
+                  <Button
+                    onClick={() => {
+                      processAllAbortRef.current = true;
+                    }}
+                    variant="destructive"
+                    size="sm"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Abort
+                  </Button>
+                )}
+                <Button
                   onClick={handleSyncAllMatchData}
-                  disabled={isSyncingAll || isPopulatingTeamMembers || isRefreshingAll}
+                  disabled={
+                    isProcessingAll ||
+                    isSyncingAll ||
+                    isPopulatingTeamMembers ||
+                    isRefreshingAll
+                  }
                   variant="outline"
                   size="sm"
                 >
@@ -1592,7 +1809,7 @@ export default function ImportThirdParty() {
                 </Button>
                 <Button
                   onClick={handlePopulateTeamMembers}
-                  disabled={isPopulatingTeamMembers || isSyncingAll}
+                  disabled={isProcessingAll || isPopulatingTeamMembers || isSyncingAll}
                   variant="secondary"
                   size="sm"
                 >
@@ -1621,7 +1838,7 @@ export default function ImportThirdParty() {
                 )}
                 <Button
                   onClick={handleRefreshAll}
-                  disabled={isRefreshingAll || isSyncingAll}
+                  disabled={isProcessingAll || isRefreshingAll || isSyncingAll}
                   variant="outline"
                   size="sm"
                 >
@@ -1749,6 +1966,7 @@ export default function ImportThirdParty() {
                                       size="sm"
                                       onClick={() => handleProcessImport(imp._id)}
                                       disabled={
+                                        isProcessingAll ||
                                         processingImportId === imp._id ||
                                         imp.pipelineStatus === "Finalized"
                                       }
@@ -1792,7 +2010,7 @@ export default function ImportThirdParty() {
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => handleSyncMatchData(imp._id)}
-                                      disabled={syncingId === imp._id || isSyncingAll}
+                                      disabled={syncingId === imp._id || isSyncingAll || isProcessingAll}
                                     >
                                       {syncingId === imp._id ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
