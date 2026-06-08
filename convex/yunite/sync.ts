@@ -780,7 +780,7 @@ export const syncTournamentMatchDataInternal = internalAction({
       console.log(`📊 Total match kills across all matches: ${totalMatchKills}`);
       
       // Mark import as having match data synced and store total match kills
-      await ctx.runMutation(api.thirdPartyMutations.updateImportMatchDataSynced, {
+      await ctx.runMutation(internal.thirdPartyMutations.updateImportMatchDataSyncedInternal, {
         importId: args.importId,
         matchDataSynced: true,
         totalMatchKills,

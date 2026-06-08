@@ -1,4 +1,4 @@
-import { internalMutation, mutation } from "./_generated/server";
+import { internalMutation, mutation, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
@@ -1302,6 +1302,45 @@ export const updateImportMatchCounts = mutation({
   },
 });
 
+async function applyImportMatchDataSynced(
+  ctx: MutationCtx,
+  args: {
+    importId: Id<"thirdPartyImports">;
+    matchDataSynced: boolean;
+    totalMatchKills?: number;
+  },
+) {
+  const updates: {
+    matchDataSynced: boolean;
+    matchDataSyncedAt?: number;
+    totalMatchKills?: number;
+  } = {
+    matchDataSynced: args.matchDataSynced,
+  };
+
+  if (args.matchDataSynced) {
+    updates.matchDataSyncedAt = Date.now();
+  }
+
+  if (args.totalMatchKills !== undefined) {
+    updates.totalMatchKills = args.totalMatchKills;
+  }
+
+  await ctx.db.patch(args.importId, updates);
+  await refreshEventCacheForImport(ctx, args.importId);
+}
+
+export const updateImportMatchDataSyncedInternal = internalMutation({
+  args: {
+    importId: v.id("thirdPartyImports"),
+    matchDataSynced: v.boolean(),
+    totalMatchKills: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await applyImportMatchDataSynced(ctx, args);
+  },
+});
+
 export const updateImportMatchDataSynced = mutation({
   args: {
     importId: v.id("thirdPartyImports"),
@@ -1310,25 +1349,7 @@ export const updateImportMatchDataSynced = mutation({
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
-    
-    const updates: {
-      matchDataSynced: boolean;
-      matchDataSyncedAt?: number;
-      totalMatchKills?: number;
-    } = {
-      matchDataSynced: args.matchDataSynced,
-    };
-
-    if (args.matchDataSynced) {
-      updates.matchDataSyncedAt = Date.now();
-    }
-    
-    if (args.totalMatchKills !== undefined) {
-      updates.totalMatchKills = args.totalMatchKills;
-    }
-    
-    await ctx.db.patch(args.importId, updates);
-    await refreshEventCacheForImport(ctx, args.importId);
+    await applyImportMatchDataSynced(ctx, args);
   },
 });
 
