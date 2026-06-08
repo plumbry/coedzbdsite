@@ -20,10 +20,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
-import { Loader2, ExternalLink, FileUp, RefreshCw, Trash2, Edit, Users, Download, Zap, X, Eye, Search, ChevronDown, ChevronRight, CheckSquare, Square, CalendarPlus, Link2, AlertTriangle } from "lucide-react";
+import { Loader2, ExternalLink, FileUp, RefreshCw, Trash2, Edit, Users, Download, Zap, X, Eye, Search, ChevronDown, ChevronRight, CheckSquare, Square, CalendarPlus, Link2, AlertTriangle, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/use-user-role.ts";
@@ -1650,8 +1651,7 @@ export default function ImportThirdParty() {
               <div>
                 <h3 className="text-lg font-semibold">Import History</h3>
                 <p className="text-sm text-muted-foreground">
-                  {importHistory?.length || 0} import{importHistory?.length !== 1 ? "s" : ""} total.
-                  Use Process All for match data, player matching, and event linking in one queue.
+                  {importHistory?.length || 0} import{importHistory?.length !== 1 ? "s" : ""} · Process All runs the full pipeline
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1664,12 +1664,12 @@ export default function ImportThirdParty() {
                   {isProcessingAll ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing {processAllProgress.current}/{processAllProgress.total}...
+                      {processAllProgress.current}/{processAllProgress.total}...
                     </>
                   ) : (
                     <>
                       <Zap className="mr-2 h-4 w-4" />
-                      Process All Imports
+                      Process All
                     </>
                   )}
                 </Button>
@@ -1730,298 +1730,202 @@ export default function ImportThirdParty() {
               </div>
             ) : (
               <>
-              <div className="border rounded-lg overflow-x-auto">
-                <Table>
+              <div className="border rounded-lg overflow-hidden [&_[data-slot=table-container]]:overflow-visible">
+                <Table className="table-fixed">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Event Name</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Source</TableHead>
-                      <TableHead>Players</TableHead>
-                      <TableHead>Pipeline</TableHead>
-                      <TableHead>Imported By</TableHead>
-                      <TableHead>Imported At</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="w-[32%]">Event</TableHead>
+                      <TableHead className="w-[12%]">Players</TableHead>
+                      <TableHead className="w-[28%]">Pipeline</TableHead>
+                      <TableHead className="w-[20%]">Imported</TableHead>
+                      <TableHead className="w-[8%] text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(importHistoryPagination.pageItems ?? []).map((imp) => (
                       <TableRow key={imp._id}>
-                        <TableCell className="font-medium">{imp.eventName}</TableCell>
-                        <TableCell>
-                          {imp.eventDate ? format(new Date(imp.eventDate), "MMM d, yyyy") : "-"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{imp.source}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-xs">
-                              {imp.playersMatched} matched
-                            </span>
-                            {imp.playersUnmatched > 0 && (
-                              <Link
-                                to={`/admin/unmatched/${imp._id}`}
-                                className="text-xs text-primary hover:underline w-fit"
-                              >
-                                {imp.playersUnmatched} unmatched
-                              </Link>
-                            )}
+                        <TableCell className="whitespace-normal py-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate" title={imp.eventName}>
+                              {imp.eventName}
+                            </p>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                              <span>
+                                {imp.eventDate ? format(new Date(imp.eventDate), "MMM d, yyyy") : "—"}
+                              </span>
+                              <Badge variant="outline" className="h-4 px-1 text-[10px] font-normal">
+                                {imp.source}
+                              </Badge>
+                            </div>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1 max-w-[180px]">
-                            <Badge variant={importPipelineStatusVariant(imp.pipelineStatus)}>
+                        <TableCell className="whitespace-normal py-2 text-xs">
+                          <span>{imp.playersMatched} matched</span>
+                          {imp.playersUnmatched > 0 && (
+                            <Link
+                              to={`/admin/unmatched/${imp._id}`}
+                              className="mt-0.5 block text-primary hover:underline"
+                            >
+                              {imp.playersUnmatched} unmatched
+                            </Link>
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-normal py-2">
+                          <div className="flex min-w-0 flex-col gap-1">
+                            <Badge
+                              variant={importPipelineStatusVariant(imp.pipelineStatus)}
+                              className="w-fit max-w-full truncate text-[11px]"
+                            >
                               {imp.pipelineStatus ?? "Not processed"}
                             </Badge>
                             {processingImportId === imp._id &&
                               importProcessingState?.job?.status === "running" && (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                <span className="text-xs text-muted-foreground flex items-center gap-1 line-clamp-2">
+                                  <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
                                   {importProcessingState.job.progressMessage}
                                 </span>
                               )}
                             {imp.pipelineError && (
-                              <span className="text-xs text-destructive line-clamp-2">
+                              <span className="text-xs text-destructive line-clamp-2" title={imp.pipelineError}>
                                 {imp.pipelineError}
                               </span>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{imp.importedByName}</TableCell>
-                        <TableCell className="text-sm">
-                          {format(new Date(imp._creationTime), "MMM d, HH:mm")}
+                        <TableCell className="whitespace-normal py-2 text-xs">
+                          <p className="truncate" title={imp.importedByName}>
+                            {imp.importedByName}
+                          </p>
+                          <p className="text-muted-foreground">
+                            {format(new Date(imp._creationTime), "MMM d, HH:mm")}
+                          </p>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
+                        <TableCell className="py-2 text-right">
+                          <div className="flex items-center justify-end gap-0.5">
                             {(imp.source === "Yunite" || imp.source === "Yunite API") && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleProcessImport(imp._id)}
-                                      disabled={
-                                        isProcessingAll ||
-                                        processingImportId === imp._id ||
-                                        imp.pipelineStatus === "Finalized"
-                                      }
-                                    >
-                                      {processingImportId === imp._id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Zap className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Process Import</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0"
+                                onClick={() => handleProcessImport(imp._id)}
+                                disabled={
+                                  isProcessingAll ||
+                                  processingImportId === imp._id ||
+                                  imp.pipelineStatus === "Finalized"
+                                }
+                                title="Process Import"
+                              >
+                                {processingImportId === imp._id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Zap className="h-4 w-4" />
+                                )}
+                              </Button>
                             )}
-                            {imp.pipelineStatus === "Finalized" && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleUnlockImport(imp._id)}
-                                    >
-                                      <RefreshCw className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Unlock Import</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            {imp.source === "Yunite" && imp.leaderboardId && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleSyncMatchData(imp._id)}
-                                      disabled={syncingId === imp._id || isProcessingAll}
-                                    >
-                                      {syncingId === imp._id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <RefreshCw className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Sync Match Data</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            {imp.source === "Yunite" && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => navigate(`/admin/yunite/${imp._id}`)}
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>View Details</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            {imp.source === "Yunite" && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handlePopulateTeamMembersForImport(imp._id)}
-                                      disabled={populatingTeamMembersId === imp._id}
-                                    >
-                                      {populatingTeamMembersId === imp._id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Users className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Populate Team Members</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            {imp.leaderboardUrl && !imp.leaderboardUrl.startsWith('CSV Import:') && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <a
-                                      href={imp.leaderboardUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      <Button variant="ghost" size="sm">
-                                        <ExternalLink className="h-4 w-4" />
-                                      </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                  <span className="sr-only">More actions</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-52">
+                                {imp.pipelineStatus === "Finalized" && (
+                                  <DropdownMenuItem onClick={() => handleUnlockImport(imp._id)}>
+                                    <RefreshCw className="mr-2 h-4 w-4" />
+                                    Unlock import
+                                  </DropdownMenuItem>
+                                )}
+                                {imp.source === "Yunite" && imp.leaderboardId && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleSyncMatchData(imp._id)}
+                                    disabled={syncingId === imp._id || isProcessingAll}
+                                  >
+                                    {syncingId === imp._id ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <RefreshCw className="mr-2 h-4 w-4" />
+                                    )}
+                                    Sync match data
+                                  </DropdownMenuItem>
+                                )}
+                                {imp.source === "Yunite" && (
+                                  <DropdownMenuItem onClick={() => navigate(`/admin/yunite/${imp._id}`)}>
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    View details
+                                  </DropdownMenuItem>
+                                )}
+                                {imp.source === "Yunite" && (
+                                  <DropdownMenuItem
+                                    onClick={() => handlePopulateTeamMembersForImport(imp._id)}
+                                    disabled={populatingTeamMembersId === imp._id}
+                                  >
+                                    {populatingTeamMembersId === imp._id ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Users className="mr-2 h-4 w-4" />
+                                    )}
+                                    Populate team members
+                                  </DropdownMenuItem>
+                                )}
+                                {imp.leaderboardUrl && !imp.leaderboardUrl.startsWith("CSV Import:") && (
+                                  <DropdownMenuItem asChild>
+                                    <a href={imp.leaderboardUrl} target="_blank" rel="noopener noreferrer">
+                                      <ExternalLink className="mr-2 h-4 w-4" />
+                                      Open leaderboard
                                     </a>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Open Leaderboard</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDownloadCSV(imp._id)}
-                                    disabled={downloadingId === imp._id}
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                  onClick={() => handleDownloadCSV(imp._id)}
+                                  disabled={downloadingId === imp._id}
+                                >
+                                  {downloadingId === imp._id ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Download className="mr-2 h-4 w-4" />
+                                  )}
+                                  Download CSV
+                                </DropdownMenuItem>
+                                {imp.playersUnmatched > 0 && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleRematch(imp._id)}
+                                    disabled={rematchingId === imp._id}
                                   >
-                                    {downloadingId === imp._id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    {rematchingId === imp._id ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     ) : (
-                                      <Download className="h-4 w-4" />
+                                      <Users className="mr-2 h-4 w-4" />
                                     )}
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Download CSV</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            {imp.playersUnmatched > 0 && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleRematch(imp._id)}
-                                      disabled={rematchingId === imp._id}
-                                    >
-                                      {rematchingId === imp._id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Users className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Rematch Players</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => openCreateEventDialog(imp)}
-                                    disabled={!!imp.eventId}
-                                    title={imp.eventId ? "Already linked to an event" : "Create event from this import"}
-                                  >
-                                    <CalendarPlus className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{imp.eventId ? "Already linked to event" : "Create Event"}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => openEditDialog(imp)}
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Edit</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDelete(imp._id)}
-                                    disabled={deletingId === imp._id}
-                                  >
-                                    {deletingId === imp._id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                    )}
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Delete</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                                    Rematch players
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                  onClick={() => openCreateEventDialog(imp)}
+                                  disabled={!!imp.eventId}
+                                >
+                                  <CalendarPlus className="mr-2 h-4 w-4" />
+                                  {imp.eventId ? "Already linked to event" : "Create event"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openEditDialog(imp)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit import
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(imp._id)}
+                                  disabled={deletingId === imp._id}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  {deletingId === imp._id ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                  )}
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
