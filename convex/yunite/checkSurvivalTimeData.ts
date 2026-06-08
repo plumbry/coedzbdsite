@@ -3,6 +3,7 @@
 import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { requireAdminAction } from "../auth_helpers";
+import { yuniteFetchOrThrow } from "../lib/yuniteRateLimit";
 
 // Debug action to check what survival time data is available from Yunite API
 export const checkLeaderboardData = action({
@@ -21,15 +22,7 @@ export const checkLeaderboardData = action({
     
     const leaderboardUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${args.tournamentId}/leaderboard`;
     
-    const response = await fetch(leaderboardUrl, {
-      headers: {
-        "Y-Api-Token": yuniteApiKey,
-      },
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch: ${response.status}`);
-    }
+    const response = await yuniteFetchOrThrow(leaderboardUrl, yuniteApiKey, {}, { skipSpacing: true });
     
     const data = await response.json();
     

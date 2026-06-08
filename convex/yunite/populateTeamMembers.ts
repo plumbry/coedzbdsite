@@ -1,9 +1,13 @@
 "use node";
 
 import { v } from "convex/values";
-import { action, internalAction } from "../_generated/server";
+import { action, internalAction, internalMutation, internalQuery } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
+import { yuniteFetchOrThrow, yuniteResponseJson } from "../lib/yuniteRateLimit";
+import type { Id } from "../_generated/dataModel.d.ts";
+
+const BULK_UPDATE_CHUNK_SIZE = 100;
 
 interface LeaderboardUser {
   discordId: string;
@@ -15,81 +19,123 @@ interface LeaderboardEntry {
   placement: number;
 }
 
-/**
- * Fetch with retry + exponential backoff for transient Yunite API errors (524 timeout, 429 rate limit).
- */
-async function fetchWithRetry(
-  url: string,
-  headers: Record<string, string>,
-  maxRetries = 3,
-): Promise<Response> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const res = await fetch(url, { headers });
+export const getTeamPopulateContext = internalQuery({
+  args: { importId: v.id("thirdPartyImports") },
+  handler: async (ctx, args) => {
+    const results = await ctx.db
+      .query("thirdPartyResults")
+      .withIndex("by_import", (q) => q.eq("importId", args.importId))
+      .collect();
 
-    if (res.ok) return res;
+    const resultsByDiscord: Record<
+      string,
+      { resultId: Id<"thirdPartyResults">; hasTeamMembers: boolean }
+    > = {};
 
-    const isRetryable = res.status === 524 || res.status === 429 || res.status >= 500;
-    if (!isRetryable || attempt === maxRetries) {
-      throw new Error(`Yunite API error: ${res.status}`);
+    for (const result of results) {
+      if (!result.discordId) {
+        continue;
+      }
+      resultsByDiscord[result.discordId] = {
+        resultId: result._id,
+        hasTeamMembers: (result.teamMembers?.length ?? 0) > 0,
+      };
     }
 
-    // Exponential back-off: 5s, 15s, 45s
-    const delay = 5000 * Math.pow(3, attempt);
-    console.log(`  ⏳ Retry ${attempt + 1}/${maxRetries} after ${delay / 1000}s (status ${res.status})`);
-    await new Promise((resolve) => setTimeout(resolve, delay));
-  }
-  // Should not reach here, but satisfy TS
-  throw new Error("Max retries exceeded");
-}
+    const players = await ctx.db.query("players").collect();
+    const discordToEpic: Record<string, string> = {};
+    for (const player of players) {
+      if (player.discordUserId && player.epicUsername) {
+        discordToEpic[player.discordUserId] = player.epicUsername;
+      }
+    }
+
+    return { resultsByDiscord, discordToEpic };
+  },
+});
+
+export const bulkUpdateResultTeamMembers = internalMutation({
+  args: {
+    updates: v.array(
+      v.object({
+        resultId: v.id("thirdPartyResults"),
+        teamMembers: v.array(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    for (const update of args.updates) {
+      await ctx.db.patch(update.resultId, {
+        teamMembers: update.teamMembers,
+      });
+    }
+    return { updated: args.updates.length };
+  },
+});
 
 export const populateForImportInternal = internalAction({
   args: { importId: v.id("thirdPartyImports") },
   handler: async (ctx, args): Promise<{ success: boolean; updated: number }> => {
     const apiKey = process.env.YUNITE_API_KEY;
     const guildId = process.env.YUNITE_GUILD_ID;
-    
+
     if (!apiKey || !guildId) {
       throw new Error("YUNITE_API_KEY and YUNITE_GUILD_ID must be set");
     }
-    
+
     const imp = await ctx.runQuery(api.thirdParty.getImportById, { importId: args.importId });
     if (!imp) throw new Error("Import not found");
-    
+
+    const { resultsByDiscord, discordToEpic } = await ctx.runQuery(
+      internal.yunite.populateTeamMembers.getTeamPopulateContext,
+      { importId: args.importId },
+    );
+
     const tournamentId = imp.leaderboardId.replace("yunite-", "");
     const url = `https://yunite.xyz/api/v3/guild/${guildId}/tournaments/${tournamentId}/leaderboard`;
-    
-    const res = await fetchWithRetry(url, { "Y-Api-Token": apiKey });
-    
-    const data: LeaderboardEntry[] = await res.json();
-    const players = await ctx.runQuery(api.players.getPlayers);
-    
-    let updated = 0;
-    
+
+    const res = await yuniteFetchOrThrow(url, apiKey, {}, { skipSpacing: true });
+    const data = await yuniteResponseJson<LeaderboardEntry[]>(res);
+    const updatesByResult = new Map<Id<"thirdPartyResults">, string[]>();
+
     for (const entry of data) {
       if (!entry.users || entry.users.length === 0) continue;
-      
+
       const epics: string[] = [];
-      for (const u of entry.users) {
-        const p = players.find((pl: { discordUserId: string; epicUsername: string }) => pl.discordUserId === u.discordId);
-        if (p) epics.push(p.epicUsername);
-      }
-      
-      for (const u of entry.users) {
-        const r = await ctx.runQuery(api.yunite.findResultByDiscordId, {
-          importId: args.importId,
-          discordId: u.discordId,
-        });
-        
-        if (r) {
-          await ctx.runMutation(api.yunite.updateResultTeamMembers, {
-            resultId: r._id,
-            teamMembers: epics,
-          });
-          updated++;
+      for (const user of entry.users) {
+        const epic = discordToEpic[user.discordId];
+        if (epic) {
+          epics.push(epic);
         }
       }
+
+      for (const user of entry.users) {
+        const resultRef = resultsByDiscord[user.discordId];
+        if (!resultRef) {
+          continue;
+        }
+
+        updatesByResult.set(resultRef.resultId, epics);
+      }
     }
-    
+
+    const pendingUpdates = [...updatesByResult.entries()].map(
+      ([resultId, teamMembers]) => ({
+        resultId,
+        teamMembers,
+      }),
+    );
+
+    let updated = 0;
+    for (let i = 0; i < pendingUpdates.length; i += BULK_UPDATE_CHUNK_SIZE) {
+      const chunk = pendingUpdates.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+      const result = await ctx.runMutation(
+        internal.yunite.populateTeamMembers.bulkUpdateResultTeamMembers,
+        { updates: chunk },
+      );
+      updated += result.updated;
+    }
+
     return { success: true, updated };
   },
 });
@@ -115,31 +161,30 @@ export const populateAllImports = action({
     await requireAdminAction(ctx);
 
     console.log("🔄 Starting to populate team members for all Yunite imports...");
-    
+
     const imports = await ctx.runQuery(api.yuniteQueries.getAllYuniteTournaments);
     console.log(`Found ${imports.length} Yunite imports`);
-    
+
     let totalUpdated = 0;
     let successCount = 0;
     let failureCount = 0;
     const failedImports: string[] = [];
-    
+
     for (let i = 0; i < imports.length; i++) {
       const imp = imports[i];
       console.log(`[${i + 1}/${imports.length}] ${imp.eventName}`);
-      
+
       try {
         const result = await ctx.runAction(api.yunite.populateTeamMembers.populateForImport, {
           importId: imp._id,
         });
-        
+
         totalUpdated += result.updated;
         successCount++;
         console.log(`  ✓ Updated ${result.updated} records`);
-        
-        // Rate limit delay
+
         if (i < imports.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       } catch (error) {
         console.error(`  ❌ Failed:`, error);
@@ -147,17 +192,17 @@ export const populateAllImports = action({
         failedImports.push(imp.eventName);
       }
     }
-    
+
     console.log(`\n✅ Completed!`);
     console.log(`   Total: ${imports.length}`);
     console.log(`   Success: ${successCount}`);
     console.log(`   Failed: ${failureCount}`);
     console.log(`   Records updated: ${totalUpdated}`);
-    
+
     if (failedImports.length > 0) {
       console.log(`   Failed imports:`, failedImports);
     }
-    
+
     return {
       success: true,
       totalImports: imports.length,

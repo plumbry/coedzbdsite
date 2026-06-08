@@ -4,9 +4,10 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import {
-  isRateLimitError,
+  isTransientYuniteError,
   progressMessageForStep,
   retryDelayMsForRateLimit,
+  sanitizePipelineErrorMessage,
   statusForStep,
   type ImportPipelineStep,
 } from "./lib/importPipeline";
@@ -169,9 +170,10 @@ export const runProcessingStep = internalAction({
       }
       return { done: false, completedStep: step };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      const message = sanitizePipelineErrorMessage(rawMessage);
 
-      if (isRateLimitError(message)) {
+      if (isTransientYuniteError(rawMessage)) {
         const { retryCount } = await ctx.runMutation(
           internal.importProcessing.incrementJobRetry,
           { jobId: args.jobId },

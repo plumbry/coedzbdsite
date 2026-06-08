@@ -109,6 +109,7 @@ import type * as lib_stats_types from "../lib/stats/types.js";
 import type * as lib_stats_versions from "../lib/stats/versions.js";
 import type * as lib_stats_zbdPerformanceStats from "../lib/stats/zbdPerformanceStats.js";
 import type * as lib_yunite from "../lib/yunite.js";
+import type * as lib_yuniteRateLimit from "../lib/yuniteRateLimit.js";
 import type * as memberManagement from "../memberManagement.js";
 import type * as migrateHasMatchData from "../migrateHasMatchData.js";
 import type * as migrateMembershipStatus from "../migrateMembershipStatus.js";
@@ -282,6 +283,7 @@ declare const fullApi: ApiFromModules<{
   "lib/stats/versions": typeof lib_stats_versions;
   "lib/stats/zbdPerformanceStats": typeof lib_stats_zbdPerformanceStats;
   "lib/yunite": typeof lib_yunite;
+  "lib/yuniteRateLimit": typeof lib_yuniteRateLimit;
   memberManagement: typeof memberManagement;
   migrateHasMatchData: typeof migrateHasMatchData;
   migrateMembershipStatus: typeof migrateMembershipStatus;

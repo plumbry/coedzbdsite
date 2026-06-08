@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import type { Id } from "../_generated/dataModel.d.ts";
+import { yuniteFetchOrThrow } from "../lib/yuniteRateLimit";
 
 // ─── Yunite Leaderboard Types ────────────────────────────────────────────────
 
@@ -108,16 +109,7 @@ export const importYuniteScores = action({
     const url = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${tournamentId}/leaderboard`;
     console.log(`Fetching Yunite leaderboard: ${url}`);
 
-    const response = await fetch(url, {
-      headers: {
-        "Y-Api-Token": yuniteApiKey,
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Yunite API error (${response.status}): ${errorText}`);
-    }
+    const response = await yuniteFetchOrThrow(url, yuniteApiKey, {}, { skipSpacing: true });
 
     const rawData = await response.json();
 

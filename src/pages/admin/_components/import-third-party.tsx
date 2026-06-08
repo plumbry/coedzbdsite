@@ -39,28 +39,21 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isYuniteImportRecord(imp: {
-  source: string;
-  importMethod?: string;
-}) {
-  return (
-    imp.source === "Yunite" ||
-    imp.source === "Yunite API" ||
-    imp.importMethod === "api"
-  );
+function formatPipelineError(message: string): string {
+  const trimmed = message.trim();
+  if (trimmed.toLowerCase().startsWith("<!doctype")) {
+    return "Yunite API gateway error (502/524). Wait a few minutes and run Process Import again.";
+  }
+  if (trimmed.length > 280) {
+    return `${trimmed.slice(0, 280)}…`;
+  }
+  return trimmed;
 }
 
-function isEligibleForBatchProcessImport(imp: {
-  source: string;
-  importMethod?: string;
-  pipelineStatus?: string;
-  pipelineLocked?: boolean;
-}) {
-  if (!isYuniteImportRecord(imp)) return false;
-  if (imp.pipelineStatus === "Ignored") return false;
-  if (imp.pipelineStatus === "Finalized" && imp.pipelineLocked) return false;
-  return true;
-}
+const API_HEAVY_PIPELINE_STEPS = new Set([
+  "sync_match_data",
+  "populate_team_members",
+]);
 
 type ImportJobOutcome = "completed" | "failed" | "waiting" | "aborted" | "timeout";
 
@@ -667,17 +660,30 @@ export default function ImportThirdParty() {
   };
 
   const handleProcessAllImports = async () => {
-    const allImports = await convex.query(api.thirdPartyQueries.getAllImports, {});
-    const eligible = allImports.filter(isEligibleForBatchProcessImport);
+    const { imports: eligible, alreadyComplete } = await convex.query(
+      api.importProcessing.listImportsNeedingProcessing,
+      {},
+    );
 
     if (eligible.length === 0) {
-      toast.error("No Yunite imports need processing");
+      toast.info(
+        alreadyComplete > 0
+          ? `No imports need processing (${alreadyComplete} already complete).`
+          : "No Yunite imports need processing.",
+      );
       return;
     }
 
+    const syncCount = eligible.filter((imp) => imp.nextStep === "sync_match_data").length;
+    const detailParts = [
+      `${eligible.length} import(s) need work`,
+      alreadyComplete > 0 ? `${alreadyComplete} already complete` : null,
+      syncCount > 0 ? `${syncCount} include match-data sync (slowest)` : null,
+    ].filter(Boolean);
+
     if (
       !confirm(
-        `Process ${eligible.length} Yunite import(s) one at a time? Finalized imports are skipped. The queue stops if an import needs admin action or fails.`,
+        `Process ${detailParts.join(" · ")}?\n\nRuns one import at a time and skips steps already done. The queue pauses if an import needs admin action or fails.`,
       )
     ) {
       return;
@@ -742,7 +748,11 @@ export default function ImportThirdParty() {
           break;
         }
 
-        if (i < eligible.length - 1 && !processAllAbortRef.current) {
+        if (
+          i < eligible.length - 1 &&
+          !processAllAbortRef.current &&
+          API_HEAVY_PIPELINE_STEPS.has(imp.nextStep)
+        ) {
           await sleep(PROCESS_IMPORT_GAP_MS);
         }
       }
@@ -1651,7 +1661,7 @@ export default function ImportThirdParty() {
               <div>
                 <h3 className="text-lg font-semibold">Import History</h3>
                 <p className="text-sm text-muted-foreground">
-                  {importHistory?.length || 0} import{importHistory?.length !== 1 ? "s" : ""} · Process All runs the full pipeline
+                  {importHistory?.length || 0} import{importHistory?.length !== 1 ? "s" : ""} · Process All skips steps already done
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1786,8 +1796,11 @@ export default function ImportThirdParty() {
                                 </span>
                               )}
                             {imp.pipelineError && (
-                              <span className="text-xs text-destructive line-clamp-2" title={imp.pipelineError}>
-                                {imp.pipelineError}
+                              <span
+                                className="text-xs text-destructive line-clamp-2"
+                                title={formatPipelineError(imp.pipelineError)}
+                              >
+                                {formatPipelineError(imp.pipelineError)}
                               </span>
                             )}
                           </div>

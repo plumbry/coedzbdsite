@@ -5,6 +5,7 @@ import { action } from "../_generated/server";
 import type { Id } from "../_generated/dataModel.d.ts";
 import { api, internal } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
+import { yuniteFetch, yuniteFetchOrThrow } from "../lib/yuniteRateLimit";
 
 interface KillFeedEntry {
   killerDiscordId: string;
@@ -97,16 +98,7 @@ export const fetchTournamentMatchBreakdown = action({
     // Fetch list of matches for this tournament
     const matchesUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${tournamentId}/matches`;
     
-    const matchesResponse = await fetch(matchesUrl, {
-      headers: {
-        "Y-Api-Token": yuniteApiKey,
-      },
-    });
-    
-    if (!matchesResponse.ok) {
-      const errorText = await matchesResponse.text();
-      throw new Error(`Failed to fetch matches: ${matchesResponse.status} - ${errorText}`);
-    }
+    const matchesResponse = await yuniteFetchOrThrow(matchesUrl, yuniteApiKey, {}, { skipSpacing: true });
     
     const matches: Array<{ id?: string; session?: string; sessionId?: string }> = await matchesResponse.json();
     console.log(`✓ Found ${matches.length} matches from API for tournament ${tournamentId}`);
@@ -127,45 +119,13 @@ export const fetchTournamentMatchBreakdown = action({
         continue;
       }
       
-      // Add delay to avoid rate limits (1 second between requests)
-      if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      
       const matchLeaderboardUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${tournamentId}/matches/${sessionId}`;
       console.log(`\n[${i + 1}/${matches.length}] Fetching match data for session: ${sessionId}`);
       
-      // Retry logic for rate limits
-      let matchResponse: Response | null = null;
-      let retries = 0;
-      const maxRetries = 3;
+      const matchResponse = await yuniteFetch(matchLeaderboardUrl, yuniteApiKey);
       
-      while (retries <= maxRetries) {
-        matchResponse = await fetch(matchLeaderboardUrl, {
-          headers: {
-            "Y-Api-Token": yuniteApiKey,
-          },
-        });
-        
-        if (matchResponse.ok) {
-          break; // Success, exit retry loop
-        }
-        
-        if (matchResponse.status === 429 && retries < maxRetries) {
-          // Rate limited - wait longer and retry
-          const waitTime = 2000 * (retries + 1); // 2s, 4s, 6s
-          console.warn(`⚠️ Rate limited on match ${sessionId}, waiting ${waitTime}ms before retry ${retries + 1}/${maxRetries}...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          retries++;
-        } else {
-          // Other error or max retries reached
-          console.warn(`❌ Failed to fetch match ${sessionId}: ${matchResponse.status}`);
-          break;
-        }
-      }
-      
-      if (!matchResponse || !matchResponse.ok) {
-        console.warn(`⏭️ Skipping match ${sessionId} after ${retries} retries`);
+      if (!matchResponse.ok) {
+        console.warn(`⏭️ Skipping match ${sessionId}: ${matchResponse.status}`);
         continue;
       }
       

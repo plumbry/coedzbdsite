@@ -5,42 +5,7 @@ import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
 import type { Id } from "../_generated/dataModel.d.ts";
-
-/**
- * Fetch with automatic retry on 429 rate limit errors.
- * Uses exponential backoff starting at 2s, doubling each retry.
- */
-async function fetchWithRetry(
-  url: string,
-  options: RequestInit,
-  maxRetries = 3,
-): Promise<Response> {
-  let lastResponse: Response | null = null;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const response = await fetch(url, options);
-
-    if (response.status !== 429) {
-      return response;
-    }
-
-    lastResponse = response;
-
-    if (attempt < maxRetries) {
-      // Use Yunite's reset header if available, otherwise exponential backoff
-      const resetIn = response.headers.get("Y-RateLimit-ResetIn");
-      const waitMs = resetIn
-        ? Math.max(parseInt(resetIn, 10) * 1000, 1000)
-        : 2000 * Math.pow(2, attempt); // 2s, 4s, 8s
-      console.log(
-        `Rate limited (429). Retrying in ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})...`,
-      );
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-    }
-  }
-
-  // All retries exhausted - return the last 429 response so caller can handle
-  return lastResponse!;
-}
+import { yuniteFetch, yuniteFetchOrThrow } from "../lib/yuniteRateLimit";
 
 /**
  * Diagnostic: Fetch the raw tournament object from Yunite API
@@ -60,20 +25,16 @@ export const inspectTournamentRaw = action({
       throw new Error("YUNITE_API_KEY and YUNITE_GUILD_ID must be set");
     }
 
-    const headers = { "Y-Api-Token": yuniteApiKey };
-
     // 1. Fetch single tournament detail
     const tournamentUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${args.tournamentId}`;
     console.log("Fetching tournament detail:", tournamentUrl);
 
-    const tournamentResponse = await fetchWithRetry(tournamentUrl, { headers });
-
-    if (!tournamentResponse.ok) {
-      const errorText = await tournamentResponse.text();
-      throw new Error(
-        `Failed to fetch tournament: ${tournamentResponse.status} - ${errorText}`,
-      );
-    }
+    const tournamentResponse = await yuniteFetchOrThrow(
+      tournamentUrl,
+      yuniteApiKey,
+      {},
+      { skipSpacing: true },
+    );
 
     const rawTournament = await tournamentResponse.json();
 
@@ -121,30 +82,18 @@ export const fetchTournamentLeaderboard = action({
       throw new Error("YUNITE_API_KEY and YUNITE_GUILD_ID must be set");
     }
 
-    const headers = { "Y-Api-Token": yuniteApiKey };
-    
-    // Fetch tournament info (with retry)
     const tournamentUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${args.tournamentId}`;
-    const tournamentResponse = await fetchWithRetry(tournamentUrl, { headers });
-    
-    if (!tournamentResponse.ok) {
-      const errorText = await tournamentResponse.text();
-      throw new Error(`Failed to fetch tournament: ${tournamentResponse.status} - ${errorText}`);
-    }
+    const tournamentResponse = await yuniteFetchOrThrow(
+      tournamentUrl,
+      yuniteApiKey,
+      {},
+      { skipSpacing: true },
+    );
     
     const tournament = await tournamentResponse.json();
-
-    // Small gap between the two requests to ease rate pressure
-    await new Promise((resolve) => setTimeout(resolve, 300));
     
-    // Fetch leaderboard (with retry)
     const leaderboardUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${args.tournamentId}/leaderboard`;
-    const response = await fetchWithRetry(leaderboardUrl, { headers });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to fetch leaderboard: ${response.status} - ${errorText}`);
-    }
+    const response = await yuniteFetchOrThrow(leaderboardUrl, yuniteApiKey);
     
     const leaderboard = await response.json();
     
@@ -244,9 +193,12 @@ export const saveTournamentImport = action({
       try {
         // Fetch match list
         const matchesUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${args.tournamentId}/matches`;
-        const matchesResponse = await fetch(matchesUrl, {
-          headers: { "Y-Api-Token": yuniteApiKey },
-        });
+        const matchesResponse = await yuniteFetch(
+          matchesUrl,
+          yuniteApiKey,
+          {},
+          { skipSpacing: true },
+        );
         
         if (matchesResponse.ok) {
           const matches = await matchesResponse.json();
@@ -257,12 +209,8 @@ export const saveTournamentImport = action({
             const sessionId = match.sessionId || match.session || match.id;
             if (!sessionId) continue;
             
-            await new Promise(resolve => setTimeout(resolve, 200)); // Rate limiting
-            
             const matchUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${args.tournamentId}/matches/${sessionId}`;
-            const matchResponse = await fetch(matchUrl, {
-              headers: { "Y-Api-Token": yuniteApiKey },
-            });
+            const matchResponse = await yuniteFetch(matchUrl, yuniteApiKey);
             
             if (!matchResponse.ok) {
               console.warn(`⚠️ Failed to fetch match ${sessionId}`);
@@ -470,16 +418,7 @@ export const fetchTournamentMatches = action({
     
     const matchesUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${args.tournamentId}/matches`;
     
-    const response = await fetch(matchesUrl, {
-      headers: {
-        "Y-Api-Token": yuniteApiKey,
-      },
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to fetch matches: ${response.status} - ${errorText}`);
-    }
+    const response = await yuniteFetchOrThrow(matchesUrl, yuniteApiKey, {}, { skipSpacing: true });
     
     const matches = await response.json();
 
@@ -517,16 +456,7 @@ export const fetchMatchData = action({
     
     const matchUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${args.tournamentId}/matches/${args.sessionId}`;
     
-    const response = await fetch(matchUrl, {
-      headers: {
-        "Y-Api-Token": yuniteApiKey,
-      },
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to fetch match data: ${response.status} - ${errorText}`);
-    }
+    const response = await yuniteFetchOrThrow(matchUrl, yuniteApiKey, {}, { skipSpacing: true });
     
     const matchData = await response.json();
     

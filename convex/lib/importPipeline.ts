@@ -112,8 +112,11 @@ export function shouldSkipStep(
       return imp.matchDataSynced === true;
     case "populate_team_members":
       return imp.matchDataSynced !== true;
-    case "match_players":
-      return imp.playersUnmatched === 0;
+    case "match_players": {
+      const matched = imp.playersMatched ?? 0;
+      const unmatched = imp.playersUnmatched ?? 0;
+      return matched + unmatched > 0 && unmatched === 0;
+    }
     case "link_event":
       return imp.eventId != null;
     case "validate_results":
@@ -179,6 +182,32 @@ export function isRateLimitError(message: string) {
     lower.includes("429") ||
     lower.includes("too many requests")
   );
+}
+
+/** Yunite/Cloudflare failures worth auto-retrying in the import pipeline. */
+export function isTransientYuniteError(message: string) {
+  const lower = message.toLowerCase();
+  return (
+    isRateLimitError(message) ||
+    lower.includes("gateway timeout") ||
+    lower.includes("bad gateway") ||
+    lower.includes("yunite api 502") ||
+    lower.includes("yunite api 524") ||
+    lower.includes("yunite api 503") ||
+    lower.includes("<!doctype") ||
+    lower.includes("invalid json")
+  );
+}
+
+export function sanitizePipelineErrorMessage(message: string): string {
+  const trimmed = message.trim();
+  if (trimmed.toLowerCase().startsWith("<!doctype")) {
+    return "Yunite API returned a gateway error (502/524). Wait a few minutes and run Process Import again.";
+  }
+  if (trimmed.length > 280) {
+    return `${trimmed.slice(0, 280)}…`;
+  }
+  return trimmed;
 }
 
 export function retryDelayMsForRateLimit(attempt: number) {

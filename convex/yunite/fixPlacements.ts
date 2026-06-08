@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
+import { yuniteFetch } from "../lib/yuniteRateLimit";
 
 interface YuniteUser {
   index: number;
@@ -102,36 +103,11 @@ export const fixPlacementsBatch = action({
       
       console.log(`\n[${globalIndex + 1}/${totalImports}] Processing: ${importRecord.eventName}`);
       
-      // Add delay between API calls (3 seconds)
-      if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      }
-      
       try {
         const leaderboardUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${tournamentId}/leaderboard`;
+        const response = await yuniteFetch(leaderboardUrl, yuniteApiKey);
         
-        // Fetch with retry logic
-        let response: Response | null = null;
-        let retryCount = 0;
-        const maxRetries = 2;
-        
-        while (retryCount <= maxRetries) {
-          response = await fetch(leaderboardUrl, {
-            headers: { "Y-Api-Token": yuniteApiKey },
-          });
-          
-          if (response.status === 429) {
-            retryCount++;
-            if (retryCount > maxRetries) break;
-            const waitTime = 5000;
-            console.warn(`  ⚠️ Rate limited, waiting ${waitTime / 1000}s (retry ${retryCount}/${maxRetries})...`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-            continue;
-          }
-          break;
-        }
-        
-        if (!response || response.status === 429) {
+        if (response.status === 429) {
           console.error(`  ❌ Rate limited after retries`);
           errors.push({ importName: importRecord.eventName, error: "Rate limited" });
           failed++;

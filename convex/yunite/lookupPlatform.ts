@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { requireAdminAction } from "../auth_helpers";
+import { yuniteFetch } from "../lib/yuniteRateLimit";
 
 /**
  * Probe Yunite API for member/user data that may include platform info.
@@ -27,7 +28,6 @@ export const probeYuniteUserEndpoints = action({
       );
     }
 
-    const headers = { "Y-Api-Token": yuniteApiKey };
     const results: Record<string, unknown> = {};
 
     // Try several possible Yunite API endpoints for user/member data
@@ -71,7 +71,7 @@ export const probeYuniteUserEndpoints = action({
         console.log(`\n🔍 Trying: ${endpoint.name}`);
         console.log(`   URL: ${endpoint.url}`);
 
-        const response = await fetch(endpoint.url, { headers });
+        const response = await yuniteFetch(endpoint.url, yuniteApiKey);
         console.log(`   Status: ${response.status}`);
 
         if (response.ok) {
@@ -113,8 +113,6 @@ export const probeYuniteUserEndpoints = action({
           };
         }
 
-        // Rate limit delay
-        await new Promise((resolve) => setTimeout(resolve, 600));
       } catch (error) {
         console.error(`   ❌ Exception:`, error);
         results[endpoint.name] = {

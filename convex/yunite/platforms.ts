@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
+import { yuniteFetchOrThrow } from "../lib/yuniteRateLimit";
 
 // Valid platform values from Yunite
 type YunitePlatform = "PC" | "PS4" | "XB1" | "SWITCH" | "MOBILE";
@@ -51,21 +52,9 @@ export const syncPlatforms = action({
     const url = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/registration/links`;
     console.log("Fetching registration links:", url);
 
-    const response = await fetch(url, {
-      headers: {
-        "Y-Api-Token": yuniteApiKey,
-      },
-    });
+    const response = await yuniteFetchOrThrow(url, yuniteApiKey, {}, { skipSpacing: true });
 
     console.log("Response status:", response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Yunite registration API error:", errorText);
-      throw new Error(
-        `Yunite registration API error: ${response.status} - ${errorText}`
-      );
-    }
 
     const data = await response.json();
 

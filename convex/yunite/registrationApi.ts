@@ -8,6 +8,8 @@
  * Fallback: GET same URL (flat users[] with discordId / epicId — used by platform sync)
  */
 
+import { yuniteFetch as yuniteApiFetch } from "../lib/yuniteRateLimit";
+
 const YUNITE_API_BASE = "https://yunite.xyz/api/v3";
 
 export interface YuniteRegistrationEntry {
@@ -169,14 +171,7 @@ async function yuniteFetch(
   init: RequestInit,
 ): Promise<{ response: Response } | { error: string }> {
   try {
-    const response = await fetch(url, {
-      ...init,
-      headers: {
-        "Y-Api-Token": apiKey.trim(),
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-        ...(init.headers ?? {}),
-      },
-    });
+    const response = await yuniteApiFetch(url, apiKey, init);
     return { response };
   } catch (error) {
     return {

@@ -10,6 +10,11 @@ import {
   normalizeYuniteLeaderboardPayload,
   yuniteTournamentHasImportableData,
 } from "../lib/yunite";
+import {
+  yuniteFetch,
+  yuniteFetchOrThrow,
+  yuniteResponseJson,
+} from "../lib/yuniteRateLimit";
 
 interface YuniteTournament {
   id: string;
@@ -95,20 +100,10 @@ export const syncYuniteTournaments = action({
           const url = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${tournamentId}`;
           console.log("Fetching tournament:", url);
           
-          const response = await fetch(url, {
-            headers: {
-              "Y-Api-Token": yuniteApiKey,
-            },
-          });
+          const response = await yuniteFetchOrThrow(url, yuniteApiKey);
           
           console.log("Response status:", response.status);
           console.log("Response content-type:", response.headers.get("content-type"));
-          
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Yunite API error response:", errorText);
-            throw new Error(`Yunite API error: ${response.status} - ${errorText}`);
-          }
           
           const tournament = await response.json();
           tournaments.push(tournament);
@@ -118,20 +113,10 @@ export const syncYuniteTournaments = action({
         const url = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments`;
         console.log("Fetching tournaments:", url);
         
-        const response = await fetch(url, {
-          headers: {
-            "Y-Api-Token": yuniteApiKey,
-          },
-        });
+        const response = await yuniteFetchOrThrow(url, yuniteApiKey, {}, { skipSpacing: true });
         
         console.log("Response status:", response.status);
         console.log("Response content-type:", response.headers.get("content-type"));
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Yunite API error response:", errorText);
-          throw new Error(`Yunite API error: ${response.status} - ${errorText}`);
-        }
         
         tournaments = await response.json();
         console.log("Fetched tournaments count:", tournaments.length);
@@ -173,33 +158,14 @@ export const syncYuniteTournaments = action({
           };
         }
         
-        // Add delay between requests to avoid rate limits (600ms)
-        if (i > 0) {
-          await new Promise(resolve => setTimeout(resolve, 600));
-        }
-        
         // Fetch leaderboard for this tournament
         const leaderboardUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${tournament.id}/leaderboard`;
         console.log(`[${i + 1}/${tournaments.length}] Fetching: ${tournament.name}`);
         
         let leaderboard: YuniteLeaderboardEntry[];
-        let leaderboardResponse = await fetch(leaderboardUrl, {
-          headers: {
-            "Y-Api-Token": yuniteApiKey,
-          },
-        });
+        const leaderboardResponse = await yuniteFetch(leaderboardUrl, yuniteApiKey);
         
         console.log(`Response status: ${leaderboardResponse.status}`);
-        
-        // Handle rate limiting - skip tournaments if rate limited
-        if (leaderboardResponse.status === 429) {
-          const retryAfter = leaderboardResponse.headers.get("Y-RateLimit-ResetIn");
-          const waitTimeSeconds = retryAfter ? parseInt(retryAfter) : 3;
-          console.warn(`Rate limited. Would need to wait ${waitTimeSeconds}s. Skipping remaining tournaments.`);
-          console.log(`Successfully processed ${successfulTournaments} out of ${i + 1} tournaments before rate limit.`);
-          // Stop processing remaining tournaments
-          break;
-        }
         
         if (!leaderboardResponse.ok) {
           const errorText = await leaderboardResponse.text();
@@ -527,18 +493,8 @@ export const syncTournamentMatchDataInternal = internalAction({
       const matchesUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${tournamentId}/matches`;
       console.log(`Fetching matches from: ${matchesUrl}`);
       
-      const matchesResponse = await fetch(matchesUrl, {
-        headers: {
-          "Y-Api-Token": yuniteApiKey,
-        },
-      });
-      
-      if (!matchesResponse.ok) {
-        const errorText = await matchesResponse.text();
-        throw new Error(`Failed to fetch matches: ${matchesResponse.status} - ${errorText}`);
-      }
-      
-      const matches: YuniteMatch[] = await matchesResponse.json();
+      const matchesResponse = await yuniteFetchOrThrow(matchesUrl, yuniteApiKey, {}, { skipSpacing: true });
+      const matches = await yuniteResponseJson<YuniteMatch[]>(matchesResponse);
       console.log(`✓ Found ${matches.length} matches`);
       console.log(`📋 Match IDs:`, matches.map(m => m.sessionId || m.session || m.id));
       
@@ -555,26 +511,27 @@ export const syncTournamentMatchDataInternal = internalAction({
         const match = matches[i];
         const sessionId = match.sessionId || match.session || match.id;
         
-        // Add delay to avoid rate limits
-        if (i > 0) {
-          await new Promise(resolve => setTimeout(resolve, 600));
-        }
-        
         const matchLeaderboardUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${tournamentId}/matches/${sessionId}`;
         console.log(`[${i + 1}/${matches.length}] Fetching match leaderboard...`);
         
-        const matchResponse = await fetch(matchLeaderboardUrl, {
-          headers: {
-            "Y-Api-Token": yuniteApiKey,
-          },
-        });
+        const matchResponse = await yuniteFetch(matchLeaderboardUrl, yuniteApiKey);
         
         if (!matchResponse.ok) {
           console.warn(`Failed to fetch match ${sessionId}: ${matchResponse.status}`);
           continue;
         }
-        
-        const matchData = await matchResponse.json();
+
+        let matchData: YuniteMatchLeaderboardEntry[];
+        try {
+          matchData = await yuniteResponseJson<YuniteMatchLeaderboardEntry[]>(
+            matchResponse,
+          );
+        } catch (parseError) {
+          const msg =
+            parseError instanceof Error ? parseError.message : String(parseError);
+          console.warn(`Failed to parse match ${sessionId}: ${msg}`);
+          continue;
+        }
         
         console.log(`  📦 Match ${i + 1} raw data structure:`, JSON.stringify(matchData).substring(0, 500));
         console.log(`  📦 Number of teams in match: ${matchData.length}`);
@@ -1034,14 +991,7 @@ export const listRecentTournaments = action({
     const url = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments`;
     console.log("Fetching tournament list:", url);
 
-    const response = await fetch(url, {
-      headers: { "Y-Api-Token": yuniteApiKey },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Yunite API error: ${response.status} - ${errorText}`);
-    }
+    const response = await yuniteFetchOrThrow(url, yuniteApiKey, {}, { skipSpacing: true });
 
     const tournaments: YuniteTournament[] = await response.json();
     console.log(`Fetched ${tournaments.length} tournaments from Yunite`);
@@ -1060,16 +1010,10 @@ export const listRecentTournaments = action({
     for (let i = 0; i < tournaments.length; i++) {
       const t = tournaments[i];
 
-      if (i > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      }
-
       let leaderboardPayload: unknown = [];
       try {
         const leaderboardUrl = `https://yunite.xyz/api/v3/guild/${yuniteGuildId}/tournaments/${t.id}/leaderboard`;
-        const leaderboardResponse = await fetch(leaderboardUrl, {
-          headers: { "Y-Api-Token": yuniteApiKey },
-        });
+        const leaderboardResponse = await yuniteFetch(leaderboardUrl, yuniteApiKey);
         if (leaderboardResponse.ok) {
           leaderboardPayload = await leaderboardResponse.json();
         }

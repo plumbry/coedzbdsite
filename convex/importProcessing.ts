@@ -23,10 +23,13 @@ import {
   isYuniteSource,
   postStepStatus,
   progressMessageForStep,
-  resolveNextStep,
   retryDelayMsForRateLimit,
   type ImportPipelineStep,
 } from "./lib/importPipeline";
+import {
+  importIsEligibleForBatchQueue,
+  resolveNextStepForImport,
+} from "./lib/resolveImportPipelineStep";
 
 async function getUserFromIdentity(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -195,6 +198,52 @@ async function validateImportResults(
 
   return { valid: true as const };
 }
+
+export const listImportsNeedingProcessing = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const allImports = await ctx.db.query("thirdPartyImports").order("desc").collect();
+    const imports: Array<{
+      _id: Id<"thirdPartyImports">;
+      eventName: string;
+      pipelineStatus?: string;
+      nextStep: ImportPipelineStep;
+    }> = [];
+    let alreadyComplete = 0;
+
+    for (const imp of allImports) {
+      if (!importIsEligibleForBatchQueue(imp)) {
+        continue;
+      }
+
+      const running = await ctx.db
+        .query("importProcessingJobs")
+        .withIndex("by_import", (q) => q.eq("importId", imp._id))
+        .filter((q) => q.eq(q.field("status"), "running"))
+        .first();
+      if (running) {
+        continue;
+      }
+
+      const nextStep = await resolveNextStepForImport(ctx, imp, false);
+      if (nextStep === null) {
+        alreadyComplete += 1;
+        continue;
+      }
+
+      imports.push({
+        _id: imp._id,
+        eventName: imp.eventName,
+        pipelineStatus: imp.pipelineStatus,
+        nextStep,
+      });
+    }
+
+    return { imports, alreadyComplete };
+  },
+});
 
 export const getImportProcessingJob = query({
   args: { importId: v.id("thirdPartyImports") },
@@ -613,7 +662,7 @@ export const resolveNextProcessingStep = internalQuery({
     if (!imp) {
       return null;
     }
-    return resolveNextStep(imp, args.forceReprocess);
+    return resolveNextStepForImport(ctx, imp, args.forceReprocess);
   },
 });
 
