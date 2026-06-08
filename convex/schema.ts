@@ -334,11 +334,47 @@ export default defineSchema({
     matchDataSyncedAt: v.optional(v.number()), // Timestamp when match data was last synced
     totalMatchKills: v.optional(v.number()), // Sum of all team kills across all matches (from match-level data)
     dataFullyCached: v.optional(v.boolean()), // True if all data (leaderboard + matches) is fully cached
+    /** Explicit Process Import pipeline status (Phase 3C). */
+    pipelineStatus: v.optional(v.string()),
+    pipelineStatusUpdatedAt: v.optional(v.number()),
+    pipelineError: v.optional(v.string()),
+    pipelineErrorCode: v.optional(v.string()),
+    finalizedAt: v.optional(v.number()),
+    finalizedBy: v.optional(v.id("users")),
+    pipelineLocked: v.optional(v.boolean()),
   }).index("by_leaderboard_id", ["leaderboardId"])
     .index("by_event", ["eventId"])
     .index("by_manual", ["isManualImport"])
-    .index("by_source", ["source"]),
-  
+    .index("by_source", ["source"])
+    .index("by_pipeline_status", ["pipelineStatus"]),
+
+  importProcessingJobs: defineTable({
+    importId: v.id("thirdPartyImports"),
+    status: v.union(
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("waiting"),
+      v.literal("cancelled"),
+    ),
+    currentStep: v.optional(v.string()),
+    progressMessage: v.string(),
+    progressCurrent: v.optional(v.number()),
+    progressTotal: v.optional(v.number()),
+    forceReprocess: v.boolean(),
+    retryCount: v.number(),
+    startedBy: v.optional(v.id("users")),
+    startedByName: v.optional(v.string()),
+    startedAt: v.number(),
+    lastProgressAt: v.number(),
+    completedAt: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+    errorCode: v.optional(v.string()),
+    resumeAt: v.optional(v.number()),
+  })
+    .index("by_import", ["importId"])
+    .index("by_status", ["status"]),
+
   thirdPartyResults: defineTable({
     importId: v.id("thirdPartyImports"),
     playerId: v.optional(v.id("players")), // null if unmatched
@@ -458,10 +494,6 @@ export default defineSchema({
     // Discord Scheduled Event sync
     discordEventId: v.optional(v.string()), // Discord scheduled event ID
     needsSetup: v.optional(v.boolean()), // True if imported from Discord and needs admin to complete details
-    /** @deprecated Remove after stripWipSchemaFields migration on production. */
-    adminWorkflowStatus: v.optional(
-      v.union(v.literal("complete"), v.literal("archived")),
-    ),
   })
     .index("by_status", ["status"])
     .index("by_type", ["type"])
@@ -693,8 +725,6 @@ export default defineSchema({
       }),
     }),
     lastUpdated: v.number(),
-    /** @deprecated Remove after stripWipSchemaFields migration on production. */
-    formulaVersion: v.optional(v.number()),
   }),
 
   aggregateStatsJobs: defineTable({
@@ -728,8 +758,6 @@ export default defineSchema({
     startedAt: v.number(),
     lastProgressAt: v.number(),
     completedAt: v.optional(v.number()),
-    /** @deprecated Remove after stripWipSchemaFields migration on production. */
-    formulaVersion: v.optional(v.number()),
   }).index("by_status", ["status"]),
 
   playerStatsRebuildJobs: defineTable({
@@ -780,8 +808,6 @@ export default defineSchema({
     lastProgressAt: v.number(),
     completedAt: v.optional(v.number()),
     errorMessage: v.optional(v.string()),
-    /** @deprecated Remove after stripWipSchemaFields migration on production. */
-    pipelineVersion: v.optional(v.number()),
   }).index("by_status", ["status"]),
 
   // Precomputed public home member directory (one row; avoids N full player reads per visitor).
@@ -1023,11 +1049,6 @@ export default defineSchema({
     consistentTeammateName: v.optional(v.string()),
     lastEventDate: v.optional(v.string()),
     evaluationStatus: v.string(),
-    /** @deprecated Remove after stripWipSchemaFields migration on production. */
-    evaluationStatusRaw: v.optional(v.string()),
-    recentEvaluationStatus: v.optional(v.string()),
-    recentEvaluationStatusRaw: v.optional(v.string()),
-    formulaVersion: v.optional(v.number()),
     // Recent (last 6 weeks) holistic score fields
     recentHolisticScore: v.optional(v.number()),
     recentRawHolisticScore: v.optional(v.number()),
@@ -1113,40 +1134,6 @@ export default defineSchema({
     ),
     mediansPlayersCursor: v.optional(v.union(v.string(), v.null())),
     mediansPageIndex: v.optional(v.number()),
-    /** @deprecated Remove after stripWipSchemaFields migration on production. */
-    rawTierHolisticMedians: v.optional(
-      v.object({
-        S: v.optional(v.number()),
-        A: v.optional(v.number()),
-        B: v.optional(v.number()),
-        C: v.optional(v.number()),
-      }),
-    ),
-    partialRawHolisticByTier: v.optional(
-      v.object({
-        S: v.array(v.number()),
-        A: v.array(v.number()),
-        B: v.array(v.number()),
-        C: v.array(v.number()),
-      }),
-    ),
-    partialRecentRawHolisticByTier: v.optional(
-      v.object({
-        S: v.array(v.number()),
-        A: v.array(v.number()),
-        B: v.array(v.number()),
-        C: v.array(v.number()),
-      }),
-    ),
-    recentTierRawHolisticMedians: v.optional(
-      v.object({
-        S: v.optional(v.number()),
-        A: v.optional(v.number()),
-        B: v.optional(v.number()),
-        C: v.optional(v.number()),
-      }),
-    ),
-    formulaVersion: v.optional(v.number()),
   }),
 
   // Player earnings from scrim events
