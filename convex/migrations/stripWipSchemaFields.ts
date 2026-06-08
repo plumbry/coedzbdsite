@@ -1,5 +1,4 @@
-import { mutation } from "../_generated/server";
-import { requireAdmin } from "../auth_helpers";
+import { internalMutation } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import type { TableNames } from "../_generated/dataModel";
 
@@ -54,12 +53,10 @@ async function stripTableFields(
   return count;
 }
 
-/** Admin-only one-shot cleanup so production can deploy the committed schema. */
-export const stripWipSchemaFields = mutation({
+/** One-shot cleanup so production can deploy the committed schema. Run via CLI only. */
+export const stripWipSchemaFields = internalMutation({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
-
     const results: Record<string, number> = {};
     for (const { table, fields } of STRIP_CONFIG) {
       results[table] = await stripTableFields(ctx, table, fields);
