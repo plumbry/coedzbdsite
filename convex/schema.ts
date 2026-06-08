@@ -1364,7 +1364,11 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
     createdBy: v.optional(v.string()),
-  }).index("by_date", ["date"]),
+    /** Links occurrences created together as a recurring series. */
+    recurrenceSeriesId: v.optional(v.string()),
+  })
+    .index("by_date", ["date"])
+    .index("by_recurrence_series", ["recurrenceSeriesId"]),
 
   potentialEventCalendarViewerSessions: defineTable({
     token: v.string(),

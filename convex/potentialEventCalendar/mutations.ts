@@ -1,6 +1,13 @@
 import { mutation } from "../_generated/server";
 import { v, ConvexError } from "convex/values";
 import { getDisplayName, requireEventBanAccess } from "../auth_helpers";
+import {
+  addDaysYmd,
+  createRecurrenceSeriesId,
+  daySpanInclusive,
+  expandRecurrenceDates,
+  type RecurrenceInterval,
+} from "./recurrence";
 
 const statusValidator = v.optional(
   v.union(
@@ -8,6 +15,17 @@ const statusValidator = v.optional(
     v.literal("confirmed"),
     v.literal("cancelled"),
   ),
+);
+
+const recurrenceValidator = v.optional(
+  v.object({
+    interval: v.union(
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("monthly"),
+    ),
+    until: v.string(),
+  }),
 );
 
 function assertValidDate(date: string, field: string) {
@@ -32,6 +50,21 @@ function assertDateRange(date: string, endDate: string | undefined) {
   }
 }
 
+function assertRecurrence(
+  date: string,
+  recurrence: { interval: RecurrenceInterval; until: string } | undefined,
+) {
+  if (!recurrence) return;
+
+  assertValidDate(recurrence.until, "recurrence until");
+  if (recurrence.until < date) {
+    throw new ConvexError({
+      message: "Recurrence end date cannot be before the start date",
+      code: "INVALID_ARGUMENT",
+    });
+  }
+}
+
 export const createEntry = mutation({
   args: {
     title: v.string(),
@@ -40,6 +73,7 @@ export const createEntry = mutation({
     time: v.optional(v.string()),
     description: v.optional(v.string()),
     status: statusValidator,
+    recurrence: recurrenceValidator,
   },
   handler: async (ctx, args) => {
     const user = await requireEventBanAccess(ctx);
@@ -52,19 +86,57 @@ export const createEntry = mutation({
     }
 
     assertDateRange(args.date, args.endDate);
+    assertRecurrence(args.date, args.recurrence);
 
     const now = Date.now();
-    return await ctx.db.insert("potentialEventCalendarEntries", {
+    const createdBy = getDisplayName(user);
+    const base = {
       title,
-      date: args.date,
-      endDate: args.endDate,
       time: args.time?.trim() || undefined,
       description: args.description?.trim() || undefined,
       status: args.status ?? "tentative",
       createdAt: now,
       updatedAt: now,
-      createdBy: getDisplayName(user),
-    });
+      createdBy,
+    };
+
+    if (!args.recurrence) {
+      const id = await ctx.db.insert("potentialEventCalendarEntries", {
+        ...base,
+        date: args.date,
+        endDate: args.endDate,
+      });
+      return { id, createdCount: 1 };
+    }
+
+    const occurrenceDates = expandRecurrenceDates(
+      args.date,
+      args.recurrence.until,
+      args.recurrence.interval,
+    );
+
+    if (occurrenceDates.length === 0) {
+      throw new ConvexError({
+        message: "Recurrence produced no event dates",
+        code: "INVALID_ARGUMENT",
+      });
+    }
+
+    const spanDays = args.endDate ? daySpanInclusive(args.date, args.endDate) : 0;
+    const seriesId = createRecurrenceSeriesId();
+    const ids = [];
+
+    for (const occurrenceDate of occurrenceDates) {
+      const id = await ctx.db.insert("potentialEventCalendarEntries", {
+        ...base,
+        date: occurrenceDate,
+        endDate: spanDays > 0 ? addDaysYmd(occurrenceDate, spanDays) : undefined,
+        recurrenceSeriesId: seriesId,
+      });
+      ids.push(id);
+    }
+
+    return { id: ids[0], seriesId, createdCount: ids.length };
   },
 });
 

@@ -118,6 +118,7 @@ import type * as players_importMatching from "../players/importMatching.js";
 import type * as players_status from "../players/status.js";
 import type * as potentialEventCalendar_mutations from "../potentialEventCalendar/mutations.js";
 import type * as potentialEventCalendar_queries from "../potentialEventCalendar/queries.js";
+import type * as potentialEventCalendar_recurrence from "../potentialEventCalendar/recurrence.js";
 import type * as potentialEventCalendar_viewerAuth from "../potentialEventCalendar/viewerAuth.js";
 import type * as replays_mutations from "../replays/mutations.js";
 import type * as replays_parser from "../replays/parser.js";
@@ -280,6 +281,7 @@ declare const fullApi: ApiFromModules<{
   "players/status": typeof players_status;
   "potentialEventCalendar/mutations": typeof potentialEventCalendar_mutations;
   "potentialEventCalendar/queries": typeof potentialEventCalendar_queries;
+  "potentialEventCalendar/recurrence": typeof potentialEventCalendar_recurrence;
   "potentialEventCalendar/viewerAuth": typeof potentialEventCalendar_viewerAuth;
   "replays/mutations": typeof replays_mutations;
   "replays/parser": typeof replays_parser;

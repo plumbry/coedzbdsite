@@ -4,9 +4,15 @@ import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
 import {
   addMonths,
+  eachDayOfInterval,
   endOfMonth,
+  endOfWeek,
   format,
+  isSameDay,
+  isSameMonth,
+  isToday,
   startOfMonth,
+  startOfWeek,
   subMonths,
 } from "date-fns";
 import { toast } from "sonner";
@@ -85,8 +91,10 @@ export default function PotentialEventCalendarManager({
   const [editingEntry, setEditingEntry] = useState<CalendarEntry | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CalendarEntry | null>(null);
 
-  const rangeStart = toDateInputValue(startOfMonth(month));
-  const rangeEnd = toDateInputValue(endOfMonth(month));
+  const rangeStart = toDateInputValue(
+    startOfWeek(startOfMonth(month), { weekStartsOn: 0 }),
+  );
+  const rangeEnd = toDateInputValue(endOfWeek(endOfMonth(month), { weekStartsOn: 0 }));
 
   const queryArgs = {
     rangeStart,
@@ -358,6 +366,15 @@ export default function PotentialEventCalendarManager({
         </div>
       </div>
 
+      <MonthlyCalendarGrid
+        month={month}
+        selectedDate={selectedDate}
+        entriesByDay={entriesByDay}
+        onSelectDate={setSelectedDate}
+        onSelectEntry={openEditDialog}
+        canEdit={canEdit}
+      />
+
       <PotentialEventCalendarEntryDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -382,6 +399,137 @@ export default function PotentialEventCalendarManager({
   );
 }
 
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const MAX_EVENTS_PER_CELL = 4;
+
+function formatGridEventLabel(entry: CalendarEntry): string {
+  const timePrefix = entry.time ? `${entry.time} ` : "";
+  return `${timePrefix}${entry.title}`;
+}
+
+function entryStatusClass(status: CalendarEntry["status"]): string {
+  switch (status) {
+    case "confirmed":
+      return "bg-primary/15 text-primary hover:bg-primary/25";
+    case "cancelled":
+      return "bg-destructive/10 text-destructive line-through hover:bg-destructive/15";
+    default:
+      return "bg-muted text-foreground hover:bg-muted/80";
+  }
+}
+
+function MonthlyCalendarGrid({
+  month,
+  selectedDate,
+  entriesByDay,
+  onSelectDate,
+  onSelectEntry,
+  canEdit,
+}: {
+  month: Date;
+  selectedDate: Date | undefined;
+  entriesByDay: Map<string, CalendarEntry[]>;
+  onSelectDate: (date: Date) => void;
+  onSelectEntry: (entry: CalendarEntry) => void;
+  canEdit: boolean;
+}) {
+  const gridDays = useMemo(() => {
+    const monthStart = startOfMonth(month);
+    const monthEnd = endOfMonth(month);
+    return eachDayOfInterval({
+      start: startOfWeek(monthStart, { weekStartsOn: 0 }),
+      end: endOfWeek(monthEnd, { weekStartsOn: 0 }),
+    });
+  }, [month]);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-medium">Monthly calendar view</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0 sm:p-0">
+        <div className="overflow-x-auto">
+          <div className="min-w-[44rem] border-t">
+            <div className="grid grid-cols-7 border-b bg-muted/40">
+              {WEEKDAY_LABELS.map((label) => (
+                <div
+                  key={label}
+                  className="border-r px-2 py-2 text-center text-xs font-medium text-muted-foreground last:border-r-0"
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {gridDays.map((day) => {
+                const dayKey = toDateInputValue(day);
+                const dayEntries = entriesByDay.get(dayKey) ?? [];
+                const inMonth = isSameMonth(day, month);
+                const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
+                const visibleEntries = dayEntries.slice(0, MAX_EVENTS_PER_CELL);
+                const hiddenCount = dayEntries.length - visibleEntries.length;
+
+                return (
+                  <div
+                    key={dayKey}
+                    className={cn(
+                      "flex min-h-28 flex-col border-b border-r p-1.5 last:border-r-0",
+                      !inMonth && "bg-muted/20",
+                      isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/30",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onSelectDate(day)}
+                      className={cn(
+                        "mb-1 flex size-7 shrink-0 items-center justify-center self-start rounded-full text-sm",
+                        isToday(day) && "bg-primary font-semibold text-primary-foreground",
+                        !isToday(day) && inMonth && "font-medium",
+                        !inMonth && "text-muted-foreground",
+                      )}
+                    >
+                      {format(day, "d")}
+                    </button>
+                    <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
+                      {visibleEntries.map((entry) => (
+                        <button
+                          key={`${dayKey}-${entry._id}`}
+                          type="button"
+                          title={formatGridEventLabel(entry)}
+                          onClick={() => {
+                            onSelectDate(day);
+                            if (canEdit) onSelectEntry(entry);
+                          }}
+                          className={cn(
+                            "w-full truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight",
+                            entryStatusClass(entry.status),
+                            !canEdit && "cursor-default",
+                          )}
+                        >
+                          {formatGridEventLabel(entry)}
+                        </button>
+                      ))}
+                      {hiddenCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectDate(day)}
+                          className="truncate px-1 text-left text-[11px] text-muted-foreground hover:text-foreground"
+                        >
+                          +{hiddenCount} more
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function EntryCard({
   entry,
   canEdit,
@@ -402,6 +550,9 @@ function EntryCard({
             <Badge variant={statusBadgeVariant(entry.status)}>
               {entry.status ?? "tentative"}
             </Badge>
+            {entry.recurrenceSeriesId && (
+              <Badge variant="outline">Recurring</Badge>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
             {formatEntryDateRange(entry)}

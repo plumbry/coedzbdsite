@@ -24,9 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
+import { Checkbox } from "@/components/ui/checkbox.tsx";
 
 type CalendarEntry = Doc<"potentialEventCalendarEntries">;
 type EntryStatus = NonNullable<CalendarEntry["status"]>;
+type RecurrenceInterval = "daily" | "weekly" | "monthly";
 
 function toDateInputValue(date: Date): string {
   const year = date.getFullYear();
@@ -57,6 +59,9 @@ export default function PotentialEventCalendarEntryDialog({
   const [time, setTime] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<EntryStatus>("tentative");
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceInterval, setRecurrenceInterval] = useState<RecurrenceInterval>("weekly");
+  const [recurrenceUntil, setRecurrenceUntil] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isEditing = Boolean(entry);
@@ -80,6 +85,9 @@ export default function PotentialEventCalendarEntryDialog({
     setTime("");
     setDescription("");
     setStatus("tentative");
+    setIsRecurring(false);
+    setRecurrenceInterval("weekly");
+    setRecurrenceUntil("");
   }, [open, entry, defaultDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -95,13 +103,36 @@ export default function PotentialEventCalendarEntryDialog({
       status,
     };
 
+    if (isRecurring && !isEditing) {
+      if (!recurrenceUntil.trim()) {
+        toast.error("Choose a date for recurrence to end");
+        setIsSubmitting(false);
+        return;
+      }
+      if (recurrenceUntil < date) {
+        toast.error("Recurrence end date cannot be before the start date");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     try {
       if (entry) {
         await updateEntry({ id: entry._id as Id<"potentialEventCalendarEntries">, ...payload });
         toast.success("Event updated");
       } else {
-        await createEntry(payload);
-        toast.success("Event added");
+        const result = await createEntry({
+          ...payload,
+          recurrence:
+            isRecurring && recurrenceUntil.trim()
+              ? { interval: recurrenceInterval, until: recurrenceUntil }
+              : undefined,
+        });
+        toast.success(
+          result.createdCount > 1
+            ? `Added ${result.createdCount} recurring events`
+            : "Event added",
+        );
       }
       onOpenChange(false);
     } catch (err) {
@@ -149,7 +180,7 @@ export default function PotentialEventCalendarEntryDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="calendar-entry-end-date">End date (optional)</Label>
+                <Label htmlFor="calendar-entry-end-date">Event end date (optional)</Label>
                 <Input
                   id="calendar-entry-end-date"
                   type="date"
@@ -157,8 +188,63 @@ export default function PotentialEventCalendarEntryDialog({
                   min={date || undefined}
                   onChange={(e) => setEndDate(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">
+                  For multi-day events. Each recurrence uses the same length.
+                </p>
               </div>
             </div>
+            {!isEditing && (
+              <div className="space-y-3 rounded-md border p-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="calendar-entry-recurring"
+                    checked={isRecurring}
+                    onCheckedChange={(checked) => setIsRecurring(checked === true)}
+                  />
+                  <Label htmlFor="calendar-entry-recurring" className="font-normal">
+                    Recurring event
+                  </Label>
+                </div>
+                {isRecurring && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Repeats</Label>
+                      <Select
+                        value={recurrenceInterval}
+                        onValueChange={(value) =>
+                          setRecurrenceInterval(value as RecurrenceInterval)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="calendar-entry-recurrence-until">Repeat until</Label>
+                      <Input
+                        id="calendar-entry-recurrence-until"
+                        type="date"
+                        value={recurrenceUntil}
+                        min={date || undefined}
+                        onChange={(e) => setRecurrenceUntil(e.target.value)}
+                        required={isRecurring}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {isEditing && entry?.recurrenceSeriesId && (
+              <p className="text-xs text-muted-foreground">
+                Part of a recurring series. Edits apply to this date only.
+              </p>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="calendar-entry-time">Time (optional)</Label>
@@ -203,7 +289,15 @@ export default function PotentialEventCalendarEntryDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting || !title.trim() || !date}>
+            <Button
+              type="submit"
+              disabled={
+                isSubmitting ||
+                !title.trim() ||
+                !date ||
+                (!isEditing && isRecurring && !recurrenceUntil.trim())
+              }
+            >
               {isSubmitting ? "Saving..." : isEditing ? "Save changes" : "Add event"}
             </Button>
           </DialogFooter>
