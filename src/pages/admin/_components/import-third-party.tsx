@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useClientPagination } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
 import { useMutation, useQuery, useConvex, useAction, usePaginatedQuery } from "convex/react";
@@ -21,6 +21,7 @@ import { Loader2, ExternalLink, FileUp, RefreshCw, Trash2, Edit, Users, Download
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/use-user-role.ts";
+import { importPipelineStatusVariant } from "@/lib/import-pipeline-display.ts";
 
 export default function ImportThirdParty() {
   const { isAdmin } = useUserRole();
@@ -67,6 +68,7 @@ export default function ImportThirdParty() {
   const [deletingId, setDeletingId] = useState<Id<"thirdPartyImports"> | null>(null);
   const [downloadingId, setDownloadingId] = useState<Id<"thirdPartyImports"> | null>(null);
   const [syncingId, setSyncingId] = useState<Id<"thirdPartyImports"> | null>(null);
+  const [processingImportId, setProcessingImportId] = useState<Id<"thirdPartyImports"> | null>(null);
   const [populatingTeamMembersId, setPopulatingTeamMembersId] = useState<Id<"thirdPartyImports"> | null>(null);
   const [editingImport, setEditingImport] = useState<Id<"thirdPartyImports"> | null>(null);
   const [editEventName, setEditEventName] = useState("");
@@ -99,6 +101,28 @@ export default function ImportThirdParty() {
   const linkImportToEvent = useMutation(api.thirdPartyMutations.linkImportToEvent);
   const replaceCSVData = useMutation(api.thirdPartyMutations.replaceCSVData);
   const refreshAllImports = useMutation(api.thirdPartyMutations.refreshAllImports);
+  const startProcessImport = useMutation(api.importProcessing.startProcessImport);
+  const unlockImport = useMutation(api.importProcessing.unlockImport);
+  const reprocessImport = useMutation(api.importProcessing.reprocessImport);
+  const importProcessingState = useQuery(
+    api.importProcessing.getImportProcessingJob,
+    processingImportId ? { importId: processingImportId } : "skip",
+  );
+
+  useEffect(() => {
+    const job = importProcessingState?.job;
+    if (!processingImportId || !job) return;
+    if (job.status === "completed") {
+      toast.success(job.progressMessage || "Import processing complete.");
+      setProcessingImportId(null);
+    } else if (job.status === "failed") {
+      toast.error(job.errorMessage || "Import processing failed.");
+      setProcessingImportId(null);
+    } else if (job.status === "waiting") {
+      toast.info(job.errorMessage || "Import needs admin action before continuing.");
+      setProcessingImportId(null);
+    }
+  }, [importProcessingState?.job?.status, processingImportId]);
   const backfillLeaderboardLinks = useMutation(api.thirdPartyMutations.backfillLeaderboardLinks);
   const createEvent = useMutation(api.events.management.createEvent);
   const { results: importHistory, status: importHistoryStatus, loadMore: loadMoreImports } = usePaginatedQuery(
@@ -550,6 +574,43 @@ export default function ImportThirdParty() {
     }
   };
   
+  const handleProcessImport = async (importId: Id<"thirdPartyImports">) => {
+    setProcessingImportId(importId);
+    try {
+      await startProcessImport({ importId });
+      toast.success("Process Import started — progress will continue in the background.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to start Process Import");
+      setProcessingImportId(null);
+    }
+  };
+
+  const handleUnlockImport = async (importId: Id<"thirdPartyImports">) => {
+    if (!confirm("Unlock this import so it can be processed again? Yunite steps will not re-run unless you choose Reprocess.")) {
+      return;
+    }
+    try {
+      await unlockImport({ importId });
+      toast.success("Import unlocked.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to unlock import");
+    }
+  };
+
+  const handleReprocessImport = async (importId: Id<"thirdPartyImports">) => {
+    if (!confirm("Reprocess this import from scratch? This may re-fetch Yunite data and re-run all pipeline steps.")) {
+      return;
+    }
+    setProcessingImportId(importId);
+    try {
+      await reprocessImport({ importId });
+      toast.success("Reprocess Import started.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to reprocess import");
+      setProcessingImportId(null);
+    }
+  };
+
   const handleRematch = async (importId: Id<"thirdPartyImports">) => {
     setRematchingId(importId);
     try {
@@ -1617,6 +1678,7 @@ export default function ImportThirdParty() {
                       <TableHead>Date</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead>Players</TableHead>
+                      <TableHead>Pipeline</TableHead>
                       <TableHead>Imported By</TableHead>
                       <TableHead>Imported At</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -1647,12 +1709,75 @@ export default function ImportThirdParty() {
                             )}
                           </div>
                         </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1 max-w-[180px]">
+                            <Badge variant={importPipelineStatusVariant(imp.pipelineStatus)}>
+                              {imp.pipelineStatus ?? "Not processed"}
+                            </Badge>
+                            {processingImportId === imp._id &&
+                              importProcessingState?.job?.status === "running" && (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  {importProcessingState.job.progressMessage}
+                                </span>
+                              )}
+                            {imp.pipelineError && (
+                              <span className="text-xs text-destructive line-clamp-2">
+                                {imp.pipelineError}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-sm">{imp.importedByName}</TableCell>
                         <TableCell className="text-sm">
                           {format(new Date(imp._creationTime), "MMM d, HH:mm")}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {(imp.source === "Yunite" || imp.source === "Yunite API") && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleProcessImport(imp._id)}
+                                      disabled={
+                                        processingImportId === imp._id ||
+                                        imp.pipelineStatus === "Finalized"
+                                      }
+                                    >
+                                      {processingImportId === imp._id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Zap className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Process Import</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            {imp.pipelineStatus === "Finalized" && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleUnlockImport(imp._id)}
+                                    >
+                                      <RefreshCw className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Unlock Import</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
                             {imp.source === "Yunite" && imp.leaderboardId && (
                               <TooltipProvider>
                                 <Tooltip>
