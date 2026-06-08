@@ -11,6 +11,7 @@ import {
   summarizeEventWorkflow,
   type EventWorkflowImportSummary,
 } from "../lib/eventWorkflow";
+import { normalizeEventType } from "../lib/eventTypes";
 import { collectEventLeaderboardUrls, extractTournamentIdFromUrl } from "../lib/yunite";
 
 // Auto-link existing unlinked imports to an event based on matching leaderboard URLs
@@ -493,9 +494,11 @@ export const createEvent = mutation({
     // Compute status based on dates
     const computedStatus = computeEventStatus(args.startDate, args.endDate);
 
+    const eventType = normalizeEventType(args.type);
+
     const eventId = await ctx.db.insert("events", {
       name: args.name,
-      type: args.type,
+      type: eventType,
       mode: args.mode,
       startDate: args.startDate,
       endDate: args.endDate,
@@ -505,8 +508,8 @@ export const createEvent = mutation({
       season: args.season,
       placementEarningsTopN: args.placementEarningsTopN,
       matchWinEarnings: args.matchWinEarnings,
-      duoPlacementEarningsTopN: (args.type === "random-trios" || args.type === "solos-meets-duos") ? args.duoPlacementEarningsTopN : undefined,
-      soloPlacementEarningsTopN: args.type === "random-trios" ? args.soloPlacementEarningsTopN : undefined,
+      duoPlacementEarningsTopN: (eventType === "random-trios" || eventType === "solos-meets-duos") ? args.duoPlacementEarningsTopN : undefined,
+      soloPlacementEarningsTopN: eventType === "random-trios" ? args.soloPlacementEarningsTopN : undefined,
       standardLeaderboards: args.standardLeaderboards,
       twoLobbies: args.twoLobbies,
       standardLeaderboardsLobby2: args.standardLeaderboardsLobby2,
@@ -518,11 +521,11 @@ export const createEvent = mutation({
       isNoMoneyEvent: args.isNoMoneyEvent,
       seasonId: args.seasonId,
       skipFirstNWeeksPoints: args.skipFirstNWeeksPoints,
-      smdTeamSize: args.type === "solos-meets-duos" ? (args.smdTeamSize ?? "duo") : undefined,
-      bestNGames: args.type === "scrim-series" ? args.bestNGames : undefined,
-      seriesDurationWeeks: args.type === "scrim-series" ? args.seriesDurationWeeks : undefined,
-      showdownBestWeeks: args.type === "showdown" ? args.showdownBestWeeks : undefined,
-      penaltyAmount: args.type === "showdown" ? args.penaltyAmount : undefined,
+      smdTeamSize: eventType === "solos-meets-duos" ? (args.smdTeamSize ?? "duo") : undefined,
+      bestNGames: eventType === "scrim-series" ? args.bestNGames : undefined,
+      seriesDurationWeeks: eventType === "scrim-series" ? args.seriesDurationWeeks : undefined,
+      showdownBestWeeks: eventType === "showdown" ? args.showdownBestWeeks : undefined,
+      penaltyAmount: eventType === "showdown" ? args.penaltyAmount : undefined,
       createdBy: user._id,
     });
     
@@ -559,7 +562,7 @@ export const createEvent = mutation({
     }
     
     // Auto-lock (snapshot) tiers for Showdown events at creation time
-    if (args.type === "showdown") {
+    if (eventType === "showdown") {
       const players = await ctx.db.query("players").collect();
       for (const player of players) {
         if (player.tier) {
@@ -572,7 +575,7 @@ export const createEvent = mutation({
       }
     }
 
-    if (args.type === "scrim-series" && args.linkedScrimSeriesId) {
+    if (eventType === "scrim-series" && args.linkedScrimSeriesId) {
       await applyLinkedScrimSeries(ctx, eventId, args.linkedScrimSeriesId);
     }
     
@@ -643,7 +646,11 @@ export const updateEvent = mutation({
     const effectiveTypeEarly = args.type ?? event.type;
     
     if (args.name !== undefined) updates.name = args.name;
-    if (args.type !== undefined) updates.type = args.type;
+    if (args.type !== undefined) {
+      updates.type = normalizeEventType(args.type);
+    } else if (event.type === "minicup") {
+      updates.type = "scrim";
+    }
     if (args.mode !== undefined) updates.mode = args.mode;
     if (args.startDate !== undefined) updates.startDate = args.startDate;
     if (args.endDate !== undefined) updates.endDate = args.endDate;

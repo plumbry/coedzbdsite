@@ -16,6 +16,11 @@ import PageToolbar from "@/components/page-toolbar.tsx";
 import PaginatedGrid from "@/components/paginated-grid.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import {
+  getPublicEventTypeLabel,
+  isScrimLikeEventType,
+  matchesPublicEventTypeFilter,
+} from "@/lib/event-types.ts";
 
 function EventCardImage({ eventId, name }: { eventId: Id<"events">; name: string }) {
   const imageUrl = useQuery(api.events.management.getEventImageUrl, { eventId });
@@ -33,7 +38,7 @@ function EventCardImage({ eventId, name }: { eventId: Id<"events">; name: string
 }
 
 export default function EventsPage() {
-  const [typeFilter, setTypeFilter] = useState<"all" | "scrim" | "minicup" | "season" | "mini-season" | "random" | "solos-meets-duos" | "scrim-series" | "showdown">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "scrim" | "season" | "mini-season" | "random" | "solos-meets-duos" | "scrim-series" | "showdown">("all");
   const [modeFilter, setModeFilter] = useState<"all" | "ZB Main Map" | "Reload">("all");
   const [statusFilter, setStatusFilter] = useState<"upcoming" | "ongoing" | "completed">("ongoing");
   const [sortBy, setSortBy] = useState<"date-asc" | "date-desc" | "name">("date-desc");
@@ -52,20 +57,7 @@ export default function EventsPage() {
   const filteredEvents = allEvents
     .filter(event => {
       if (statusFilter && event.status !== statusFilter) return false;
-      if (typeFilter !== "all") {
-        // Group random-squads and random-trios under "random" filter
-        if (typeFilter === "random") {
-          if (event.type !== "random-squads" && event.type !== "random-trios") return false;
-        } else if (typeFilter === "solos-meets-duos") {
-          if (event.type !== "solos-meets-duos") return false;
-        } else if (typeFilter === "scrim-series") {
-          if (event.type !== "scrim-series") return false;
-        } else if (typeFilter === "showdown") {
-          if (event.type !== "showdown") return false;
-        } else if (event.type !== typeFilter) {
-          return false;
-        }
-      }
+      if (!matchesPublicEventTypeFilter(event.type, typeFilter)) return false;
       if (modeFilter !== "all" && event.mode !== modeFilter) return false;
       return true;
     })
@@ -87,8 +79,7 @@ export default function EventsPage() {
   
   // Type counts (always from current status, regardless of type filter)
   const statusFilteredEvents = allEvents.filter(e => e.status === statusFilter);
-  const scrimCount = statusFilteredEvents.filter(e => e.type === "scrim").length;
-  const minicupCount = statusFilteredEvents.filter(e => e.type === "minicup").length;
+  const scrimCount = statusFilteredEvents.filter((e) => isScrimLikeEventType(e.type)).length;
   const seasonCount = statusFilteredEvents.filter(e => e.type === "season").length;
   const miniSeasonCount = statusFilteredEvents.filter(e => e.type === "mini-season").length;
   const randomCount = statusFilteredEvents.filter(e => e.type === "random-squads" || e.type === "random-trios").length;
@@ -129,21 +120,7 @@ export default function EventsPage() {
           
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">
-              {event.type === "scrim" 
-                ? "Scrim" 
-                : event.type === "minicup" 
-                ? "Mini Cup" 
-                : event.type === "season" 
-                ? "Season" 
-                : event.type === "mini-season"
-                ? "Mini Season"
-                : event.type === "solos-meets-duos"
-                ? "Solos Meets Duos"
-                : event.type === "scrim-series"
-                ? "Scrim Series"
-                : event.type === "showdown"
-                ? "Showdown"
-                : "Random"}
+              {getPublicEventTypeLabel(event.type)}
             </Badge>
             <Badge variant="outline">
               <MapPin className="mr-1 h-3 w-3" />
@@ -185,7 +162,7 @@ export default function EventsPage() {
       <PageHeader
         title="Co-Ed ZBD Hub - Events"
         icon={Calendar}
-        description="Browse scrims, mini cups, and seasonal tournaments"
+        description="Browse scrims and seasonal tournaments"
       />
 
       <PageToolbar>
@@ -229,7 +206,6 @@ export default function EventsPage() {
             <TabsList>
               <TabsTrigger value="all">All Events</TabsTrigger>
               <TabsTrigger value="scrim">Scrims ({scrimCount})</TabsTrigger>
-              <TabsTrigger value="minicup">Mini Cups ({minicupCount})</TabsTrigger>
               <TabsTrigger value="season">Seasons ({seasonCount})</TabsTrigger>
               <TabsTrigger value="mini-season">Mini Seasons ({miniSeasonCount})</TabsTrigger>
               <TabsTrigger value="random">Random ({randomCount})</TabsTrigger>
@@ -249,15 +225,6 @@ export default function EventsPage() {
             <TabsContent value="scrim">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Calendar /></EmptyMedia><EmptyTitle>No upcoming scrims</EmptyTitle></EmptyHeader></Empty>
-              ) : (
-                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
-                  {(event) => <EventCard key={event._id} event={event} />}
-                </PaginatedGrid>
-              )}
-            </TabsContent>
-            <TabsContent value="minicup">
-              {filteredEvents.length === 0 ? (
-                <Empty><EmptyHeader><EmptyMedia variant="icon"><Calendar /></EmptyMedia><EmptyTitle>No upcoming mini cups</EmptyTitle></EmptyHeader></Empty>
               ) : (
                 <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
                   {(event) => <EventCard key={event._id} event={event} />}
@@ -326,7 +293,6 @@ export default function EventsPage() {
             <TabsList>
               <TabsTrigger value="all">All Events</TabsTrigger>
               <TabsTrigger value="scrim">Scrims ({scrimCount})</TabsTrigger>
-              <TabsTrigger value="minicup">Mini Cups ({minicupCount})</TabsTrigger>
               <TabsTrigger value="season">Seasons ({seasonCount})</TabsTrigger>
               <TabsTrigger value="mini-season">Mini Seasons ({miniSeasonCount})</TabsTrigger>
               <TabsTrigger value="random">Random ({randomCount})</TabsTrigger>
@@ -346,15 +312,6 @@ export default function EventsPage() {
             <TabsContent value="scrim">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No ongoing scrims</EmptyTitle></EmptyHeader></Empty>
-              ) : (
-                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
-                  {(event) => <EventCard key={event._id} event={event} />}
-                </PaginatedGrid>
-              )}
-            </TabsContent>
-            <TabsContent value="minicup">
-              {filteredEvents.length === 0 ? (
-                <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No ongoing mini cups</EmptyTitle></EmptyHeader></Empty>
               ) : (
                 <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
                   {(event) => <EventCard key={event._id} event={event} />}
@@ -423,7 +380,6 @@ export default function EventsPage() {
             <TabsList>
               <TabsTrigger value="all">All Events</TabsTrigger>
               <TabsTrigger value="scrim">Scrims ({scrimCount})</TabsTrigger>
-              <TabsTrigger value="minicup">Mini Cups ({minicupCount})</TabsTrigger>
               <TabsTrigger value="season">Seasons ({seasonCount})</TabsTrigger>
               <TabsTrigger value="mini-season">Mini Seasons ({miniSeasonCount})</TabsTrigger>
               <TabsTrigger value="random">Random ({randomCount})</TabsTrigger>
@@ -443,15 +399,6 @@ export default function EventsPage() {
             <TabsContent value="scrim">
               {filteredEvents.length === 0 ? (
                 <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No past scrims</EmptyTitle></EmptyHeader></Empty>
-              ) : (
-                <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
-                  {(event) => <EventCard key={event._id} event={event} />}
-                </PaginatedGrid>
-              )}
-            </TabsContent>
-            <TabsContent value="minicup">
-              {filteredEvents.length === 0 ? (
-                <Empty><EmptyHeader><EmptyMedia variant="icon"><Trophy /></EmptyMedia><EmptyTitle>No past mini cups</EmptyTitle></EmptyHeader></Empty>
               ) : (
                 <PaginatedGrid items={filteredEvents} resetDeps={[statusFilter, typeFilter, modeFilter, sortBy]} itemLabel="events">
                   {(event) => <EventCard key={event._id} event={event} />}

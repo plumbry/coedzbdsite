@@ -65,13 +65,13 @@ import ICSImportDialog from "./ics-import-dialog.tsx";
 import ShowdownPenaltiesPanel from "./showdown-penalties-panel.tsx";
 import { DEFAULT_PAGE_SIZE } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
+import { isScrimLikeEventType } from "@/lib/event-types.ts";
 
 const EVENT_TYPE_META: Record<
   string,
   { abbr: string; label: string; className: string }
 > = {
   scrim: { abbr: "SC", label: "Scrim", className: "bg-muted text-muted-foreground" },
-  minicup: { abbr: "MC", label: "Mini Cup", className: "bg-primary/15 text-primary" },
   season: { abbr: "SN", label: "Season", className: "bg-purple-500/15 text-purple-700 dark:text-purple-300" },
   "mini-season": {
     abbr: "MS",
@@ -173,7 +173,8 @@ function IconIndicator({
 }
 
 function TypeAbbrIndicator({ type, mode }: { type: string; mode: string }) {
-  const meta = EVENT_TYPE_META[type] ?? {
+  const displayType = isScrimLikeEventType(type) ? "scrim" : type;
+  const meta = EVENT_TYPE_META[displayType] ?? {
     abbr: type.slice(0, 2).toUpperCase(),
     label: type,
     className: "bg-muted text-muted-foreground",
@@ -246,7 +247,7 @@ export default function EventManager() {
   const [editingLinkedImportCount, setEditingLinkedImportCount] = useState(0);
   const [deletingEvent, setDeletingEvent] = useState<Id<"events"> | null>(null);
   const [isICSImportOpen, setIsICSImportOpen] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<"all" | "scrim" | "minicup" | "season" | "mini-season" | "random-squads" | "random-trios" | "solos-meets-duos" | "scrim-series" | "showdown">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "scrim" | "season" | "mini-season" | "random-squads" | "random-trios" | "solos-meets-duos" | "scrim-series" | "showdown">("all");
   const [eventsTablePage, setEventsTablePage] = useState(1);
   const [isCreatingSeriesLink, setIsCreatingSeriesLink] = useState(false);
 
@@ -256,7 +257,7 @@ export default function EventManager() {
   
   // Form state
   const [name, setName] = useState("");
-  const [type, setType] = useState<"scrim" | "minicup" | "season" | "mini-season" | "random" | "random-squads" | "random-trios" | "solos-meets-duos" | "scrim-series" | "showdown">("scrim");
+  const [type, setType] = useState<"scrim" | "season" | "mini-season" | "random" | "random-squads" | "random-trios" | "solos-meets-duos" | "scrim-series" | "showdown">("scrim");
   const [mode, setMode] = useState<"ZB Main Map" | "Reload">("ZB Main Map");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -378,7 +379,7 @@ export default function EventManager() {
     setEditingLinkedImportCount(event.linkedImportCount ?? 0);
     setLinkedScrimSeriesId(event.linkedScrimSeriesId ?? "none");
     setName(event.name);
-    setType(event.type);
+    setType(isScrimLikeEventType(event.type) ? "scrim" : event.type);
     setMode(event.mode);
     setStartDate(event.startDate);
     setEndDate(event.endDate);
@@ -1035,10 +1036,7 @@ export default function EventManager() {
                   All ({events.length})
                 </TabsTrigger>
                 <TabsTrigger value="scrim">
-                  Scrims ({events.filter(e => e.type === "scrim").length})
-                </TabsTrigger>
-                <TabsTrigger value="minicup">
-                  Mini Cups ({events.filter(e => e.type === "minicup").length})
+                  Scrims ({events.filter((e) => isScrimLikeEventType(e.type)).length})
                 </TabsTrigger>
                 <TabsTrigger value="season">
                   Seasons ({events.filter(e => e.type === "season").length})
@@ -1068,11 +1066,7 @@ export default function EventManager() {
               </TabsContent>
               
               <TabsContent value="scrim" className="mt-4">
-                {renderEventTable(events.filter(e => e.type === "scrim"))}
-              </TabsContent>
-              
-              <TabsContent value="minicup" className="mt-4">
-                {renderEventTable(events.filter(e => e.type === "minicup"))}
+                {renderEventTable(events.filter((e) => isScrimLikeEventType(e.type)))}
               </TabsContent>
               
               <TabsContent value="season" className="mt-4">
@@ -1156,7 +1150,6 @@ export default function EventManager() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="scrim">Scrim</SelectItem>
-                    <SelectItem value="minicup">Mini Cup</SelectItem>
                     <SelectItem value="season">Season</SelectItem>
                     <SelectItem value="mini-season">Mini Season</SelectItem>
                     <SelectItem value="random">Random (Legacy)</SelectItem>
@@ -1267,7 +1260,7 @@ export default function EventManager() {
                     }}
                   />
                   <p className="text-xs text-muted-foreground">
-                    {type === "scrim" || type === "minicup" 
+                    {type === "scrim"
                       ? "Number of top teams to track earnings for (e.g., 3 = Top 3 teams)" 
                       : "Number of top teams on cumulative leaderboard (e.g., 5 = Top 5 teams)"}
                   </p>
@@ -1676,7 +1669,7 @@ export default function EventManager() {
                       Enter yunite.xyz/leaderboard/... links
                     </p>
                   </div>
-                  {(type === "season" || type === "minicup") && (
+                  {type === "season" && (
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id="twoLobbies"

@@ -70,13 +70,13 @@ export const runProcessingStep = internalAction({
     try {
       switch (step as ImportPipelineStep) {
         case "sync_match_data": {
-          await ctx.runAction(api.yunite.sync.syncTournamentMatchData, {
+          await ctx.runAction(internal.yunite.sync.syncTournamentMatchDataInternal, {
             importId: job.importId,
           });
           break;
         }
         case "populate_team_members": {
-          await ctx.runAction(api.yunite.populateTeamMembers.populateForImport, {
+          await ctx.runAction(internal.yunite.populateTeamMembers.populateForImportInternal, {
             importId: job.importId,
           });
           break;

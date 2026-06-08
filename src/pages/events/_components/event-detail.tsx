@@ -15,6 +15,7 @@ import PageShell from "@/components/page-shell.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import PlayerProfileLink from "@/components/player-profile-link.tsx";
 import LinkedScrimSeriesResults from "./linked-scrim-series-results.tsx";
+import { getPublicEventTypeLabel } from "@/lib/event-types.ts";
 
 export default function EventDetail() {
   const { eventId } = useParams<{ eventId: string }>();
@@ -190,21 +191,7 @@ export default function EventDetail() {
           </CardHeader>
           <CardContent>
             <Badge variant="secondary">
-              {event.type === "scrim" 
-                ? "Scrim" 
-                : event.type === "minicup" 
-                ? "Mini Cup" 
-                : event.type === "season" 
-                ? "Season" 
-                : event.type === "mini-season"
-                ? "Mini Season"
-                : event.type === "solos-meets-duos"
-                ? "Solos Meets Duos"
-                : event.type === "scrim-series"
-                ? "Scrim Series"
-                : event.type === "showdown"
-                ? "Showdown"
-                : "Random"}
+              {getPublicEventTypeLabel(event.type)}
             </Badge>
             {event.type === "scrim-series" && event.linkedScrimSeries && (
               <Badge variant="outline" className="text-xs">

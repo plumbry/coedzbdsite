@@ -16,6 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip.tsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Loader2, ExternalLink, FileUp, RefreshCw, Trash2, Edit, Users, Download, Zap, X, Eye, Search, ChevronDown, ChevronRight, CheckSquare, Square, CalendarPlus, Link2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
@@ -224,14 +230,9 @@ export default function ImportThirdParty() {
       : "skip",
   );
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
-  const [isPopulatingTeamMembers, setIsPopulatingTeamMembers] = useState(false);
-  const [populateProgress, setPopulateProgress] = useState({ current: 0, total: 0, failed: 0 });
-  const [isSyncingAll, setIsSyncingAll] = useState(false);
-  const [syncAllProgress, setSyncAllProgress] = useState({ current: 0, total: 0 });
   const [isProcessingAll, setIsProcessingAll] = useState(false);
   const [processAllProgress, setProcessAllProgress] = useState({ current: 0, total: 0 });
   const [isBackfilling, setIsBackfilling] = useState(false);
-  const populateAbortRef = useRef(false);
   const processAllAbortRef = useRef(false);
   const processAllActiveRef = useRef(false);
   
@@ -913,7 +914,7 @@ export default function ImportThirdParty() {
     if (!confirm("This will re-match all imports with current player database. Continue?")) {
       return;
     }
-    
+
     setIsRefreshingAll(true);
     try {
       const result = await refreshAllImports({});
@@ -925,64 +926,20 @@ export default function ImportThirdParty() {
     }
   };
 
-  const handlePopulateTeamMembers = async () => {
-    if (!importHistory || importHistory.length === 0) {
-      toast.error("No imports found");
-      return;
-    }
-    if (!confirm("This will populate team member data for all Yunite imports. Each request waits 10 seconds to avoid API rate limits. Continue?")) {
-      return;
-    }
-    
-    // Filter to only Yunite imports (they have leaderboardIds starting with "yunite-")
-    const yuniteImports = importHistory.filter(
-      (imp) => imp.source === "Yunite" || imp.leaderboardId.startsWith("yunite-")
-    );
-    
-    if (yuniteImports.length === 0) {
-      toast.info("No Yunite imports found to populate");
-      return;
-    }
-    
-    populateAbortRef.current = false;
-    setIsPopulatingTeamMembers(true);
-    setPopulateProgress({ current: 0, total: yuniteImports.length, failed: 0 });
-    
-    let totalUpdated = 0;
-    let failedCount = 0;
-    
-    for (let i = 0; i < yuniteImports.length; i++) {
-      if (populateAbortRef.current) {
-        toast.info(`Aborted after ${i} of ${yuniteImports.length} imports`);
-        break;
-      }
-
-      const imp = yuniteImports[i];
-      setPopulateProgress((prev) => ({ ...prev, current: i + 1 }));
-      
-      try {
-        const result = await populateTeamMembersForImport({ importId: imp._id });
-        totalUpdated += result.updated;
-      } catch {
-        failedCount++;
-        setPopulateProgress((prev) => ({ ...prev, failed: prev.failed + 1 }));
-      }
-
-      // Wait 10 seconds between requests to avoid Yunite 524/429 errors
-      if (i < yuniteImports.length - 1 && !populateAbortRef.current) {
-        await new Promise((resolve) => setTimeout(resolve, 10000));
-      }
-    }
-    
-    setIsPopulatingTeamMembers(false);
-    
-    if (failedCount > 0) {
-      toast.warning(`Updated ${totalUpdated} records. ${failedCount} imports failed.`);
-    } else if (!populateAbortRef.current) {
-      toast.success(`Updated ${totalUpdated} records across ${yuniteImports.length} imports`);
+  const handleBackfillLeaderboardLinks = async () => {
+    setIsBackfilling(true);
+    try {
+      const result = await backfillLeaderboardLinks({});
+      toast.success(
+        `Backfill complete: ${result.linksAdded} links added to ${result.eventsUpdated} events`,
+      );
+    } catch {
+      toast.error("Backfill failed");
+    } finally {
+      setIsBackfilling(false);
     }
   };
-  
+
   const handleDownloadCSV = async (importId: Id<"thirdPartyImports">) => {
     setDownloadingId(importId);
     try {
@@ -1060,58 +1017,6 @@ export default function ImportThirdParty() {
     }
   };
 
-  const handleSyncAllMatchData = async () => {
-    if (!importHistory) return;
-    
-    // Filter for Yunite imports with leaderboardId
-    const yuniteImports = importHistory.filter(
-      (imp) => imp.source === "Yunite" && imp.leaderboardId
-    );
-    
-    if (yuniteImports.length === 0) {
-      toast.error("No Yunite imports found to sync");
-      return;
-    }
-    
-    setIsSyncingAll(true);
-    setSyncAllProgress({ current: 0, total: yuniteImports.length });
-    
-    let successCount = 0;
-    let failCount = 0;
-    
-    try {
-      for (let i = 0; i < yuniteImports.length; i++) {
-        const imp = yuniteImports[i];
-        setSyncAllProgress({ current: i + 1, total: yuniteImports.length });
-        setSyncingId(imp._id);
-        
-        try {
-          await syncTournamentMatchData({ importId: imp._id });
-          successCount++;
-          toast.success(`Synced ${imp.eventName} (${i + 1}/${yuniteImports.length})`);
-        } catch (error) {
-          console.error(`Failed to sync ${imp.eventName}:`, error);
-          failCount++;
-          toast.error(`Failed to sync ${imp.eventName}`);
-        }
-        
-        // Rate limiting: wait 1 second between each sync
-        if (i < yuniteImports.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-      
-      toast.success(`Sync complete! ${successCount} succeeded, ${failCount} failed`);
-    } catch (error) {
-      console.error("Sync all error:", error);
-      toast.error("Sync all interrupted");
-    } finally {
-      setIsSyncingAll(false);
-      setSyncingId(null);
-      setSyncAllProgress({ current: 0, total: 0 });
-    }
-  };
-
   // Detect mode from event name (e.g., "Reload" in name → Reload mode)
   const detectModeFromName = (name: string): string => {
     const lower = name.toLowerCase();
@@ -1124,7 +1029,7 @@ export default function ImportThirdParty() {
     const lower = name.toLowerCase();
     if (lower.includes("season") && lower.includes("mini")) return "mini-season";
     if (lower.includes("season")) return "season";
-    if (lower.includes("minicup") || lower.includes("mini cup") || lower.includes("mini-cup")) return "minicup";
+    if (lower.includes("minicup") || lower.includes("mini cup") || lower.includes("mini-cup")) return "scrim";
     if (lower.includes("random") && lower.includes("trio")) return "random-trios";
     if (lower.includes("random") && lower.includes("squad")) return "random-squads";
     if (lower.includes("random")) return "random";
@@ -1211,7 +1116,7 @@ export default function ImportThirdParty() {
       
       const eventId = await createEvent({
         name: createEventName.trim(),
-        type: createEventType as "scrim" | "minicup" | "season" | "mini-season" | "random" | "random-squads" | "random-trios" | "solos-meets-duos" | "scrim-series" | "showdown",
+        type: createEventType as "scrim" | "season" | "mini-season" | "random" | "random-squads" | "random-trios" | "solos-meets-duos" | "scrim-series" | "showdown",
         mode: createEventMode as "ZB Main Map" | "Reload",
         startDate: createEventStartDate,
         endDate: createEventEndDate,
@@ -1745,18 +1650,14 @@ export default function ImportThirdParty() {
               <div>
                 <h3 className="text-lg font-semibold">Import History</h3>
                 <p className="text-sm text-muted-foreground">
-                  {importHistory?.length || 0} import{importHistory?.length !== 1 ? 's' : ''} total
+                  {importHistory?.length || 0} import{importHistory?.length !== 1 ? "s" : ""} total.
+                  Use Process All for match data, player matching, and event linking in one queue.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={handleProcessAllImports}
-                  disabled={
-                    isProcessingAll ||
-                    isSyncingAll ||
-                    isPopulatingTeamMembers ||
-                    isRefreshingAll
-                  }
+                  disabled={isProcessingAll || isRefreshingAll || isBackfilling}
                   variant="default"
                   size="sm"
                 >
@@ -1784,104 +1685,40 @@ export default function ImportThirdParty() {
                     Abort
                   </Button>
                 )}
-                <Button
-                  onClick={handleSyncAllMatchData}
-                  disabled={
-                    isProcessingAll ||
-                    isSyncingAll ||
-                    isPopulatingTeamMembers ||
-                    isRefreshingAll
-                  }
-                  variant="outline"
-                  size="sm"
-                >
-                  {isSyncingAll ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Syncing {syncAllProgress.current}/{syncAllProgress.total}...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="mr-2 h-4 w-4" />
-                      Sync All Match Data
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={handlePopulateTeamMembers}
-                  disabled={isProcessingAll || isPopulatingTeamMembers || isSyncingAll}
-                  variant="secondary"
-                  size="sm"
-                >
-                  {isPopulatingTeamMembers ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Populating {populateProgress.current}/{populateProgress.total}
-                      {populateProgress.failed > 0 && ` (${populateProgress.failed} failed)`}
-                    </>
-                  ) : (
-                    <>
-                      <Users className="mr-2 h-4 w-4" />
-                      Populate Team Members
-                    </>
-                  )}
-                </Button>
-                {isPopulatingTeamMembers && (
-                  <Button
-                    onClick={() => { populateAbortRef.current = true; }}
-                    variant="destructive"
-                    size="sm"
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Abort
-                  </Button>
-                )}
-                <Button
-                  onClick={handleRefreshAll}
-                  disabled={isProcessingAll || isRefreshingAll || isSyncingAll}
-                  variant="outline"
-                  size="sm"
-                >
-                  {isRefreshingAll ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Refreshing...
-                    </>
-                  ) : (
-                    <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isProcessingAll || isRefreshingAll || isBackfilling}
+                    >
+                      {isRefreshingAll || isBackfilling ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Maintenance...
+                        </>
+                      ) : (
+                        <>
+                          Maintenance
+                          <ChevronDown className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onClick={handleRefreshAll} disabled={isRefreshingAll}>
                       <RefreshCw className="mr-2 h-4 w-4" />
-                      Re-match All
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={async () => {
-                    setIsBackfilling(true);
-                    try {
-                      const result = await backfillLeaderboardLinks({});
-                      toast.success(`Backfill complete: ${result.linksAdded} links added to ${result.eventsUpdated} events`);
-                    } catch (error) {
-                      toast.error("Backfill failed");
-                    } finally {
-                      setIsBackfilling(false);
-                    }
-                  }}
-                  disabled={isBackfilling}
-                  variant="outline"
-                  size="sm"
-                >
-                  {isBackfilling ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Backfilling...
-                    </>
-                  ) : (
-                    <>
+                      Re-match all imports
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleBackfillLeaderboardLinks}
+                      disabled={isBackfilling}
+                    >
                       <Link2 className="mr-2 h-4 w-4" />
-                      Backfill Leaderboard Links
-                    </>
-                  )}
-                </Button>
+                      Backfill event leaderboard links
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
@@ -2010,7 +1847,7 @@ export default function ImportThirdParty() {
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => handleSyncMatchData(imp._id)}
-                                      disabled={syncingId === imp._id || isSyncingAll || isProcessingAll}
+                                      disabled={syncingId === imp._id || isProcessingAll}
                                     >
                                       {syncingId === imp._id ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -2375,7 +2212,6 @@ export default function ImportThirdParty() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="scrim">Scrim</SelectItem>
-                    <SelectItem value="minicup">Mini Cup</SelectItem>
                     <SelectItem value="season">Season</SelectItem>
                     <SelectItem value="mini-season">Mini Season</SelectItem>
                     <SelectItem value="random">Random Duos</SelectItem>

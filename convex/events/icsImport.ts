@@ -86,7 +86,6 @@ export const parseAndImportICS = action({
     icsContent: v.string(),
     defaultType: v.union(
       v.literal("scrim"),
-      v.literal("minicup"),
       v.literal("season"),
       v.literal("mini-season"),
       v.literal("random"),

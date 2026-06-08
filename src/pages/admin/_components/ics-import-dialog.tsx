@@ -64,7 +64,7 @@ export default function ICSImportDialog({
       // Import events
       const result = await parseAndImportICS({
         icsContent: fileContent,
-        defaultType: defaultType as "scrim" | "minicup" | "season" | "mini-season" | "random" | "random-squads" | "random-trios",
+        defaultType: defaultType as "scrim" | "season" | "mini-season" | "random" | "random-squads" | "random-trios",
         defaultMode: defaultMode as "ZB Main Map" | "Reload",
       });
 
@@ -132,7 +132,6 @@ export default function ICSImportDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="scrim">Scrim</SelectItem>
-                <SelectItem value="minicup">Minicup</SelectItem>
                 <SelectItem value="season">Season</SelectItem>
                 <SelectItem value="mini-season">Mini Season</SelectItem>
                 <SelectItem value="random">Random</SelectItem>

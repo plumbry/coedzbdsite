@@ -1,7 +1,7 @@
 "use node";
 
 import { v } from "convex/values";
-import { action } from "../_generated/server";
+import { action, internalAction } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
 import { matchPlayerForImport } from "../lib/playerIdentity";
@@ -496,13 +496,11 @@ interface YuniteMatchLeaderboardEntry {
   }>>;
 }
 
-export const syncTournamentMatchData = action({
+export const syncTournamentMatchDataInternal = internalAction({
   args: {
     importId: v.id("thirdPartyImports"),
   },
   handler: async (ctx, args) => {
-    await requireAdminAction(ctx);
-
     const yuniteApiKey = process.env.YUNITE_API_KEY;
     const yuniteGuildId = process.env.YUNITE_GUILD_ID;
     
@@ -857,6 +855,26 @@ export const syncTournamentMatchData = action({
       console.error("Error syncing match data:", error);
       throw error;
     }
+  },
+});
+
+type SyncTournamentMatchDataResult = {
+  success: boolean;
+  matchesFetched: number;
+  updated: number;
+  totalMatchKills: number;
+  csCalculated: number;
+  csFailed: number;
+  duoRecalculated: number;
+};
+
+export const syncTournamentMatchData = action({
+  args: {
+    importId: v.id("thirdPartyImports"),
+  },
+  handler: async (ctx, args): Promise<SyncTournamentMatchDataResult> => {
+    await requireAdminAction(ctx);
+    return await ctx.runAction(internal.yunite.sync.syncTournamentMatchDataInternal, args);
   },
 });
 

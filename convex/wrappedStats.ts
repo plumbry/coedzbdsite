@@ -381,7 +381,7 @@ function formatEventType(type: string): string {
     case "scrim":
       return "Scrim";
     case "minicup":
-      return "Minicup";
+      return "Scrim";
     case "season":
       return "Season";
     case "mini-season":

@@ -16,8 +16,8 @@ Events are **calendar occurrences** for ZBD competitive play (operational “scr
 | Concept | Detail |
 |--------|--------|
 | **What they are** | Scheduled competitive occurrences with a type, mode, dates, optional Yunite URL slots, and optional linked import snapshots. |
-| **Minimum Yunite data** | **Policy, not schema:** In production, an event should have **at least one Yunite leaderboard URL and/or at least one linked `thirdPartyImports` row**. The database allows empty shells (e.g. Discord cron with `needsSetup: true`). |
-| **Types** | Ten `events.type` values (see [Event types](#event-types)). |
+| **Minimum Yunite data** | **Operational expectation, not a save requirement:** Live events will have **at least one Yunite leaderboard URL and/or linked import** before results go public. Admins can create and save event shells (e.g. Discord cron with `needsSetup: true`) without attaching Yunite data first. |
+| **Types** | Nine active `events.type` values plus legacy `minicup` in schema (see [Event types](#event-types)). |
 | **Creation** | **Manual:** Events Manager, ICS import. **Automatic (partial):** Daily Discord cron creates **event shells only** — default `scrim`, `needsSetup: true` — **no Yunite import**. |
 | **Game mode** | Every event has `mode`: `ZB Main Map` or `Reload`. Not limited to a single type (e.g. mini-seasons are often Reload by convention). |
 
@@ -38,17 +38,17 @@ Leaderboard behavior is driven by `events.type` and flags (`twoLobbies`, `exclud
 |--|--|
 | **Intent** | One-off scrim in the community server. |
 | **Typical setup** | One Yunite import / one week; often one URL. |
-| **Code** | Team weekly boards + **cumulative** with cross-week team consolidation (2+ overlapping players merge teams). Same engine as minicup/season. |
+| **Code** | Team weekly boards + **cumulative** with cross-week team consolidation (2+ overlapping players merge teams). Same engine as season. |
 | **Reload** | Set `mode: "Reload"` when applicable (optional). |
 | **Limit** | **Not** limited to one leaderboard in code — multiple URL slots and multiple linked imports are supported. |
 
-### Mini-Cup
+### Mini-Cup (legacy — merged into Scrim)
 
 | | |
 |--|--|
-| **Intent** | One-off cup-style event. |
-| **Product direction** | Can be merged into **Scrim** operationally; `minicup` remains in schema with **identical** leaderboard logic to scrim. |
-| **Code** | Same as scrim. |
+| **Status** | **Removed from UI** (2026-06). Use **`scrim`** for one-off cup-style events. |
+| **Schema** | `minicup` literal remains for old rows; `normalizeEventType` maps it to `scrim` on create/update. Run `migrations.mergeMinicupIntoScrim` to retype existing data. |
+| **Code** | Identical leaderboard logic to scrim. |
 
 ### Seasons
 
@@ -239,7 +239,6 @@ Jobs record **`rebuildKind`**: `full`, `through_tier_eval`, `event_participation
 |-------------|----------------|
 | Single admin surface for `events` + standalone Scrim Series | Events Manager links calendar events; **Admin → Scrim Series** is the sole surface for imports, penalties, and scores (including when linked) |
 | Showdown configurable penalties | **Shipped** — `showdownBestWeeks`, `penaltyAmount`, `eventPenalties` |
-| Enforce minimum one Yunite URL or import (hard block) | **Shipped** — Events Manager + `createEvent` / `updateEvent` reject save without URL, linked import, or linked Scrim Series |
 | Unify scrim-series Yunite import into Events Manager | **Not shipped** — imports/penalties stay on Admin → Scrim Series; Events Manager links + deep-link only |
 | Unified internal stats rebuild (replace fragmented cache buttons) | **Shipped** — `playerStatsRebuild` + Data Cache / Data Maintenance / tier-eval UIs |
 
@@ -263,7 +262,7 @@ Jobs record **`rebuildKind`**: `full`, `through_tier_eval`, `event_participation
 
 | Type | Primary standings |
 |------|-------------------|
-| scrim, minicup, season, mini-season | Teams (weekly + cumulative) |
+| scrim (incl. legacy minicup), season, mini-season | Teams (weekly + cumulative) |
 | random-squads | Duos (cumulative) |
 | random-trios | Duos + solos (cumulative) |
 | solos-meets-duos | Pre-assigned groups (cumulative) |
@@ -279,7 +278,7 @@ Jobs record **`rebuildKind`**: `full`, `through_tier_eval`, `event_participation
 | 2026-06-04 | Initial spec from events/leaderboard audit; corrections applied (Yunite sync trigger, random trios duo/solo, mini-season, visibility, target vs shipped). |
 | 2026-06-04 | Code aligned: auto-link URL append, public leaderboard links, mini-season consolation label, admin copy, CSV default source, Events Manager save warning. |
 | 2026-06-04 | `events.linkedScrimSeriesId` links calendar events to standalone Scrim Series; event page shows series LB + import-log Yunite URLs. |
-| 2026-06-04 | Hard block on Events Manager save + `createEvent` / `updateEvent` when no Yunite URL, linked import, or linked Scrim Series. |
+| 2026-06-08 | Mini-Cup removed from UI; merged into Scrim (`normalizeEventType`, `mergeMinicupIntoScrim` migration). Yunite leaderboard is expected on live events but not required to save shells. |
 | 2026-06-04 | Showdown penalties + configurable `showdownBestWeeks`; `getEventLeaderboards` delegates to `computeEventLeaderboards`. |
 | 2026-06-04 | Schema narrow: removed deprecated `players.powerScore` / `rankingStats`. |
 | 2026-06-04 | Scrim series ↔ Events Manager: `createAndLinkToEvent`, deep-link to `/admin/scrim-series?series=&tab=`, linked-event banner on series admin; imports/penalties remain on Scrim Series page only. |

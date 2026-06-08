@@ -1,8 +1,8 @@
 "use node";
 
 import { v } from "convex/values";
-import { action } from "../_generated/server";
-import { api } from "../_generated/api";
+import { action, internalAction } from "../_generated/server";
+import { api, internal } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
 
 interface LeaderboardUser {
@@ -42,11 +42,9 @@ async function fetchWithRetry(
   throw new Error("Max retries exceeded");
 }
 
-export const populateForImport = action({
+export const populateForImportInternal = internalAction({
   args: { importId: v.id("thirdPartyImports") },
   handler: async (ctx, args): Promise<{ success: boolean; updated: number }> => {
-    await requireAdminAction(ctx);
-
     const apiKey = process.env.YUNITE_API_KEY;
     const guildId = process.env.YUNITE_GUILD_ID;
     
@@ -93,6 +91,14 @@ export const populateForImport = action({
     }
     
     return { success: true, updated };
+  },
+});
+
+export const populateForImport = action({
+  args: { importId: v.id("thirdPartyImports") },
+  handler: async (ctx, args): Promise<{ success: boolean; updated: number }> => {
+    await requireAdminAction(ctx);
+    return await ctx.runAction(internal.yunite.populateTeamMembers.populateForImportInternal, args);
   },
 });
 

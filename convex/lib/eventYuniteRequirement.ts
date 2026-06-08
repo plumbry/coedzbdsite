@@ -14,8 +14,9 @@ type EventLeaderboardFields = Pick<
   | "linkedScrimSeriesId"
 >;
 
+/** Used for workflow/readiness hints — saving an event shell without Yunite data is allowed. */
 export const EVENT_YUNITE_REQUIRED_MESSAGE =
-  "Event must have at least one Yunite leaderboard URL, a linked Yunite import, or a linked Scrim Series before saving.";
+  "Event should have at least one Yunite leaderboard URL, a linked Yunite import, or a linked Scrim Series before results go live.";
 
 export function eventHasLeaderboardUrls(event: EventLeaderboardFields): boolean {
   return (
