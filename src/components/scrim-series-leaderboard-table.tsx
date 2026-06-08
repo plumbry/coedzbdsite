@@ -18,24 +18,45 @@ export type ScrimSeriesLeaderboardEntry = {
   finalTotal: number;
 };
 
+function filterLeaderboardEntries(
+  entries: ScrimSeriesLeaderboardEntry[],
+  { minGamesOnly, minParticipationOnly }: { minGamesOnly: boolean; minParticipationOnly: boolean },
+) {
+  let result = entries;
+  if (minGamesOnly) result = result.filter((e) => e.meetsMinGames);
+  if (minParticipationOnly) result = result.filter((e) => e.isValid);
+  return result;
+}
+
 export default function ScrimSeriesLeaderboardTable({
   entries,
   bestN,
+  participationThreshold,
   penaltyAmount,
   gamesPerSession,
 }: {
   entries: ScrimSeriesLeaderboardEntry[];
   bestN: number;
+  participationThreshold: number;
   penaltyAmount: number;
   gamesPerSession: number[];
 }) {
   const [showDetails, setShowDetails] = useState(false);
   const [minGamesOnly, setMinGamesOnly] = useState(false);
+  const [minParticipationOnly, setMinParticipationOnly] = useState(false);
 
   const displayedEntries = useMemo(
-    () => (minGamesOnly ? entries.filter((e) => e.meetsMinGames) : entries),
-    [entries, minGamesOnly],
+    () => filterLeaderboardEntries(entries, { minGamesOnly, minParticipationOnly }),
+    [entries, minGamesOnly, minParticipationOnly],
   );
+
+  const emptyFilterMessage = minGamesOnly && minParticipationOnly
+    ? `No players meet the minimum ${bestN} games and ${participationThreshold}% participation requirements yet.`
+    : minGamesOnly
+      ? `No players have played the minimum ${bestN} games yet.`
+      : minParticipationOnly
+        ? `No players meet the minimum ${participationThreshold}% participation requirement yet.`
+        : "No players to display.";
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const topSpacerRef = useRef<HTMLDivElement>(null);
@@ -90,13 +111,22 @@ export default function ScrimSeriesLeaderboardTable({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-          <Checkbox
-            checked={minGamesOnly}
-            onCheckedChange={(checked) => setMinGamesOnly(checked === true)}
-          />
-          Min {bestN} games only
-        </label>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+            <Checkbox
+              checked={minGamesOnly}
+              onCheckedChange={(checked) => setMinGamesOnly(checked === true)}
+            />
+            Min {bestN} games only
+          </label>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+            <Checkbox
+              checked={minParticipationOnly}
+              onCheckedChange={(checked) => setMinParticipationOnly(checked === true)}
+            />
+            Min {participationThreshold}% participation only
+          </label>
+        </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
             {displayedEntries.length} of {entries.length} players
@@ -124,7 +154,7 @@ export default function ScrimSeriesLeaderboardTable({
 
       {displayedEntries.length === 0 ? (
         <div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-          No players have played the minimum {bestN} games yet.
+          {emptyFilterMessage}
         </div>
       ) : (
       <div className="rounded-lg border bg-card overflow-hidden">

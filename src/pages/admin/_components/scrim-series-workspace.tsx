@@ -434,11 +434,24 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const series = useQuery(api.scrimSeries.queries.getSeries, { seriesId });
   const leaderboard = useQuery(api.scrimSeries.queries.getLeaderboard, { seriesId });
   const [minGamesOnly, setMinGamesOnly] = useState(false);
+  const [minParticipationOnly, setMinParticipationOnly] = useState(false);
 
-  const displayedLeaderboard = useMemo(
-    () => (leaderboard && minGamesOnly ? leaderboard.filter((e) => e.meetsMinGames) : leaderboard ?? []),
-    [leaderboard, minGamesOnly],
-  );
+  const displayedLeaderboard = useMemo(() => {
+    if (!leaderboard) return [];
+    let result = leaderboard;
+    if (minGamesOnly) result = result.filter((e) => e.meetsMinGames);
+    if (minParticipationOnly) result = result.filter((e) => e.isValid);
+    return result;
+  }, [leaderboard, minGamesOnly, minParticipationOnly]);
+
+  const emptyFilterMessage =
+    minGamesOnly && minParticipationOnly
+      ? `No players meet the minimum ${series?.bestN} games and ${series?.participationThreshold}% participation requirements yet.`
+      : minGamesOnly
+        ? `No players have played the minimum ${series?.bestN} games yet.`
+        : minParticipationOnly
+          ? `No players meet the minimum ${series?.participationThreshold}% participation requirement yet.`
+          : "No players to display.";
 
   if (!series || !leaderboard) return <Skeleton className="h-60 w-full" />;
 
@@ -469,18 +482,27 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
         <CardDescription className="text-xs">
           Ranked by Best {series.bestN} score minus penalties. Amber = below min games, red = below participation %.
         </CardDescription>
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none pt-1">
-          <Checkbox
-            checked={minGamesOnly}
-            onCheckedChange={(checked) => setMinGamesOnly(checked === true)}
-          />
-          Min {series.bestN} games only
-        </label>
+        <div className="flex flex-wrap items-center gap-4 pt-1">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+            <Checkbox
+              checked={minGamesOnly}
+              onCheckedChange={(checked) => setMinGamesOnly(checked === true)}
+            />
+            Min {series.bestN} games only
+          </label>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+            <Checkbox
+              checked={minParticipationOnly}
+              onCheckedChange={(checked) => setMinParticipationOnly(checked === true)}
+            />
+            Min {series.participationThreshold}% participation only
+          </label>
+        </div>
       </CardHeader>
       <CardContent>
         {displayedLeaderboard.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
-            No players have played the minimum {series.bestN} games yet.
+            {(minGamesOnly || minParticipationOnly) ? emptyFilterMessage : "No players to display."}
           </p>
         ) : (
         <div className="overflow-x-auto">

@@ -118,6 +118,7 @@ export default function ScrimSeriesLeaderboardPage() {
         <ScrimSeriesLeaderboardTable
           entries={leaderboard}
           bestN={series.bestN}
+          participationThreshold={series.participationThreshold}
           penaltyAmount={series.penaltyAmount}
           gamesPerSession={series.gamesPerSession}
         />
