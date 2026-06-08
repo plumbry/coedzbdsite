@@ -99,13 +99,13 @@ function AverageStatsContent() {
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
-              <CardTitle className="text-[10px] font-medium">Avg Events per Player</CardTitle>
+              <CardTitle className="text-[10px] font-medium">Avg Events Played</CardTitle>
               <Calendar className="h-3 w-3 text-muted-foreground" />
             </CardHeader>
             <CardContent className="py-1 pb-2">
               <div className="text-base font-bold">{stats.avgTotalEvents}</div>
               <p className="text-[10px] text-muted-foreground">
-                events per player
+                Yunite imports per player
               </p>
             </CardContent>
           </Card>

@@ -1,0 +1,17 @@
+{
+  "aggregateStats": null,
+  "capturedAt": 1780910477776,
+  "eventsPlayed": {
+    "decreases": [],
+    "increases": [],
+    "mismatchCount": 0
+  },
+  "missingRecentStatusCount": 0,
+  "missingRecentStatusExamples": [],
+  "missingStatusRawCount": 0,
+  "playerCount": 0,
+  "tierEvalCount": 0,
+  "tierEvalStatuses": [],
+  "topFiveMismatchCount": 0,
+  "topFiveMismatches": []
+}

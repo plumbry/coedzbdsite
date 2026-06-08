@@ -1,0 +1,73 @@
+{
+  "deployment": "production",
+  "beforeCapturedAt": 1780911210775,
+  "afterCapturedAt": 1780911940668,
+  "rebuild": {
+    "jobId": "rh7arqbdp1fvxcs8cdf0k2zp8d8894kf",
+    "finalStatus": "completed",
+    "finalPhase": "completed",
+    "totalProcessed": 3859
+  },
+  "eventsPlayed": {
+    "beforeMismatchCount": 0,
+    "afterMismatchCount": 0
+  },
+  "statusCompare": {
+    "changedCount": 0,
+    "movements": {},
+    "examples": []
+  },
+  "aggregateCompare": {
+    "avgTotalEvents": {
+      "before": 13.8,
+      "after": 13.8,
+      "delta": 0,
+      "pct": 0
+    },
+    "avgWinRate": {
+      "before": 3.1,
+      "after": 3.1,
+      "delta": 0,
+      "pct": 0
+    },
+    "avgAveragePlacement": {
+      "before": 19.8,
+      "after": 19.8,
+      "delta": 0,
+      "pct": 0
+    },
+    "avgAverageKD": {
+      "before": 0.8,
+      "after": 0.8,
+      "delta": 0,
+      "pct": 0
+    },
+    "avgTotalEliminations": {
+      "before": 65.9,
+      "after": 65.9,
+      "delta": 0,
+      "pct": 0
+    },
+    "avgAverageScore": {
+      "before": 74.9,
+      "after": 74.9,
+      "delta": 0,
+      "pct": 0
+    },
+    "avgTop3Finishes": {
+      "before": 2.1,
+      "after": 2.1,
+      "delta": 0,
+      "pct": 0
+    },
+    "playerCount": {
+      "before": 380,
+      "after": 380,
+      "delta": 0,
+      "pct": 0
+    }
+  },
+  "topFiveMismatchCount": 0,
+  "missingRecentStatusCount": 0,
+  "missingStatusRawCount": 0
+}

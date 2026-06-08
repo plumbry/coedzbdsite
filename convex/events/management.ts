@@ -5,13 +5,11 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel.d.ts";
 import type { MutationCtx } from "../_generated/server";
 import { appendLeaderboardUrlToEvent } from "../lib/eventLeaderboardLinks";
-import {
-  EVENT_YUNITE_REQUIRED_MESSAGE,
-  eventMeetsYuniteMinimum,
-  eventHasLeaderboardUrls,
-  eventHasLinkedScrimSeries,
-} from "../lib/eventYuniteRequirement";
 import { applyLinkedScrimSeries } from "../lib/scrimSeriesEventLink";
+import {
+  summarizeEventWorkflow,
+  type EventWorkflowImportSummary,
+} from "../lib/eventWorkflow";
 import { collectEventLeaderboardUrls, extractTournamentIdFromUrl } from "../lib/yunite";
 
 // Auto-link existing unlinked imports to an event based on matching leaderboard URLs
@@ -53,6 +51,28 @@ async function autoLinkImportsToEvent(
   return linked;
 }
 
+function mapImportsForWorkflow(
+  imports: Array<{
+    _id: Id<"thirdPartyImports">;
+    eventName: string;
+    playersUnmatched: number;
+    matchDataSynced?: boolean;
+    source: string;
+    importMethod?: string;
+    totalPlayers: number;
+  }>,
+): EventWorkflowImportSummary[] {
+  return imports.map((importRecord) => ({
+    _id: importRecord._id,
+    eventName: importRecord.eventName,
+    playersUnmatched: importRecord.playersUnmatched,
+    matchDataSynced: importRecord.matchDataSynced,
+    source: importRecord.source,
+    importMethod: importRecord.importMethod,
+    totalPlayers: importRecord.totalPlayers,
+  }));
+}
+
 // Helper function to compute status based on dates
 function computeEventStatus(startDate: string, endDate: string): "upcoming" | "ongoing" | "completed" {
   const now = new Date();
@@ -81,14 +101,36 @@ export const getAllEvents = query({
       .collect();
 
     const imports = await ctx.db.query("thirdPartyImports").collect();
-    const linkedImportCountByEvent = new Map<Id<"events">, number>();
+    const importsByEventId = new Map<Id<"events">, typeof imports>();
     for (const imp of imports) {
       if (imp.eventId) {
-        linkedImportCountByEvent.set(
-          imp.eventId,
-          (linkedImportCountByEvent.get(imp.eventId) ?? 0) + 1,
+        const existing = importsByEventId.get(imp.eventId) ?? [];
+        existing.push(imp);
+        importsByEventId.set(imp.eventId, existing);
+      }
+    }
+
+    const manualResults = await ctx.db.query("eventResults").collect();
+    const manualResultCountByEvent = new Map<Id<"events">, number>();
+    for (const result of manualResults) {
+      if (result.eventId) {
+        manualResultCountByEvent.set(
+          result.eventId,
+          (manualResultCountByEvent.get(result.eventId) ?? 0) + 1,
         );
       }
+    }
+
+    const scrimSeriesScorePresence = new Map<Id<"scrimSeries">, boolean>();
+    for (const event of events) {
+      if (!event.linkedScrimSeriesId || scrimSeriesScorePresence.has(event.linkedScrimSeriesId)) {
+        continue;
+      }
+      const sample = await ctx.db
+        .query("scrimSeriesScores")
+        .withIndex("by_series", (q) => q.eq("seriesId", event.linkedScrimSeriesId!))
+        .take(1);
+      scrimSeriesScorePresence.set(event.linkedScrimSeriesId, sample.length > 0);
     }
 
     const eventsWithDetails = await Promise.all(
@@ -99,16 +141,31 @@ export const getAllEvents = query({
         }
 
         const computedStatus = computeEventStatus(event.startDate, event.endDate);
+        const linkedImports = importsByEventId.get(event._id) ?? [];
+        const workflowContext = {
+          linkedImports: mapImportsForWorkflow(linkedImports),
+          manualResultCount: manualResultCountByEvent.get(event._id) ?? 0,
+          scrimSeriesScoreCount:
+            event.linkedScrimSeriesId &&
+            scrimSeriesScorePresence.get(event.linkedScrimSeriesId)
+              ? 1
+              : 0,
+        };
+        const workflow = summarizeEventWorkflow(event, workflowContext, computedStatus);
 
         return {
           ...event,
           status: computedStatus,
           imageUrl,
           standardCount: event.standardLeaderboards?.length || 0,
-          linkedImportCount: linkedImportCountByEvent.get(event._id) ?? 0,
+          linkedImportCount: linkedImports.length,
           leaderboardUrlCount: collectEventLeaderboardUrls(event, {
             includeStandardLobby2: true,
           }).length,
+          workflowStatus: workflow.workflowStatus,
+          setupReasons: workflow.setupReasons,
+          needsAttention: workflow.needsAttention,
+          isManualScoring: workflow.isManualScoring,
         };
       }),
     );
@@ -166,6 +223,29 @@ export const getOperationsSummary = query({
       importsByEventId.set(importRecord.eventId, existing);
     }
 
+    const manualResults = await ctx.db.query("eventResults").collect();
+    const manualResultCountByEvent = new Map<Id<"events">, number>();
+    for (const result of manualResults) {
+      if (result.eventId && eventIds.has(result.eventId)) {
+        manualResultCountByEvent.set(
+          result.eventId,
+          (manualResultCountByEvent.get(result.eventId) ?? 0) + 1,
+        );
+      }
+    }
+
+    const scrimSeriesScorePresence = new Map<Id<"scrimSeries">, boolean>();
+    for (const event of events) {
+      if (!event.linkedScrimSeriesId || scrimSeriesScorePresence.has(event.linkedScrimSeriesId)) {
+        continue;
+      }
+      const sample = await ctx.db
+        .query("scrimSeriesScores")
+        .withIndex("by_series", (q) => q.eq("seriesId", event.linkedScrimSeriesId!))
+        .take(1);
+      scrimSeriesScorePresence.set(event.linkedScrimSeriesId, sample.length > 0);
+    }
+
     const eventDetails = events.map((event) => {
       const leaderboardCount = collectEventLeaderboardUrls(event).length;
       const linkedImports = importsByEventId.get(event._id) ?? [];
@@ -180,13 +260,24 @@ export const getOperationsSummary = query({
             importRecord.importMethod === "api") &&
           importRecord.matchDataSynced !== true,
       ).length;
+      const dateStatus = computeEventStatus(event.startDate, event.endDate);
+      const workflowContext = {
+        linkedImports: mapImportsForWorkflow(linkedImports),
+        manualResultCount: manualResultCountByEvent.get(event._id) ?? 0,
+        scrimSeriesScoreCount:
+          event.linkedScrimSeriesId &&
+          scrimSeriesScorePresence.get(event.linkedScrimSeriesId)
+            ? 1
+            : 0,
+      };
+      const workflow = summarizeEventWorkflow(event, workflowContext, dateStatus);
 
       return {
         _id: event._id,
         name: event.name,
         type: event.type,
         mode: event.mode,
-        status: computeEventStatus(event.startDate, event.endDate),
+        status: dateStatus,
         startDate: event.startDate,
         endDate: event.endDate,
         needsSetup: event.needsSetup === true,
@@ -194,13 +285,20 @@ export const getOperationsSummary = query({
         linkedImportCount: linkedImports.length,
         unmatchedPlayers,
         unsyncedYuniteImports,
+        workflowStatus: workflow.workflowStatus,
+        setupReasons: workflow.setupReasons,
+        needsAttention: workflow.needsAttention,
+        actionItems: workflow.actionItems,
       };
     });
+
+    const attentionEvents = eventDetails.filter((event) => event.needsAttention);
+    const actionItems = attentionEvents.flatMap((event) => event.actionItems);
 
     return {
       totalEventsChecked: events.length,
       generatedAt: now,
-      needsSetup: eventDetails.filter((event) => event.needsSetup).length,
+      needsSetup: attentionEvents.length,
       withLinkedImports: eventDetails.filter((event) => event.linkedImportCount > 0)
         .length,
       withUnmatchedImports: eventDetails.filter((event) => event.unmatchedPlayers > 0)
@@ -209,6 +307,8 @@ export const getOperationsSummary = query({
         (event) => event.unsyncedYuniteImports > 0,
       ).length,
       recentEvents: eventDetails.slice(0, 8),
+      attentionEvents: attentionEvents.slice(0, 12),
+      actionItems: actionItems.slice(0, 20),
     };
   },
 });
@@ -390,24 +490,6 @@ export const createEvent = mutation({
 
     // Compute status based on dates
     const computedStatus = computeEventStatus(args.startDate, args.endDate);
-
-    const draftForYuniteCheck = {
-      type: args.type,
-      twoLobbies: args.twoLobbies,
-      standardLeaderboards: args.standardLeaderboards,
-      standardLeaderboardsLobby2: args.standardLeaderboardsLobby2,
-      qualifierLobby1Leaderboards: args.qualifierLobby1Leaderboards,
-      qualifierLobby2Leaderboards: args.qualifierLobby2Leaderboards,
-      finalsLeaderboards: args.finalsLeaderboards,
-      linkedScrimSeriesId:
-        args.type === "scrim-series" ? args.linkedScrimSeriesId ?? undefined : undefined,
-    };
-    if (
-      !eventHasLeaderboardUrls(draftForYuniteCheck) &&
-      !eventHasLinkedScrimSeries(draftForYuniteCheck)
-    ) {
-      throw new Error(EVENT_YUNITE_REQUIRED_MESSAGE);
-    }
 
     const eventId = await ctx.db.insert("events", {
       name: args.name,
@@ -641,52 +723,9 @@ export const updateEvent = mutation({
     if (args.isNoMoneyEvent !== undefined) updates.isNoMoneyEvent = args.isNoMoneyEvent;
     if (args.seasonId !== undefined) updates.seasonId = args.seasonId;
     if (args.skipFirstNWeeksPoints !== undefined) updates.skipFirstNWeeksPoints = args.skipFirstNWeeksPoints;
-    
-    // Clear needsSetup flag when admin edits a Discord-imported event
+
     if (event.needsSetup) {
       updates.needsSetup = false;
-    }
-
-    const effectiveTypeForYunite = args.type ?? event.type;
-    const effectiveLinkedScrimSeriesId =
-      args.linkedScrimSeriesId !== undefined
-        ? args.linkedScrimSeriesId === null
-          ? undefined
-          : args.linkedScrimSeriesId
-        : event.linkedScrimSeriesId;
-    const mergedForYuniteCheck = {
-      type: effectiveTypeForYunite,
-      twoLobbies:
-        args.twoLobbies !== undefined ? args.twoLobbies : event.twoLobbies,
-      standardLeaderboards:
-        args.standardLeaderboards !== undefined
-          ? args.standardLeaderboards
-          : event.standardLeaderboards,
-      standardLeaderboardsLobby2:
-        args.standardLeaderboardsLobby2 !== undefined
-          ? args.standardLeaderboardsLobby2
-          : event.standardLeaderboardsLobby2,
-      qualifierLobby1Leaderboards:
-        args.qualifierLobby1Leaderboards !== undefined
-          ? args.qualifierLobby1Leaderboards
-          : event.qualifierLobby1Leaderboards,
-      qualifierLobby2Leaderboards:
-        args.qualifierLobby2Leaderboards !== undefined
-          ? args.qualifierLobby2Leaderboards
-          : event.qualifierLobby2Leaderboards,
-      finalsLeaderboards:
-        args.finalsLeaderboards !== undefined
-          ? args.finalsLeaderboards
-          : event.finalsLeaderboards,
-      linkedScrimSeriesId:
-        effectiveTypeForYunite === "scrim-series"
-          ? effectiveLinkedScrimSeriesId
-          : undefined,
-    };
-    if (
-      !(await eventMeetsYuniteMinimum(ctx, mergedForYuniteCheck, args.eventId))
-    ) {
-      throw new Error(EVENT_YUNITE_REQUIRED_MESSAGE);
     }
 
     await ctx.db.patch(args.eventId, updates);
@@ -747,6 +786,31 @@ export const updateEvent = mutation({
       }
     }
     
+    return { success: true };
+  },
+});
+
+export const setEventWorkflowStatus = mutation({
+  args: {
+    eventId: v.id("events"),
+    workflowStatus: v.union(
+      v.literal("complete"),
+      v.literal("archived"),
+      v.null(),
+    ),
+  },
+  handler: async (ctx, args) => {
+    await requireModeratorOrAdmin(ctx);
+
+    const event = await ctx.db.get(args.eventId);
+    if (!event) {
+      throw new Error("Event not found");
+    }
+
+    await ctx.db.patch(args.eventId, {
+      adminWorkflowStatus: args.workflowStatus ?? undefined,
+    });
+
     return { success: true };
   },
 });

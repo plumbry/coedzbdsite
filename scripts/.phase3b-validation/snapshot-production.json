@@ -1,0 +1,3566 @@
+{
+  "capturedAt": 1780912065405,
+  "totalTableRows": 1638,
+  "playerCount": 1638,
+  "population": {
+    "byStatus": {
+      "active": 775,
+      "archived": 701,
+      "rejected": 153,
+      "discord_member": 1,
+      "unset": 8
+    },
+    "byMembership": {
+      "accepted": 775,
+      "former": 701,
+      "rejected": 153,
+      "unset": 9
+    },
+    "withTier": 1510,
+    "withMatchData": 503
+  },
+  "aggregateStats": {
+    "avgAverageKD": 0.8,
+    "avgAveragePlacement": 19.8,
+    "avgAverageScore": 74.9,
+    "avgTop3Finishes": 2.1,
+    "avgTotalEliminations": 65.9,
+    "avgTotalEvents": 13.8,
+    "avgWinRate": 3.1,
+    "lastUpdated": 1780766850321,
+    "playerCount": 380
+  },
+  "eventsPlayed": {
+    "mismatchCount": 0,
+    "increases": [],
+    "decreases": [],
+    "allMismatches": []
+  },
+  "tierEvalCount": 381,
+  "tierEvalStatuses": [
+    {
+      "discordUsername": "timoja__",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97ahjvmjr61snw05fgyz9f62x7ws50g",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 3,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "rickeh1",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977yw6dt1c08zkxh3grjr9gb17wse89",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "justmilan__",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9709h511g4tzggy6yefyfkak17wr6hh",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 14
+    },
+    {
+      "discordUsername": "un1quezb",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97303dza5x22yxsh9pfd26vkh7wr0mg",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 11
+    },
+    {
+      "discordUsername": "vlux1x",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97evjmn663npqz1a0cent3hh57wskmc",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "guwa_28",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j976qm1yjxch8k6nda25z2rn1n7ws4x0",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 6
+    },
+    {
+      "discordUsername": "mr.drowsy",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j975p0zewtgb2w1tembhcda7857ws1x5",
+      "recentTop5Count": 1
+    },
+    {
+      "discordUsername": "kanch7k",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j9751s78myaqg0k03xh143t9557wrgfq",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "meow.valentine",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j970cfm9gg4banzk3kk6f755x97wssrt",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 12
+    },
+    {
+      "discordUsername": "natemercks",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j978gzeatv52dz1xzzh9nqm3jx7wrf4s",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "nocompp",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j973yt6j7qxs0q0z9ma7ckjcv17wr00j",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 9
+    },
+    {
+      "discordUsername": "doener8175",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j979z52myzd5q0hmd1r6mzz5k97ws92d",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 10
+    },
+    {
+      "discordUsername": "rehman__",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97b86r86xrkw3r2trp0h0yf6h7wrp85",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 3,
+      "recentTotalEvents": 17
+    },
+    {
+      "discordUsername": "ilhan_3107",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97cfxhyj9zd07j5wphgdhzdw97wrqfk",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 11
+    },
+    {
+      "discordUsername": "egopekka.fnz",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97129n5wxjmtmrdbf7jfm58mx7wrg5n",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 6
+    },
+    {
+      "discordUsername": ".kroxxx.",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j974d8rvky70k0g1me3sa1ep057wrmss",
+      "recentTop5Count": 3
+    },
+    {
+      "discordUsername": "fadilj",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j978s8xv14084483w42cc9nbd57wrtd0",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "iadz",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97fq91k0ynvg0ynfefj3ddkjn7wrhyz",
+      "recentTop5Count": 1
+    },
+    {
+      "discordUsername": "zbacettv",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97btfmcmfgd66qj4xbp6hwjj57wrbwx",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "ttwyla",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97d7jwnv0n72yt6fggwfafyp57wr7qf",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "simplyxyz",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97cgfxrj6f0ecqz1h4942c7as7wsv99",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "irvinip",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97cvx33vd3c1rqdxwze9ba4bx7wrc22",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "ilysem_",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97czrescyzqbzbm7vd6388hbx7wr6nq",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "hyphyy.",
+      "evaluationStatus": "Eligible for Demotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j974cn40sapzf3gnysvmmh9kjx7wsv03",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "hugoeu__",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97b6nysaf6934kdpmwkjqd4qs7wrwxp",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 14
+    },
+    {
+      "discordUsername": ".xav",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97001008kkksjak9hft67g7g17wrxdp",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "twitchaohgaming",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j976ph1aewp0fjavkfdytedwmx7ws8de",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "delaney24",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j977fh8nkzvmzpchsd98h720qd7wsnwz",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 14
+    },
+    {
+      "discordUsername": "palischkapio",
+      "evaluationStatus": "Eligible for Demotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j972yeaj25nmzk8x5d8mhqp4mh7wrx3x",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 13
+    },
+    {
+      "discordUsername": "denirommo",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j972jpknp6sjg83mg5dmcvvtes7ws513",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 3,
+      "recentTotalEvents": 11
+    },
+    {
+      "discordUsername": "gui_kill_07",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97b7jfdnx85wqn6y8vcp42s7s7wrqsj",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "fantazy",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97853jn31crm318m8qdxm1nss7wr47t",
+      "recentTop5Count": 4
+    },
+    {
+      "discordUsername": "youknowfish",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97eps2wt2z0xavb9e53pcbxv97wsw7a",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "taz_zb",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9758dcwdg15p8txwpbqem4zv97wr9cc",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "wydkay",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971x601m1a48ecgr5ybt6c6497wrvpd",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "greekrussiangirl",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j974d3gpte5958d9bzk9paj50d7wrw25",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 11
+    },
+    {
+      "discordUsername": "panda_724",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97670zecaeahbs4ywh8za6asd7wrb9a",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 12
+    },
+    {
+      "discordUsername": "mspinkks",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j972p5bvna45mbrn4fpprvaeh57wrhg3",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 7
+    },
+    {
+      "discordUsername": "alexxabtw",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9739xyxeb8t7t0vjqns3wkd8x7ws8r3",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "tobytheshadow",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j977vr2sq5s8j4p06ctyqy7x797wsee5",
+      "recentTop5Count": 1
+    },
+    {
+      "discordUsername": "aaahrii",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97cz0wk8ppdttaygf7swkfpkd7wrgwt",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 10
+    },
+    {
+      "discordUsername": "zygaah",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97235m8a7gsx6jf3wm5vxmhvh7wsyj8",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 8
+    },
+    {
+      "discordUsername": "bobscott81",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j970kpacngqjc25zbxvx0q80r97wsdgm",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "royalsven",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97bs8f9hma0b0psp78znck9zn7wsnqy",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 5
+    },
+    {
+      "discordUsername": "weezerwonka",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97bn7jfbsjsj7mkjry598n2517wrgfj",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 4,
+      "recentTotalEvents": 17
+    },
+    {
+      "discordUsername": "ftrsweet",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j97f69qdvjxyqk1k6b6kpbv9617ws15m",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 9
+    },
+    {
+      "discordUsername": "billyliako",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97dvg7hg71hxv5r1mqqf74bp57wr6mb",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "itsmancityy",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9702p87erzpysq8sveybb30rx7wrcba",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "maskpj",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9747e0h13kfn6me9faqhjwjmd7wsbyn",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 7
+    },
+    {
+      "discordUsername": "nycxking",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j975w0rxazzpmvm013b82qjash7wsynt",
+      "recentEvaluationStatus": "Strong Demotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Demotion Outlier",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 10
+    },
+    {
+      "discordUsername": "lauxita1",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97368sq7k74vf5qrz4r333fx57wrhyn",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "salvep",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97a5gq0b0q6y4hbvvn0gazjvs7wrf7n",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "dxstymlg",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9784bwy26qgej4x5n1q7182ch7wsh6g",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "laluisa",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j974px1ccbba9fg6g127fhrts57wrtxw",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "cherkoyt",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97f37rnsefekksw9fhh8czqq97wr8tx",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 15
+    },
+    {
+      "discordUsername": "richmxm",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9798kkfwzcm5p5v0xwt7v4rb57wsrf0",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "seonac_",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97evmqt9zj5h9r6re24grnjfs7wr3bd",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 16
+    },
+    {
+      "discordUsername": "bold_knife",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j970e4j3e8r9jyswf6s8ex7s757ws89e",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 5
+    },
+    {
+      "discordUsername": "mendike.",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970ge7wrwfea1p553ze5pcsnx7wsx8v",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "merio1995",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j970et7z6h8r1ct7sw1ja6fmb97wshm9",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Strong Demotion Outlier",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": ".b3ast.",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97dekpemsy4y9r38by3xdpcb17wsqwm",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "plumbry",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j970aadag56a1rm0de2z5xrc1h7ws4zy",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 7
+    },
+    {
+      "discordUsername": "f8ltraico",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974tbthca87ypf0jq7gxz6t957wr0sr",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "twin0708",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97ckjm0x6svkx73t3qhgb76m17wsgyy",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 14
+    },
+    {
+      "discordUsername": "lindzpindz",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970w61j9951s45gva7d38pdtd7wsfmd",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "crixstina",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9775ct58gg185pj4jcgfy2c797wr1vw",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "azn4869",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97fp9zwcryweb0bf2cwpws9bh7ws3qq",
+      "recentTop5Count": 2
+    },
+    {
+      "discordUsername": "maskttvgiolajefa",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j972g2wf0qf9txx4z7hc8hyhm17wsbxt",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 6
+    },
+    {
+      "discordUsername": "brokeahhshinji",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j975yejprnemvvmm3vkjh8sv597wr46w",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 12
+    },
+    {
+      "discordUsername": "beztclaw",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j97byxy31b0pckq8nwx3q8bb397ws992",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "ghvstling",
+      "evaluationStatus": "Eligible for Demotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j977ba7eke9bshs11k55hyahbx7wsbqp",
+      "recentEvaluationStatus": "Strong Demotion Outlier",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "dann_fnbr",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9787t1wmasx30ga7sj4mqb8hs7ws4vp",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "jiznosh",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97bzba5mxj1wd8jtae4vrjzbd7wrwvq",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "maik_inho",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97269t6jrkdjv8nnehvj8wv7s7ws9es",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "nixlol33",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97d9pdbkwtn1sz5q9j5pf8sb57wrtwd",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "realdeal0941",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97a3xdj7xhwc7jp8kvh84y4ph7wsybj",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "shilq_",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977wnyynqxvbe6rnd9p0mrym57wr2zc",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "thatgirlpope",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j977fj1p140vy1dwzfzbhqvg3x7wr68e",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 9
+    },
+    {
+      "discordUsername": "tippo7",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j97dvwpn1r5b2m6vym4yanjk0h7wr8v7",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 4,
+      "recentTotalEvents": 16
+    },
+    {
+      "discordUsername": "noah1235214",
+      "evaluationStatus": "Eligible for Demotion Evaluation",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97dqt5nv3b5jf61y0y01p1yr97wrywr",
+      "recentTop5Count": 1
+    },
+    {
+      "discordUsername": "trojy",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9707spn5qe2ac3k6jwk63arms7wsddv",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "umbralol",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j975cgk68ppzqy3m8p8ptks7js7ws8be",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "itspero",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j97akxp7rc78s85845z8bdjc117wrd71",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 4,
+      "recentTotalEvents": 6
+    },
+    {
+      "discordUsername": "trip.e",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j979m8hyf550japedxxpg5yzv57wspkz",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "azzzzlan1",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9721xgeq6fzyxn9apc812rbrn7wrqb7",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 10
+    },
+    {
+      "discordUsername": "antfrost1",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j97dr0e35v1528rnx7b96r47497wrvtf",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 15
+    },
+    {
+      "discordUsername": "saf3148",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97fjawvw45bq0bxmq922bnc0d7wsmrk",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 12
+    },
+    {
+      "discordUsername": "dazedautunm1739",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97edgaqvxnrpje02hph1bbwnx7wrg4g",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 15
+    },
+    {
+      "discordUsername": "bonesfv",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9714fvbs7mzs3xssc1jgynj4d7wswm3",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "mntsandvalleys",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j979dcemrbqnqv6n41tbkfywfn7wrj03",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 12
+    },
+    {
+      "discordUsername": "privant",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j973pvx5fjswkeq87q5hp4425s7wshyb",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 10
+    },
+    {
+      "discordUsername": "mitch.03",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j974tcpeh2xrstb9qhnydyn17d7wrk51",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "silverlab14",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97bby34fj0gprn0f7gv7p6qch7wrdjj",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "fearvivi",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97b8ygefsc68ckp0hjf26jjz17wsnh6",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": ".atomicbeast",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9770f0340ns0d3pc1r2548bpd7wrw42",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "._.corny",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97dtgxm55xthhv512fccx7rfs7ws7d9",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "xokaley",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j971brgptzar5zb82xnpa65a6s7wryka",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 9
+    },
+    {
+      "discordUsername": "sarahhall1712",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j970mgbtmtaq9k6wbbfpbgs7y57ws44p",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 17
+    },
+    {
+      "discordUsername": "7.sandra",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j971gzwh2jz559rctra51sa70s7wrsq2",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "dawn.zb",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j973q92qnwhst0fyy001aaefes7wr4mh",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "fazbair",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97dbmte0sfsrsxbz3na8600bh7wszpp",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "obeygg",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9787dchnxx1a2gjwfy6r9vwfh7ws268",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "lnn1724",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97a1hyw0mc06wvzxa1czj9f517wsayx",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "fishmasterdavid",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97adtx3cjmkaq14cjaj8gbe0d7wsg0z",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "richard_raccoon",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j972d5npt82tah18faa2r309kh7wrg0z",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "cashmereempire",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97cjyd68mjwqb7tc7ab6zg93n7wrjg6",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "brutalbina",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9742ntv442hnhkgtezq3pb7rn7wrv2h",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "carukyu",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j975b9ks1eft7vfwfv6qjzxgnh7wrh26",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "dazdog",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977rgp6td2e5h8n2016yse0957wrgap",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "lnrmnnv",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97amnhwh6jzdrjz56bb5e4j2n7wrv79",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 10
+    },
+    {
+      "discordUsername": "pawnzytv",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97fg54802p9440wb85tdea7pn7wsee3",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "justkittenv",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j970bggge3svrdz2zzez70jnax7wr1t2",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "baby_j8907",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j976nvs9d71gs2erqjb0fzhbtx7wrvzn",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "__jetty__",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j979nhy6261wmwy95m4s41210h7wskbe",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 3,
+      "recentTotalEvents": 17
+    },
+    {
+      "discordUsername": "cherribo",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971080w9nqfacv6px8qxb06397wsrgn",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "celesteik",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97esewgfb975q083qp9xvsan57wrfcz",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 7
+    },
+    {
+      "discordUsername": "simon73z",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j973kaewgndd053113tdmn7m7s7wredb",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "imamy99",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97dsjj88ww3jtv9mpbm08e16x7wr2g6",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 3,
+      "recentTotalEvents": 17
+    },
+    {
+      "discordUsername": "terresawint",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97dsykndpv9ccr4z6xdvexd6h7wrrjg",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "danielleduffy",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97fvkacberfavws85dh6kz8ph7wscsj",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "uwrq",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9763xjsvaek3c80cfq1ktb6nn7wrtg3",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "x.aladin",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9702ypjvrh0gam0xy8b91z72s7wsc89",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "ju1cybaklava_",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j97cvdt4hph15e6s5ah3w66pfs7wr2zh",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "enzo180937",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97fbaqp9t2m9zgww43p987f117ws911",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "hmr_abood",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977dsz5yz59085b0ktrgcxvm17wrt4f",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "lb.981",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97e80ne6yrtt8s7sz5x9kyv3x7ws9ej",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "itstinnnie",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977csyt912cpbpwya3r9ahn557wr624",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "blindguy5_",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97c78y5rgpma82hv5brwzpq1d7wstzf",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "pomidorek.",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9777nk335156qryn1bmdabnpn7wsthq",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "clownswiper",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974y6me2kcqv0kc1qg1sb9h1h7wrffy",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "alpaca16",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97f70vxkw89cw2fsmtgwzrvnn7wrj8r",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 13
+    },
+    {
+      "discordUsername": "graffitizb",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j973q8mnzxhf0z19kpt23mf4e57wsyz6",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": "aniya.xo",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97480x0qj972bmjpxtrzscq1x7ws9vx",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "ppot_",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j973g7cbvj2kyakqe9rc0drnfs7ws24t",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "lexmre",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97dj0zf6sgybznnpskbtfbbwd7wrpc3",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "robshmoney",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j977jwzhnxn9hvnqz7rknmejgx7wrz12",
+      "recentTop5Count": 1
+    },
+    {
+      "discordUsername": "860storm",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j972kk9ykxqca2hw7t1c0m698n7wr9c6",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": "cjdubstv",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977051jd9en4xbz28te4k2pfn7wr1d4",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "xxyagami",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977hagb6rpjj1n8cwf7dd4nbh7wr0k7",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "d9vious",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9719tgdmmshvkewh95wnzp8q97wsgx7",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": "kylef841",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9769wjdkyht8ngd8z5a2ar6p97wrz4x",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "douglithfunnie",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971m49x7ppxxs1f2k3rzg6cn97wsqkr",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "bean.g._79928",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j978r4ae0hxnwbcs5gtcawejkh7ws3dz",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "candyksh",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97e86710ffbntvm4qyjahcmhd7wrzew",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "rellevxnt1",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971w146dk280tk0nnp9zyaft97wsvx1",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "leszus",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970dzxpy48pd8sgskywsd3c9d7wswe2",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "sleepytimebec",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j970yymj7sskex03s94c14hdjd7ws6c7",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": "unibot67",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j9744vfzen1yhc5ex441tdet8h7wr267",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 11
+    },
+    {
+      "discordUsername": "idkenvy_",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97akspsbeeennxh8ceyknybq97wrwa6",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 16
+    },
+    {
+      "discordUsername": "shockwaveshd",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j972njd3dbkrre0rw44pbdwpq57wr4sa",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "lapapalynn",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9746hj0ppmwcb63dfg60z9g717wrsv9",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "xaytrill7",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971520398ebd6vwk2epq7691x7wsqtp",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "bkcrusher1",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9741svxmhh1r1r8adn9a90gad7wsaej",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "spockny78",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9739jgvw4j8h4ct06hzrd9kz17wsk4q",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 6
+    },
+    {
+      "discordUsername": "itsmissdaisy",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977yy9ndcgffb5h6jk3v8pj0h7ws5jw",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "lajay21",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97c5evb8xwzpjcprd7mxcgabx7wsy6f",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "velveta67",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j973zk78ktx9hxf0219vac5hed7wr7sr",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "rubythelatias",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97cy5mvx0kbn2gp0p2301nw9h7wsagy",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "clement_000000000000000000001",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97e70p7es5bhtea29n6rxqfas7wsx98",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "kuna42",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970vq09we5dnrwtxmtcfs5b357wrgcw",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "chilli_doug",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97a5fxzdqp0a2bzf3w6yfd3d17wra2q",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "camyvt",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j975wvg90fqx47cf5enqw8p7ks7wr6yf",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "gothpett",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97ethf8adh8s5j6813n2rws3h7wr8ga",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 12
+    },
+    {
+      "discordUsername": "envyblood",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97883jn47k53zfcf9618jwpxd7wsjcy",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 9
+    },
+    {
+      "discordUsername": "daisy.0309",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j978rxk0s3tqg0y69wpmcmc1ax7wrhmv",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 11
+    },
+    {
+      "discordUsername": "mlxiia",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974yc5pc5fm0tdhd5f2k5c2p17wr0en",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "sam3starx",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j978yn7x2na7trstn61sfvs2n17wspk8",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 14
+    },
+    {
+      "discordUsername": "crazyteddyy",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97f29p28n5hnazwt1m96hjp997wsnpd",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "yearn4syphonx",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97ckf7qj09m5949g7ygqkafjx7wshbc",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 3,
+      "recentTotalEvents": 7
+    },
+    {
+      "discordUsername": "tattedtiffx3",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97a56m3ccwnprdfmfveqpgnxx7wr8vg",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "serpentqueenie",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97017y73vtba8ax04jtm50r1h7wsbja",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": "itsthaakey",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971vbb69408snwk8jg8svxpvs7wrqcj",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "kelsxym",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97dzfpybyr5bwhwvrn1944cr17wr01a",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 10
+    },
+    {
+      "discordUsername": "randee1o1",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97b735gmjpscdz5yx4sah62gd7wrjrf",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 8
+    },
+    {
+      "discordUsername": "bluntbk",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j972nwzepr5814tpwwtv9q3g5d7wrxh7",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 4,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": "paulinchenchen",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9778nd5pwkzyjyktgkt72yhn17wr1g0",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "superiornex",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j972ezt7kwc7pr49nt9652drxd7wsmdm",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "bnth.otter",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974hcv0edxfx955rppzqfv5td7wsvjm",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "exclusivegabby",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j973rwhy1cps663p5hat8t7ajx7wrkp0",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "cosmic_groover",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9714yhh0a4zg23zg337affj317wsh1e",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "btgg4203",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97dxcg1t361r8dvjeyh0shwj17wscha",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "raymondsmith11",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97cb2xrrw34efvx10vgvmj9557wrrvm",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "laurenlbj5443",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974081b2e6982s6r2a3gs8x3n7wr5ex",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "siredttv",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j973jfrd8t7syy0w5rv9w1nned7wse3z",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "itswiimm",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j975w9814grdf9dq26rfp056q17wr811",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "n1ghtwinged",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97f55hsw4zn9fay0s7pymsyf17wr643",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "skip2mylewi",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9794xrgfxhx4dcdyzxrvq6s5s7wsv0p",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "xo_elsie_xo_30101",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97dns3f4rfa57yr2yh046m6jx7wrxwn",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 15
+    },
+    {
+      "discordUsername": "itslishy",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974hezhxe0qc41cnw6y0nvk7n7wsc01",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "catsnjuice",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j975py6z1tvcppgnt2hsp0m2tn7wr4h6",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "spicymayopls",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97c9zrx76eg9ag45hdmvegw7x7wrk2j",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "hugetrickster",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9778hv98fnmrwr9kz8gt8esqd7wrhxr",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "hbcruella",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j973j5hc7smrwwfh3exdayamvd7wrqtq",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": "c00k3dbyaustin",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9708v9syymcc8x76xsc8zztp57wrtxb",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "mungmann",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97488j4cn77wzxkfgtz3rbefd7wrx6d",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "epuppys.",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974642bzpmr42vxrsmenvwpmn7ws2xt",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "_morfintime",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974b3833344qngyrrckyh42as7wracb",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "smithee133",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97avfe92pg57ndz9rgypt35717wra85",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "imagoober8",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j975a0pj1ga046f56252wwbpv97wsvb4",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "pixel.maddie",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j978q1mrheemja3graz3tkmrbh7wsb3e",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 11
+    },
+    {
+      "discordUsername": "kizlo.",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j973z1mdt3vcfwwtvbv1kywg7h7wr5z4",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "lili.sakura",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971fvg4m1amv6yscmet4tga9x7ws8bp",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "renstinkss",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97cde829fqjgrcn0qw170ywbd7ws7k3",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "policarponicole",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97axd5ct953w7fsc6p22y6rg17wrxrs",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "onenerdysquirrel",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97cr0q3b8s15ctcwbee1waqyh7wr8xz",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "bellatrixie7",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977f1kbw06x6ept0v3f7dnbz57wrm3c",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "charmed_15",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9745dgzhxd0hmkank3cs8kg5s7wsf8z",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "jellyfishxoxo24",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97337z26v2469vrhevpyftpah7wr8x8",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 3,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "killmo17",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9781z2wv31dztzadx3ff16nx17wr3m1",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "thedanger8536",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97d8bwbbkc85yxww06pp2j45d7wshz3",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "amber_nicole1201",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97bx4q24myhm0etq2v1c8j4wh7wrmps",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "taykeeboss",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97c874kgteyf4t1r087ra45d17wsbam",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "iblesst",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j975kn56pqfnqcr0qe1n2st5j17wrewj",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "corteeezzz3003",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9791vjcp21yrb5wnkemsvx7ss7wr1b6",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 7
+    },
+    {
+      "discordUsername": "river_chi",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9701ydwewyv5p5amzfj9x8k657wryw3",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "twintopiaflame",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j972ykx638wmcqnmy32x39jewd7wr9v9",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "celestialsnipes",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974pjrt7c3endvs691bbt4bah7wsxk5",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "ih8void",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970hpbs1s0pfsdnewv3gcpc6n7wsfbt",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "elias00494",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971krrmctnzvmy1z7fmq8zxd57wspfa",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "airotykv",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97fb26zmsxbzy01cgx1qx05hx7wrw27",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "reloadmommy",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97a654v0pzs42mwmz64tnbj597wsymp",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "justamyxx",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97b3c4p59jefne4cnmc12g2jh7wsbav",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "xxsanna",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97cwgh87nz9ha7xvbgsncbets7wrx8a",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "chijmownsme",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97719fvxg83dfn4rhhwpwfv717wrdez",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "mmmmmog9876",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97fjsypk33nbm8v4bd5wj48017wsyxv",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "sarxhrawr",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9712b1bjzwsvjtgyn7b1vt8x57wsfgy",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "rezzyfn.14",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9789nfv69caj3mrc51avkbngd7wrfb4",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "qxitr",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j975cp8dzqk0ya1dmdefm7nrgn7wrmgh",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "hotdiggityhannah",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9701133hjmdg2rq52esav8fa97wre6z",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "changuito309",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970nthqe7gatwx3ya3zn7r5bs7wsbvz",
+      "recentTop5Count": 1
+    },
+    {
+      "discordUsername": "ast_calski",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j976n7bg3zf2aateks3pbxrtdd7wsmw8",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "marvthehulk",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97762wx0cgkycx4ba4y51tg417wr34f",
+      "recentEvaluationStatus": "Strong Demotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Demotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "mannivzn",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9799wxbb1m2nzp12a969hf9zh7ws275",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "peachynoon1_67646",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97dj70nncrm64pw4rvygdb0jx7ws0zh",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": "alanaweyhey",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j975gppck7n61zg4yytw3170857wtwe0",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "veganfort_14746",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j979cfxmqeb1gd4dz6ha5naynh7wvjzs",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "desayay",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j970c1nbjp30wgkfjmshjvtb8s7xjynq",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "ale09528",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97bf080yedg4amap0rh3vzc7s7xq4bb",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "xoxoash_fn",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97egxygyeewy7qrwqp1tzj0mh7xqzqc",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "penta.harald",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j979v91gm50m1pcxm7bj54157s7xq862",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "shankz09",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97emj33yxax4z1c6dawsptt457xp3z3",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "loganide",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j971hd4ebkbpg4bf4y2a7ehkj57xpjtb",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "briafnbr",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97013yp00cc32bd57m24653j17xqf5t",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 9
+    },
+    {
+      "discordUsername": "katxnna",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974dpcr4w26sg12xqxm0yfp217y7t85",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "elii3459",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9772kmb9cvascedztckh83x9s7y6gbp",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "deyfw_maddi",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9720rhtwf90hhh67r0jed05k97y7c3d",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "mtvvxz",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97em4nre4sxgc15a2pck95kdn7y683r",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 14
+    },
+    {
+      "discordUsername": "saimon_zekiller",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971aq5rwmdcz17yc1rv547nkd7yecj7",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "istradefe",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j973ppb2vn634ep498ara9agk57yenrp",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "charkefz",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j9739sxfxm1q1mpqwjt1705zcd7yedhn",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 4,
+      "recentTotalEvents": 6
+    },
+    {
+      "discordUsername": "j.k020",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j972n78ze3qehnm4x3j87a8cz97yf6j5",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "juuman2",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97cb8pa938m00z5ybxs4049zh7yk3h3",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "nieceyzb",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97945x2t29zj852ayjthqpxmx7yk1th",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "amelie.xoox",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j97a0yt4epz5yxnr0xzgxzvn4s7ymshf",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 17
+    },
+    {
+      "discordUsername": "ojlovednicole18",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j972p4e5y7056hewyhp7069ej97ynt6a",
+      "recentTop5Count": 1
+    },
+    {
+      "discordUsername": "sarah_apbt",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97dhf62b6mqk7efd0d26zy1y17ymasy",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "_elavie_",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97db7xjys1zbagn4hb083vk117ywe56",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "charatu2",
+      "evaluationStatus": "Strong Demotion Outlier",
+      "evaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97dys2cyqzk7t4b5e9fxa2cpd7yxa2p",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "tasosnor",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97c0nn4715sa40jsm61p3y4657yw2ah",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "iced0134",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9745fapjxrgkjnwmsmwzk9e3x7yw0dy",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "m.axi.e",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97b0ge8jgrej6a8agq1aq1fhh7zh74w",
+      "recentTop5Count": 2
+    },
+    {
+      "discordUsername": "jonydee.",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97bsxtqmdhws2njbc97qa78ed7zgaph",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "bmess15",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9796r0d1d5nfh85v0w9j0j1ph7zgfj5",
+      "recentTop5Count": 1
+    },
+    {
+      "discordUsername": "karamia9611",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97b0vfgr57je1ctzv6e9nng9s7zk38a",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 6
+    },
+    {
+      "discordUsername": "me0w4jay",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970215gv56seha582t5wmhbhx7zk0j5",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "chandler520r",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977z4tqm3vche48558jk8x0r57zknqq",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "yearnbaby",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97ebj2qe78txenzjha5e4zy8h7zjafa",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "ju1zie.",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97dyd8ybb2b8ttzqct4bfwxes80a29w",
+      "recentTop5Count": 3
+    },
+    {
+      "discordUsername": "mask_backshot",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j976786a9xjpcqv9t7eppbst1s80ax2d",
+      "recentTop5Count": 1
+    },
+    {
+      "discordUsername": "jclarkie02",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j9762peqbm0p9remakdm9yxhk980sz94",
+      "recentTop5Count": 2
+    },
+    {
+      "discordUsername": "midasmulligxn",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977f6z01e48dfc8vvgn0yb9zx80rz5k",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "crashlanding001",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j976v0nrm8cdz33jhkbhzk4ta980sd2t",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "cosmic_9120",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97ajtq77xhwvhwjhz1p4v4v1180sged",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "redquinn6662385",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97a3gvzwm5fhxechg1adzenc980rby9",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "screamingsiren.",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j976krhcbp2aqez1x8zmgbaxtd80vajn",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "flobotics",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97cv50vzxxbkhpz0kz82cb4wx80v3wr",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "cat_adventures",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9712xcj8w0grtz7k2xe95p82h80v8zp",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 6
+    },
+    {
+      "discordUsername": "digiornoslut",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j979nrhz3mb07rv7qwgjmm19m980v7c3",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "urameshiiiii",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j979mpfa0yskjsj3zrqpky8vk980vygh",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "xfrancis768",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97300wq4peyy40fh7y7cwk18580xsx9",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "codlogic12",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97e20w0z1z015rh3re5209nh980w2vd",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "purplezombiebabe",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97f0511q40chf747rzw8wv11980x8wn",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "lethalluxe_",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97fchhf2bq82hw5vjsjtkq0mx80x1ra",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "kikiwieanders",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j978tq68a15kvqdn14t0mv1wy580wea5",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "st4r_snugget",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970r9pjek431n3pnt2egtk2xh80xjhj",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "tanyalouise11",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Strong Promotion Outlier",
+      "formulaVersion": 1,
+      "playerId": "j975cpxctfckjzz24hbazspb8980zzm0",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": "croy23",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9780vtnf7rbm2a346zxf4ex9h80yryr",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "intoxikaited",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97a1e5zcg6nfcx0nmg125h7x180yx6p",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "lovelyitem",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9788dt0rv8kyvq57th9d9hadh80y58e",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "inferno4890",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97aw1q2r8vvtjsy6kmv2jm81180zf1f",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "wessyde",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97bjh2g5a23kg04asvv63my6h80z5zk",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "devon5342",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j975fagjrk83vgfs13vzb7y8zx80ydrr",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "dj2xs.",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97d3trpweb5v7wza547sykvjx80yhm0",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "kasper0070489",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974etxa02j6ff4m14hja4sjqn80yja4",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "sunflowerbot67",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j978h6g7mqa0tcxqaeccjn2e91816ym4",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": ".queenlady",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97dphpzbtk9xhhkgs9b53y81s817kdf",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 12
+    },
+    {
+      "discordUsername": "sixburgsteelers_87825",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974raxx587rjqeve96sc5dssh816r5e",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "johnda5th",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97fjcntgf92wmjhk3dmq7z17d817hs4",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "ilikeyello",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97b2g5fd66q4gyfwmkt71a0a98168yx",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "lov3bug4",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97bmg8v0grrzr23yenb7pqtmh81622m",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "beastmexican",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97en1ytmjdysrsdgrkh8sc4518176r3",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "vonun",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97dz2wjrttv45ctrhzz1f1rhn817kre",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "rocko0694",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974h9k465x55mjgvzsxbzs85s817c2p",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "nogginwinters98_13495",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97efppnxf77h993z642nx5bw5817zfw",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "diobe_",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97chfjcfavms54rc46pghbnrs81653b",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 6
+    },
+    {
+      "discordUsername": "ghoul6094",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97418tshn8bc2vht7nc77wv1d816met",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "brandireaddean",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97dwvk619ceqf3ds128b82twd817pay",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "audibody",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970g52eckmbzxx27xwgjbfs45816p9v",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "nyx_capes",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977xjxkzstg0sshg7hage6p4h81926r",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": ".bengy101",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9794e34ebgj1ccqcakcws40yx819qhw",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "coleyy_xo1274",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j979dcfhcartdfn2m7zr64z1xn8196ap",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "blitzplayss9",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j974dj7ag4yv77btp2vv2yk175819w68",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "gusstu97",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j979rre2fvc5dejkp1yd5kdrq9819ybq",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "missblitz.",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j970c0wqrw2ktxsqhss3f5h5a9819qyg",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": "penta_reacher",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9739cwkasq9k8nrqy269zq2298183kj",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "sleepyahhfn",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974r9jz2ht0kj6jyqak5bj0p581hqvz",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "iamtwo.",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97997g6mmrnf8xkdj4j9r2kgx81hnjb",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "weebigboi22",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971776y9qhp77165fa057rjph81h44d",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "tinydancer_9",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97dazv3qatqxev32qwf47za3d81gb96",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "nakkixd",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j973s3rzcxdzxkj5akve5rw3a181hszg",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "bealesy",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970qsaq4wz8z03h0kybmzqxcs81g3r4",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "sebastian8439_",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j977ncp807kvz1bbnbts4m53b581gm69",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 8
+    },
+    {
+      "discordUsername": "luvdarcie",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9762ddjzpx3p3n5pt3fbfs9md81hwf4",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "krutzmann.",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j977603z9wbrwjvy6dcp4xfh5581pxxq",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 6
+    },
+    {
+      "discordUsername": "entykl",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971kecrjc79h0ac81ssx9txx581xz4f",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 3,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "tcash151",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97evj3tf3zkhqq4j81q5drv3d81xrh9",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "angelbabyye",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j972w60xtjvhg8st7ywg7z21yx81zre5",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "cheeseypep",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97bjmarh3h4e684h6ewx1wq3181zad9",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "_gio.1",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971bt8spdddkm8r7d09zwvhe182cajp",
+      "recentTop5Count": 1
+    },
+    {
+      "discordUsername": "mychoppaeat",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97244vrkrtkjngyzbfp2p6qc182ck67",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "haru327_33481",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j978v25mn9paxd58rard89pbg182dxhp",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "moni7110",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j978q5m0hdbcqgf68jbwtm6yjx82ddzy",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 8
+    },
+    {
+      "discordUsername": "ohana_kezza16",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970hjvv3j04a2zwsvmpbsngkn82dpt6",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "scottygfn",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97fb5mee37787aajfq803ph8182da4a",
+      "recentTop5Count": 3
+    },
+    {
+      "discordUsername": "interwarf",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97dceza997z2m16114wsjdmks82d2dy",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "mitchfnbr",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97a0s22ma0px9cb34x578wvwd82c94s",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "nanotus",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97cfwn83q3vjjewzbchmem64982cj2q",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "kazuki_stinks",
+      "evaluationStatus": "Strong Promotion Outlier",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97dctkd6g9xebxytnrmw8v7k982fhxt",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 10
+    },
+    {
+      "discordUsername": "ice_d_talia",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j972yy4awjyzqhs6ghzj9d2nxd82mbrz",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "beanie0804",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97cjcb8a9m9xe0t3tf3yxtta182m0ng",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 10
+    },
+    {
+      "discordUsername": "evburgerr1",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97d0p1dgck218nqr3b9x8hfvh82xdkr",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "halyberry",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97ekh132am3n99cgsfp1asqm182xemr",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "pixy0962",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97ck6h6zbcjzntkgt70repss583j6k4",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "luk1.06._91074",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970cc46rsv2njjpk3m6jh6qfx83jbpr",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "marybeeee",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j972q69nbbn01fcx6p6qnns7xs83ja21",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "kelebek3561",
+      "evaluationStatus": "Eligible for Promotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Promotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j97b7emkcegk76yf5kt9cedass83jwa3",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 3,
+      "recentTotalEvents": 14
+    },
+    {
+      "discordUsername": "iceytv",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j972kjjprv8qxjv8x4w5ns4c9x83jd5w",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "vyxi.3",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97b7m2dmd3ay0af97x9dy3yg183kw5r",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 4,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "tempziepoo",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j972f7v847sdz2tdfeaw03x1wh83khaz",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 12
+    },
+    {
+      "discordUsername": "maskbane.",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j977th0kcmv1z74r8bt2qx9rcn86mktp",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 15
+    },
+    {
+      "discordUsername": "ryze00000",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j972pk1k2bveq889s21kwedjcs86nezg",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "sammzzy1",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j97be75z9jmac7zy86d6xm4gz186n10e",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 18
+    },
+    {
+      "discordUsername": "fortnite_pro124",
+      "evaluationStatus": "Eligible for Demotion Evaluation",
+      "evaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "formulaVersion": 1,
+      "playerId": "j978p1jfwbvrtws9n9fcv7n7th86mtp2",
+      "recentEvaluationStatus": "Strong Demotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Demotion Outlier",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 14
+    },
+    {
+      "discordUsername": "bobbyj132",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9703v4pv19wb7y0j9hxv1c82x86mrje",
+      "recentEvaluationStatus": "Strong Promotion Outlier",
+      "recentEvaluationStatusRaw": "Strong Promotion Outlier",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 18
+    },
+    {
+      "discordUsername": "kaitlincapo",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97an8qsyngr92m01dyybfzp9n86mck0",
+      "recentTop5Count": 1
+    },
+    {
+      "discordUsername": "soul1781",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j971m9bh2n02hhnp3mddmyj93586mc7b",
+      "recentEvaluationStatus": "Stable",
+      "recentEvaluationStatusRaw": "Stable",
+      "recentTop5Count": 4,
+      "recentTotalEvents": 17
+    },
+    {
+      "discordUsername": "sdelloroend",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97bn6dpr7kp2nj7aq2db135yh86m55m",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "pdizzle8658",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j973d2c24jyd42twz8k83katxn86nab3",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "rinsabletick700245",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j979aqpjmrwxska1fpddsvvsr986mhdy",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "wildsaladfingers",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97b56pkcxy17g8xt1kbx6sq3s86mwcj",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "egirlfanboi",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97ctf84n3yaz4s3ag26n4nj7s86nxc1",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "allieboo2.0",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9781x17kfr75x2tssp1s5nzs986nxfn",
+      "recentTop5Count": 0
+    },
+    {
+      "discordUsername": "._.binkie",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j970dm6ysj9am3j7vsp05qyw8186nwhr",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 7
+    },
+    {
+      "discordUsername": "sn27vv",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97fb15z97wxvpp76yvjzr10hx86rg5z",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "defaultdarnger",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j974a2zypq3zt7j3zw9bzewxfs86rtp7",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 5
+    },
+    {
+      "discordUsername": "doctorroro",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j975awb1e3nj45c643kmkw890586r9jg",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 4
+    },
+    {
+      "discordUsername": "karolinagg",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9760a6rreswf2fe4ksdfnedkd86sphc",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 5
+    },
+    {
+      "discordUsername": "meatwest",
+      "evaluationStatus": "Eligible for Demotion Evaluation",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j970wenb2dmgwd0zwsxahhgwd986sg5w",
+      "recentEvaluationStatus": "Eligible for Demotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 11
+    },
+    {
+      "discordUsername": "luvmiakat",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j9781bfw4bbv6ckp8cbnm03jsd86r2g0",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "starraro",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97b4yvtwkvd4yvzp8jp2zec9h86sdj4",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "yopeakz",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j978cx8xybh7t2p7fx1mjf3gvs86rtzw",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 5
+    },
+    {
+      "discordUsername": "zb.droxzz",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j975sdy2drxfnaj3w6sc8s1b1986sw6t",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "edlingaa",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97e4p1g4y6bxp8v6m5mb5f08x86sb2s",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 7
+    },
+    {
+      "discordUsername": "nancyvp_",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971y54vnnzqwpy6m13hy7cby986snfx",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "lyssislive",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j978qd4zdyec63zw1qhaea0vyd86r7xz",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "brendenwalters",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j972339pe4f66wtkjqemzncp5h86s416",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 0,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "veronix._",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j971zm94p72yhcg0775e39wteh870qb9",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 1
+    },
+    {
+      "discordUsername": "domedieblume",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97f9s8sqfh3rvppaacffnb3z5871g9a",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "whoohub",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j973ty4296dqav1dyr9xxjs95h87dnph",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 2,
+      "recentTotalEvents": 3
+    },
+    {
+      "discordUsername": "hxnnahh__",
+      "evaluationStatus": "Insufficient Data",
+      "evaluationStatusRaw": "Insufficient Data",
+      "formulaVersion": 1,
+      "playerId": "j97ek2a6r1gkcsysr8brkwpd5587cfw8",
+      "recentEvaluationStatus": "Insufficient Data",
+      "recentEvaluationStatusRaw": "Insufficient Data",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 2
+    },
+    {
+      "discordUsername": "liquidwater16",
+      "evaluationStatus": "Stable",
+      "evaluationStatusRaw": "Stable",
+      "formulaVersion": 1,
+      "playerId": "j9762jqrgamqxnppt01mr6aned87z9z0",
+      "recentEvaluationStatus": "Eligible for Promotion Evaluation",
+      "recentEvaluationStatusRaw": "Eligible for Demotion Evaluation",
+      "recentTop5Count": 1,
+      "recentTotalEvents": 3
+    }
+  ],
+  "topFiveMismatchCount": 0,
+  "topFiveMismatches": [],
+  "missingRecentStatusCount": 0,
+  "missingStatusRawCount": 0,
+  "missingRecentStatusExamples": []
+}

@@ -283,17 +283,9 @@ function TierReEvaluationContent() {
               "Strong Demotion Outlier": 4,
               "Insufficient Data": 5,
             };
-            // Derive effective status for sorting when recent toggle is on
             const deriveStatus = (e: typeof a) => {
               if (!recentWeeksOnly) return e?.evaluationStatus as string;
-              if ((e?.totalEvents || 0) < 8 || (e?.recentTotalEvents ?? 0) === 0) return "Insufficient Data";
-              const pro = e?.recentPromotionDiff;
-              const dem = e?.recentDemotionDiff;
-              if (pro != null && pro > 5) return "Strong Promotion Outlier";
-              if (pro != null && pro > 0) return "Eligible for Promotion Evaluation";
-              if (dem != null && dem < -5) return "Strong Demotion Outlier";
-              if (dem != null && dem < 0) return "Eligible for Demotion Evaluation";
-              return "Stable";
+              return (e?.recentEvaluationStatus ?? e?.evaluationStatus) as string;
             };
             aVal = statusOrder[deriveStatus(a)] ?? 99;
             bVal = statusOrder[deriveStatus(b)] ?? 99;
@@ -611,20 +603,11 @@ function TierReEvaluationContent() {
     }
   };
 
-  // Derive evaluation status from diff values (used for recent toggle)
-  const getEffectiveStatus = (evaluation: typeof displayedEvaluations[number]): string => {
+  const getDisplayedStatus = (
+    evaluation: (typeof displayedEvaluations)[number],
+  ): string => {
     if (!recentWeeksOnly) return evaluation.evaluationStatus;
-    // When toggle is on, recalculate status from recent diffs
-    if (evaluation.totalEvents < 8) return "Insufficient Data";
-    const recentEvents = evaluation.recentTotalEvents ?? 0;
-    if (recentEvents === 0) return "Insufficient Data";
-    const proDiff = evaluation.recentPromotionDiff;
-    const demDiff = evaluation.recentDemotionDiff;
-    if (proDiff != null && proDiff > 5) return "Strong Promotion Outlier";
-    if (proDiff != null && proDiff > 0) return "Eligible for Promotion Evaluation";
-    if (demDiff != null && demDiff < -5) return "Strong Demotion Outlier";
-    if (demDiff != null && demDiff < 0) return "Eligible for Demotion Evaluation";
-    return "Stable";
+    return evaluation.recentEvaluationStatus ?? evaluation.evaluationStatus;
   };
 
   return (
@@ -1408,7 +1391,7 @@ function TierReEvaluationContent() {
               </TableHeader>
               <TableBody>
                 {displayedEvaluations.map((evaluation) => {
-                  const effectiveStatus = getEffectiveStatus(evaluation);
+                  const effectiveStatus = getDisplayedStatus(evaluation);
                   return (
                   <TableRow
                     key={evaluation.playerId}

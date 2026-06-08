@@ -336,7 +336,7 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
       <div className="grid gap-2 md:grid-cols-4 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
-            <CardTitle className="text-[10px] font-medium">Total Events</CardTitle>
+            <CardTitle className="text-[10px] font-medium">Events Played</CardTitle>
             <Calendar className="h-3 w-3 text-muted-foreground" />
           </CardHeader>
           <CardContent className="py-1 pb-2">

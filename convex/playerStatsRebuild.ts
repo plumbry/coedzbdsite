@@ -8,6 +8,7 @@ import {
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin } from "./auth_helpers";
+import { deriveEvaluationStatus } from "./lib/stats/evaluationStatus";
 import { syncInternalEventParticipation } from "./lib/stats/syncInternalEventParticipation";
 import {
   isActivePlayerWithMatchData,
@@ -20,6 +21,7 @@ import {
   rebuildKindLabel,
   resolvePlayerStatsRebuildKind,
 } from "./lib/stats/rebuildKind";
+import { PIPELINE_VERSION } from "./lib/stats/versions";
 
 const EVENT_BATCH = 6;
 const PLAYER_CACHE_BATCH = 3;
@@ -98,9 +100,13 @@ function patchRecentComparisonFields(
   entry: {
     _id: Id<"tierReEvaluationCache">;
     tier: string;
+    totalEvents: number;
     recentHolisticScore?: number;
+    recentRawHolisticScore?: number;
+    recentTotalEvents?: number;
   },
   recentMedians: Record<string, number | undefined>,
+  recentRawMedians: Record<string, number | undefined>,
 ) {
   const tierOrder = ["S", "A", "B", "C"];
   const tierIdx = tierOrder.indexOf(entry.tier);
@@ -114,13 +120,36 @@ function patchRecentComparisonFields(
   const aboveRecent = tierAbove ? recentMedians[tierAbove] : undefined;
   const belowRecent = tierBelow ? recentMedians[tierBelow] : undefined;
 
+  const recentPromotionDiff =
+    aboveRecent != null ? entry.recentHolisticScore - aboveRecent : undefined;
+  const recentDemotionDiff =
+    belowRecent != null ? entry.recentHolisticScore - belowRecent : undefined;
+
+  const rawScore = entry.recentRawHolisticScore ?? entry.recentHolisticScore;
+  const rawAbove = tierAbove ? recentRawMedians[tierAbove] : undefined;
+  const rawBelow = tierBelow ? recentRawMedians[tierBelow] : undefined;
+  const recentRawPromotionDiff =
+    rawAbove != null ? rawScore - rawAbove : undefined;
+  const recentRawDemotionDiff =
+    rawBelow != null ? rawScore - rawBelow : undefined;
+
   return {
     recentHolisticVsSameTier:
       sameTierRecent != null ? entry.recentHolisticScore - sameTierRecent : undefined,
-    recentPromotionDiff:
-      aboveRecent != null ? entry.recentHolisticScore - aboveRecent : undefined,
-    recentDemotionDiff:
-      belowRecent != null ? entry.recentHolisticScore - belowRecent : undefined,
+    recentPromotionDiff,
+    recentDemotionDiff,
+    recentEvaluationStatus: deriveEvaluationStatus({
+      totalEvents: entry.totalEvents,
+      recentEvents: entry.recentTotalEvents ?? 0,
+      promotionDiff: recentPromotionDiff,
+      demotionDiff: recentDemotionDiff,
+    }),
+    recentEvaluationStatusRaw: deriveEvaluationStatus({
+      totalEvents: entry.totalEvents,
+      recentEvents: entry.recentTotalEvents ?? 0,
+      promotionDiff: recentRawPromotionDiff,
+      demotionDiff: recentRawDemotionDiff,
+    }),
   };
 }
 
@@ -387,6 +416,7 @@ export const scheduleFullRebuild = internalMutation({
       applyDuoAdjustment: args.applyDuoAdjustment ?? false,
       applyTCPenalty: args.applyTCPenalty !== false,
       applyTCDCAToHolistic: args.applyTCDCAToHolistic !== false,
+      pipelineVersion: PIPELINE_VERSION,
       processedInPhase: 0,
       totalProcessed: 0,
       startedAt: now,
@@ -445,24 +475,6 @@ export const startFullPlayerStatsRebuild = mutation({
   ): Promise<{ jobId: Id<"playerStatsRebuildJobs">; message: string }> => {
     await requireAdmin(ctx);
     return await ctx.runMutation(internal.playerStatsRebuild.scheduleFullRebuild, args);
-  },
-});
-
-/** Event counts, DCA, and top-five after match import (TC usually already updated). */
-export const refreshPlayerDerivedCachesForPlayers = internalMutation({
-  args: { playerIds: v.array(v.id("players")) },
-  handler: async (ctx, args) => {
-    for (const playerId of args.playerIds) {
-      await syncInternalEventParticipation(ctx, playerId);
-
-      const player = await ctx.db.get(playerId);
-      if (!player?.hasMatchData) continue;
-
-      await ctx.runMutation(internal.dcaCache.cacheDCAForPlayer, { playerId });
-      await ctx.runMutation(internal.topFiveCache.updateSinglePlayerCache, {
-        playerId,
-      });
-    }
   },
 });
 
@@ -628,13 +640,19 @@ export const processRebuildStep = internalMutation({
               string,
               number | undefined
             >;
+            const recentRawMedians = (mediansCache?.recentTierRawHolisticMedians ??
+              {}) as Record<string, number | undefined>;
             const page = await ctx.db.query("tierReEvaluationCache").paginate({
               numItems: TIER_EVAL_FINALIZE_BATCH,
               cursor: playersCursor,
             });
 
             for (const entry of page.page) {
-              const patch = patchRecentComparisonFields(entry, recentMedians);
+              const patch = patchRecentComparisonFields(
+                entry,
+                recentMedians,
+                recentRawMedians,
+              );
               if (patch) {
                 await ctx.db.patch(entry._id, patch);
               }
@@ -713,13 +731,19 @@ export const processRebuildStep = internalMutation({
             string,
             number | undefined
           >;
+          const recentRawMedians = (mediansCache?.recentTierRawHolisticMedians ??
+            {}) as Record<string, number | undefined>;
           const page = await ctx.db.query("tierReEvaluationCache").paginate({
             numItems: TIER_EVAL_FINALIZE_BATCH,
             cursor: playersCursor,
           });
 
           for (const entry of page.page) {
-            const patch = patchRecentComparisonFields(entry, recentMedians);
+            const patch = patchRecentComparisonFields(
+              entry,
+              recentMedians,
+              recentRawMedians,
+            );
             if (patch) {
               await ctx.db.patch(entry._id, patch);
             }

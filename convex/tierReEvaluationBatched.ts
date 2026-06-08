@@ -1,9 +1,8 @@
-import { internalMutation, query } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id, Doc } from "./_generated/dataModel.d.ts";
 import { internal } from "./_generated/api";
-import { requireAdmin } from "./auth_helpers";
 import { filterVisibleMembers } from "./helpers/playerAlt";
 import {
   isActivePlayerWithMatchData,
@@ -17,6 +16,8 @@ import {
   getPlayerDcaCpm,
   roundHolisticScore,
 } from "./lib/stats/holisticScore";
+import { deriveEvaluationStatus } from "./lib/stats/evaluationStatus";
+import { FORMULA_VERSION } from "./lib/stats/versions";
 
 const BATCH_SIZE = 1; // One player per batch — heavy per-player reads (results, imports, match stats)
 const CACHE_CLEAR_BATCH = 50;
@@ -89,10 +90,57 @@ function finalizeTierMediansFromPartials(
   return { tierAverages, tierHolisticMedians, tierKillsMedians };
 }
 
+function finalizeRawHolisticMediansFromPartials(
+  partialRawHolistic: Record<ValidTier, number[]>,
+) {
+  const rawTierHolisticMedians: { S?: number; A?: number; B?: number; C?: number } = {};
+  for (const tier of VALID_TIERS) {
+    const tierScores = [...partialRawHolistic[tier]].sort((a, b) => a - b);
+    if (tierScores.length === 0) {
+      continue;
+    }
+    rawTierHolisticMedians[tier] = medianFromSorted(tierScores);
+  }
+  return rawTierHolisticMedians;
+}
+
+function tierHolisticDiffs(
+  holisticScore: number,
+  playerTier: string,
+  tierHolisticMedians: Record<string, number | undefined>,
+) {
+  const tierOrder = ["S", "A", "B", "C"];
+  const tierIndex = tierOrder.indexOf(playerTier);
+  const tierAbove = tierIndex > 0 ? tierOrder[tierIndex - 1] : undefined;
+  const tierBelow =
+    tierIndex < tierOrder.length - 1 ? tierOrder[tierIndex + 1] : undefined;
+  const tierAboveHolistic = tierAbove
+    ? tierHolisticMedians[tierAbove]
+    : undefined;
+  const tierBelowHolistic = tierBelow
+    ? tierHolisticMedians[tierBelow]
+    : undefined;
+  const sameTierHolistic = tierHolisticMedians[playerTier];
+
+  return {
+    holisticVsSameTier:
+      sameTierHolistic !== undefined ? holisticScore - sameTierHolistic : undefined,
+    promotionDiff:
+      tierAboveHolistic !== undefined ? holisticScore - tierAboveHolistic : undefined,
+    demotionDiff:
+      tierBelowHolistic !== undefined ? holisticScore - tierBelowHolistic : undefined,
+  };
+}
+
 async function scorePlayerForTierMedians(
   ctx: MutationCtx,
   player: Doc<"players">,
-): Promise<{ tier: ValidTier; holisticScore: number; killsPerMatch: number } | null> {
+): Promise<{
+  tier: ValidTier;
+  holisticScore: number;
+  rawHolisticScore: number;
+  killsPerMatch: number;
+} | null> {
   const internal = await computeInternalPlayerStats(ctx, player._id);
   if (internal.eventsPlayed === 0) {
     return null;
@@ -110,12 +158,14 @@ async function scorePlayerForTierMedians(
     deathsPerMatch: internal.deathsPerMatch,
   });
   const baseHolistic = averageHolisticComponents(components);
+  const rawHolisticScore = roundHolisticScore(baseHolistic);
   const { dca, cpm } = getPlayerDcaCpm(player);
   const holisticScore = applyDcaTcToHolistic(baseHolistic, dca, cpm);
 
   return {
     tier: playerTier as ValidTier,
     holisticScore,
+    rawHolisticScore,
     killsPerMatch: internal.killsPerMatch,
   };
 }
@@ -136,6 +186,8 @@ async function getOrCreateMediansBuildCache(ctx: MutationCtx) {
     mediansPlayersCursor: null,
     mediansPageIndex: 0,
     partialRecentHolisticByTier: emptyTierNumberArrays(),
+    partialRecentRawHolisticByTier: emptyTierNumberArrays(),
+    partialRawHolisticByTier: emptyTierNumberArrays(),
     recentMediansCacheCursor: null,
   });
   const created = await ctx.db.get(id);
@@ -163,6 +215,7 @@ async function appendRecentHolisticPartial(
   ctx: MutationCtx,
   tier: ValidTier,
   recentHolisticScore: number,
+  recentRawHolisticScore?: number,
 ) {
   const cache = await getOrCreateMediansBuildCache(ctx);
   const partialRecent = {
@@ -170,10 +223,26 @@ async function appendRecentHolisticPartial(
     ...(cache.partialRecentHolisticByTier ?? {}),
   };
   partialRecent[tier].push(recentHolisticScore);
-  await ctx.db.patch(cache._id, {
+
+  const patch: {
+    partialRecentHolisticByTier: typeof partialRecent;
+    partialRecentRawHolisticByTier?: Record<ValidTier, number[]>;
+    lastUpdated: number;
+  } = {
     partialRecentHolisticByTier: partialRecent,
     lastUpdated: Date.now(),
-  });
+  };
+
+  if (recentRawHolisticScore != null) {
+    const partialRecentRaw = {
+      ...emptyTierNumberArrays(),
+      ...(cache.partialRecentRawHolisticByTier ?? {}),
+    };
+    partialRecentRaw[tier].push(recentRawHolisticScore);
+    patch.partialRecentRawHolisticByTier = partialRecentRaw;
+  }
+
+  await ctx.db.patch(cache._id, patch);
 }
 
 // Helper function to convert tier letter to numeric value
@@ -256,10 +325,12 @@ async function resetTierMediansBuildHandler(ctx: MutationCtx): Promise<{ ok: tru
     tierKillsMedians: {},
     lastUpdated: Date.now(),
     partialHolisticByTier: emptyTierNumberArrays(),
+    partialRawHolisticByTier: emptyTierNumberArrays(),
     partialKillsByTier: emptyTierNumberArrays(),
     mediansPlayersCursor: null,
     mediansPageIndex: 0,
     partialRecentHolisticByTier: emptyTierNumberArrays(),
+    partialRecentRawHolisticByTier: emptyTierNumberArrays(),
     recentMediansCacheCursor: null,
   });
 
@@ -283,6 +354,10 @@ async function calculateTierMediansStepHandler(
     ...emptyTierNumberArrays(),
     ...(cache.partialKillsByTier ?? {}),
   };
+  const partialRawHolistic = {
+    ...emptyTierNumberArrays(),
+    ...(cache.partialRawHolisticByTier ?? {}),
+  };
 
   const cursor = cache.mediansPlayersCursor ?? null;
   let pageIndex = cache.mediansPageIndex ?? 0;
@@ -293,13 +368,17 @@ async function calculateTierMediansStepHandler(
 
   const finalizeAndReturn = async () => {
     const finalized = finalizeTierMediansFromPartials(partialHolistic, partialKills);
+    const rawTierHolisticMedians =
+      finalizeRawHolisticMediansFromPartials(partialRawHolistic);
     await ctx.db.patch(cache._id, {
       tierAverages: finalized.tierAverages,
       tierHolisticMedians: finalized.tierHolisticMedians,
       tierKillsMedians: finalized.tierKillsMedians,
+      rawTierHolisticMedians,
       lastUpdated: Date.now(),
       partialHolisticByTier: undefined,
       partialKillsByTier: undefined,
+      partialRawHolisticByTier: undefined,
       mediansPlayersCursor: undefined,
       mediansPageIndex: undefined,
     });
@@ -313,6 +392,7 @@ async function calculateTierMediansStepHandler(
     await ctx.db.patch(cache._id, {
       partialHolisticByTier: partialHolistic,
       partialKillsByTier: partialKills,
+      partialRawHolisticByTier: partialRawHolistic,
       mediansPlayersCursor: page.continueCursor,
       mediansPageIndex: 0,
       lastUpdated: Date.now(),
@@ -333,6 +413,7 @@ async function calculateTierMediansStepHandler(
         scored.holisticScore,
         scored.killsPerMatch,
       );
+      partialRawHolistic[scored.tier].push(scored.rawHolisticScore);
     }
   }
 
@@ -345,6 +426,7 @@ async function calculateTierMediansStepHandler(
     await ctx.db.patch(cache._id, {
       partialHolisticByTier: partialHolistic,
       partialKillsByTier: partialKills,
+      partialRawHolisticByTier: partialRawHolistic,
       mediansPlayersCursor: page.continueCursor,
       mediansPageIndex: 0,
       lastUpdated: Date.now(),
@@ -355,6 +437,7 @@ async function calculateTierMediansStepHandler(
   await ctx.db.patch(cache._id, {
     partialHolisticByTier: partialHolistic,
     partialKillsByTier: partialKills,
+    partialRawHolisticByTier: partialRawHolistic,
     mediansPlayersCursor: cursor,
     mediansPageIndex: pageIndex,
     lastUpdated: Date.now(),
@@ -419,55 +502,17 @@ export const resetRecentMediansBuild = internalMutation({
     }
     await ctx.db.patch(cache._id, {
       partialRecentHolisticByTier: emptyTierNumberArrays(),
+      partialRecentRawHolisticByTier: emptyTierNumberArrays(),
       recentMediansCacheCursor: null,
       recentTierHolisticMedians: undefined,
+      recentTierRawHolisticMedians: undefined,
       lastUpdated: Date.now(),
     });
     return { ok: true };
   },
 });
 
-// Step 2b: Initialize batch rebuild (no longer clears cache — done separately)
-export const initializeBatchRebuild = internalMutation({
-  args: {
-    recentOnly: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args): Promise<{
-    totalPlayers: number;
-    batchCount: number;
-    playerIds: Id<"players">[];
-  }> => {
-    // Calculate tier medians (separate from clearing)
-    await ctx.runMutation(internal.tierReEvaluationBatched.calculateTierMedians, {});
-
-    // Active members with match data only.
-    const activePlayers = await ctx.db
-      .query("players")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .collect();
-    let eligiblePlayers = filterVisibleMembers(
-      activePlayers.filter((p) => p.hasMatchData === true),
-    );
-
-    // Filter to only players active in the last 6 weeks if recentOnly is enabled
-    if (args.recentOnly) {
-      const SIX_WEEKS_MS = 6 * 7 * 24 * 60 * 60 * 1000;
-      const cutoff = Date.now() - SIX_WEEKS_MS;
-      eligiblePlayers = eligiblePlayers.filter((p) => {
-        const mostRecent = p.topFiveCache?.mostRecentEventTime;
-        return mostRecent !== undefined && mostRecent >= cutoff;
-      });
-    }
-
-    const totalPlayers = eligiblePlayers.length;
-    const batchCount = Math.ceil(totalPlayers / BATCH_SIZE);
-    const playerIds = eligiblePlayers.map((p) => p._id);
-
-    return { totalPlayers, batchCount, playerIds };
-  },
-});
-
-// Step 3: Process a single batch
+// Process a single batch (used by processOneTierEvalPlayerStep and legacy in-flight jobs)
 async function lookupPlayerByEpicUsername(ctx: MutationCtx, epicUsername: string) {
   return await ctx.db
     .query("players")
@@ -498,7 +543,8 @@ async function processBatchHandler(
       throw new Error("Tier medians not calculated. Please restart the batch rebuild process.");
     }
 
-    const { tierAverages, tierHolisticMedians, tierKillsMedians } = mediansCache;
+    const { tierAverages, tierHolisticMedians, tierKillsMedians, rawTierHolisticMedians } =
+      mediansCache;
 
     let batchPlayers: Doc<"players">[] = [];
 
@@ -595,22 +641,22 @@ async function processBatchHandler(
       const promotionDiff = tierAboveHolistic !== undefined ? holisticScore - tierAboveHolistic : undefined;
       const demotionDiff = tierBelowHolistic !== undefined ? holisticScore - tierBelowHolistic : undefined;
 
-      // Evaluation status
-      let evaluationStatus: "Strong Promotion Outlier" | "Eligible for Promotion Evaluation" | "Stable" | "Eligible for Demotion Evaluation" | "Strong Demotion Outlier" | "Insufficient Data";
+      const evaluationStatus = deriveEvaluationStatus({
+        totalEvents,
+        promotionDiff,
+        demotionDiff,
+      });
 
-      if (totalEvents < 8) {
-        evaluationStatus = "Insufficient Data";
-      } else if (promotionDiff !== undefined && promotionDiff > 5) {
-        evaluationStatus = "Strong Promotion Outlier";
-      } else if (promotionDiff !== undefined && promotionDiff > 0) {
-        evaluationStatus = "Eligible for Promotion Evaluation";
-      } else if (demotionDiff !== undefined && demotionDiff < -5) {
-        evaluationStatus = "Strong Demotion Outlier";
-      } else if (demotionDiff !== undefined && demotionDiff < 0) {
-        evaluationStatus = "Eligible for Demotion Evaluation";
-      } else {
-        evaluationStatus = "Stable";
-      }
+      const rawMedians = (rawTierHolisticMedians ?? {}) as Record<
+        string,
+        number | undefined
+      >;
+      const rawDiffs = tierHolisticDiffs(rawHolisticScore, playerTier, rawMedians);
+      const evaluationStatusRaw = deriveEvaluationStatus({
+        totalEvents,
+        promotionDiff: rawDiffs.promotionDiff,
+        demotionDiff: rawDiffs.demotionDiff,
+      });
 
       const tierKillsMedian = (tierKillsMedians as Record<string, number>)[playerTier] || undefined;
       const killsVsTierDiff = tierKillsMedian !== undefined ? killsPerMatch - tierKillsMedian : undefined;
@@ -724,7 +770,7 @@ async function processBatchHandler(
       let recentDeathsScore: number | undefined;
       
       if (recentResults.length > 0) {
-        recentTotalEvents = recentResults.length;
+        recentTotalEvents = recentImportIds.size;
         
         // Compute recent placement and win rate from thirdPartyResults
         const recentPlacements = recentResults.map((r) => r.placement);
@@ -753,24 +799,22 @@ async function processBatchHandler(
           recentKillsPerMatch = recentElims.reduce((sum, e) => sum + e, 0) / recentElims.length;
         }
         
-        // Compute recent component scores (same formula as all-time)
-        recentPlacementScore = Math.max(0, Math.min(100, (50 - recentAvgPlacement) * 2));
-        recentWinRateScore = Math.min(100, recentWinRate * 7.5);
-        recentKillsScore = Math.min(100, ((recentKillsPerMatch ?? 0) / 5) * 100);
-        recentDeathsScore = recentDeathsPerMatch !== undefined
-          ? Math.max(0, Math.min(100, (3 - recentDeathsPerMatch) * 33.33))
-          : undefined;
-        
-        const recentScores = [recentPlacementScore, recentWinRateScore, recentKillsScore, recentDeathsScore].filter(
-          (s): s is number => s !== undefined
+        const recentComponents = computeHolisticComponentScores({
+          avgPlacement: recentAvgPlacement,
+          winRate: recentWinRate,
+          killsPerMatch: recentKillsPerMatch ?? 0,
+          deathsPerMatch: recentDeathsPerMatch,
+        });
+        recentPlacementScore = recentComponents.placementScore;
+        recentWinRateScore = recentComponents.winRateScore;
+        recentKillsScore = recentComponents.killsScore;
+        recentDeathsScore = recentComponents.deathsScore;
+
+        const recentBase = averageHolisticComponents(recentComponents);
+        recentRawHolisticScore = roundHolisticScore(recentBase);
+        recentHolisticScore = roundHolisticScore(
+          applyDcaTcToHolistic(recentBase, dca, cpm),
         );
-        if (recentScores.length > 0) {
-          const recentBase = recentScores.reduce((sum, s) => sum + s, 0) / recentScores.length;
-          recentRawHolisticScore = roundHolisticScore(recentBase);
-          recentHolisticScore = roundHolisticScore(
-            applyDcaTcToHolistic(recentBase, dca, cpm),
-          );
-        }
       }
 
       // Recent-vs-tier diffs use population recent medians; filled in during finalize.
@@ -786,6 +830,7 @@ async function processBatchHandler(
           ctx,
           playerTier as ValidTier,
           recentHolisticScore,
+          recentRawHolisticScore,
         );
       }
 
@@ -833,6 +878,7 @@ async function processBatchHandler(
         consistentTeammateName,
         lastEventDate,
         evaluationStatus,
+        evaluationStatusRaw,
         recentHolisticScore,
         recentRawHolisticScore,
         recentKillsPerMatch,
@@ -848,6 +894,7 @@ async function processBatchHandler(
         recentPromotionDiff,
         recentDemotionDiff,
         lastUpdated: now,
+        formulaVersion: FORMULA_VERSION,
       });
 
       processedNames.push(player.name || player.discordUsername);
@@ -943,46 +990,6 @@ export const processOneTierEvalPlayerStep = internalMutation({
   },
 });
 
-/** @deprecated Prefer processOneTierEvalPlayerStep (one player per scheduler step). */
-export const processTierEvalPlayersStep = internalMutation({
-  args: {
-    cursor: v.union(v.string(), v.null()),
-    recentOnly: v.boolean(),
-  },
-  handler: async (ctx, args): Promise<{
-    isDone: boolean;
-    continueCursor: string | null;
-    processed: number;
-  }> => {
-    const mediansCache = await ctx.db.query("tierMediansCache").first();
-    if (!mediansCache) {
-      throw new Error("Tier medians not calculated. Run the medians step first.");
-    }
-
-    const page = await paginateActivePlayers(ctx, args.cursor, 20);
-
-    let processed = 0;
-    for (const player of page.page) {
-      if (!isEligibleForTierEvalPlayer(player, args.recentOnly)) {
-        continue;
-      }
-
-      await ctx.runMutation(internal.tierReEvaluationBatched.processBatch, {
-        batchNumber: 0,
-        recentOnly: args.recentOnly,
-        playerIds: [player._id],
-      });
-      processed += 1;
-    }
-
-    return {
-      isDone: page.isDone,
-      continueCursor: page.isDone ? null : page.continueCursor,
-      processed,
-    };
-  },
-});
-
 /** Finalize recent tier medians from partials accumulated during player processing. */
 export const finalizeRecentTierMediansFromBuild = internalMutation({
   args: {},
@@ -994,11 +1001,18 @@ export const finalizeRecentTierMediansFromBuild = internalMutation({
       ...emptyTierNumberArrays(),
       ...(cache.partialRecentHolisticByTier ?? {}),
     };
+    const partialRecentRaw = {
+      ...emptyTierNumberArrays(),
+      ...(cache.partialRecentRawHolisticByTier ?? {}),
+    };
     const recentMedians = finalizeRecentMediansFromPartials(partialRecent);
+    const recentRawMedians = finalizeRawHolisticMediansFromPartials(partialRecentRaw);
 
     await ctx.db.patch(cache._id, {
       recentTierHolisticMedians: recentMedians,
+      recentTierRawHolisticMedians: recentRawMedians,
       partialRecentHolisticByTier: undefined,
+      partialRecentRawHolisticByTier: undefined,
       recentMediansCacheCursor: undefined,
       lastUpdated: Date.now(),
     });
@@ -1043,6 +1057,10 @@ async function computeRecentTierMediansStepHandler(
     ...emptyTierNumberArrays(),
     ...(cache.partialRecentHolisticByTier ?? {}),
   };
+  const partialRecentRaw = {
+    ...emptyTierNumberArrays(),
+    ...(cache.partialRecentRawHolisticByTier ?? {}),
+  };
 
   const page = await ctx.db.query("tierReEvaluationCache").paginate({
     numItems: RECENT_MEDIANS_CACHE_BATCH,
@@ -1055,12 +1073,16 @@ async function computeRecentTierMediansStepHandler(
       VALID_TIERS.includes(entry.tier as ValidTier)
     ) {
       partialRecent[entry.tier as ValidTier].push(entry.recentHolisticScore);
+      if (entry.recentRawHolisticScore != null) {
+        partialRecentRaw[entry.tier as ValidTier].push(entry.recentRawHolisticScore);
+      }
     }
   }
 
   if (!page.isDone) {
     await ctx.db.patch(cache._id, {
       partialRecentHolisticByTier: partialRecent,
+      partialRecentRawHolisticByTier: partialRecentRaw,
       recentMediansCacheCursor: page.continueCursor,
       lastUpdated: Date.now(),
     });
@@ -1071,9 +1093,12 @@ async function computeRecentTierMediansStepHandler(
   }
 
   const recentMedians = finalizeRecentMediansFromPartials(partialRecent);
+  const recentRawMedians = finalizeRawHolisticMediansFromPartials(partialRecentRaw);
   await ctx.db.patch(cache._id, {
     recentTierHolisticMedians: recentMedians,
+    recentTierRawHolisticMedians: recentRawMedians,
     partialRecentHolisticByTier: undefined,
+    partialRecentRawHolisticByTier: undefined,
     recentMediansCacheCursor: undefined,
     lastUpdated: Date.now(),
   });
@@ -1088,60 +1113,4 @@ async function computeRecentTierMediansStepHandler(
 export const computeRecentTierMediansStep = internalMutation({
   args: { cursor: v.union(v.string(), v.null()) },
   handler: async (ctx, args) => computeRecentTierMediansStepHandler(ctx, args.cursor),
-});
-
-// Step 4b: Finalize recent (6-week) comparisons after all batches complete.
-// Computes 6-week tier medians from cached recentHolisticScore values,
-// then updates each cache entry's recent diff fields against those medians.
-export const finalizeRecentComparisons = internalMutation({
-  args: {},
-  handler: async (ctx): Promise<{ updated: number; recentMedians: Record<string, number | undefined> }> => {
-    const { recentMedians } = await ctx.runMutation(
-      internal.tierReEvaluationBatched.computeRecentTierMedians,
-      {},
-    );
-
-    const allCache = await ctx.db.query("tierReEvaluationCache").collect();
-    const tierOrder = ["S", "A", "B", "C"];
-    let updated = 0;
-
-    for (const entry of allCache) {
-      if (entry.recentHolisticScore == null) continue;
-
-      const tierIdx = tierOrder.indexOf(entry.tier);
-      if (tierIdx === -1) continue;
-
-      const sameTierRecent = (recentMedians as Record<string, number | undefined>)[entry.tier];
-      const tierAbove = tierIdx > 0 ? tierOrder[tierIdx - 1] : undefined;
-      const tierBelow = tierIdx < tierOrder.length - 1 ? tierOrder[tierIdx + 1] : undefined;
-      const aboveRecent = tierAbove ? (recentMedians as Record<string, number | undefined>)[tierAbove] : undefined;
-      const belowRecent = tierBelow ? (recentMedians as Record<string, number | undefined>)[tierBelow] : undefined;
-
-      const recentHolisticVsSameTier = sameTierRecent != null
-        ? entry.recentHolisticScore - sameTierRecent : undefined;
-      const recentPromotionDiff = aboveRecent != null
-        ? entry.recentHolisticScore - aboveRecent : undefined;
-      const recentDemotionDiff = belowRecent != null
-        ? entry.recentHolisticScore - belowRecent : undefined;
-
-      await ctx.db.patch(entry._id, {
-        recentHolisticVsSameTier,
-        recentPromotionDiff,
-        recentDemotionDiff,
-      });
-      updated++;
-    }
-
-    return { updated, recentMedians };
-  },
-});
-
-export const getBatchProgress = query({
-  args: {},
-  handler: async (ctx) => {
-    await requireAdmin(ctx);
-
-    const cache = await ctx.db.query("tierReEvaluationCache").collect();
-    return { cacheCount: cache.length };
-  },
 });

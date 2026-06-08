@@ -16,8 +16,15 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Loader2, Plus, Edit, Trash2, Calendar, Upload, X, FileDown, DollarSign, Lock, RefreshCw, ExternalLink, CheckCircle2, AlertCircle, Trophy } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, Calendar, Upload, X, FileDown, DollarSign, Lock, RefreshCw, ExternalLink, CheckCircle2, AlertCircle, Trophy, Check } from "lucide-react";
 import { toast } from "sonner";
+import {
+  WORKFLOW_STATUS_LABELS,
+  formatSetupReasons,
+  workflowStatusBadgeVariant,
+  type EventWorkflowStatus,
+  type SetupReasonCode,
+} from "@/lib/event-workflow.ts";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import ICSImportDialog from "./ics-import-dialog.tsx";
@@ -119,8 +126,10 @@ export default function EventManager() {
   const lockTiers = useMutation(api.events.showdown.lockTiers);
   const syncDiscordEvents = useAction(api.discord.eventSync.syncDiscordEvents);
   const createAndLinkSeries = useMutation(api.scrimSeries.mutations.createAndLinkToEvent);
+  const setEventWorkflowStatus = useMutation(api.events.management.setEventWorkflowStatus);
   const [isLockingTiers, setIsLockingTiers] = useState(false);
   const [isSyncingDiscord, setIsSyncingDiscord] = useState(false);
+  const [markingCompleteId, setMarkingCompleteId] = useState<Id<"events"> | null>(null);
   
   const openCreateDialog = () => {
     resetForm();
@@ -312,29 +321,11 @@ export default function EventManager() {
     const filteredQ2 = qualifierLobby2.filter(l => l.trim());
     const filteredFinals = finalsLeaderboards.filter(l => l.trim());
 
-    const totalLeaderboardUrls =
-      filteredStdBoards.length +
-      (twoLobbies ? filteredStdBoardsLobby2.length : 0) +
-      filteredQ1.length +
-      filteredQ2.length +
-      filteredFinals.length;
-
-    const hasLinkedScrimSeries =
-      type === "scrim-series" && linkedScrimSeriesId !== "none";
-    if (totalLeaderboardUrls === 0 && !hasLinkedScrimSeries) {
-      const hasLinkedImports = editingEvent
-        ? editingLinkedImportCount > 0
-        : false;
-      if (!hasLinkedImports) {
-        toast.error(
-          "Add at least one Yunite leaderboard URL, link a Scrim Series, or link a Yunite import from Admin → Uploads before saving.",
-        );
-        return;
-      }
-    }
-
     setIsSubmitting(true);
-    
+    const savingToastId = toast.loading(
+      editingEvent ? "Saving event..." : "Creating event...",
+    );
+
     try {
       if (editingEvent) {
         // Use new image if uploaded, otherwise keep current image
@@ -375,7 +366,7 @@ export default function EventManager() {
                 : linkedScrimSeriesId
               : null,
         });
-        toast.success("Event updated");
+        toast.success("Event saved successfully.", { id: savingToastId });
       } else {
         await createEvent({
           name: name.trim(),
@@ -409,13 +400,17 @@ export default function EventManager() {
               ? linkedScrimSeriesId
               : undefined,
         });
-        toast.success("Event created");
+        toast.success("Event created successfully.", { id: savingToastId });
       }
-      
+
       setIsCreateOpen(false);
       resetForm();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save event");
+      const message =
+        error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error(`Event could not be saved because ${message}. Review the form and try again.`, {
+        id: savingToastId,
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -434,23 +429,45 @@ export default function EventManager() {
       return;
     }
     setIsCreatingSeriesLink(true);
+    const linkingToastId = toast.loading("Creating and linking Scrim Series...");
     try {
       const seriesId = await createAndLinkSeries({
         eventId: editingEvent,
         bestN: bestNGames,
         seriesDurationWeeks,
       });
-      toast.success("Scrim series created and linked — open Scrim Series admin to import.");
+      toast.success("Scrim series created and linked. Open Scrim Series admin to import scores.", {
+        id: linkingToastId,
+      });
       setIsCreateOpen(false);
       setEditingEvent(null);
       resetForm();
       navigate(scrimSeriesAdminPath(seriesId, "yunite"));
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to create linked series",
-      );
+      const message =
+        error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error(`Scrim Series could not be linked because ${message}. Save the event first, then retry.`, {
+        id: linkingToastId,
+      });
     } finally {
       setIsCreatingSeriesLink(false);
+    }
+  };
+
+  const handleMarkComplete = async (eventId: Id<"events">, eventName: string) => {
+    setMarkingCompleteId(eventId);
+    const loadingId = toast.loading(`Marking "${eventName}" complete...`);
+    try {
+      await setEventWorkflowStatus({ eventId, workflowStatus: "complete" });
+      toast.success("Event marked complete.", { id: loadingId });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error(`Event could not be marked complete because ${message}.`, {
+        id: loadingId,
+      });
+    } finally {
+      setMarkingCompleteId(null);
     }
   };
 
@@ -460,11 +477,14 @@ export default function EventManager() {
     }
     
     setDeletingEvent(eventId);
+    const loadingId = toast.loading(`Deleting "${eventName}"...`);
     try {
       await deleteEvent({ eventId });
-      toast.success("Event deleted");
+      toast.success("Event deleted successfully.", { id: loadingId });
     } catch (error) {
-      toast.error("Failed to delete event");
+      const message =
+        error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error(`Event could not be deleted because ${message}.`, { id: loadingId });
     } finally {
       setDeletingEvent(null);
     }
@@ -521,15 +541,41 @@ export default function EventManager() {
     ].reduce((total, list) => total + (list?.filter((url) => url.trim()).length || 0), 0);
   };
 
+  const getWorkflowStatusBadge = (workflowStatus: EventWorkflowStatus | null | undefined) => {
+    if (!workflowStatus) {
+      return null;
+    }
+    return (
+      <Badge
+        variant={workflowStatusBadgeVariant(workflowStatus)}
+        className="text-[10px] px-1.5 py-0"
+      >
+        {WORKFLOW_STATUS_LABELS[workflowStatus]}
+      </Badge>
+    );
+  };
+
   const getReadinessBadges = (event: NonNullable<typeof events>[number]) => {
     const badges = [];
     const leaderboardCount = getLeaderboardCount(event);
+    const setupReasons = (event.setupReasons ?? []) as SetupReasonCode[];
 
-    if (event.needsSetup) {
+    if (setupReasons.length > 0) {
       badges.push(
-        <Badge key="setup" variant="destructive" className="text-[10px] px-1.5 py-0">
-          <AlertCircle className="mr-1 h-3 w-3" />
-          Needs Setup
+        <div key="setup" className="space-y-0.5 max-w-[220px]">
+          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+            <AlertCircle className="mr-1 h-3 w-3" />
+            Needs Setup
+          </Badge>
+          <p className="text-[10px] text-muted-foreground leading-snug">
+            {formatSetupReasons(setupReasons)}
+          </p>
+        </div>,
+      );
+    } else if (event.isManualScoring) {
+      badges.push(
+        <Badge key="manual" variant="secondary" className="text-[10px] px-1.5 py-0">
+          Manual scoring
         </Badge>,
       );
     }
@@ -604,7 +650,12 @@ export default function EventManager() {
                 <TableCell className="text-sm text-muted-foreground">
                   {format(new Date(event.startDate), "MMM d")} - {format(new Date(event.endDate), "MMM d, yyyy")}
                 </TableCell>
-                <TableCell>{getStatusBadge(event.status)}</TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-1">
+                    {getStatusBadge(event.status)}
+                    {getWorkflowStatusBadge(event.workflowStatus)}
+                  </div>
+                </TableCell>
                 <TableCell className="text-sm">
                   {event.standardLeaderboards && event.standardLeaderboards.length > 0 ? (
                     <span>{event.standardLeaderboards.length} Links</span>
@@ -647,6 +698,21 @@ export default function EventManager() {
                         title="Scrim Series admin (imports, penalties, scores)"
                       >
                         <Trophy className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {event.needsAttention && event.workflowStatus !== "complete" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleMarkComplete(event._id, event.name)}
+                        disabled={markingCompleteId === event._id}
+                        title="Mark event complete"
+                      >
+                        {markingCompleteId === event._id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5 text-green-600" />
+                        )}
                       </Button>
                     )}
                     <Button
@@ -694,22 +760,28 @@ export default function EventManager() {
 
   const handleSyncDiscordEvents = async () => {
     setIsSyncingDiscord(true);
+    const loadingId = toast.loading("Syncing Discord scheduled events...");
     try {
       const result = await syncDiscordEvents();
       if (result.imported > 0 || result.removed > 0) {
         toast.success(
-          `Discord sync complete: ${result.imported} imported, ${result.updated} updated, ${result.skipped} skipped, ${result.removed} removed`,
+          `Discord sync complete: ${result.imported} imported, ${result.updated} updated, ${result.skipped} skipped, ${result.removed} removed.`,
+          { id: loadingId },
         );
       } else {
-        toast.info("Discord sync complete: no new events to import");
+        toast.info("Discord sync complete: no new events to import.", { id: loadingId });
       }
       if (result.errors.length > 0) {
-        toast.warning(`${result.errors.length} error(s) during sync`);
+        toast.warning(
+          `${result.errors.length} error(s) during sync. Review Events Manager for events that need setup.`,
+        );
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to sync Discord events",
-      );
+      const message =
+        error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error(`Discord sync failed because ${message}. Retry in a moment.`, {
+        id: loadingId,
+      });
     } finally {
       setIsSyncingDiscord(false);
     }

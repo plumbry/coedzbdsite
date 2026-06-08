@@ -38,96 +38,10 @@ export const getPlayerComparisonData = query({
         const player = await ctx.db.get(playerId);
         if (!player) return null;
 
-        // Get player's third-party results
-        const thirdPartyResults = await ctx.db
-          .query("thirdPartyResults")
-          .withIndex("by_player", (q) => q.eq("playerId", playerId))
-          .collect();
-
-        // Calculate recent top 5s (last 5 leaderboards)
-        const top5FinishesPromises = thirdPartyResults
-          .filter((result) => result.placement <= 5)
-          .map(async (result) => {
-            const importData = await ctx.db.get(result.importId);
-            if (!importData || !importData.eventDate) {
-              return null;
-            }
-            
-            return { 
-              result, 
-              importId: result.importId,
-              eventDate: importData.eventDate,
-              creationTime: importData._creationTime 
-            };
-          });
-
-        const top5FinishesResults = await Promise.all(top5FinishesPromises);
-        const validTop5s = top5FinishesResults.filter((r) => r !== null);
-        
-        // Sort by leaderboard creation time (most recent first)
-        const sortedTop5s = validTop5s.sort((a, b) => {
-          return b.creationTime - a.creationTime;
-        });
-        
-        // Get unique leaderboards (importIds) and count top 5s in last 5 leaderboards
-        const recentLeaderboardIds = new Set<string>();
-        
-        for (const item of sortedTop5s) {
-          if (recentLeaderboardIds.size < 5) {
-            recentLeaderboardIds.add(item.importId);
-          }
-        }
-        
-        const recentTop5Count = recentLeaderboardIds.size;
-        
-        // Calculate recent top 3 finishes (last 5 leaderboards) for green flag
-        const top3FinishesPromises = thirdPartyResults
-          .filter((result) => result.placement <= 3)
-          .map(async (result) => {
-            const importData = await ctx.db.get(result.importId);
-            if (!importData || !importData.eventDate) {
-              return null;
-            }
-            
-            return { 
-              result, 
-              importId: result.importId,
-              eventDate: importData.eventDate,
-              creationTime: importData._creationTime 
-            };
-          });
-
-        const top3FinishesResults = await Promise.all(top3FinishesPromises);
-        const validTop3s = top3FinishesResults.filter((r) => r !== null);
-        
-        // Sort by leaderboard creation time (most recent first)
-        const sortedTop3s = validTop3s.sort((a, b) => {
-          return b.creationTime - a.creationTime;
-        });
-        
-        // Get unique leaderboards (importIds) and count top 3s in last 5 leaderboards
-        const recentTop3LeaderboardIds = new Set<string>();
-        
-        for (const item of sortedTop3s) {
-          if (recentTop3LeaderboardIds.size < 5) {
-            recentTop3LeaderboardIds.add(item.importId);
-          }
-        }
-        
-        const recentTop3Count = recentTop3LeaderboardIds.size;
-
-        // Get last event played date
-        let lastEventDate: string | null = null;
-        if (thirdPartyResults.length > 0) {
-          const sortedResults = [...thirdPartyResults].sort(
-            (a, b) => b._creationTime - a._creationTime
-          );
-          const mostRecentResult = sortedResults[0];
-          const mostRecentImport = await ctx.db.get(mostRecentResult.importId);
-          if (mostRecentImport?.eventDate) {
-            lastEventDate = mostRecentImport.eventDate;
-          }
-        }
+        const topFiveCache = player.topFiveCache;
+        const recentTop5Count = topFiveCache?.recentTop5Count ?? 0;
+        const recentTop3Count = topFiveCache?.recentTop3Count ?? 0;
+        const lastEventDate = player.lastEventDate ?? null;
 
         const internal = await computeInternalPlayerStats(ctx, playerId);
         const tierCache = await ctx.db

@@ -1,0 +1,74 @@
+{
+  "title": "Phase 3B Production Baseline",
+  "capturedAt": "2026-06-08T10:43:59.536Z",
+  "capturedAtMs": 1780915439538,
+  "deployment": "production",
+  "sourcesOfTruth": {
+    "eventsPlayed": "syncInternalEventParticipation → players.eventsPlayedCount",
+    "holistic": "convex/lib/stats/holisticScore.ts",
+    "evaluationStatuses": "tierReEvaluationCache (rebuild)",
+    "topFive": "players.topFiveCache",
+    "tc": "calculateAndStoreCSInternal",
+    "populationAverages": "aggregateStatsCache via computeInternalPlayerStats",
+    "eventResults": "thirdPartyResults + computeEventLeaderboards()"
+  },
+  "population": {
+    "acceptedMembers": 775,
+    "totalPlayerRows": 1638,
+    "playersWithYuniteMatchData": 503,
+    "aggregatePoolSize": 381,
+    "tierEvalPoolSize": 381,
+    "breakdown": {
+      "byStatus": {
+        "active": 775,
+        "archived": 701,
+        "rejected": 153,
+        "discord_member": 1,
+        "unset": 8
+      },
+      "byMembership": {
+        "accepted": 775,
+        "former": 701,
+        "rejected": 153,
+        "unset": 9
+      },
+      "withTier": 1510,
+      "withMatchData": 503
+    }
+  },
+  "aggregateStatistics": {
+    "avgTotalEvents": 15,
+    "avgTotalEliminations": 41.6,
+    "avgAveragePlacement": 14.2,
+    "avgAverageKD": 0.51,
+    "avgAverageScore": 74.9,
+    "avgWinRate": 3.1,
+    "avgTop3Finishes": 2.1,
+    "lastUpdated": 1780914794552,
+    "formulaVersion": 1
+  },
+  "evaluationStatusDistribution": {
+    "Eligible for Demotion Evaluation": 6,
+    "Eligible for Promotion Evaluation": 26,
+    "Insufficient Data": 239,
+    "Stable": 93,
+    "Strong Demotion Outlier": 1,
+    "Strong Promotion Outlier": 16
+  },
+  "topFiveValidation": {
+    "mismatchCount": 0,
+    "expected": 0,
+    "mismatches": []
+  },
+  "versions": {
+    "aggregateStatsCacheFormulaVersion": 1,
+    "tierEvaluationFormulaVersion": 1,
+    "tierEvaluationFormulaVersionCounts": {},
+    "pipelineVersion": 1,
+    "codeFormulaVersion": 1,
+    "codePipelineVersion": 1,
+    "latestCompletedRebuildJobId": "rh7arqbdp1fvxcs8cdf0k2zp8d8894kf",
+    "latestCompletedRebuildAt": 1780911810585,
+    "versionNote": "Post-3B rebuild confirmed FORMULA_VERSION=1 and PIPELINE_VERSION=1 in code; some cache documents predate optional schema fields and may not echo version stamps until the next full rebuild."
+  }
+}

@@ -471,6 +471,125 @@ export const submitSessionScores = mutation({
   },
 });
 
+/** Bulk import scores for one game from parsed CSV rows. */
+export const importSingleGameScores = mutation({
+  args: {
+    seriesId: v.id("scrimSeries"),
+    sessionIndex: v.number(),
+    gameIndex: v.number(),
+    entries: v.array(
+      v.object({
+        epicId: v.string(),
+        playerName: v.optional(v.string()),
+        score: v.number(),
+        teamId: v.optional(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
+    }
+
+    const series = await ctx.db.get(args.seriesId);
+    if (!series) {
+      throw new ConvexError({ message: "Series not found", code: "NOT_FOUND" });
+    }
+
+    if (args.sessionIndex < 0 || args.sessionIndex >= series.gamesPerSession.length) {
+      throw new ConvexError({ message: "Invalid session index", code: "BAD_REQUEST" });
+    }
+
+    const maxGames = series.gamesPerSession[args.sessionIndex];
+    if (args.gameIndex < 0 || args.gameIndex >= maxGames) {
+      throw new ConvexError({ message: "Invalid game index", code: "BAD_REQUEST" });
+    }
+
+    if (args.entries.length === 0) {
+      throw new ConvexError({ message: "No score entries provided", code: "BAD_REQUEST" });
+    }
+
+    const seriesPlayers = await ctx.db
+      .query("scrimSeriesPlayers")
+      .withIndex("by_series", (q) => q.eq("seriesId", args.seriesId))
+      .collect();
+
+    const epicIdToPlayer = new Map<
+      string,
+      { _id: typeof seriesPlayers[number]["_id"]; playerName: string }
+    >();
+    for (const player of seriesPlayers) {
+      epicIdToPlayer.set(player.epicId.toLowerCase(), {
+        _id: player._id,
+        playerName: player.playerName,
+      });
+    }
+
+    let playersUpdated = 0;
+    let playersAdded = 0;
+    const processedEpicIds = new Set<string>();
+
+    for (const entry of args.entries) {
+      const epicIdLower = entry.epicId.trim().toLowerCase();
+      if (!epicIdLower || processedEpicIds.has(epicIdLower)) continue;
+      processedEpicIds.add(epicIdLower);
+
+      let matchedPlayer = epicIdToPlayer.get(epicIdLower);
+      if (!matchedPlayer) {
+        const playerName = entry.playerName?.trim() || entry.epicId.trim();
+        const newPlayerId = await ctx.db.insert("scrimSeriesPlayers", {
+          seriesId: args.seriesId,
+          playerName,
+          epicId: entry.epicId.trim(),
+          teamId: entry.teamId,
+        });
+        matchedPlayer = { _id: newPlayerId, playerName };
+        epicIdToPlayer.set(epicIdLower, matchedPlayer);
+        playersAdded++;
+      } else if (entry.teamId) {
+        const existing = await ctx.db.get(matchedPlayer._id);
+        if (existing && !existing.teamId) {
+          await ctx.db.patch(matchedPlayer._id, { teamId: entry.teamId });
+        }
+      }
+
+      const existingScores = await ctx.db
+        .query("scrimSeriesScores")
+        .withIndex("by_series_and_player", (q) =>
+          q.eq("seriesId", args.seriesId).eq("playerId", matchedPlayer!._id),
+        )
+        .collect();
+
+      const existing = existingScores.find(
+        (s) =>
+          s.sessionIndex === args.sessionIndex && s.gameIndex === args.gameIndex,
+      );
+
+      if (existing) {
+        await ctx.db.patch(existing._id, { score: entry.score });
+      } else {
+        await ctx.db.insert("scrimSeriesScores", {
+          seriesId: args.seriesId,
+          playerId: matchedPlayer._id,
+          sessionIndex: args.sessionIndex,
+          gameIndex: args.gameIndex,
+          score: entry.score,
+        });
+      }
+
+      playersUpdated++;
+    }
+
+    return {
+      playersUpdated,
+      playersAdded,
+      sessionNumber: args.sessionIndex + 1,
+      gameNumber: args.gameIndex + 1,
+    };
+  },
+});
+
 export const deleteScore = mutation({
   args: { scoreId: v.id("scrimSeriesScores") },
   handler: async (ctx, args) => {

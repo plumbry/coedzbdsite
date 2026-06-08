@@ -57,4 +57,11 @@ crons.daily(
   internal.inGameEarnings.actions.refreshTournamentCache,
 );
 
+// Continue in-flight aggregate stats cache rebuilds (cron-driven; no deep scheduler chains)
+crons.interval(
+  "tick aggregate stats rebuilds",
+  { seconds: 5 },
+  internal.aggregateStats.tickAggregateStatsRebuilds,
+);
+
 export default crons;

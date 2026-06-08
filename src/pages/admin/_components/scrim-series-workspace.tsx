@@ -11,8 +11,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.t
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings, Users, Trophy, AlertTriangle, X, Upload, History, Loader2, ExternalLink, Copy } from "lucide-react";
+import { Plus, Trash2, Settings, Users, Trophy, AlertTriangle, X, Upload, History, Loader2, ExternalLink, Copy, FileUp, Download } from "lucide-react";
 import { Link } from "react-router-dom";
+import {
+  parseScrimSeriesGameCsv,
+  scrimSeriesGameCsvTemplate,
+} from "@/lib/scrim-series-game-csv.ts";
 
 // ─── Series Selector ─────────────────────────────────────────────────────────
 
@@ -504,6 +508,167 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
               ))}
             </tbody>
           </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Single Game CSV Import ──────────────────────────────────────────────────
+
+function GameScoreCsvImport({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
+  const series = useQuery(api.scrimSeries.queries.getSeries, { seriesId });
+  const importSingleGameScores = useMutation(api.scrimSeries.mutations.importSingleGameScores);
+
+  const [sessionIndex, setSessionIndex] = useState("0");
+  const [gameIndex, setGameIndex] = useState("0");
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  if (!series) return null;
+
+  const sessionIdx = parseInt(sessionIndex, 10);
+  const gamesInSession = series.gamesPerSession[sessionIdx] ?? 0;
+
+  const handleDownloadTemplate = () => {
+    const blob = new Blob([scrimSeriesGameCsvTemplate()], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "scrim-series-game-scores-template.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = async () => {
+    if (!csvFile) {
+      toast.error("Please select a CSV file");
+      return;
+    }
+
+    const session = parseInt(sessionIndex, 10);
+    const game = parseInt(gameIndex, 10);
+    if (Number.isNaN(session) || session < 0 || session >= series.gamesPerSession.length) {
+      toast.error("Invalid session selected");
+      return;
+    }
+    if (Number.isNaN(game) || game < 0 || game >= series.gamesPerSession[session]) {
+      toast.error("Invalid game selected");
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const text = await csvFile.text();
+      const entries = parseScrimSeriesGameCsv(text);
+      const result = await importSingleGameScores({
+        seriesId,
+        sessionIndex: session,
+        gameIndex: game,
+        entries,
+      });
+
+      const parts: string[] = [`${result.playersUpdated} scores saved`];
+      if (result.playersAdded > 0) parts.push(`${result.playersAdded} players added`);
+      toast.success(
+        `Link ${result.sessionNumber}, Game ${result.gameNumber}: ${parts.join(", ")}.`,
+      );
+      setCsvFile(null);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to import CSV";
+      toast.error(msg);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <FileUp className="h-4 w-4" /> Import Single Game (CSV)
+        </CardTitle>
+        <CardDescription className="text-xs">
+          Upload scores for one game when Yunite did not register it. CSV needs Epic Username and
+          Score columns; Player Name and Team ID are optional.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Link / Session</label>
+            <Select value={sessionIndex} onValueChange={setSessionIndex} disabled={importing}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {series.gamesPerSession.map((games, i) => (
+                  <SelectItem key={i} value={String(i)}>
+                    Link {i + 1} ({games} games)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Game</label>
+            <Select
+              value={gameIndex}
+              onValueChange={setGameIndex}
+              disabled={importing || gamesInSession === 0}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: gamesInSession }, (_, i) => (
+                  <SelectItem key={i} value={String(i)}>
+                    Game {i + 1}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">CSV File</label>
+            <Input
+              type="file"
+              accept=".csv,text/csv"
+              disabled={importing}
+              onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={handleImport}
+            disabled={importing || !csvFile}
+            className="cursor-pointer"
+          >
+            {importing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Importing...
+              </>
+            ) : (
+              <>
+                <Upload className="mr-2 h-4 w-4" />
+                Import Scores
+              </>
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleDownloadTemplate}
+            disabled={importing}
+            className="cursor-pointer"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Download Template
+          </Button>
         </div>
       </CardContent>
     </Card>
@@ -1069,7 +1234,10 @@ export function ScrimSeriesAdminContent({
           </TabsContent>
 
           <TabsContent value="scores">
-            <ScoreEntryGrid seriesId={selectedSeriesId} />
+            <div className="space-y-4">
+              <GameScoreCsvImport seriesId={selectedSeriesId} />
+              <ScoreEntryGrid seriesId={selectedSeriesId} />
+            </div>
           </TabsContent>
 
           <TabsContent value="yunite">

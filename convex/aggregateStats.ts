@@ -1,10 +1,17 @@
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ConvexError, v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin } from "./auth_helpers";
+import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerStats";
+import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
+import { FORMULA_VERSION } from "./lib/stats/versions";
 
-const PLAYERS_PER_BATCH = 8;
+/** Population averages use `computeInternalPlayerStats` (Yunite imports) via `aggregateStatsCache`. */
+const PLAYERS_PER_BATCH = 2;
+/** One player per tick — keeps each mutation under Convex byte-read limits. */
+const PLAYERS_PER_TICK = 1;
 
 type PlayerStatSnapshot = {
   tier?: string;
@@ -64,6 +71,7 @@ function buildCachePayload(playersWithEvents: PlayerStatSnapshot[]) {
         D: emptyTierStats(),
       },
       lastUpdated: Date.now(),
+      formulaVersion: FORMULA_VERSION,
     };
   }
 
@@ -189,6 +197,7 @@ function buildCachePayload(playersWithEvents: PlayerStatSnapshot[]) {
     medianAverageKD: Math.round(getMedian(sortedAvgKD) * 100) / 100,
     perTierStats,
     lastUpdated: Date.now(),
+    formulaVersion: FORMULA_VERSION,
   };
 }
 
@@ -218,6 +227,45 @@ async function writeAggregateStatsCache(
     await ctx.db.delete(existingCache._id);
   }
   await ctx.db.insert("aggregateStatsCache", statsData);
+}
+
+async function appendRebuildRow(
+  ctx: MutationCtx,
+  jobId: Id<"aggregateStatsJobs">,
+  row: PlayerStatSnapshot,
+) {
+  await ctx.db.insert("aggregateStatsRebuildRows", { jobId, ...row });
+}
+
+async function loadRebuildRows(
+  ctx: MutationCtx,
+  jobId: Id<"aggregateStatsJobs">,
+): Promise<PlayerStatSnapshot[]> {
+  const rows = await ctx.db
+    .query("aggregateStatsRebuildRows")
+    .withIndex("by_job", (q) => q.eq("jobId", jobId))
+    .collect();
+
+  return rows.map((row) => ({
+    tier: row.tier,
+    totalGames: row.totalGames,
+    totalEliminations: row.totalEliminations,
+    averagePlacement: row.averagePlacement,
+    averageScore: row.averageScore,
+    averageKD: row.averageKD,
+    winRate: row.winRate,
+    top3Finishes: row.top3Finishes,
+  }));
+}
+
+async function deleteRebuildRows(ctx: MutationCtx, jobId: Id<"aggregateStatsJobs">) {
+  const rows = await ctx.db
+    .query("aggregateStatsRebuildRows")
+    .withIndex("by_job", (q) => q.eq("jobId", jobId))
+    .collect();
+  for (const row of rows) {
+    await ctx.db.delete(row._id);
+  }
 }
 
 async function failStaleRunningJobs(ctx: MutationCtx) {
@@ -307,6 +355,48 @@ export const getRebuildJobStatus = query({
 });
 
 // Starts a batched background rebuild; returns immediately.
+async function snapshotPlayerForAggregate(
+  ctx: MutationCtx,
+  entry: { playerId: Id<"players">; tier?: string },
+): Promise<PlayerStatSnapshot | null> {
+  try {
+    const thirdPartyResults = await fetchThirdPartyResultsForPlayer(
+      ctx,
+      entry.playerId,
+    );
+    const internal = await computeInternalPlayerStats(
+      ctx,
+      entry.playerId,
+      thirdPartyResults,
+    );
+    const totalYunitePoints = thirdPartyResults.reduce(
+      (sum, row) => sum + row.points,
+      0,
+    );
+    const averageScore =
+      thirdPartyResults.length > 0
+        ? Math.round((totalYunitePoints / thirdPartyResults.length) * 10) / 10
+        : 0;
+
+    return {
+      tier: entry.tier,
+      totalGames: internal.eventsPlayed,
+      totalEliminations: internal.totalEliminations,
+      averagePlacement: internal.averagePlacement,
+      averageScore,
+      averageKD: internal.killsPerMatch,
+      winRate: internal.winRate,
+      top3Finishes: internal.top3Finishes,
+    };
+  } catch (error) {
+    console.error(
+      `[aggregateStats] player ${entry.playerId} failed:`,
+      error,
+    );
+    return null;
+  }
+}
+
 async function scheduleAggregateStatsRebuildHandler(ctx: MutationCtx) {
   await failStaleRunningJobs(ctx);
 
@@ -347,24 +437,63 @@ async function scheduleAggregateStatsRebuildHandler(ctx: MutationCtx) {
     lastProgressAt: now,
   });
 
-  await ctx.scheduler.runAfter(0, internal.aggregateStats.processRebuildBatch, {
-    jobId,
-  });
+  await ctx.scheduler.runAfter(0, internal.aggregateStats.tickAggregateStatsRebuilds, {});
 
   return { started: true, playerCount: players.length, jobId };
+}
+
+async function advanceAggregateJob(
+  ctx: MutationCtx,
+  jobId: Id<"aggregateStatsJobs">,
+  maxPlayers: number,
+) {
+  const job = await ctx.db.get(jobId);
+  if (!job || job.status !== "running") {
+    return { done: true as const, reason: "no_running_job" as const };
+  }
+
+  const startIdx = job.nextPlayerIndex;
+  if (startIdx >= job.players.length) {
+    return { done: false as const, needsFinalize: true as const };
+  }
+
+  const endIdx = Math.min(startIdx + maxPlayers, job.players.length);
+
+  for (let idx = startIdx; idx < endIdx; idx++) {
+    try {
+      const entry = job.players[idx];
+      const row = await snapshotPlayerForAggregate(ctx, entry);
+      if (row) {
+        await appendRebuildRow(ctx, jobId, row);
+      }
+    } catch (error) {
+      console.error(
+        `[aggregateStats] player index ${idx} failed for job ${jobId}:`,
+        error,
+      );
+    }
+  }
+
+  const nextIdx = endIdx;
+  const needsFinalize = nextIdx >= job.players.length;
+
+  await ctx.db.patch(jobId, {
+    processedCount: nextIdx,
+    nextPlayerIndex: nextIdx,
+    lastProgressAt: Date.now(),
+  });
+
+  return {
+    done: needsFinalize,
+    needsFinalize,
+    processedCount: nextIdx,
+    totalCount: job.totalCount,
+  };
 }
 
 export const scheduleAggregateStatsRebuild = internalMutation({
   args: {},
   handler: scheduleAggregateStatsRebuildHandler,
-});
-
-export const rebuildAggregateStatsCache = mutation({
-  args: {},
-  handler: async (ctx) => {
-    await requireAdmin(ctx);
-    return scheduleAggregateStatsRebuildHandler(ctx);
-  },
 });
 
 export const processRebuildBatch = internalMutation({
@@ -386,23 +515,16 @@ export const processRebuildBatch = internalMutation({
       const newRows: PlayerStatSnapshot[] = [];
 
       for (const entry of batch) {
-        const stats = await ctx.runQuery(
-          internal.playerStats.comprehensiveStatsForPlayerInternal,
-          { playerId: entry.playerId },
-        );
-        newRows.push({
-          tier: entry.tier,
-          totalGames: stats.totalGames,
-          totalEliminations: stats.totalEliminations,
-          averagePlacement: stats.averagePlacement,
-          averageScore: stats.averageScore,
-          averageKD: stats.averageKD,
-          winRate: stats.winRate,
-          top3Finishes: stats.top3Finishes,
-        });
+        const row = await snapshotPlayerForAggregate(ctx, entry);
+        if (row) {
+          newRows.push(row);
+        }
       }
 
-      const accumulatedStats = [...job.accumulatedStats, ...newRows];
+      for (const row of newRows) {
+        await appendRebuildRow(ctx, args.jobId, row);
+      }
+
       const processedCount = batchEnd;
       const isDone = processedCount >= job.players.length;
 
@@ -410,7 +532,6 @@ export const processRebuildBatch = internalMutation({
         await ctx.db.patch(args.jobId, {
           processedCount,
           nextPlayerIndex: batchEnd,
-          accumulatedStats,
           lastProgressAt: Date.now(),
         });
 
@@ -422,16 +543,18 @@ export const processRebuildBatch = internalMutation({
         return;
       }
 
+      const accumulatedStats = await loadRebuildRows(ctx, args.jobId);
       const playersWithEvents = accumulatedStats.filter((s) => s.totalGames > 0);
       const statsData = buildCachePayload(playersWithEvents);
       await writeAggregateStatsCache(ctx, statsData);
+      await deleteRebuildRows(ctx, args.jobId);
 
       const completedAt = Date.now();
       await ctx.db.patch(args.jobId, {
         status: "completed",
         processedCount: job.totalCount,
         nextPlayerIndex: job.players.length,
-        accumulatedStats,
+        accumulatedStats: [],
         lastProgressAt: completedAt,
         completedAt,
       });
@@ -443,5 +566,223 @@ export const processRebuildBatch = internalMutation({
         completedAt: Date.now(),
       });
     }
+  },
+});
+
+/** Cancel in-flight aggregate rebuild jobs (ops / recovery). */
+export const cancelRunningAggregateStatsJobs = internalMutation({
+  args: {
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const running = await ctx.db
+      .query("aggregateStatsJobs")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .collect();
+
+    const now = Date.now();
+    const reason = args.reason ?? "Cancelled";
+    for (const job of running) {
+      await deleteRebuildRows(ctx, job._id);
+      await ctx.db.patch(job._id, {
+        status: "failed",
+        errorMessage: reason,
+        completedAt: now,
+        lastProgressAt: now,
+        accumulatedStats: [],
+      });
+    }
+
+    return { cancelled: running.length };
+  },
+});
+
+/** Cancel any running job and start a fresh aggregate cache rebuild. */
+export const recoverAggregateStatsCache = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    await failStaleRunningJobs(ctx);
+    await ctx.runMutation(internal.aggregateStats.cancelRunningAggregateStatsJobs, {
+      reason: "Cancelled for aggregate cache recovery rebuild",
+    });
+    return await scheduleAggregateStatsRebuildHandler(ctx);
+  },
+});
+
+/** Cron/manual driver — processes a batch per running job without deep scheduler chains. */
+export const tickAggregateStatsRebuilds = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const running = await ctx.db
+      .query("aggregateStatsJobs")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .collect();
+
+    const results = [];
+    for (const job of running) {
+      if (job.nextPlayerIndex >= job.players.length) {
+        const finalized = await finalizeAggregateJobHandler(ctx, job._id);
+        results.push({ jobId: job._id, finalized });
+        continue;
+      }
+
+      const advanced = await advanceAggregateJob(ctx, job._id, PLAYERS_PER_TICK);
+      if (advanced.needsFinalize) {
+        const finalized = await finalizeAggregateJobHandler(ctx, job._id);
+        results.push({ jobId: job._id, ...advanced, finalized });
+      } else {
+        results.push({ jobId: job._id, ...advanced });
+      }
+    }
+
+    return { jobs: results.length, results };
+  },
+});
+
+/** Manual single-tick advance for one job (ops recovery). */
+export const processRebuildSingleStep = internalMutation({
+  args: { jobId: v.id("aggregateStatsJobs") },
+  handler: async (ctx, args) => {
+    const advanced = await advanceAggregateJob(ctx, args.jobId, PLAYERS_PER_TICK);
+    if (advanced.needsFinalize) {
+      return await finalizeAggregateJobHandler(ctx, args.jobId);
+    }
+    return advanced;
+  },
+});
+
+async function finalizeAggregateJobHandler(
+  ctx: MutationCtx,
+  jobId: Id<"aggregateStatsJobs">,
+) {
+  const job = await ctx.db.get(jobId);
+  if (!job || job.status !== "running") {
+    return { done: true as const, reason: "no_running_job" as const };
+  }
+
+  const accumulatedStats = await loadRebuildRows(ctx, jobId);
+  const playersWithEvents = accumulatedStats.filter((s) => s.totalGames > 0);
+  const statsData = buildCachePayload(playersWithEvents);
+  await writeAggregateStatsCache(ctx, statsData);
+  await deleteRebuildRows(ctx, jobId);
+
+  const completedAt = Date.now();
+  await ctx.db.patch(jobId, {
+    status: "completed",
+    processedCount: job.totalCount,
+    nextPlayerIndex: job.players.length,
+    accumulatedStats: [],
+    lastProgressAt: completedAt,
+    completedAt,
+  });
+
+  return {
+    done: true as const,
+    playerCount: statsData.playerCount,
+    formulaVersion: statsData.formulaVersion,
+    skippedPlayers: job.totalCount - accumulatedStats.length,
+  };
+}
+
+/** Write aggregateStatsCache from scratch rows (separate step to stay under read limits). */
+export const finalizeAggregateStatsJob = internalMutation({
+  args: { jobId: v.id("aggregateStatsJobs") },
+  handler: async (ctx, args) => finalizeAggregateJobHandler(ctx, args.jobId),
+});
+
+/** Finish a stalled batched job from its cursor using single-player steps. */
+export const finalizeStalledAggregateStatsJob = internalMutation({
+  args: {
+    jobId: v.optional(v.id("aggregateStatsJobs")),
+  },
+  handler: async (ctx, args) => {
+    const job =
+      args.jobId != null
+        ? await ctx.db.get(args.jobId)
+        : await ctx.db
+            .query("aggregateStatsJobs")
+            .withIndex("by_status", (q) => q.eq("status", "running"))
+            .first();
+
+    if (!job || job.status !== "running") {
+      return { started: false, reason: "no_running_job" };
+    }
+
+    await ctx.scheduler.runAfter(0, internal.aggregateStats.tickAggregateStatsRebuilds, {});
+
+    return {
+      started: true,
+      jobId: job._id,
+      resumeFrom: job.nextPlayerIndex,
+      totalCount: job.totalCount,
+    };
+  },
+});
+
+/** Re-schedule the next batch for a running job (scheduler chain recovery). */
+export const kickAggregateStatsRebuild = internalMutation({
+  args: {
+    jobId: v.optional(v.id("aggregateStatsJobs")),
+  },
+  handler: async (ctx, args) => {
+    const job =
+      args.jobId != null
+        ? await ctx.db.get(args.jobId)
+        : await ctx.db
+            .query("aggregateStatsJobs")
+            .withIndex("by_status", (q) => q.eq("status", "running"))
+            .first();
+
+    if (!job || job.status !== "running") {
+      return { kicked: false, reason: "no_running_job" };
+    }
+
+    await ctx.scheduler.runAfter(0, internal.aggregateStats.tickAggregateStatsRebuilds, {});
+
+    return {
+      kicked: true,
+      jobId: job._id,
+      processedCount: job.processedCount,
+      totalCount: job.totalCount,
+    };
+  },
+});
+
+export const getAggregateStatsCacheInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const cache = await ctx.db.query("aggregateStatsCache").first();
+    const running = await ctx.db
+      .query("aggregateStatsJobs")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .first();
+
+    return {
+      cache: cache
+        ? {
+            lastUpdated: cache.lastUpdated,
+            formulaVersion: cache.formulaVersion,
+            playerCount: cache.playerCount,
+            avgTotalEvents: cache.avgTotalEvents,
+            avgWinRate: cache.avgWinRate,
+            avgAveragePlacement: cache.avgAveragePlacement,
+            avgAverageKD: cache.avgAverageKD,
+            avgTotalEliminations: cache.avgTotalEliminations,
+            avgAverageScore: cache.avgAverageScore,
+            avgTop3Finishes: cache.avgTop3Finishes,
+          }
+        : null,
+      runningJob: running
+        ? {
+            jobId: running._id,
+            processedCount: running.processedCount,
+            totalCount: running.totalCount,
+            lastProgressAt: running.lastProgressAt,
+            nextPlayerIndex: running.nextPlayerIndex,
+            stuckPlayerId: running.players[running.nextPlayerIndex]?.playerId,
+            errorMessage: running.errorMessage,
+          }
+        : null,
+    };
   },
 });

@@ -1,8 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel.d.ts";
-import { internal } from "./_generated/api";
 import { filterVisibleMembers } from "./helpers/playerAlt";
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 
@@ -334,33 +333,6 @@ async function calculatePlayerTopFiveData(
   };
 }
 
-// Mutation to update top-5 cache for a single player
-export const updatePlayerTopFiveCache = mutation({
-  args: { playerId: v.id("players") },
-  handler: async (ctx, args) => {
-    const topFiveData = await calculatePlayerTopFiveData(ctx, args.playerId);
-    
-    if (!topFiveData) {
-      return { success: false };
-    }
-    
-    await ctx.db.patch(args.playerId, {
-      topFiveCache: {
-        recentTop5Count: topFiveData.recentTop5Count,
-        recentTop4Count: topFiveData.recentTop4Count,
-        recentTop3Count: topFiveData.recentTop3Count,
-        hasRecentActivity: topFiveData.hasRecentActivity,
-        mostRecentEventTime: topFiveData.mostRecentEventTime,
-        consistentTeammateName: topFiveData.consistentTeammateName,
-        recentTop5WithTeammate: topFiveData.recentTop5WithTeammate,
-        lastUpdated: Date.now(),
-      }
-    });
-    
-    return { success: true };
-  },
-});
-
 // Internal mutation to update cache for a single player
 export const updateSinglePlayerCache = internalMutation({
   args: { playerId: v.id("players") },
@@ -384,163 +356,6 @@ export const updateSinglePlayerCache = internalMutation({
     }
     
     return { success: false };
-  },
-});
-
-// Internal mutation to rebuild cache for all players with match data
-export const rebuildAllTopFiveCaches = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    // Helper to check if Discord ID is valid
-    const isValidDiscordId = (id: string | undefined): boolean => {
-      if (!id || id === "") return false;
-      if (id === "imported") return false;
-      if (id.startsWith("placeholder_")) return false;
-      return true;
-    };
-    
-    // Get only active players (exclude former/archived)
-    const activePlayersByStatus = await ctx.db
-      .query("players")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .collect();
-    const acceptedMembers = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
-      .collect();
-    
-    // Combine and deduplicate
-    const playerMap = new Map<string, typeof activePlayersByStatus[0]>();
-    for (const p of [...activePlayersByStatus, ...acceptedMembers]) {
-      playerMap.set(p._id, p);
-    }
-    
-    // Filter for valid Discord IDs and exclude archived / alt accounts
-    const activePlayers = filterVisibleMembers(
-      Array.from(playerMap.values()).filter(
-        (p) => p.status !== "archived" && isValidDiscordId(p.discordUserId),
-      ),
-    );
-    
-    console.log(`[Top-5 Cache] Scheduling cache rebuild for ${activePlayers.length} active players`);
-    
-    // Schedule all cache updates without awaiting each one (faster)
-    // Use 500ms delay to avoid database overload
-    const schedulePromises = activePlayers.map((player, i) => 
-      ctx.scheduler.runAfter(
-        i * 500, // Stagger by 500ms to keep database responsive
-        internal.topFiveCache.updateSinglePlayerCache,
-        { playerId: player._id }
-      )
-    );
-    
-    // Wait for all scheduling to complete
-    await Promise.all(schedulePromises);
-    
-    console.log(`[Top-5 Cache] Successfully scheduled ${activePlayers.length} cache updates`);
-    return { scheduled: activePlayers.length };
-  },
-});
-
-// Admin mutation to manually trigger cache rebuild (batched with progress)
-export const triggerCacheRebuild = mutation({
-  args: { batchSize: v.optional(v.number()) },
-  handler: async (ctx, args) => {
-    // Check if user is admin
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return { success: 0, failed: 0, remaining: 0, total: 0 };
-    }
-    
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    
-    if (!user || user.role !== "admin") {
-      return { success: 0, failed: 0, remaining: 0, total: 0 };
-    }
-    
-    const BATCH_SIZE = args.batchSize || 5;
-    
-    // Helper to check if Discord ID is valid
-    const isValidDiscordId = (id: string | undefined): boolean => {
-      if (!id || id === "") return false;
-      if (id === "imported") return false;
-      if (id.startsWith("placeholder_")) return false;
-      return true;
-    };
-    
-    // Get only active players using indexed queries (exclude former/archived)
-    const activePlayersByStatus = await ctx.db
-      .query("players")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .collect();
-    const acceptedMembers = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
-      .collect();
-    
-    // Combine and deduplicate
-    const playerMap = new Map<string, typeof activePlayersByStatus[0]>();
-    for (const p of [...activePlayersByStatus, ...acceptedMembers]) {
-      playerMap.set(p._id, p);
-    }
-    
-    // Filter for valid Discord IDs and exclude archived / alt accounts
-    const allActivePlayers = filterVisibleMembers(
-      Array.from(playerMap.values()).filter(
-        (p) => p.status !== "archived" && isValidDiscordId(p.discordUserId),
-      ),
-    );
-    
-    // Find players that need cache updates (either no cache or stale)
-    const oneHourAgo = Date.now() - (60 * 60 * 1000);
-    const playersNeedingUpdate = allActivePlayers.filter(p => 
-      !p.topFiveCache || !p.topFiveCache.lastUpdated || p.topFiveCache.lastUpdated < oneHourAgo
-    );
-    
-    const total = playersNeedingUpdate.length;
-    
-    if (total === 0) {
-      return { success: 0, failed: 0, remaining: 0, total: allActivePlayers.length };
-    }
-    
-    // Process batch
-    const batch = playersNeedingUpdate.slice(0, BATCH_SIZE);
-    let successCount = 0;
-    let failedCount = 0;
-    
-    for (const player of batch) {
-      try {
-        const topFiveData = await calculatePlayerTopFiveData(ctx, player._id);
-        
-        if (topFiveData) {
-          await ctx.db.patch(player._id, {
-            topFiveCache: {
-              recentTop5Count: topFiveData.recentTop5Count,
-              recentTop4Count: topFiveData.recentTop4Count,
-              recentTop3Count: topFiveData.recentTop3Count,
-              hasRecentActivity: topFiveData.hasRecentActivity,
-              mostRecentEventTime: topFiveData.mostRecentEventTime,
-              consistentTeammateName: topFiveData.consistentTeammateName,
-              recentTop5WithTeammate: topFiveData.recentTop5WithTeammate,
-              lastUpdated: Date.now(),
-            }
-          });
-          successCount++;
-        } else {
-          failedCount++;
-        }
-      } catch (error) {
-        console.error(`[Top-5 Cache] Failed to update player ${player._id}:`, error);
-        failedCount++;
-      }
-    }
-    
-    const remaining = Math.max(0, total - BATCH_SIZE);
-    
-    return { success: successCount, failed: failedCount, remaining, total: allActivePlayers.length };
   },
 });
 

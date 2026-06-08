@@ -19,6 +19,9 @@ export type TierEvaluationRow = {
   tierAboveHolistic?: number;
   tierBelowHolistic?: number;
   evaluationStatus: string;
+  evaluationStatusRaw?: string;
+  recentEvaluationStatus?: string;
+  recentEvaluationStatusRaw?: string;
 };
 
 export type TierEvaluationCacheView = {
@@ -65,19 +68,26 @@ export function pickHolisticScore(
   return evaluation.rawHolisticScore ?? evaluation.holisticScore;
 }
 
-function deriveEvaluationStatus(
-  totalEvents: number,
-  promotionDiff: number | undefined,
-  demotionDiff: number | undefined,
-  fallback: string,
+function pickEvaluationStatus(
+  evaluation: TierEvaluationRow,
+  applyTcdc: boolean,
+  recent: boolean,
 ): string {
-  if (totalEvents < 8) return "Insufficient Data";
-  if (promotionDiff != null && promotionDiff > 5) return "Strong Promotion Outlier";
-  if (promotionDiff != null && promotionDiff > 0) return "Eligible for Promotion Evaluation";
-  if (demotionDiff != null && demotionDiff < -5) return "Strong Demotion Outlier";
-  if (demotionDiff != null && demotionDiff < 0) return "Eligible for Demotion Evaluation";
-  if (promotionDiff != null || demotionDiff != null) return "Stable";
-  return fallback;
+  if (recent) {
+    if (applyTcdc) {
+      return evaluation.recentEvaluationStatus ?? evaluation.evaluationStatus;
+    }
+    return (
+      evaluation.recentEvaluationStatusRaw ??
+      evaluation.evaluationStatusRaw ??
+      evaluation.evaluationStatus
+    );
+  }
+
+  if (applyTcdc) {
+    return evaluation.evaluationStatus;
+  }
+  return evaluation.evaluationStatusRaw ?? evaluation.evaluationStatus;
 }
 
 function buildTierMedians(
@@ -178,13 +188,6 @@ export function remapTierEvaluationForTcdcView<T extends TierEvaluationCacheView
       recentTierHolisticMedians,
     );
 
-    const evaluationStatus = deriveEvaluationStatus(
-      evaluation.totalEvents ?? 0,
-      allTimeDiffs.promotionDiff,
-      allTimeDiffs.demotionDiff,
-      evaluation.evaluationStatus,
-    );
-
     return {
       ...evaluation,
       holisticScore: allTimeHolistic,
@@ -202,7 +205,8 @@ export function remapTierEvaluationForTcdcView<T extends TierEvaluationCacheView
       recentHolisticVsSameTier: recentDiffs.holisticVsSameTier,
       recentPromotionDiff: recentDiffs.promotionDiff,
       recentDemotionDiff: recentDiffs.demotionDiff,
-      evaluationStatus,
+      evaluationStatus: pickEvaluationStatus(evaluation, applyTcdc, false),
+      recentEvaluationStatus: pickEvaluationStatus(evaluation, applyTcdc, true),
     };
   });
 

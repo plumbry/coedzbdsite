@@ -1,0 +1,28 @@
+{
+  "capturedAt": 1780911210775,
+  "playerCount": 1638,
+  "aggregateStats": {
+    "avgAverageKD": 0.8,
+    "avgAveragePlacement": 19.8,
+    "avgAverageScore": 74.9,
+    "avgTop3Finishes": 2.1,
+    "avgTotalEliminations": 65.9,
+    "avgTotalEvents": 13.8,
+    "avgWinRate": 3.1,
+    "lastUpdated": 1780766850321,
+    "playerCount": 380
+  },
+  "eventsPlayed": {
+    "mismatchCount": 0,
+    "increases": [],
+    "decreases": [],
+    "allMismatches": []
+  },
+  "tierEvalCount": 0,
+  "tierEvalStatuses": [],
+  "topFiveMismatchCount": 0,
+  "topFiveMismatches": [],
+  "missingRecentStatusCount": 0,
+  "missingStatusRawCount": 0,
+  "missingRecentStatusExamples": []
+}

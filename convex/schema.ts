@@ -494,6 +494,9 @@ export default defineSchema({
     // Discord Scheduled Event sync
     discordEventId: v.optional(v.string()), // Discord scheduled event ID
     needsSetup: v.optional(v.boolean()), // True if imported from Discord and needs admin to complete details
+    adminWorkflowStatus: v.optional(
+      v.union(v.literal("complete"), v.literal("archived")),
+    ),
   })
     .index("by_status", ["status"])
     .index("by_type", ["type"])
@@ -725,6 +728,7 @@ export default defineSchema({
       }),
     }),
     lastUpdated: v.number(),
+    formulaVersion: v.optional(v.number()),
   }),
 
   aggregateStatsJobs: defineTable({
@@ -759,6 +763,18 @@ export default defineSchema({
     lastProgressAt: v.number(),
     completedAt: v.optional(v.number()),
   }).index("by_status", ["status"]),
+
+  aggregateStatsRebuildRows: defineTable({
+    jobId: v.id("aggregateStatsJobs"),
+    tier: v.optional(v.string()),
+    totalGames: v.number(),
+    totalEliminations: v.number(),
+    averagePlacement: v.number(),
+    averageScore: v.number(),
+    averageKD: v.number(),
+    winRate: v.number(),
+    top3Finishes: v.number(),
+  }).index("by_job", ["jobId"]),
 
   playerStatsRebuildJobs: defineTable({
     status: v.union(
@@ -808,6 +824,7 @@ export default defineSchema({
     lastProgressAt: v.number(),
     completedAt: v.optional(v.number()),
     errorMessage: v.optional(v.string()),
+    pipelineVersion: v.optional(v.number()),
   }).index("by_status", ["status"]),
 
   // Precomputed public home member directory (one row; avoids N full player reads per visitor).
@@ -1049,6 +1066,10 @@ export default defineSchema({
     consistentTeammateName: v.optional(v.string()),
     lastEventDate: v.optional(v.string()),
     evaluationStatus: v.string(),
+    evaluationStatusRaw: v.optional(v.string()),
+    recentEvaluationStatus: v.optional(v.string()),
+    recentEvaluationStatusRaw: v.optional(v.string()),
+    formulaVersion: v.optional(v.number()),
     // Recent (last 6 weeks) holistic score fields
     recentHolisticScore: v.optional(v.number()),
     recentRawHolisticScore: v.optional(v.number()),
@@ -1089,6 +1110,14 @@ export default defineSchema({
       B: v.optional(v.number()),
       C: v.optional(v.number()),
     }),
+    rawTierHolisticMedians: v.optional(
+      v.object({
+        S: v.optional(v.number()),
+        A: v.optional(v.number()),
+        B: v.optional(v.number()),
+        C: v.optional(v.number()),
+      }),
+    ),
     // Kills per match medians
     tierKillsMedians: v.object({
       S: v.optional(v.number()),
@@ -1124,6 +1153,30 @@ export default defineSchema({
         C: v.array(v.number()),
       }),
     ),
+    partialRawHolisticByTier: v.optional(
+      v.object({
+        S: v.array(v.number()),
+        A: v.array(v.number()),
+        B: v.array(v.number()),
+        C: v.array(v.number()),
+      }),
+    ),
+    partialRecentRawHolisticByTier: v.optional(
+      v.object({
+        S: v.array(v.number()),
+        A: v.array(v.number()),
+        B: v.array(v.number()),
+        C: v.array(v.number()),
+      }),
+    ),
+    recentTierRawHolisticMedians: v.optional(
+      v.object({
+        S: v.optional(v.number()),
+        A: v.optional(v.number()),
+        B: v.optional(v.number()),
+        C: v.optional(v.number()),
+      }),
+    ),
     partialKillsByTier: v.optional(
       v.object({
         S: v.array(v.number()),
@@ -1134,6 +1187,7 @@ export default defineSchema({
     ),
     mediansPlayersCursor: v.optional(v.union(v.string(), v.null())),
     mediansPageIndex: v.optional(v.number()),
+    formulaVersion: v.optional(v.number()),
   }),
 
   // Player earnings from scrim events

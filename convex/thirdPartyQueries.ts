@@ -8,6 +8,7 @@ import {
 } from "./lib/yunite";
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 import { isYuniteImport } from "./lib/importSource";
+import { buildImportActionItems } from "./lib/eventWorkflow";
 
 export const getPlayerThirdPartyResults = query({
   args: { 
@@ -135,6 +136,20 @@ export const getImportOperationsSummary = query({
     );
     const unlinkedImports = imports.filter((importRecord) => !importRecord.eventId);
 
+    const needsReviewImports = imports.filter(
+      (importRecord) =>
+        importRecord.playersUnmatched > 0 ||
+        !importRecord.eventId ||
+        ((importRecord.source === "Yunite" ||
+          importRecord.source === "Yunite API" ||
+          importRecord.importMethod === "api") &&
+          importRecord.matchDataSynced !== true),
+    );
+
+    const actionItems = needsReviewImports
+      .flatMap((importRecord) => buildImportActionItems(importRecord))
+      .slice(0, 20);
+
     return {
       totalImportsChecked: imports.length,
       importsWithUnmatchedPlayers: importsWithUnmatchedPlayers.length,
@@ -144,28 +159,18 @@ export const getImportOperationsSummary = query({
       ),
       unsyncedYuniteImports: unsyncedYuniteImports.length,
       unlinkedImports: unlinkedImports.length,
-      recentNeedsReview: imports
-        .filter(
-          (importRecord) =>
-            importRecord.playersUnmatched > 0 ||
-            !importRecord.eventId ||
-            ((importRecord.source === "Yunite" ||
-              importRecord.source === "Yunite API" ||
-              importRecord.importMethod === "api") &&
-              importRecord.matchDataSynced !== true),
-        )
-        .slice(0, 8)
-        .map((importRecord) => ({
-          _id: importRecord._id,
-          eventName: importRecord.eventName,
-          eventDate: importRecord.eventDate,
-          source: importRecord.source,
-          leaderboardUrl: importRecord.leaderboardUrl,
-          playersUnmatched: importRecord.playersUnmatched,
-          totalPlayers: importRecord.totalPlayers,
-          eventId: importRecord.eventId,
-          matchDataSynced: importRecord.matchDataSynced,
-        })),
+      recentNeedsReview: needsReviewImports.slice(0, 8).map((importRecord) => ({
+        _id: importRecord._id,
+        eventName: importRecord.eventName,
+        eventDate: importRecord.eventDate,
+        source: importRecord.source,
+        leaderboardUrl: importRecord.leaderboardUrl,
+        playersUnmatched: importRecord.playersUnmatched,
+        totalPlayers: importRecord.totalPlayers,
+        eventId: importRecord.eventId,
+        matchDataSynced: importRecord.matchDataSynced,
+      })),
+      actionItems,
     };
   },
 });

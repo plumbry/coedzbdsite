@@ -5,6 +5,7 @@ import type { QueryCtx } from "./_generated/server";
 import { requireAdmin } from "./auth_helpers";
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 import { isYuniteImport } from "./lib/importSource";
+import { buildZbdPerformanceStats } from "./lib/stats/zbdPerformanceStats";
 
 async function partitionThirdPartyResultsByImport(
   ctx: QueryCtx,
@@ -322,8 +323,20 @@ export const getPlayerZBDPerformanceBundle = query({
       ctx,
       args.playerId,
     );
+    const comprehensive = computeComprehensiveStats(eventResults, yuniteResults);
+    const { stats } = await buildZbdPerformanceStats(
+      ctx,
+      args.playerId,
+      eventResults,
+      yuniteResults,
+    );
+
     return {
-      stats: computeComprehensiveStats(eventResults, yuniteResults),
+      stats: {
+        ...stats,
+        /** Unique event names across manual + Yunite rows (not competitive events played). */
+        totalRecordedEvents: comprehensive.totalGames,
+      },
       events: await formatPlayerAllEvents(
         ctx,
         args.playerId,
