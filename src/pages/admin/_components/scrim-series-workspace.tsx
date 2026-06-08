@@ -566,21 +566,63 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   );
 }
 
-// ─── Single Game CSV Import ──────────────────────────────────────────────────
+// ─── Imports Panel (Yunite + CSV) ────────────────────────────────────────────
 
-function GameScoreCsvImport({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
+function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const series = useQuery(api.scrimSeries.queries.getSeries, { seriesId });
+  const importHistory = useQuery(api.scrimSeries.queries.getImportHistory, { seriesId });
+  const importYuniteScores = useAction(api.scrimSeries.importFromYunite.importYuniteScores);
   const importSingleGameScores = useMutation(api.scrimSeries.mutations.importSingleGameScores);
+  const deleteImportLog = useMutation(api.scrimSeries.mutations.deleteImportLog);
+  const deleteCsvImportLog = useMutation(api.scrimSeries.mutations.deleteCsvImportLog);
 
-  const [sessionIndex, setSessionIndex] = useState("0");
-  const [gameIndex, setGameIndex] = useState("0");
+  const [tournamentId, setTournamentId] = useState("");
+  const [sessionNumber, setSessionNumber] = useState("1");
+  const [yuniteImporting, setYuniteImporting] = useState(false);
+
+  const [csvSessionIndex, setCsvSessionIndex] = useState("0");
+  const [csvGameIndex, setCsvGameIndex] = useState("0");
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [importing, setImporting] = useState(false);
+  const [csvImporting, setCsvImporting] = useState(false);
 
-  if (!series) return null;
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
-  const sessionIdx = parseInt(sessionIndex, 10);
-  const gamesInSession = series.gamesPerSession[sessionIdx] ?? 0;
+  if (!series) return <Skeleton className="h-40 w-full" />;
+
+  const csvSessionIdx = parseInt(csvSessionIndex, 10);
+  const gamesInCsvSession = series.gamesPerSession[csvSessionIdx] ?? 0;
+
+  const handleYuniteImport = async () => {
+    if (!tournamentId.trim()) {
+      toast.error("Please enter a Tournament ID");
+      return;
+    }
+    const session = parseInt(sessionNumber, 10);
+    if (isNaN(session) || session < 1 || session > 12) {
+      toast.error("Session must be between 1 and 12");
+      return;
+    }
+    if (session > series.gamesPerSession.length) {
+      toast.error(`This series only has ${series.gamesPerSession.length} sessions`);
+      return;
+    }
+
+    setYuniteImporting(true);
+    try {
+      const result = await importYuniteScores({
+        seriesId,
+        tournamentId: tournamentId.trim(),
+        sessionNumber: session,
+      });
+      toast.success(result.message);
+      setTournamentId("");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Import failed";
+      toast.error(msg);
+    } finally {
+      setYuniteImporting(false);
+    }
+  };
 
   const handleDownloadTemplate = () => {
     const blob = new Blob([scrimSeriesGameCsvTemplate()], { type: "text/csv;charset=utf-8;" });
@@ -594,14 +636,14 @@ function GameScoreCsvImport({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
     URL.revokeObjectURL(url);
   };
 
-  const handleImport = async () => {
+  const handleCsvImport = async () => {
     if (!csvFile) {
       toast.error("Please select a CSV file");
       return;
     }
 
-    const session = parseInt(sessionIndex, 10);
-    const game = parseInt(gameIndex, 10);
+    const session = parseInt(csvSessionIndex, 10);
+    const game = parseInt(csvGameIndex, 10);
     if (Number.isNaN(session) || session < 0 || session >= series.gamesPerSession.length) {
       toast.error("Invalid session selected");
       return;
@@ -611,7 +653,7 @@ function GameScoreCsvImport({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
       return;
     }
 
-    setImporting(true);
+    setCsvImporting(true);
     try {
       const text = await csvFile.text();
       const entries = parseScrimSeriesGameCsv(text);
@@ -619,6 +661,7 @@ function GameScoreCsvImport({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
         seriesId,
         sessionIndex: session,
         gameIndex: game,
+        fileName: csvFile.name,
         entries,
       });
 
@@ -632,74 +675,130 @@ function GameScoreCsvImport({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
       const msg = error instanceof Error ? error.message : "Failed to import CSV";
       toast.error(msg);
     } finally {
-      setImporting(false);
+      setCsvImporting(false);
+    }
+  };
+
+  const handleDeleteYuniteImport = async (log: {
+    _id: Id<"scrimSeriesImportLog">;
+    sessionNumber: number;
+    tournamentId: string;
+  }) => {
+    const yuniteCount = importHistory?.filter((e) => e.type === "yunite").length ?? 0;
+    const csvCount = importHistory?.filter((e) => e.type === "csv").length ?? 0;
+    const isOnlyYuniteImport = yuniteCount === 1 && csvCount === 0;
+
+    if (
+      !confirm(
+        isOnlyYuniteImport
+          ? "Delete the only Yunite import for this series? This removes all players, scores, penalties, and import history. This cannot be undone."
+          : `Delete Session ${log.sessionNumber} Yunite import (${log.tournamentId})? This removes all scores for that session and any Yunite penalties from this import.`
+      )
+    ) {
+      return;
+    }
+
+    const key = `yunite:${log._id}`;
+    setDeletingKey(key);
+    try {
+      const result = await deleteImportLog({ importLogId: log._id });
+      if (result.fullWipe) {
+        toast.success(
+          `Import deleted. Removed ${result.playersDeleted} players, ${result.scoresDeleted} scores, and ${result.penaltiesDeleted} penalties.`
+        );
+      } else {
+        const scoreMsg = result.scoresKept
+          ? "Session scores kept (another import exists for this session)."
+          : `Removed ${result.scoresDeleted} scores`;
+        toast.success(`Import deleted. ${scoreMsg}, ${result.penaltiesDeleted} penalties removed.`);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to delete import";
+      toast.error(msg);
+    } finally {
+      setDeletingKey(null);
+    }
+  };
+
+  const handleDeleteCsvImport = async (log: {
+    _id: Id<"scrimSeriesCsvImportLog">;
+    sessionNumber: number;
+    gameNumber: number;
+    fileName?: string;
+  }) => {
+    const label = log.fileName ?? `Link ${log.sessionNumber}, Game ${log.gameNumber}`;
+    if (
+      !confirm(
+        `Delete CSV import (${label})? Scores from this upload will be removed or restored to their previous values.`
+      )
+    ) {
+      return;
+    }
+
+    const key = `csv:${log._id}`;
+    setDeletingKey(key);
+    try {
+      const result = await deleteCsvImportLog({ importLogId: log._id });
+      const parts: string[] = [];
+      if (result.scoresDeleted > 0) parts.push(`${result.scoresDeleted} removed`);
+      if (result.scoresReverted > 0) parts.push(`${result.scoresReverted} restored`);
+      toast.success(`CSV import deleted${parts.length > 0 ? `: ${parts.join(", ")}` : "."}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to delete import";
+      toast.error(msg);
+    } finally {
+      setDeletingKey(null);
     }
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <FileUp className="h-4 w-4" /> Import Single Game (CSV)
-        </CardTitle>
-        <CardDescription className="text-xs">
-          Upload scores for one game when Yunite did not register it. CSV needs Epic Username and
-          Score columns; Player Name and Team ID are optional.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Link / Session</label>
-            <Select value={sessionIndex} onValueChange={setSessionIndex} disabled={importing}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {series.gamesPerSession.map((games, i) => (
-                  <SelectItem key={i} value={String(i)}>
-                    Link {i + 1} ({games} games)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Upload className="h-4 w-4" /> Import from Yunite
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Enter a Yunite Tournament ID and Session number to import scores from the Yunite API.
+            Scores are team-level (all teammates get the same game scores).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2 space-y-2">
+              <label className="text-sm font-medium">Tournament ID</label>
+              <Input
+                placeholder="e.g. abc123def456"
+                value={tournamentId}
+                onChange={(e) => setTournamentId(e.target.value)}
+                disabled={yuniteImporting}
+              />
+              <p className="text-xs text-muted-foreground">
+                The Yunite tournament ID (from the leaderboard URL)
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Session (1–{series.gamesPerSession.length})</label>
+              <Select value={sessionNumber} onValueChange={setSessionNumber} disabled={yuniteImporting}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: series.gamesPerSession.length }, (_, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>
+                      Session {i + 1} ({series.gamesPerSession[i]} games)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Game</label>
-            <Select
-              value={gameIndex}
-              onValueChange={setGameIndex}
-              disabled={importing || gamesInSession === 0}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: gamesInSession }, (_, i) => (
-                  <SelectItem key={i} value={String(i)}>
-                    Game {i + 1}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">CSV File</label>
-            <Input
-              type="file"
-              accept=".csv,text/csv"
-              disabled={importing}
-              onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
-            />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
           <Button
-            onClick={handleImport}
-            disabled={importing || !csvFile}
+            onClick={handleYuniteImport}
+            disabled={yuniteImporting || !tournamentId.trim()}
             className="cursor-pointer"
           >
-            {importing ? (
+            {yuniteImporting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Importing...
@@ -707,23 +806,197 @@ function GameScoreCsvImport({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
             ) : (
               <>
                 <Upload className="mr-2 h-4 w-4" />
-                Import Scores
+                Submit Scores
               </>
             )}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleDownloadTemplate}
-            disabled={importing}
-            className="cursor-pointer"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Download Template
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileUp className="h-4 w-4" /> Import Single Game (CSV)
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Upload scores for one game when Yunite did not register it. CSV needs Epic Username and
+            Score columns; Player Name and Team ID are optional.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Link / Session</label>
+              <Select value={csvSessionIndex} onValueChange={setCsvSessionIndex} disabled={csvImporting}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {series.gamesPerSession.map((games, i) => (
+                    <SelectItem key={i} value={String(i)}>
+                      Link {i + 1} ({games} games)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Game</label>
+              <Select
+                value={csvGameIndex}
+                onValueChange={setCsvGameIndex}
+                disabled={csvImporting || gamesInCsvSession === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: gamesInCsvSession }, (_, i) => (
+                    <SelectItem key={i} value={String(i)}>
+                      Game {i + 1}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">CSV File</label>
+              <Input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={csvImporting}
+                onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={handleCsvImport}
+              disabled={csvImporting || !csvFile}
+              className="cursor-pointer"
+            >
+              {csvImporting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import Scores
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDownloadTemplate}
+              disabled={csvImporting}
+              className="cursor-pointer"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download Template
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <History className="h-4 w-4" /> Import History
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Yunite session imports and single-game CSV uploads. Delete an entry to undo that import.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {importHistory === undefined ? (
+            <Skeleton className="h-20 w-full" />
+          ) : importHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No imports yet. Submit a Yunite tournament or CSV upload above to get started.
+            </p>
+          ) : (
+            <div className="space-y-1 max-h-72 overflow-y-auto">
+              {importHistory.map((log) => {
+                const deleteKey = `${log.type}:${log._id}`;
+                const isDeleting = deletingKey === deleteKey;
+
+                if (log.type === "yunite") {
+                  return (
+                    <div
+                      key={deleteKey}
+                      className="flex items-center gap-3 py-2 px-2 rounded hover:bg-muted/30 text-sm border-b last:border-b-0"
+                    >
+                      <Badge variant="default" className="text-xs shrink-0">Yunite</Badge>
+                      <Badge variant="secondary" className="text-xs shrink-0">S{log.sessionNumber}</Badge>
+                      <span className="font-mono text-xs text-muted-foreground truncate">{log.tournamentId}</span>
+                      <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                        {log.playersUpdated} players, {log.penaltiesLogged} penalties
+                      </span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {new Date(log.importedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteYuniteImport(log)}
+                        disabled={isDeleting}
+                        className="min-h-9 min-w-9 h-9 w-9 p-0 shrink-0 cursor-pointer text-destructive hover:text-destructive"
+                        title="Delete import"
+                      >
+                        {isDeleting ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3 w-3" />
+                        )}
+                      </Button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={deleteKey}
+                    className="flex items-center gap-3 py-2 px-2 rounded hover:bg-muted/30 text-sm border-b last:border-b-0"
+                  >
+                    <Badge variant="outline" className="text-xs shrink-0">CSV</Badge>
+                    <Badge variant="secondary" className="text-xs shrink-0">
+                      S{log.sessionNumber} G{log.gameNumber}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {log.fileName ?? "Manual upload"}
+                    </span>
+                    <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                      {log.playersUpdated} scores
+                      {log.playersAdded > 0 ? `, ${log.playersAdded} added` : ""}
+                    </span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {new Date(log.importedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeleteCsvImport(log)}
+                      disabled={isDeleting}
+                      className="min-h-9 min-w-9 h-9 w-9 p-0 shrink-0 cursor-pointer text-destructive hover:text-destructive"
+                      title="Delete import"
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -1007,206 +1280,10 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   );
 }
 
-// ─── Yunite Import Panel ─────────────────────────────────────────────────────
-
-function YuniteImportPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
-  const series = useQuery(api.scrimSeries.queries.getSeries, { seriesId });
-  const importLog = useQuery(api.scrimSeries.queries.getImportLog, { seriesId });
-  const importYuniteScores = useAction(api.scrimSeries.importFromYunite.importYuniteScores);
-  const deleteImportLog = useMutation(api.scrimSeries.mutations.deleteImportLog);
-
-  const [tournamentId, setTournamentId] = useState("");
-  const [sessionNumber, setSessionNumber] = useState("1");
-  const [importing, setImporting] = useState(false);
-  const [deletingId, setDeletingId] = useState<Id<"scrimSeriesImportLog"> | null>(null);
-
-  if (!series) return <Skeleton className="h-40 w-full" />;
-
-  const handleImport = async () => {
-    if (!tournamentId.trim()) {
-      toast.error("Please enter a Tournament ID");
-      return;
-    }
-    const session = parseInt(sessionNumber, 10);
-    if (isNaN(session) || session < 1 || session > 12) {
-      toast.error("Session must be between 1 and 12");
-      return;
-    }
-    if (session > series.gamesPerSession.length) {
-      toast.error(`This series only has ${series.gamesPerSession.length} sessions`);
-      return;
-    }
-
-    setImporting(true);
-    try {
-      const result = await importYuniteScores({
-        seriesId,
-        tournamentId: tournamentId.trim(),
-        sessionNumber: session,
-      });
-      toast.success(result.message);
-      setTournamentId("");
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Import failed";
-      toast.error(msg);
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const handleDeleteImport = async (log: {
-    _id: Id<"scrimSeriesImportLog">;
-    sessionNumber: number;
-    tournamentId: string;
-  }) => {
-    const isOnlyImport = importLog?.length === 1;
-    if (
-      !confirm(
-        isOnlyImport
-          ? "Delete the only import for this series? This removes all players, scores, penalties, and import history. This cannot be undone."
-          : `Delete Session ${log.sessionNumber} import (${log.tournamentId})? This removes all scores for that session and any Yunite penalties from this import.`
-      )
-    ) {
-      return;
-    }
-
-    setDeletingId(log._id);
-    try {
-      const result = await deleteImportLog({ importLogId: log._id });
-      if (result.fullWipe) {
-        toast.success(
-          `Import deleted. Removed ${result.playersDeleted} players, ${result.scoresDeleted} scores, and ${result.penaltiesDeleted} penalties.`
-        );
-      } else {
-        const scoreMsg = result.scoresKept
-          ? "Session scores kept (another import exists for this session)."
-          : `Removed ${result.scoresDeleted} scores`;
-        toast.success(`Import deleted. ${scoreMsg}, ${result.penaltiesDeleted} penalties removed.`);
-      }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Failed to delete import";
-      toast.error(msg);
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Upload className="h-4 w-4" /> Import from Yunite
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Enter a Yunite Tournament ID and Session number to import scores from the Yunite API (admin-triggered).
-            Scores are team-level (all teammates get the same game scores).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="sm:col-span-2 space-y-2">
-              <label className="text-sm font-medium">Tournament ID</label>
-              <Input
-                placeholder="e.g. abc123def456"
-                value={tournamentId}
-                onChange={(e) => setTournamentId(e.target.value)}
-                disabled={importing}
-              />
-              <p className="text-xs text-muted-foreground">
-                The Yunite tournament ID (from the leaderboard URL)
-              </p>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Session (1–{series.gamesPerSession.length})</label>
-              <Select value={sessionNumber} onValueChange={setSessionNumber} disabled={importing}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: series.gamesPerSession.length }, (_, i) => (
-                    <SelectItem key={i + 1} value={String(i + 1)}>
-                      Session {i + 1} ({series.gamesPerSession[i]} games)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <Button
-            onClick={handleImport}
-            disabled={importing || !tournamentId.trim()}
-            className="cursor-pointer"
-          >
-            {importing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Importing...
-              </>
-            ) : (
-              <>
-                <Upload className="mr-2 h-4 w-4" />
-                Submit Scores
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Import History */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <History className="h-4 w-4" /> Import History
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {importLog === undefined ? (
-            <Skeleton className="h-20 w-full" />
-          ) : importLog.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No imports yet. Submit a tournament above to get started.
-            </p>
-          ) : (
-            <div className="space-y-1 max-h-60 overflow-y-auto">
-              {importLog.map((log) => (
-                <div key={log._id} className="flex items-center gap-3 py-2 px-2 rounded hover:bg-muted/30 text-sm border-b last:border-b-0">
-                  <Badge variant="secondary" className="text-xs shrink-0">S{log.sessionNumber}</Badge>
-                  <span className="font-mono text-xs text-muted-foreground truncate">{log.tournamentId}</span>
-                  <span className="text-xs text-muted-foreground ml-auto shrink-0">
-                    {log.playersUpdated} players, {log.penaltiesLogged} penalties
-                  </span>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {new Date(log.importedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDeleteImport(log)}
-                    disabled={deletingId === log._id}
-                    className="min-h-9 min-w-9 h-9 w-9 p-0 shrink-0 cursor-pointer text-destructive hover:text-destructive"
-                    title="Delete import"
-                  >
-                    {deletingId === log._id ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3 w-3" />
-                    )}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 export type ScrimSeriesAdminTab =
   | "leaderboard"
   | "scores"
-  | "yunite"
+  | "imports"
   | "players"
   | "penalties"
   | "settings";
@@ -1275,7 +1352,7 @@ export function ScrimSeriesAdminContent({
           <TabsList>
             <TabsTrigger value="leaderboard" className="cursor-pointer">Leaderboard</TabsTrigger>
             <TabsTrigger value="scores" className="cursor-pointer">Scores</TabsTrigger>
-            <TabsTrigger value="yunite" className="cursor-pointer">Yunite Import</TabsTrigger>
+            <TabsTrigger value="imports" className="cursor-pointer">Imports</TabsTrigger>
             <TabsTrigger value="players" className="cursor-pointer">Players</TabsTrigger>
             <TabsTrigger value="penalties" className="cursor-pointer">Penalties</TabsTrigger>
             <TabsTrigger value="settings" className="cursor-pointer">Settings</TabsTrigger>
@@ -1286,14 +1363,11 @@ export function ScrimSeriesAdminContent({
           </TabsContent>
 
           <TabsContent value="scores">
-            <div className="space-y-4">
-              <GameScoreCsvImport seriesId={selectedSeriesId} />
-              <ScoreEntryGrid seriesId={selectedSeriesId} />
-            </div>
+            <ScoreEntryGrid seriesId={selectedSeriesId} />
           </TabsContent>
 
-          <TabsContent value="yunite">
-            <YuniteImportPanel seriesId={selectedSeriesId} />
+          <TabsContent value="imports">
+            <ImportsPanel seriesId={selectedSeriesId} />
           </TabsContent>
 
           <TabsContent value="players">

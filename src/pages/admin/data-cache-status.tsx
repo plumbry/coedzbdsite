@@ -151,6 +151,11 @@ function DataCacheStatusContent() {
     return Math.round((count / total) * 100);
   };
 
+  const poolCoverageLabel = (covered: number, pool: number) => {
+    if (pool <= 0) return "—";
+    return `${covered} / ${pool} (${getPercentage(covered, pool)}%)`;
+  };
+
   const formatCount = (count: number, sampled?: boolean) =>
     `${count.toLocaleString()}${sampled ? "+" : ""}`;
 
@@ -217,11 +222,11 @@ function DataCacheStatusContent() {
 
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Players */}
+            {/* Competitive stats pool */}
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium">Players</CardTitle>
+                  <CardTitle className="text-sm font-medium">Competitive pool</CardTitle>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -250,34 +255,41 @@ function DataCacheStatusContent() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{playerStats.total}</div>
+                <div className="text-2xl font-bold">
+                  {playerStats.eligibleMatchDataPool}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Active members with Yunite match data ({playerStats.totalMembers.toLocaleString()}{" "}
+                  total member rows)
+                </p>
                 <div className="space-y-1 mt-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tier Eval Cache</span>
-                    <span className="font-medium">
-                      {getPercentage(playerStats.withTierEvalCache, playerStats.total)}%
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">Tier eval cache</span>
+                    <span className="font-medium text-right">
+                      {poolCoverageLabel(
+                        playerStats.withTierEvalCache,
+                        playerStats.tierEvalEligiblePool,
+                      )}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Top 5 Cache</span>
-                    <span className="font-medium">
-                      {getPercentage(playerStats.withTopFiveCache, playerStats.total)}%
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">Top 5 cache</span>
+                    <span className="font-medium text-right">
+                      {poolCoverageLabel(
+                        playerStats.withTopFiveCache,
+                        playerStats.eligibleMatchDataPool,
+                      )}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Discord Sync</span>
-                    <span className="font-medium">
-                      {getPercentage(playerStats.withLastDiscordSync, playerStats.total)}%
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">TC (contribution)</span>
+                    <span className="font-medium text-right">
+                      {poolCoverageLabel(
+                        playerStats.withContributionScore,
+                        playerStats.eligibleMatchDataPool,
+                      )}
                     </span>
                   </div>
-                  {playerStats.lastUpdated && (
-                    <div className="flex justify-between pt-2 border-t">
-                      <span className="text-muted-foreground">Last Updated</span>
-                      <span className="font-medium">
-                        {formatRelativeTime(playerStats.lastUpdated)}
-                      </span>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>
@@ -476,10 +488,13 @@ function DataCacheStatusContent() {
                 </div>
                 {cacheMetadata.aggregateStatsCache && (
                   <div className="space-y-1 mt-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Players</span>
-                      <span className="font-medium">
-                        {cacheMetadata.aggregateStatsCache.playerCount}
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Pool coverage</span>
+                      <span className="font-medium text-right">
+                        {poolCoverageLabel(
+                          cacheMetadata.aggregateStatsCache.playerCount,
+                          cacheMetadata.competitivePool.eligibleMatchDataPool,
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -521,10 +536,13 @@ function DataCacheStatusContent() {
                 </div>
                 {cacheMetadata.tierReEvaluationCache.evaluationCount > 0 && (
                   <div className="space-y-1 mt-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Players</span>
-                      <span className="font-medium">
-                        {cacheMetadata.tierReEvaluationCache.evaluationCount}
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Pool coverage</span>
+                      <span className="font-medium text-right">
+                        {poolCoverageLabel(
+                          cacheMetadata.tierReEvaluationCache.evaluationCount,
+                          cacheMetadata.competitivePool.tierEvalEligiblePool,
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -574,7 +592,11 @@ function DataCacheStatusContent() {
                   <div className="text-sm text-muted-foreground">Contribution Scores</div>
                   <div className="text-2xl font-bold">{playerStats.withContributionScore}</div>
                   <div className="text-xs text-muted-foreground">
-                    {getPercentage(playerStats.withContributionScore, playerStats.total)}% cached
+                    {poolCoverageLabel(
+                      playerStats.withContributionScore,
+                      playerStats.eligibleMatchDataPool,
+                    )}{" "}
+                    of competitive pool
                   </div>
                 </div>
               </div>

@@ -698,24 +698,31 @@ export const processRebuildStep = internalMutation({
             processedInPhase = 0;
           }
         } else if (!tierEvalInitialized) {
+          if (!tierEvalPlayerIds || tierEvalPlayerIds.length === 0) {
+            const init = await ctx.runMutation(
+              internal.tierReEvaluationBatched.initTierEvalPlayerList,
+              { recentOnly: job.tierEvalRecentOnly },
+            );
+            tierEvalPlayerIds = init.playerIds;
+            tierEvalPageIndex = 0;
+          }
+
           const playersStep = await ctx.runMutation(
             internal.tierReEvaluationBatched.processOneTierEvalPlayerStep,
             {
-              cursor: playersCursor,
-              pageIndex: tierEvalPageIndex,
+              playerIds: tierEvalPlayerIds,
+              playerIndex: tierEvalPageIndex,
               recentOnly: job.tierEvalRecentOnly,
             },
           );
           processedInPhase += playersStep.processed;
           totalProcessed += 1;
+          tierEvalPageIndex = playersStep.nextPlayerIndex;
           if (playersStep.isDone) {
             tierEvalInitialized = true;
             playersCursor = null;
             tierEvalPageIndex = 0;
             processedInPhase = 0;
-          } else {
-            playersCursor = playersStep.continueCursor;
-            tierEvalPageIndex = playersStep.nextPageIndex;
           }
         } else if (!tierEvalRecentMediansDone) {
           await ctx.runMutation(
@@ -782,6 +789,7 @@ export const processRebuildStep = internalMutation({
           playersCursor,
           tierEvalBatch,
           tierEvalBatchCount,
+          tierEvalPlayerIds,
           tierEvalClearDone,
           tierEvalMediansDone,
           tierEvalRecentMediansDone,
@@ -800,6 +808,7 @@ export const processRebuildStep = internalMutation({
         playersCursor,
         tierEvalBatch,
         tierEvalBatchCount,
+        tierEvalPlayerIds,
         tierEvalClearDone,
         tierEvalMediansDone,
         tierEvalRecentMediansDone,

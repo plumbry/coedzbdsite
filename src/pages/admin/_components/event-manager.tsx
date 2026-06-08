@@ -418,7 +418,7 @@ export default function EventManager() {
   
   const openScrimSeriesAdmin = (
     seriesId: Id<"scrimSeries">,
-    tab: "yunite" | "penalties" | "leaderboard" = "yunite",
+    tab: "imports" | "penalties" | "leaderboard" = "imports",
   ) => {
     navigate(scrimSeriesAdminPath(seriesId, tab));
   };
@@ -442,7 +442,7 @@ export default function EventManager() {
       setIsCreateOpen(false);
       setEditingEvent(null);
       resetForm();
-      navigate(scrimSeriesAdminPath(seriesId, "yunite"));
+      navigate(scrimSeriesAdminPath(seriesId, "imports"));
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "An unexpected error occurred";
@@ -693,7 +693,7 @@ export default function EventManager() {
                         size="sm"
                         variant="ghost"
                         onClick={() =>
-                          openScrimSeriesAdmin(event.linkedScrimSeriesId!, "yunite")
+                          openScrimSeriesAdmin(event.linkedScrimSeriesId!, "imports")
                         }
                         title="Scrim Series admin (imports, penalties, scores)"
                       >
@@ -1239,7 +1239,7 @@ export default function EventManager() {
                           size="sm"
                           variant="secondary"
                           onClick={() => {
-                            openScrimSeriesAdmin(linkedScrimSeriesId, "yunite");
+                            openScrimSeriesAdmin(linkedScrimSeriesId, "imports");
                             setIsCreateOpen(false);
                             setEditingEvent(null);
                             resetForm();

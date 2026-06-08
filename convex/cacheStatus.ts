@@ -2,9 +2,45 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { internal, api } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel.d.ts";
+import { filterVisibleMembers } from "./helpers/playerAlt";
+import { isActivePlayerWithMatchData } from "./lib/stats/listEligiblePlayers";
 
 // Split into focused queries to avoid exceeding Convex scan limits
 const STATUS_SAMPLE_LIMIT = 1000;
+const TIER_EVAL_TIERS = new Set(["S", "A", "B", "C"]);
+
+const isValidDiscordId = (id: string | undefined): boolean => {
+  if (!id || id === "") return false;
+  if (id === "imported") return false;
+  if (id.startsWith("placeholder_")) return false;
+  return true;
+};
+
+/** Stats rebuild pool: active members with Yunite match data (excludes alts). */
+function buildCompetitivePoolStats(
+  allPlayers: Doc<"players">[],
+  tierEvalCacheCount: number,
+) {
+  const eligibleMatchData = filterVisibleMembers(
+    allPlayers.filter(
+      (p) => isActivePlayerWithMatchData(p) && isValidDiscordId(p.discordUserId),
+    ),
+  );
+  const tierEvalEligible = eligibleMatchData.filter((p) =>
+    TIER_EVAL_TIERS.has(p.tier || ""),
+  );
+
+  return {
+    totalMembers: allPlayers.length,
+    eligibleMatchDataPool: eligibleMatchData.length,
+    tierEvalEligiblePool: tierEvalEligible.length,
+    withContributionScore: eligibleMatchData.filter((p) => p.contributionScore)
+      .length,
+    withTopFiveCache: eligibleMatchData.filter((p) => p.topFiveCache).length,
+    withTierEvalCache: tierEvalCacheCount,
+  };
+}
 
 export const getPlayerStats = query({
   args: {},
@@ -17,16 +53,19 @@ export const getPlayerStats = query({
       : undefined;
     
     const tierEvalCache = await ctx.db.query("tierReEvaluationCache").collect();
+    const competitivePool = buildCompetitivePoolStats(
+      allPlayers,
+      tierEvalCache.length,
+    );
 
     return {
+      ...competitivePool,
+      /** @deprecated Use totalMembers — kept for older UI paths */
       total: allPlayers.length,
       withEpicId: allPlayers.filter(p => p.epicId).length,
       withName: allPlayers.filter(p => p.name).length,
       withAvatarUrl: allPlayers.filter(p => p.avatarUrl).length,
       withLastDiscordSync: playersWithSync.length,
-      withTierEvalCache: tierEvalCache.length,
-      withContributionScore: allPlayers.filter(p => p.contributionScore).length,
-      withTopFiveCache: allPlayers.filter(p => p.topFiveCache).length,
       lastUpdated: mostRecentPlayerSync,
     };
   },
@@ -132,6 +171,12 @@ export const getCacheMetadata = query({
     const tierReEvaluationCache = await ctx.db.query("tierReEvaluationCache").collect();
     const tierMediansCache = await ctx.db.query("tierMediansCache").first();
     
+    const allPlayers = await ctx.db.query("players").collect();
+    const competitivePool = buildCompetitivePoolStats(
+      allPlayers,
+      tierReEvaluationCache.length,
+    );
+
     return {
       aggregateStatsCache: aggregateStatsCache ? {
         lastUpdated: aggregateStatsCache.lastUpdated,
@@ -141,6 +186,7 @@ export const getCacheMetadata = query({
         evaluationCount: tierReEvaluationCache.length,
         lastUpdated: tierMediansCache?.lastUpdated || null,
       },
+      competitivePool,
       lastChecked: Date.now(),
     };
   },
@@ -160,16 +206,18 @@ export const getCacheStatus = query({
       : undefined;
     
     const tierEvalCache = await ctx.db.query("tierReEvaluationCache").collect();
+    const competitivePool = buildCompetitivePoolStats(
+      allPlayers,
+      tierEvalCache.length,
+    );
 
     const playerStats = {
+      ...competitivePool,
       total: allPlayers.length,
       withEpicId: allPlayers.filter(p => p.epicId).length,
       withName: allPlayers.filter(p => p.name).length,
       withAvatarUrl: allPlayers.filter(p => p.avatarUrl).length,
       withLastDiscordSync: playersWithSync.length,
-      withTierEvalCache: tierEvalCache.length,
-      withContributionScore: allPlayers.filter(p => p.contributionScore).length,
-      withTopFiveCache: allPlayers.filter(p => p.topFiveCache).length,
       lastUpdated: mostRecentPlayerSync,
     };
     

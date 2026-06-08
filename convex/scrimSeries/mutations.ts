@@ -1,6 +1,7 @@
 import { mutation } from "../_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
+import type { Id } from "../_generated/dataModel.d.ts";
 import { applyLinkedScrimSeries } from "../lib/scrimSeriesEventLink";
 
 // ─── Series CRUD ────────────────────────────────────────────────────────────
@@ -477,6 +478,7 @@ export const importSingleGameScores = mutation({
     seriesId: v.id("scrimSeries"),
     sessionIndex: v.number(),
     gameIndex: v.number(),
+    fileName: v.optional(v.string()),
     entries: v.array(
       v.object({
         epicId: v.string(),
@@ -529,6 +531,11 @@ export const importSingleGameScores = mutation({
     let playersUpdated = 0;
     let playersAdded = 0;
     const processedEpicIds = new Set<string>();
+    const affectedScores: Array<{
+      scoreId: Id<"scrimSeriesScores">;
+      hadPreviousScore: boolean;
+      previousScore?: number;
+    }> = [];
 
     for (const entry of args.entries) {
       const epicIdLower = entry.epicId.trim().toLowerCase();
@@ -548,8 +555,8 @@ export const importSingleGameScores = mutation({
         epicIdToPlayer.set(epicIdLower, matchedPlayer);
         playersAdded++;
       } else if (entry.teamId) {
-        const existing = await ctx.db.get(matchedPlayer._id);
-        if (existing && !existing.teamId) {
+        const existingPlayer = await ctx.db.get(matchedPlayer._id);
+        if (existingPlayer && !existingPlayer.teamId) {
           await ctx.db.patch(matchedPlayer._id, { teamId: entry.teamId });
         }
       }
@@ -566,10 +573,15 @@ export const importSingleGameScores = mutation({
           s.sessionIndex === args.sessionIndex && s.gameIndex === args.gameIndex,
       );
 
+      const hadPreviousScore = existing !== undefined;
+      const previousScore = existing?.score;
+
+      let scoreId;
       if (existing) {
         await ctx.db.patch(existing._id, { score: entry.score });
+        scoreId = existing._id;
       } else {
-        await ctx.db.insert("scrimSeriesScores", {
+        scoreId = await ctx.db.insert("scrimSeriesScores", {
           seriesId: args.seriesId,
           playerId: matchedPlayer._id,
           sessionIndex: args.sessionIndex,
@@ -578,8 +590,25 @@ export const importSingleGameScores = mutation({
         });
       }
 
+      affectedScores.push({
+        scoreId,
+        hadPreviousScore,
+        previousScore: hadPreviousScore ? previousScore : undefined,
+      });
+
       playersUpdated++;
     }
+
+    await ctx.db.insert("scrimSeriesCsvImportLog", {
+      seriesId: args.seriesId,
+      sessionNumber: args.sessionIndex + 1,
+      gameNumber: args.gameIndex + 1,
+      fileName: args.fileName,
+      playersUpdated,
+      playersAdded,
+      affectedScores,
+      importedAt: new Date().toISOString(),
+    });
 
     return {
       playersUpdated,
@@ -730,7 +759,12 @@ export const deleteImportLog = mutation({
       .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
       .collect();
 
-    const isOnlyImport = importLogs.length === 1;
+    const csvImportLogs = await ctx.db
+      .query("scrimSeriesCsvImportLog")
+      .withIndex("by_series", (q) => q.eq("seriesId", importLog.seriesId))
+      .collect();
+
+    const isOnlyImport = importLogs.length === 1 && csvImportLogs.length === 0;
 
     let scoresDeleted = 0;
     let penaltiesDeleted = 0;
@@ -822,6 +856,49 @@ export const deleteImportLog = mutation({
       playersDeleted,
       fullWipe: true,
       scoresKept: false,
+    };
+  },
+});
+
+// Delete a CSV single-game import and revert affected scores.
+export const deleteCsvImportLog = mutation({
+  args: { importLogId: v.id("scrimSeriesCsvImportLog") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
+    }
+
+    const importLog = await ctx.db.get(args.importLogId);
+    if (!importLog) {
+      throw new ConvexError({ message: "Import not found", code: "NOT_FOUND" });
+    }
+
+    let scoresReverted = 0;
+    let scoresDeleted = 0;
+
+    for (const affected of importLog.affectedScores) {
+      const score = await ctx.db.get(affected.scoreId);
+      if (!score) continue;
+
+      if (affected.hadPreviousScore && affected.previousScore !== undefined) {
+        await ctx.db.patch(affected.scoreId, { score: affected.previousScore });
+        scoresReverted++;
+      } else {
+        await ctx.db.delete(affected.scoreId);
+        scoresDeleted++;
+      }
+    }
+
+    await ctx.db.delete(args.importLogId);
+
+    return {
+      success: true,
+      sessionNumber: importLog.sessionNumber,
+      gameNumber: importLog.gameNumber,
+      fileName: importLog.fileName,
+      scoresReverted,
+      scoresDeleted,
     };
   },
 });

@@ -89,7 +89,7 @@ export const getPenalties = query({
   },
 });
 
-// Get import log for a series
+// Get import log for a series (Yunite only — prefer getImportHistory)
 export const getImportLog = query({
   args: { seriesId: v.id("scrimSeries") },
   handler: async (ctx, args) => {
@@ -98,6 +98,69 @@ export const getImportLog = query({
       .withIndex("by_series", (q) => q.eq("seriesId", args.seriesId))
       .order("desc")
       .collect();
+  },
+});
+
+export type ScrimSeriesImportHistoryEntry =
+  | {
+      type: "yunite";
+      _id: Id<"scrimSeriesImportLog">;
+      sessionNumber: number;
+      tournamentId: string;
+      playersUpdated: number;
+      penaltiesLogged: number;
+      importedAt: string;
+    }
+  | {
+      type: "csv";
+      _id: Id<"scrimSeriesCsvImportLog">;
+      sessionNumber: number;
+      gameNumber: number;
+      fileName?: string;
+      playersUpdated: number;
+      playersAdded: number;
+      importedAt: string;
+    };
+
+// Combined Yunite + CSV import history for the Imports tab
+export const getImportHistory = query({
+  args: { seriesId: v.id("scrimSeries") },
+  handler: async (ctx, args): Promise<ScrimSeriesImportHistoryEntry[]> => {
+    const [yuniteLogs, csvLogs] = await Promise.all([
+      ctx.db
+        .query("scrimSeriesImportLog")
+        .withIndex("by_series", (q) => q.eq("seriesId", args.seriesId))
+        .collect(),
+      ctx.db
+        .query("scrimSeriesCsvImportLog")
+        .withIndex("by_series", (q) => q.eq("seriesId", args.seriesId))
+        .collect(),
+    ]);
+
+    const entries: ScrimSeriesImportHistoryEntry[] = [
+      ...yuniteLogs.map((log) => ({
+        type: "yunite" as const,
+        _id: log._id,
+        sessionNumber: log.sessionNumber,
+        tournamentId: log.tournamentId,
+        playersUpdated: log.playersUpdated,
+        penaltiesLogged: log.penaltiesLogged,
+        importedAt: log.importedAt,
+      })),
+      ...csvLogs.map((log) => ({
+        type: "csv" as const,
+        _id: log._id,
+        sessionNumber: log.sessionNumber,
+        gameNumber: log.gameNumber,
+        fileName: log.fileName,
+        playersUpdated: log.playersUpdated,
+        playersAdded: log.playersAdded,
+        importedAt: log.importedAt,
+      })),
+    ];
+
+    entries.sort((a, b) => b.importedAt.localeCompare(a.importedAt));
+    return entries;
   },
 });
 

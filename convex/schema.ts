@@ -1187,6 +1187,8 @@ export default defineSchema({
     ),
     mediansPlayersCursor: v.optional(v.union(v.string(), v.null())),
     mediansPageIndex: v.optional(v.number()),
+    /** Player IDs for tier-median rebuild (avoids nested pagination with match stats). */
+    mediansEligiblePlayerIds: v.optional(v.array(v.id("players"))),
     formulaVersion: v.optional(v.number()),
   }),
 
@@ -1524,4 +1526,22 @@ export default defineSchema({
     importedAt: v.string(), // ISO 8601 UTC
   }).index("by_series", ["seriesId"])
     .index("by_series_and_tournament", ["seriesId", "tournamentId"]),
+
+  // Import log for single-game CSV score uploads (supports undo via affectedScores)
+  scrimSeriesCsvImportLog: defineTable({
+    seriesId: v.id("scrimSeries"),
+    sessionNumber: v.number(), // 1-based
+    gameNumber: v.number(), // 1-based
+    fileName: v.optional(v.string()),
+    playersUpdated: v.number(),
+    playersAdded: v.number(),
+    affectedScores: v.array(
+      v.object({
+        scoreId: v.id("scrimSeriesScores"),
+        hadPreviousScore: v.boolean(),
+        previousScore: v.optional(v.number()),
+      }),
+    ),
+    importedAt: v.string(), // ISO 8601 UTC
+  }).index("by_series", ["seriesId"]),
 });

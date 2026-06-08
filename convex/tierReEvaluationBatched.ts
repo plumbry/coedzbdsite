@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import { filterVisibleMembers } from "./helpers/playerAlt";
 import {
   isActivePlayerWithMatchData,
-  paginateActivePlayers,
+  listEligibleMatchDataPlayerIds,
 } from "./lib/stats/listEligiblePlayers";
 import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerStats";
 import {
@@ -53,6 +53,44 @@ function isEligibleForTierEvalPlayer(
   const cutoff = Date.now() - SIX_WEEKS_MS;
   const mostRecent = player.topFiveCache?.mostRecentEventTime;
   return mostRecent !== undefined && mostRecent >= cutoff;
+}
+
+async function buildTierMediansEligiblePlayerIds(
+  ctx: MutationCtx,
+): Promise<Id<"players">[]> {
+  const ids = await listEligibleMatchDataPlayerIds(ctx);
+  const eligible: Id<"players">[] = [];
+
+  for (const playerId of ids) {
+    const player = await ctx.db.get(playerId);
+    if (!player || !isActivePlayerWithMatchData(player)) {
+      continue;
+    }
+    const tier = player.tier || "Unranked";
+    if (!VALID_TIERS.includes(tier as ValidTier)) {
+      continue;
+    }
+    eligible.push(playerId);
+  }
+
+  return eligible;
+}
+
+async function buildTierEvalEligiblePlayerIds(
+  ctx: MutationCtx,
+  recentOnly: boolean,
+): Promise<Id<"players">[]> {
+  const ids = await listEligibleMatchDataPlayerIds(ctx);
+  const eligible: Id<"players">[] = [];
+
+  for (const playerId of ids) {
+    const player = await ctx.db.get(playerId);
+    if (player && isEligibleForTierEvalPlayer(player, recentOnly)) {
+      eligible.push(playerId);
+    }
+  }
+
+  return eligible;
 }
 
 function appendTierMedianScore(
@@ -359,9 +397,18 @@ async function calculateTierMediansStepHandler(
     ...(cache.partialRawHolisticByTier ?? {}),
   };
 
-  const cursor = cache.mediansPlayersCursor ?? null;
-  let pageIndex = cache.mediansPageIndex ?? 0;
-  const page = await paginateActivePlayers(ctx, cursor, 20);
+  let eligiblePlayerIds = cache.mediansEligiblePlayerIds;
+  if (!eligiblePlayerIds) {
+    eligiblePlayerIds = await buildTierMediansEligiblePlayerIds(ctx);
+    await ctx.db.patch(cache._id, {
+      mediansEligiblePlayerIds: eligiblePlayerIds,
+      mediansPageIndex: 0,
+      mediansPlayersCursor: undefined,
+      lastUpdated: Date.now(),
+    });
+  }
+
+  let playerIndex = cache.mediansPageIndex ?? 0;
 
   const countScored = () =>
     VALID_TIERS.reduce((sum, tier) => sum + partialHolistic[tier].length, 0);
@@ -381,65 +428,50 @@ async function calculateTierMediansStepHandler(
       partialRawHolisticByTier: undefined,
       mediansPlayersCursor: undefined,
       mediansPageIndex: undefined,
+      mediansEligiblePlayerIds: undefined,
     });
     return { isDone: true as const, processed: 1, totalPlayersScored: countScored() };
   };
 
-  if (pageIndex >= page.page.length) {
-    if (page.isDone) {
-      return finalizeAndReturn();
-    }
-    await ctx.db.patch(cache._id, {
-      partialHolisticByTier: partialHolistic,
-      partialKillsByTier: partialKills,
-      partialRawHolisticByTier: partialRawHolistic,
-      mediansPlayersCursor: page.continueCursor,
-      mediansPageIndex: 0,
-      lastUpdated: Date.now(),
-    });
-    return { isDone: false, processed: 0, totalPlayersScored: countScored() };
+  if (playerIndex >= eligiblePlayerIds.length) {
+    return finalizeAndReturn();
   }
 
-  const player = page.page[pageIndex];
-  pageIndex += 1;
+  const player = await ctx.db.get(eligiblePlayerIds[playerIndex]);
+  playerIndex += 1;
 
-  if (isActivePlayerWithMatchData(player)) {
-    const scored = await scorePlayerForTierMedians(ctx, player);
-    if (scored) {
-      appendTierMedianScore(
-        partialHolistic,
-        partialKills,
-        scored.tier,
-        scored.holisticScore,
-        scored.killsPerMatch,
+  if (player && isActivePlayerWithMatchData(player)) {
+    try {
+      const scored = await scorePlayerForTierMedians(ctx, player);
+      if (scored) {
+        appendTierMedianScore(
+          partialHolistic,
+          partialKills,
+          scored.tier,
+          scored.holisticScore,
+          scored.killsPerMatch,
+        );
+        partialRawHolistic[scored.tier].push(scored.rawHolisticScore);
+      }
+    } catch (error) {
+      console.error(
+        `[tierReEvaluationBatched] tier medians failed for ${player.discordUsername}:`,
+        error,
       );
-      partialRawHolistic[scored.tier].push(scored.rawHolisticScore);
     }
   }
 
   const totalPlayersScored = countScored();
 
-  if (pageIndex >= page.page.length) {
-    if (page.isDone) {
-      return finalizeAndReturn();
-    }
-    await ctx.db.patch(cache._id, {
-      partialHolisticByTier: partialHolistic,
-      partialKillsByTier: partialKills,
-      partialRawHolisticByTier: partialRawHolistic,
-      mediansPlayersCursor: page.continueCursor,
-      mediansPageIndex: 0,
-      lastUpdated: Date.now(),
-    });
-    return { isDone: false, processed: 1, totalPlayersScored };
+  if (playerIndex >= eligiblePlayerIds.length) {
+    return finalizeAndReturn();
   }
 
   await ctx.db.patch(cache._id, {
     partialHolisticByTier: partialHolistic,
     partialKillsByTier: partialKills,
     partialRawHolisticByTier: partialRawHolistic,
-    mediansPlayersCursor: cursor,
-    mediansPageIndex: pageIndex,
+    mediansPageIndex: playerIndex,
     lastUpdated: Date.now(),
   });
   return { isDone: false, processed: 1, totalPlayersScored };
@@ -448,6 +480,14 @@ async function calculateTierMediansStepHandler(
 export const calculateTierMediansStep = internalMutation({
   args: {},
   handler: calculateTierMediansStepHandler,
+});
+
+export const initTierEvalPlayerList = internalMutation({
+  args: { recentOnly: v.boolean() },
+  handler: async (ctx, args) => {
+    const playerIds = await buildTierEvalEligiblePlayerIds(ctx, args.recentOnly);
+    return { playerIds };
+  },
 });
 
 // Step 2a: Clear existing cache in batched pages (safe for large caches).
@@ -909,14 +949,13 @@ async function processBatchHandler(
 /** Process at most one eligible player per call to avoid mutation timeouts. */
 export const processOneTierEvalPlayerStep = internalMutation({
   args: {
-    cursor: v.union(v.string(), v.null()),
-    pageIndex: v.number(),
+    playerIds: v.array(v.id("players")),
+    playerIndex: v.number(),
     recentOnly: v.boolean(),
   },
   handler: async (ctx, args): Promise<{
     isDone: boolean;
-    continueCursor: string | null;
-    nextPageIndex: number;
+    nextPlayerIndex: number;
     processed: number;
   }> => {
     const mediansCache = await ctx.db.query("tierMediansCache").first();
@@ -924,31 +963,15 @@ export const processOneTierEvalPlayerStep = internalMutation({
       throw new Error("Tier medians not calculated. Run the medians step first.");
     }
 
-    const page = await paginateActivePlayers(ctx, args.cursor, 20);
-    let pageIndex = args.pageIndex;
-
-    if (pageIndex >= page.page.length) {
-      if (page.isDone) {
-        return {
-          isDone: true,
-          continueCursor: null,
-          nextPageIndex: 0,
-          processed: 0,
-        };
-      }
-      return {
-        isDone: false,
-        continueCursor: page.continueCursor,
-        nextPageIndex: 0,
-        processed: 0,
-      };
+    if (args.playerIndex >= args.playerIds.length) {
+      return { isDone: true, nextPlayerIndex: args.playerIndex, processed: 0 };
     }
 
-    const player = page.page[pageIndex];
-    pageIndex += 1;
+    const player = await ctx.db.get(args.playerIds[args.playerIndex]);
+    const nextPlayerIndex = args.playerIndex + 1;
     let processed = 0;
 
-    if (isEligibleForTierEvalPlayer(player, args.recentOnly)) {
+    if (player && isEligibleForTierEvalPlayer(player, args.recentOnly)) {
       try {
         const result = await processBatchHandler(ctx, {
           batchNumber: 0,
@@ -964,27 +987,9 @@ export const processOneTierEvalPlayerStep = internalMutation({
       }
     }
 
-    if (pageIndex >= page.page.length) {
-      if (page.isDone) {
-        return {
-          isDone: true,
-          continueCursor: null,
-          nextPageIndex: 0,
-          processed,
-        };
-      }
-      return {
-        isDone: false,
-        continueCursor: page.continueCursor,
-        nextPageIndex: 0,
-        processed,
-      };
-    }
-
     return {
-      isDone: false,
-      continueCursor: args.cursor,
-      nextPageIndex: pageIndex,
+      isDone: nextPlayerIndex >= args.playerIds.length,
+      nextPlayerIndex,
       processed,
     };
   },

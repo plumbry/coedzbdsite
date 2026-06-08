@@ -6,9 +6,10 @@ import {
 } from "./_components/scrim-series-workspace.tsx";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
-const VALID_TABS = new Set<ScrimSeriesAdminTab>([
+const VALID_TABS = new Set<ScrimSeriesAdminTab | "yunite">([
   "leaderboard",
   "scores",
+  "imports",
   "yunite",
   "players",
   "penalties",
@@ -16,7 +17,8 @@ const VALID_TABS = new Set<ScrimSeriesAdminTab>([
 ]);
 
 function parseInitialTab(tab: string | null): ScrimSeriesAdminTab {
-  if (tab && VALID_TABS.has(tab as ScrimSeriesAdminTab)) {
+  if (tab === "yunite") return "imports";
+  if (tab && VALID_TABS.has(tab as ScrimSeriesAdminTab | "yunite")) {
     return tab as ScrimSeriesAdminTab;
   }
   return "leaderboard";
