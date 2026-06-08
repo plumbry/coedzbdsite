@@ -131,6 +131,32 @@ function logYuniteRateLimitEvent(
   );
 }
 
+function isTransientNetworkError(error: unknown): boolean {
+  const parts: string[] = [];
+  if (error instanceof Error) {
+    parts.push(error.message);
+    const cause = (error as Error & { cause?: unknown }).cause;
+    if (cause instanceof Error) {
+      parts.push(cause.message);
+    } else if (cause != null) {
+      parts.push(String(cause));
+    }
+  } else {
+    parts.push(String(error));
+  }
+
+  const combined = parts.join(" ").toLowerCase();
+  return (
+    combined.includes("fetch failed") ||
+    combined.includes("econnreset") ||
+    combined.includes("etimedout") ||
+    combined.includes("econnrefused") ||
+    combined.includes("socket hang up") ||
+    combined.includes("network error") ||
+    combined.includes("timed out")
+  );
+}
+
 async function waitForRequestGap(gapMs: number): Promise<void> {
   const now = Date.now();
   const elapsed = now - lastYuniteRequestAt;
@@ -189,10 +215,24 @@ export async function yuniteFetch(
   let lastResponse: Response | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const response = await fetch(url, {
-      ...init,
-      headers: buildYuniteHeaders(apiKey, init),
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...init,
+        headers: buildYuniteHeaders(apiKey, init),
+      });
+    } catch (error) {
+      if (attempt < maxRetries && isTransientNetworkError(error)) {
+        const waitMs = Math.min(120_000, 2000 * Math.pow(2, attempt));
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `Yunite network error for ${url}: ${message}. Retrying in ${waitMs}ms (${attempt + 1}/${maxRetries})...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+      throw error;
+    }
 
     lastYuniteRequestAt = Date.now();
 

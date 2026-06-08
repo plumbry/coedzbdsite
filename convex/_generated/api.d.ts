@@ -96,6 +96,7 @@ import type * as lib_eventYuniteRequirement from "../lib/eventYuniteRequirement.
 import type * as lib_importPipeline from "../lib/importPipeline.js";
 import type * as lib_importSource from "../lib/importSource.js";
 import type * as lib_playerIdentity from "../lib/playerIdentity.js";
+import type * as lib_resolveImportPipelineStep from "../lib/resolveImportPipelineStep.js";
 import type * as lib_scrimLeaderboard from "../lib/scrimLeaderboard.js";
 import type * as lib_scrimSeriesEventLink from "../lib/scrimSeriesEventLink.js";
 import type * as lib_stats_computeInternalPlayerStats from "../lib/stats/computeInternalPlayerStats.js";
@@ -171,6 +172,7 @@ import type * as yunite_matchData from "../yunite/matchData.js";
 import type * as yunite_platformMutations from "../yunite/platformMutations.js";
 import type * as yunite_platforms from "../yunite/platforms.js";
 import type * as yunite_populateTeamMembers from "../yunite/populateTeamMembers.js";
+import type * as yunite_populateTeamMembersHelpers from "../yunite/populateTeamMembersHelpers.js";
 import type * as yunite_recalculateStats from "../yunite/recalculateStats.js";
 import type * as yunite_registrationApi from "../yunite/registrationApi.js";
 import type * as yunite_sync from "../yunite/sync.js";
@@ -270,6 +272,7 @@ declare const fullApi: ApiFromModules<{
   "lib/importPipeline": typeof lib_importPipeline;
   "lib/importSource": typeof lib_importSource;
   "lib/playerIdentity": typeof lib_playerIdentity;
+  "lib/resolveImportPipelineStep": typeof lib_resolveImportPipelineStep;
   "lib/scrimLeaderboard": typeof lib_scrimLeaderboard;
   "lib/scrimSeriesEventLink": typeof lib_scrimSeriesEventLink;
   "lib/stats/computeInternalPlayerStats": typeof lib_stats_computeInternalPlayerStats;
@@ -345,6 +348,7 @@ declare const fullApi: ApiFromModules<{
   "yunite/platformMutations": typeof yunite_platformMutations;
   "yunite/platforms": typeof yunite_platforms;
   "yunite/populateTeamMembers": typeof yunite_populateTeamMembers;
+  "yunite/populateTeamMembersHelpers": typeof yunite_populateTeamMembersHelpers;
   "yunite/recalculateStats": typeof yunite_recalculateStats;
   "yunite/registrationApi": typeof yunite_registrationApi;
   "yunite/sync": typeof yunite_sync;

@@ -1,7 +1,7 @@
 "use node";
 
 import { v } from "convex/values";
-import { action, internalAction, internalMutation, internalQuery } from "../_generated/server";
+import { action, internalAction } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
 import { yuniteFetchOrThrow, yuniteResponseJson } from "../lib/yuniteRateLimit";
@@ -19,60 +19,6 @@ interface LeaderboardEntry {
   placement: number;
 }
 
-export const getTeamPopulateContext = internalQuery({
-  args: { importId: v.id("thirdPartyImports") },
-  handler: async (ctx, args) => {
-    const results = await ctx.db
-      .query("thirdPartyResults")
-      .withIndex("by_import", (q) => q.eq("importId", args.importId))
-      .collect();
-
-    const resultsByDiscord: Record<
-      string,
-      { resultId: Id<"thirdPartyResults">; hasTeamMembers: boolean }
-    > = {};
-
-    for (const result of results) {
-      if (!result.discordId) {
-        continue;
-      }
-      resultsByDiscord[result.discordId] = {
-        resultId: result._id,
-        hasTeamMembers: (result.teamMembers?.length ?? 0) > 0,
-      };
-    }
-
-    const players = await ctx.db.query("players").collect();
-    const discordToEpic: Record<string, string> = {};
-    for (const player of players) {
-      if (player.discordUserId && player.epicUsername) {
-        discordToEpic[player.discordUserId] = player.epicUsername;
-      }
-    }
-
-    return { resultsByDiscord, discordToEpic };
-  },
-});
-
-export const bulkUpdateResultTeamMembers = internalMutation({
-  args: {
-    updates: v.array(
-      v.object({
-        resultId: v.id("thirdPartyResults"),
-        teamMembers: v.array(v.string()),
-      }),
-    ),
-  },
-  handler: async (ctx, args) => {
-    for (const update of args.updates) {
-      await ctx.db.patch(update.resultId, {
-        teamMembers: update.teamMembers,
-      });
-    }
-    return { updated: args.updates.length };
-  },
-});
-
 export const populateForImportInternal = internalAction({
   args: { importId: v.id("thirdPartyImports") },
   handler: async (ctx, args): Promise<{ success: boolean; updated: number }> => {
@@ -87,7 +33,7 @@ export const populateForImportInternal = internalAction({
     if (!imp) throw new Error("Import not found");
 
     const { resultsByDiscord, discordToEpic } = await ctx.runQuery(
-      internal.yunite.populateTeamMembers.getTeamPopulateContext,
+      internal.yunite.populateTeamMembersHelpers.getTeamPopulateContext,
       { importId: args.importId },
     );
 
@@ -130,7 +76,7 @@ export const populateForImportInternal = internalAction({
     for (let i = 0; i < pendingUpdates.length; i += BULK_UPDATE_CHUNK_SIZE) {
       const chunk = pendingUpdates.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
       const result = await ctx.runMutation(
-        internal.yunite.populateTeamMembers.bulkUpdateResultTeamMembers,
+        internal.yunite.populateTeamMembersHelpers.bulkUpdateResultTeamMembers,
         { updates: chunk },
       );
       updated += result.updated;

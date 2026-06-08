@@ -189,6 +189,12 @@ export function isTransientYuniteError(message: string) {
   const lower = message.toLowerCase();
   return (
     isRateLimitError(message) ||
+    lower.includes("fetch failed") ||
+    lower.includes("econnreset") ||
+    lower.includes("etimedout") ||
+    lower.includes("econnrefused") ||
+    lower.includes("socket hang up") ||
+    lower.includes("network error") ||
     lower.includes("gateway timeout") ||
     lower.includes("bad gateway") ||
     lower.includes("yunite api 502") ||
@@ -201,6 +207,10 @@ export function isTransientYuniteError(message: string) {
 
 export function sanitizePipelineErrorMessage(message: string): string {
   const trimmed = message.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("fetch failed") || lower.includes("econnreset") || lower.includes("etimedout")) {
+    return "Network error reaching Yunite API. Wait a moment and run Process Import again.";
+  }
   if (trimmed.toLowerCase().startsWith("<!doctype")) {
     return "Yunite API returned a gateway error (502/524). Wait a few minutes and run Process Import again.";
   }

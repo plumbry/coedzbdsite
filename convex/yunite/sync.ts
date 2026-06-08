@@ -433,12 +433,14 @@ interface YuniteMatch {
 
 interface YuniteMatchLeaderboardEntry {
   team: {
+    id?: string;
     players: Array<{
       index: number;
       discordId: string;
       epicId: string;
     }>;
   };
+  teamId?: string;
   placement: number;
   kills: number; // Team total
   survivalTime: number;
