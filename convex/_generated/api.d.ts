@@ -101,6 +101,7 @@ import type * as lib_stats_syncInternalEventParticipation from "../lib/stats/syn
 import type * as lib_stats_types from "../lib/stats/types.js";
 import type * as lib_stats_zbdPerformanceStats from "../lib/stats/zbdPerformanceStats.js";
 import type * as lib_yunite from "../lib/yunite.js";
+import type * as migrations_stripWipSchemaFields from "../migrations/stripWipSchemaFields.js";
 import type * as memberManagement from "../memberManagement.js";
 import type * as migrateHasMatchData from "../migrateHasMatchData.js";
 import type * as migrateMembershipStatus from "../migrateMembershipStatus.js";
@@ -264,6 +265,7 @@ declare const fullApi: ApiFromModules<{
   "lib/stats/types": typeof lib_stats_types;
   "lib/stats/zbdPerformanceStats": typeof lib_stats_zbdPerformanceStats;
   "lib/yunite": typeof lib_yunite;
+  "migrations/stripWipSchemaFields": typeof migrations_stripWipSchemaFields;
   memberManagement: typeof memberManagement;
   migrateHasMatchData: typeof migrateHasMatchData;
   migrateMembershipStatus: typeof migrateMembershipStatus;
