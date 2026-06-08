@@ -211,7 +211,6 @@ export const syncYuniteTournaments = action({
         }
         
         const leaderboardPayload = await leaderboardResponse.json();
-        leaderboard = normalizeYuniteLeaderboardPayload(leaderboardPayload);
 
         if (!yuniteTournamentHasImportableData(tournament, leaderboardPayload)) {
           console.log(
@@ -219,6 +218,10 @@ export const syncYuniteTournaments = action({
           );
           continue;
         }
+
+        leaderboard = normalizeYuniteLeaderboardPayload(
+          leaderboardPayload,
+        ) as YuniteLeaderboardEntry[];
 
         successfulTournaments++;
         

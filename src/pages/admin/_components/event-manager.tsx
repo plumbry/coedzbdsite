@@ -198,7 +198,7 @@ function TypeAbbrIndicator({ type, mode }: { type: string; mode: string }) {
   );
 }
 
-function formatEventDateRange(startDate: number, endDate: number) {
+function formatEventDateRange(startDate: string | number, endDate: string | number) {
   const start = new Date(startDate);
   const end = new Date(endDate);
 
