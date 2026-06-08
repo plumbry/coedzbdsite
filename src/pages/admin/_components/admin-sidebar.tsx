@@ -14,6 +14,7 @@ import {
   Users,
   ArrowLeft,
   Calendar,
+  CalendarDays,
   ListChecks,
   Upload,
   Trophy,
@@ -335,6 +336,11 @@ export default function AdminSidebar() {
         label: "Mods",
         items: [
           { path: "/admin/event-bans", label: "Event Bans", icon: Ban },
+          {
+            path: "/admin/potential-event-calendar",
+            label: "Event Calendar",
+            icon: CalendarDays,
+          },
           { path: "/admin/punishment-matrix", label: "Punishment Matrix", icon: ScrollText },
           { path: "/spin", label: "Spin Page", icon: Dices },
           { path: "/admin/spin-moderation", label: "Spin Moderation", icon: KeyRound },

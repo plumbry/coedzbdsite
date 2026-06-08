@@ -15,6 +15,7 @@ import {
   BarChart3,
   TrendingUp,
   Ban,
+  CalendarDays,
   ScrollText,
   KeyRound,
   Dices,
@@ -227,6 +228,12 @@ export default function AdminHubPage() {
           description: "Manage event bans and offense tracking.",
           href: "/admin/event-bans",
           icon: Ban,
+        },
+        {
+          title: "Event Calendar",
+          description: "Plan potential events on a shared standalone calendar.",
+          href: "/admin/potential-event-calendar",
+          icon: CalendarDays,
         },
         {
           title: "Punishment Matrix",

@@ -1347,6 +1347,30 @@ export default defineSchema({
     expiresAt: v.number(),
   }).index("by_token", ["token"]),
 
+  // Standalone planning calendar for potential events (not linked to the events system)
+  potentialEventCalendarEntries: defineTable({
+    title: v.string(),
+    date: v.string(), // YYYY-MM-DD
+    endDate: v.optional(v.string()), // YYYY-MM-DD for multi-day entries
+    time: v.optional(v.string()),
+    description: v.optional(v.string()),
+    status: v.optional(
+      v.union(
+        v.literal("tentative"),
+        v.literal("confirmed"),
+        v.literal("cancelled"),
+      ),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+  }).index("by_date", ["date"]),
+
+  potentialEventCalendarViewerSessions: defineTable({
+    token: v.string(),
+    expiresAt: v.number(),
+  }).index("by_token", ["token"]),
+
   // ─── Scrim Series Leaderboard ───────────────────────────────────────────────
 
   // A scrim series (e.g. "Season 1") with configurable settings
