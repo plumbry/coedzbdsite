@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query, action, internalMutation } from "../_generated/server";
-import { requireAdmin, requireModeratorOrAdmin, getDisplayName } from "../auth_helpers";
+import {
+  requireAdmin,
+  requireEventBanAccess,
+  requireModeratorOrAdmin,
+  getDisplayName,
+} from "../auth_helpers";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel.d.ts";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
@@ -383,6 +388,22 @@ export const getPublicEvents = query({
       hasImage: !!event.image,
       standardCount: event.standardLeaderboards?.length || 0,
     }));
+  },
+});
+
+/** Unique event names from Events Manager — for calendar title suggestions. */
+export const listEventTitles = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireEventBanAccess(ctx);
+
+    const events = await ctx.db.query("events").collect();
+    const titles = new Set<string>();
+    for (const event of events) {
+      const name = event.name.trim();
+      if (name) titles.add(name);
+    }
+    return Array.from(titles).sort((a, b) => a.localeCompare(b));
   },
 });
 

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "convex/react";
+import { useCachedEventTitles } from "@/hooks/use-cached-event-titles.ts";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
@@ -63,11 +64,24 @@ export default function PotentialEventCalendarEntryDialog({
   const [recurrenceInterval, setRecurrenceInterval] = useState<RecurrenceInterval>("weekly");
   const [recurrenceUntil, setRecurrenceUntil] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
+
+  const { titles: cachedEventTitles } = useCachedEventTitles(open);
+  const titleSuggestions = useMemo(() => {
+    const query = title.trim().toLowerCase();
+    if (!query) return cachedEventTitles.slice(0, 12);
+    return cachedEventTitles
+      .filter((name) => name.toLowerCase().includes(query))
+      .slice(0, 12);
+  }, [cachedEventTitles, title]);
 
   const isEditing = Boolean(entry);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setShowTitleSuggestions(false);
+      return;
+    }
 
     if (entry) {
       setTitle(entry.title);
@@ -160,13 +174,44 @@ export default function PotentialEventCalendarEntryDialog({
           <DialogBody className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="calendar-entry-title">Title</Label>
-              <Input
-                id="calendar-entry-title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Community scrim night"
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="calendar-entry-title"
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    setShowTitleSuggestions(true);
+                  }}
+                  onFocus={() => setShowTitleSuggestions(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => setShowTitleSuggestions(false), 150);
+                  }}
+                  placeholder="e.g. Community scrim night"
+                  autoComplete="off"
+                  required
+                />
+                {showTitleSuggestions && titleSuggestions.length > 0 && (
+                  <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-md border bg-popover shadow-md">
+                    {titleSuggestions.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        className="flex w-full cursor-pointer px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setTitle(name);
+                          setShowTitleSuggestions(false);
+                        }}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Pick from Events Manager titles or type a custom name.
+              </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
