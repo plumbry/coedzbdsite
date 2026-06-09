@@ -6,6 +6,7 @@ import {
   loadFemaleVerificationLookup,
   enrichPlayerWithFemaleVerification,
 } from "./helpers/femaleVerification";
+import { scheduleGenderSheetRebuild } from "./helpers/genderSheetSchedule";
 import {
   buildPublicMemberDirectory,
   schedulePublicMemberDirectoryRebuild,
@@ -13,6 +14,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
+import { markPlayersRecentlyActive, RECENT_ACTIVITY_MS } from "./lib/memberActivity";
 import { filterVisibleMembers } from "./helpers/playerAlt";
 import {
   playerMatchesSearchTerm,
@@ -622,7 +624,8 @@ export const acceptApplication = mutation({
     });
 
     await schedulePublicMemberDirectoryRebuild(ctx);
-    
+    await scheduleGenderSheetRebuild(ctx);
+
     return playerId;
   },
 });
@@ -696,6 +699,8 @@ export const rejectApplication = mutation({
       performedByName: getDisplayName(user),
       isSystemAction: false,
     });
+
+    await scheduleGenderSheetRebuild(ctx);
   },
 });
 
@@ -847,75 +852,76 @@ export const rebuildPublicMemberDirectoryCache = mutation({
   },
 });
 
-// Public home page — reads precomputed snapshot (rebuilt on cron / membership changes).
+// Public home page — reads precomputed snapshot only (no live rebuild).
 export const getPublicMemberDirectory = query({
   args: {},
   handler: async (ctx) => {
     const cache = await ctx.db.query("publicMemberDirectoryCache").first();
     if (cache) {
-      return cache.members;
+      return {
+        available: true as const,
+        members: cache.members,
+        lastUpdated: cache.lastUpdated,
+      };
     }
-    return await buildPublicMemberDirectory(ctx);
+    return {
+      available: false as const,
+      members: [] as Awaited<ReturnType<typeof buildPublicMemberDirectory>>,
+      message:
+        "Member directory cache is not built. An admin must run Rebuild public directory in Data Maintenance.",
+    };
   },
 });
 
-// Refresh cached isRecentlyActive flags (cron / post-import)
-export const refreshRecentlyActiveFlags = internalMutation({
+/** Mark import-affected players as recently active (called from import pipeline). */
+export const markPlayersRecentlyActiveInternal = internalMutation({
+  args: { playerIds: v.array(v.id("players")) },
+  handler: async (ctx, args) => {
+    const updated = await markPlayersRecentlyActive(ctx, args.playerIds);
+    if (updated > 0) {
+      await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
+    }
+    return { updated };
+  },
+});
+
+/** Daily cron — mark players inactive when lastActiveAt is past the threshold. */
+export const markInactivePlayersPastThreshold = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const sixWeeksAgo = new Date(Date.now() - 6 * 7 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
+    const threshold = Date.now() - RECENT_ACTIVITY_MS;
 
-    const recentEvents = await ctx.db
-      .query("events")
-      .withIndex("by_date")
-      .filter((q) => q.gte(q.field("startDate"), sixWeeksAgo))
-      .collect();
-
-    const recentEventIds = new Set(recentEvents.map((e) => e._id));
-    const recentImportIds = new Set<Id<"thirdPartyImports">>();
-
-    for (const eventId of recentEventIds) {
-      const imports = await ctx.db
-        .query("thirdPartyImports")
-        .withIndex("by_event", (q) => q.eq("eventId", eventId))
-        .collect();
-      for (const imp of imports) {
-        recentImportIds.add(imp._id);
-      }
-    }
-
-    const players = await ctx.db
+    const stale = await ctx.db
       .query("players")
-      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
+      .withIndex("by_recently_active", (q) =>
+        q.eq("isRecentlyActive", true).lt("lastActiveAt", threshold),
+      )
       .collect();
 
-    for (const player of players) {
-      let isActive = false;
-      if (recentImportIds.size > 0) {
-        const playerMatches = await ctx.db
-          .query("matchPlayerStats")
-          .withIndex("by_player", (q) => q.eq("playerId", player._id))
-          .order("desc")
-          .take(30);
-        isActive = playerMatches.some((m) => recentImportIds.has(m.importId));
-      }
-      if (player.isRecentlyActive !== isActive) {
-        await ctx.db.patch(player._id, { isRecentlyActive: isActive });
-      }
+    let updated = 0;
+    for (const player of stale) {
+      await ctx.db.patch(player._id, { isRecentlyActive: false });
+      updated += 1;
     }
 
-    await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
+    if (updated > 0) {
+      await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
+    }
+
+    return { markedInactive: updated };
   },
 });
 
-// Admin: refresh isRecentlyActive flags immediately (also runs daily via cron)
-export const triggerRefreshRecentlyActive = mutation({
+// Admin: run inactivity sweep immediately (also runs daily via cron)
+export const triggerMarkInactivePlayers = mutation({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    await ctx.scheduler.runAfter(0, internal.memberManagement.refreshRecentlyActiveFlags, {});
+    await ctx.scheduler.runAfter(
+      0,
+      internal.memberManagement.markInactivePlayersPastThreshold,
+      {},
+    );
   },
 });
 
@@ -1197,6 +1203,7 @@ export const updateMemberStatus = mutation({
     });
 
     await schedulePublicMemberDirectoryRebuild(ctx);
+    await scheduleGenderSheetRebuild(ctx);
   },
 });
 
@@ -1292,6 +1299,7 @@ export const deletePlayer = mutation({
     });
 
     await schedulePublicMemberDirectoryRebuild(ctx);
+    await scheduleGenderSheetRebuild(ctx);
   },
 });
 

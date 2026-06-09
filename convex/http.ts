@@ -325,7 +325,7 @@ http.route({
   }),
 });
 
-// Manual / rare reconciliation only — not part of automatic sync workflows.
+// Legacy fallback — primary bot path is Mod Log "Gender Sheet". Manual reconcile only.
 // GET endpoint for Discord bot — website-evaluated female members (gender = 50)
 http.route({
   path: "/api/discord/female-evaluated-members",

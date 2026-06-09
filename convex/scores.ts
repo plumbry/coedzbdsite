@@ -1,10 +1,12 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
 import { getManualScoreForPlayer } from "./helpers/manualScores";
+import { scheduleGenderSheetRebuild } from "./helpers/genderSheetSchedule";
 import { schedulePublicMemberDirectoryRebuildForPlayer } from "./helpers/publicMemberDirectory";
+import { updateTierEvalForPlayerIfEligible } from "./lib/stats/updateTierEvalForPlayer";
 
 // Calculate tier based on total score
 function calculateTier(totalScore: number): string {
@@ -283,17 +285,25 @@ export const createOrUpdateScore = mutation({
       newValue: `${totalScore}/1900, Tier ${tier}`,
     });
 
-    await ctx.scheduler.runAfter(
-      0,
-      internal.helpers.eventDrivenRebuilds.scheduleTierEvalRebuild,
-      {},
-    );
+    await ctx.scheduler.runAfter(0, internal.scores.syncTierEvalAfterEvaluation, {
+      playerId: args.playerId,
+    });
 
     await schedulePublicMemberDirectoryRebuildForPlayer(ctx, {
       currentMembershipStatus: player.currentMembershipStatus,
       isAlt: player.isAlt,
     });
 
+    await scheduleGenderSheetRebuild(ctx);
+
     return { totalScore, tier };
+  },
+});
+
+/** After a manual evaluation save — update tier re-eval for this player only. */
+export const syncTierEvalAfterEvaluation = internalMutation({
+  args: { playerId: v.id("players") },
+  handler: async (ctx, args) => {
+    return await updateTierEvalForPlayerIfEligible(ctx, args.playerId);
   },
 });
