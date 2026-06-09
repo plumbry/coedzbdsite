@@ -25,10 +25,12 @@ import PageHeader from "@/components/page-header.tsx";
 import ConfirmDialog from "@/components/confirm-dialog.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import PotentialEventCalendarEntryDialog from "./potential-event-calendar-entry-dialog.tsx";
+import PotentialEventCalendarExportDialog from "./potential-event-calendar-export-dialog.tsx";
 import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Download,
   Lock,
   Pencil,
   Plus,
@@ -90,6 +92,10 @@ export default function PotentialEventCalendarManager({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<CalendarEntry | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CalendarEntry | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+
+  const exportRangeStart = toDateInputValue(startOfMonth(month));
+  const exportRangeEnd = toDateInputValue(endOfMonth(month));
 
   const rangeStart = toDateInputValue(
     startOfWeek(startOfMonth(month), { weekStartsOn: 0 }),
@@ -198,6 +204,10 @@ export default function PotentialEventCalendarManager({
                 End view session
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+              <Download className="mr-2 h-4 w-4" />
+              Download
+            </Button>
             {canEdit && (
               <Button size="sm" onClick={() => openCreateDialog()}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -424,6 +434,14 @@ export default function PotentialEventCalendarManager({
         onOpenChange={setDialogOpen}
         entry={editingEntry}
         defaultDate={selectedDate}
+      />
+
+      <PotentialEventCalendarExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        defaultRangeStart={exportRangeStart}
+        defaultRangeEnd={exportRangeEnd}
+        viewerToken={viewerToken}
       />
 
       <ConfirmDialog
