@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, internalMutation } from "./_generated/server";
 import { requireAdmin } from "./auth_helpers";
+import { getPlayerDisplayStatsEligibility } from "./lib/stats/playerStatsCacheEligibility";
 
 /** Read cached Team Contribution score for a player. */
 export const getPlayerCS = query({
@@ -9,6 +10,11 @@ export const getPlayerCS = query({
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
+
+    const eligibility = await getPlayerDisplayStatsEligibility(ctx, args.playerId);
+    if (!eligibility.statsEligible) {
+      return null;
+    }
 
     const player = await ctx.db.get(args.playerId);
     return player?.contributionScore || null;

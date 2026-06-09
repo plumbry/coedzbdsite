@@ -106,6 +106,7 @@ import type * as lib_stats_filterYuniteResults from "../lib/stats/filterYuniteRe
 import type * as lib_stats_holisticScore from "../lib/stats/holisticScore.js";
 import type * as lib_stats_listEligiblePlayers from "../lib/stats/listEligiblePlayers.js";
 import type * as lib_stats_matchPlayerFromLookup from "../lib/stats/matchPlayerFromLookup.js";
+import type * as lib_stats_playerStatsCacheEligibility from "../lib/stats/playerStatsCacheEligibility.js";
 import type * as lib_stats_rebuildKind from "../lib/stats/rebuildKind.js";
 import type * as lib_stats_syncInternalEventParticipation from "../lib/stats/syncInternalEventParticipation.js";
 import type * as lib_stats_thresholds from "../lib/stats/thresholds.js";
@@ -287,6 +288,7 @@ declare const fullApi: ApiFromModules<{
   "lib/stats/holisticScore": typeof lib_stats_holisticScore;
   "lib/stats/listEligiblePlayers": typeof lib_stats_listEligiblePlayers;
   "lib/stats/matchPlayerFromLookup": typeof lib_stats_matchPlayerFromLookup;
+  "lib/stats/playerStatsCacheEligibility": typeof lib_stats_playerStatsCacheEligibility;
   "lib/stats/rebuildKind": typeof lib_stats_rebuildKind;
   "lib/stats/syncInternalEventParticipation": typeof lib_stats_syncInternalEventParticipation;
   "lib/stats/thresholds": typeof lib_stats_thresholds;

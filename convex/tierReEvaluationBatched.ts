@@ -598,26 +598,18 @@ async function processBatchHandler(
       }
     } else {
       // Legacy path when playerIds were not stored on the rebuild job
-      const activePlayers = await ctx.db
-        .query("players")
-        .withIndex("by_status", (q) => q.eq("status", "active"))
-        .collect();
-      let eligiblePlayers = filterVisibleMembers(
-        activePlayers.filter((p) => p.hasMatchData === true),
+      const eligibleIds = await buildTierEvalEligiblePlayerIds(
+        ctx,
+        args.recentOnly ?? false,
       );
-
-      if (args.recentOnly) {
-        const SIX_WEEKS_MS = 6 * 7 * 24 * 60 * 60 * 1000;
-        const cutoff = Date.now() - SIX_WEEKS_MS;
-        eligiblePlayers = eligiblePlayers.filter((p) => {
-          const mostRecent = p.topFiveCache?.mostRecentEventTime;
-          return mostRecent !== undefined && mostRecent >= cutoff;
-        });
-      }
-
       const startIdx = args.batchNumber * BATCH_SIZE;
-      const endIdx = Math.min(startIdx + BATCH_SIZE, eligiblePlayers.length);
-      batchPlayers = eligiblePlayers.slice(startIdx, endIdx);
+      const endIdx = Math.min(startIdx + BATCH_SIZE, eligibleIds.length);
+      for (const playerId of eligibleIds.slice(startIdx, endIdx)) {
+        const player = await ctx.db.get(playerId);
+        if (player) {
+          batchPlayers.push(player);
+        }
+      }
     }
 
     const now = Date.now();

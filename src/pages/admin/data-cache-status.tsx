@@ -32,6 +32,7 @@ import {
   PlayerStatsRebuildRunningAlert,
 } from "@/components/admin/player-stats-rebuild-button.tsx";
 import { PlayerStatsMigrationChecklist } from "@/components/admin/player-stats-migration-checklist.tsx";
+import { PlayerStatsCacheBackfillChecklist } from "@/components/admin/player-stats-cache-backfill-checklist.tsx";
 
 class DataCacheStatusErrorBoundary extends Component<
   { children: ReactNode },
@@ -182,6 +183,7 @@ function DataCacheStatusContent() {
         <Skeleton className="h-96 w-full" />
       ) : (
         <div className="space-y-6">
+          <PlayerStatsCacheBackfillChecklist />
           <PlayerStatsMigrationChecklist variant="cache" />
 
           <Card className="border-primary bg-primary/5">

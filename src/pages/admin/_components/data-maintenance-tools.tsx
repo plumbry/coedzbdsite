@@ -19,6 +19,7 @@ import {
   PlayerStatsRebuildRunningAlert,
 } from "@/components/admin/player-stats-rebuild-button.tsx";
 import { PlayerStatsMigrationChecklist } from "@/components/admin/player-stats-migration-checklist.tsx";
+import { PlayerStatsCacheBackfillChecklist } from "@/components/admin/player-stats-cache-backfill-checklist.tsx";
 
 type PendingConfirm = {
   title: string;
@@ -241,6 +242,7 @@ export default function DataMaintenanceTools() {
 
   return (
     <div className="space-y-4">
+      <PlayerStatsCacheBackfillChecklist />
       <PlayerStatsMigrationChecklist
         variant="maintenance"
         clearingPlayerPr={isClearingDeprecatedRanking}

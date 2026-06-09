@@ -8,6 +8,7 @@ import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerSta
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 import { FORMULA_VERSION } from "./lib/stats/versions";
 import { listStatsEligiblePlayerIds } from "./lib/stats/listEligiblePlayers";
+import { isPlayerStatsCachePopulated } from "./lib/stats/playerStatsCacheEligibility";
 
 /** Population averages use `computeInternalPlayerStats` (Yunite imports) via `aggregateStatsCache`. */
 const PLAYERS_PER_BATCH = 2;
@@ -33,8 +34,8 @@ const isValidDiscordId = (id: string | undefined): boolean => {
 };
 
 async function listActivePlayersWithMatchData(ctx: MutationCtx) {
-  const statsEligibleIds = await listStatsEligiblePlayerIds(ctx);
-  if (statsEligibleIds.length > 0) {
+  if (await isPlayerStatsCachePopulated(ctx)) {
+    const statsEligibleIds = await listStatsEligiblePlayerIds(ctx);
     const players = [];
     for (const playerId of statsEligibleIds) {
       const player = await ctx.db.get(playerId);
@@ -49,6 +50,7 @@ async function listActivePlayersWithMatchData(ctx: MutationCtx) {
     return players;
   }
 
+  // Pre-backfill only until first playerStatsCache rebuild.
   const allPlayers = await ctx.db.query("players").collect();
   return allPlayers.filter(
     (p) =>

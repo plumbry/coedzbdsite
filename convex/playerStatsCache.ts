@@ -54,6 +54,43 @@ export const getPlayerStatsCache = query({
   },
 });
 
+/** Admin summary for post-deploy backfill verification. */
+export const getCacheStatusSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const allRows = await ctx.db.query("playerStatsCache").collect();
+    const statsEligible = allRows.filter((row) => row.statsEligible).length;
+    const reevaluationEligible = allRows.filter((row) => row.reevaluationEligible).length;
+
+    const activeRebuild = await ctx.db
+      .query("playerStatsCacheRebuildJobs")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .first();
+
+    return {
+      populated: allRows.length > 0,
+      totalRows: allRows.length,
+      statsEligible,
+      reevaluationEligible,
+      belowDisplayThreshold: allRows.filter((row) => !row.statsEligible).length,
+      betweenDisplayAndReeval: allRows.filter(
+        (row) => row.statsEligible && !row.reevaluationEligible,
+      ).length,
+      activeRebuild: activeRebuild
+        ? {
+            jobId: activeRebuild._id,
+            processedCount: activeRebuild.processedCount,
+            totalPlayers: activeRebuild.playerIds.length,
+            collectingPlayerIds: activeRebuild.collectingPlayerIds ?? false,
+          }
+        : null,
+      lastCheckedAt: Date.now(),
+    };
+  },
+});
+
 export const recalculateStatsForPlayer = mutation({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {

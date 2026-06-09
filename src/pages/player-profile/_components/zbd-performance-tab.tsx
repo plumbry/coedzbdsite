@@ -226,8 +226,6 @@ function EventResultsGrouped({ events }: { events: EventResult[] }) {
 
 export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerformanceTabProps) {
   const bundle = useQuery(api.playerStats.getPlayerZBDPerformanceBundle, { playerId });
-  const allEvents = bundle?.events;
-  const stats = bundle?.stats;
   const duoPerf = useQuery(api.playerStats.getPlayerDuoPerformance, { playerId });
   const cs = useQuery(api.calculateContributionScore.getPlayerCS, { playerId });
   const matchStats = useQuery(api.playerStats.getPlayerMatchStats, { playerId });
@@ -237,11 +235,32 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
   const [expandedDialogOpen, setExpandedDialogOpen] = useState(false);
   const [expandedChartType, setExpandedChartType] = useState<"placement" | "kills">("placement");
   
-  if (bundle === undefined || allEvents === undefined || stats === undefined) {
+  if (bundle === undefined) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-64 w-full" />
         <Skeleton className="h-96 w-full" />
+      </div>
+    );
+  }
+
+  const eligibility = bundle.eligibility;
+  const allEvents = bundle.events ?? [];
+  const stats = bundle.stats;
+
+  if (!stats) {
+    const eventCount = eligibility?.eventCount ?? 0;
+    const required = eligibility?.requiredDisplayEvents ?? 3;
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg border border-muted bg-muted/30 p-4">
+          <p className="text-sm text-muted-foreground">
+            {eligibility?.hasCacheRow
+              ? `Displayed competitive stats require at least ${required} Yunite import events. This player has ${eventCount}.`
+              : `Displayed competitive stats require at least ${required} Yunite import events. Run the player stats cache backfill in Admin → Data Maintenance if this player has imported data.`}
+          </p>
+        </div>
+        {allEvents.length > 0 && <EventResultsGrouped events={allEvents} />}
       </div>
     );
   }

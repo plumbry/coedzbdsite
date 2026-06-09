@@ -6,6 +6,11 @@ import { requireAdmin } from "./auth_helpers";
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 import { isYuniteImport } from "./lib/importSource";
 import { buildZbdPerformanceStats } from "./lib/stats/zbdPerformanceStats";
+import {
+  getPlayerDisplayStatsEligibility,
+  getPlayerStatsCacheRow,
+} from "./lib/stats/playerStatsCacheEligibility";
+import type { ZbdPerformanceStats } from "./lib/stats/zbdPerformanceStats";
 
 async function partitionThirdPartyResultsByImport(
   ctx: QueryCtx,
@@ -314,35 +319,72 @@ export const comprehensiveStatsForPlayerInternal = internalQuery({
   },
 });
 
+function mapCacheRowToZbdStats(
+  cacheRow: NonNullable<Awaited<ReturnType<typeof getPlayerStatsCacheRow>>>,
+): ZbdPerformanceStats {
+  return {
+    totalGames: cacheRow.eventCount,
+    eventsPlayed: cacheRow.eventCount,
+    totalMatches: 0,
+    matchWins: 0,
+    winRate: cacheRow.winRate,
+    winCount: 0,
+    averagePlacement: cacheRow.averagePlacement,
+    averageKD: cacheRow.averageKills,
+    killsPerMatch: cacheRow.averageKills,
+    deathsPerMatch: 0,
+    averageKd: cacheRow.averageKills,
+    totalEliminations: cacheRow.totalKills,
+    top3Finishes: Math.round((cacheRow.top3Rate / 100) * cacheRow.eventCount),
+    averageScore: cacheRow.averageScore,
+    manualEventsCount: 0,
+    yuniteTournamentRows: cacheRow.eventCount,
+  };
+}
+
 export const getPlayerZBDPerformanceBundle = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
 
+    const eligibility = await getPlayerDisplayStatsEligibility(ctx, args.playerId);
     const { eventResults, yuniteResults } = await fetchZbdPerformanceRows(
       ctx,
       args.playerId,
     );
-    const comprehensive = computeComprehensiveStats(eventResults, yuniteResults);
-    const { stats } = await buildZbdPerformanceStats(
+    const events = await formatPlayerAllEvents(
       ctx,
       args.playerId,
       eventResults,
       yuniteResults,
     );
 
+    if (!eligibility.statsEligible) {
+      return {
+        stats: null,
+        eligibility,
+        events,
+      };
+    }
+
+    const cacheRow = await getPlayerStatsCacheRow(ctx, args.playerId);
+    if (!cacheRow) {
+      return {
+        stats: null,
+        eligibility,
+        events,
+      };
+    }
+
+    const stats = mapCacheRowToZbdStats(cacheRow);
+
     return {
       stats: {
         ...stats,
-        /** Unique event names across manual + Yunite rows (not competitive events played). */
-        totalRecordedEvents: comprehensive.totalGames,
+        totalRecordedEvents: stats.eventsPlayed,
       },
-      events: await formatPlayerAllEvents(
-        ctx,
-        args.playerId,
-        eventResults,
-        yuniteResults,
-      ),
+      eligibility,
+      events,
     };
   },
 });
@@ -405,6 +447,11 @@ export const getPlayerDuoPerformance = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
+
+    const eligibility = await getPlayerDisplayStatsEligibility(ctx, args.playerId);
+    if (!eligibility.statsEligible) {
+      return null;
+    }
 
     // Get the player details
     const player = await ctx.db.get(args.playerId);
@@ -587,6 +634,10 @@ export const getPlayerMatchStats = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
+    const eligibility = await getPlayerDisplayStatsEligibility(ctx, args.playerId);
+    if (!eligibility.statsEligible) {
+      return null;
+    }
     return computePlayerMatchStats(ctx, args.playerId);
   },
 });
