@@ -30,15 +30,16 @@ type ProcessingStepResult = {
 export const runProcessingStep = internalAction({
   args: { jobId: v.id("importProcessingJobs") },
   handler: async (ctx, args): Promise<ProcessingStepResult> => {
-    const context = await ctx.runQuery(internal.importProcessing.getProcessingContext, {
-      jobId: args.jobId,
-    });
+    const context = await ctx.runQuery(
+      internal.importProcessing.getProcessingContextWithNextStep,
+      { jobId: args.jobId },
+    );
 
     if (!context || context.job.status !== "running") {
       return { done: true, reason: "job_not_running" };
     }
 
-    const { job } = context;
+    const { job, step } = context;
 
     if (job.resumeAt && Date.now() < job.resumeAt) {
       const delay = job.resumeAt - Date.now();
@@ -48,12 +49,6 @@ export const runProcessingStep = internalAction({
       });
       return { waiting: true, reason: "resume_scheduled" };
     }
-
-    const step = await ctx.runQuery(internal.importProcessing.resolveNextProcessingStep, {
-      importId: job.importId,
-      forceReprocess: job.forceReprocess,
-      completedSteps: job.completedSteps ?? [],
-    });
 
     if (!step) {
       const completed = new Set(context.job.completedSteps ?? []);
@@ -103,6 +98,7 @@ export const runProcessingStep = internalAction({
         case "sync_match_data": {
           await ctx.runAction(internal.yunite.sync.syncTournamentMatchDataInternal, {
             importId: job.importId,
+            jobId: args.jobId,
           });
           break;
         }

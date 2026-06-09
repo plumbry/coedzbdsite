@@ -10,6 +10,10 @@ import {
 } from "./thresholds";
 import { FORMULA_VERSION } from "./versions";
 import { getCachedImportRecord, type ImportRecordCache } from "./importRecordCache";
+import {
+  maybeRecalculateContributionScore,
+  type ContributionScoreUpdateResult,
+} from "./computeContributionScore";
 
 export type PlayerStatsCacheFields = {
   playerId: Id<"players">;
@@ -224,12 +228,18 @@ export type UpdatePlayerStatsOutcome = {
   statsCache: UpsertPlayerStatsCacheResult;
   tierEvalRemoved: boolean;
   tierEvalSkipped: boolean;
+  contributionScore: ContributionScoreUpdateResult;
 };
 
-/** Update denormalized player fields, stats cache, and tier-eval eligibility for one player. */
+export type UpdateStatsForPlayerOptions = {
+  matchDataChanged?: boolean;
+};
+
+/** Update denormalized player fields, stats cache, tier-eval eligibility, and TC when triggered. */
 export async function updateStatsForPlayer(
   ctx: MutationCtx,
   playerId: Id<"players">,
+  options?: UpdateStatsForPlayerOptions,
 ): Promise<UpdatePlayerStatsOutcome> {
   const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
   await syncInternalEventParticipationFromResults(ctx, playerId, thirdPartyResults);
@@ -243,29 +253,61 @@ export async function updateStatsForPlayer(
     .withIndex("by_player", (q) => q.eq("playerId", playerId))
     .first();
 
+  const contributionScore = await maybeRecalculateContributionScore(
+    ctx,
+    playerId,
+    {
+      statsCacheChanged: statsCache.action !== "skipped",
+      matchDataChanged: options?.matchDataChanged ?? false,
+    },
+    cacheRow,
+  );
+
   if (!cacheRow?.reevaluationEligible) {
     const tierEvalRemoved = await removeTierReEvaluationCacheForPlayer(ctx, playerId);
-    return { statsCache, tierEvalRemoved, tierEvalSkipped: true };
+    return {
+      statsCache,
+      tierEvalRemoved,
+      tierEvalSkipped: true,
+      contributionScore,
+    };
   }
 
-  return { statsCache, tierEvalRemoved: false, tierEvalSkipped: false };
+  return {
+    statsCache,
+    tierEvalRemoved: false,
+    tierEvalSkipped: false,
+    contributionScore,
+  };
 }
+
+export type UpdateStatsForPlayersOptions = {
+  matchDataChangedPlayerIds?: ReadonlySet<string>;
+};
 
 export async function updateStatsForPlayers(
   ctx: MutationCtx,
   playerIds: Id<"players">[],
+  options?: UpdateStatsForPlayersOptions,
 ): Promise<{
   playersUpdated: number;
   skippedNoChange: number;
+  csCalculated: number;
+  csSkippedNoChange: number;
   errors: string[];
 }> {
   let playersUpdated = 0;
   let skippedNoChange = 0;
+  let csCalculated = 0;
+  let csSkippedNoChange = 0;
   const errors: string[] = [];
+  const matchDataChanged = options?.matchDataChangedPlayerIds;
 
   for (const playerId of playerIds) {
     try {
-      const outcome = await updateStatsForPlayer(ctx, playerId);
+      const outcome = await updateStatsForPlayer(ctx, playerId, {
+        matchDataChanged: matchDataChanged?.has(playerId) ?? false,
+      });
       if (outcome.statsCache.action === "skipped") {
         skippedNoChange += 1;
       } else if (
@@ -275,6 +317,11 @@ export async function updateStatsForPlayers(
       ) {
         playersUpdated += 1;
       }
+      if (outcome.contributionScore.action === "calculated") {
+        csCalculated += 1;
+      } else if (outcome.contributionScore.action === "skipped_no_change") {
+        csSkippedNoChange += 1;
+      }
     } catch (error) {
       errors.push(
         `${playerId}: ${error instanceof Error ? error.message : String(error)}`,
@@ -282,5 +329,5 @@ export async function updateStatsForPlayers(
     }
   }
 
-  return { playersUpdated, skippedNoChange, errors };
+  return { playersUpdated, skippedNoChange, csCalculated, csSkippedNoChange, errors };
 }

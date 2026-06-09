@@ -255,7 +255,10 @@ export const rebuildTierReevaluationForEligible = mutation({
 });
 
 export const scheduleStatsUpdateForPlayers = internalMutation({
-  args: { playerIds: v.array(v.id("players")) },
+  args: {
+    playerIds: v.array(v.id("players")),
+    matchDataChangedPlayerIds: v.optional(v.array(v.id("players"))),
+  },
   handler: async (ctx, args) => {
     if (args.playerIds.length === 0) {
       return { scheduled: false };
@@ -267,6 +270,7 @@ export const scheduleStatsUpdateForPlayers = internalMutation({
 
     await ctx.scheduler.runAfter(0, internal.playerStatsCache.updateStatsBatchInternal, {
       playerIds: unique,
+      matchDataChangedPlayerIds: args.matchDataChangedPlayerIds,
     });
 
     return { scheduled: true, count: unique.length };
@@ -274,9 +278,17 @@ export const scheduleStatsUpdateForPlayers = internalMutation({
 });
 
 export const updateStatsBatchInternal = internalMutation({
-  args: { playerIds: v.array(v.id("players")) },
+  args: {
+    playerIds: v.array(v.id("players")),
+    matchDataChangedPlayerIds: v.optional(v.array(v.id("players"))),
+  },
   handler: async (ctx, args) => {
-    const summary = await updateStatsForPlayers(ctx, args.playerIds);
+    const matchDataChangedPlayerIds = args.matchDataChangedPlayerIds
+      ? new Set(args.matchDataChangedPlayerIds.map((id) => id as string))
+      : undefined;
+    const summary = await updateStatsForPlayers(ctx, args.playerIds, {
+      matchDataChangedPlayerIds,
+    });
     let tierEvalUpdated = 0;
     for (const playerId of args.playerIds) {
       const result = await updateTierEvalForPlayerIfEligible(ctx, playerId);

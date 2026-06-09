@@ -387,6 +387,10 @@ export default defineSchema({
     stepRowCursor: v.optional(v.number()),
     /** Player cursor for batched update_player_stats processing. */
     statsPlayerCursor: v.optional(v.number()),
+    /** Players whose matchPlayerStats rows changed during sync_match_data. */
+    matchStatsAffectedPlayerIds: v.optional(v.array(v.id("players"))),
+    csCalculated: v.optional(v.number()),
+    csSkippedNoChange: v.optional(v.number()),
     /** Row index at the last throttled progress write within the current step. */
     lastProgressWriteRow: v.optional(v.number()),
     batchesProcessed: v.optional(v.number()),

@@ -107,6 +107,7 @@ import type * as lib_playerIdentity from "../lib/playerIdentity.js";
 import type * as lib_resolveImportPipelineStep from "../lib/resolveImportPipelineStep.js";
 import type * as lib_scrimLeaderboard from "../lib/scrimLeaderboard.js";
 import type * as lib_scrimSeriesEventLink from "../lib/scrimSeriesEventLink.js";
+import type * as lib_stats_computeContributionScore from "../lib/stats/computeContributionScore.js";
 import type * as lib_stats_computeInternalPlayerStats from "../lib/stats/computeInternalPlayerStats.js";
 import type * as lib_stats_evaluationStatus from "../lib/stats/evaluationStatus.js";
 import type * as lib_stats_filterYuniteResults from "../lib/stats/filterYuniteResults.js";
@@ -182,6 +183,7 @@ import type * as yunite_fixPlacementsHelpers from "../yunite/fixPlacementsHelper
 import type * as yunite_lookupEpicRegistration from "../yunite/lookupEpicRegistration.js";
 import type * as yunite_lookupPlatform from "../yunite/lookupPlatform.js";
 import type * as yunite_matchData from "../yunite/matchData.js";
+import type * as yunite_matchDataHelpers from "../yunite/matchDataHelpers.js";
 import type * as yunite_platformMutations from "../yunite/platformMutations.js";
 import type * as yunite_platforms from "../yunite/platforms.js";
 import type * as yunite_populateTeamMembers from "../yunite/populateTeamMembers.js";
@@ -296,6 +298,7 @@ declare const fullApi: ApiFromModules<{
   "lib/resolveImportPipelineStep": typeof lib_resolveImportPipelineStep;
   "lib/scrimLeaderboard": typeof lib_scrimLeaderboard;
   "lib/scrimSeriesEventLink": typeof lib_scrimSeriesEventLink;
+  "lib/stats/computeContributionScore": typeof lib_stats_computeContributionScore;
   "lib/stats/computeInternalPlayerStats": typeof lib_stats_computeInternalPlayerStats;
   "lib/stats/evaluationStatus": typeof lib_stats_evaluationStatus;
   "lib/stats/filterYuniteResults": typeof lib_stats_filterYuniteResults;
@@ -371,6 +374,7 @@ declare const fullApi: ApiFromModules<{
   "yunite/lookupEpicRegistration": typeof yunite_lookupEpicRegistration;
   "yunite/lookupPlatform": typeof yunite_lookupPlatform;
   "yunite/matchData": typeof yunite_matchData;
+  "yunite/matchDataHelpers": typeof yunite_matchDataHelpers;
   "yunite/platformMutations": typeof yunite_platformMutations;
   "yunite/platforms": typeof yunite_platforms;
   "yunite/populateTeamMembers": typeof yunite_populateTeamMembers;

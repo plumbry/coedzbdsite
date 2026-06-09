@@ -428,6 +428,26 @@ interface YuniteMatch {
   sessionId?: string;
 }
 
+const DISCORD_LOOKUP_BATCH_SIZE = 75;
+const MATCH_STATS_BATCH_SIZE = 75;
+const RESULT_UPDATE_BATCH_SIZE = 100;
+
+type PendingMatchPlayerStats = {
+  sessionId: string;
+  discordId: string;
+  teamId?: string;
+  duoDiscordId?: string;
+  placement: number;
+  eliminations: number;
+  knocks: number;
+  deaths: number;
+  teamTotalKills: number;
+  deathTime?: number;
+  duoDeathTime?: number;
+  killsAfterDuoDeath?: number;
+  timeAliveAfterDuoDeath?: number;
+};
+
 interface YuniteMatchLeaderboardEntry {
   team: {
     id?: string;
@@ -464,6 +484,7 @@ interface YuniteMatchLeaderboardEntry {
 export const syncTournamentMatchDataInternal = internalAction({
   args: {
     importId: v.id("thirdPartyImports"),
+    jobId: v.optional(v.id("importProcessingJobs")),
   },
   handler: async (ctx, args) => {
     const yuniteApiKey = process.env.YUNITE_API_KEY;
@@ -496,11 +517,23 @@ export const syncTournamentMatchDataInternal = internalAction({
       const matches = await yuniteResponseJson<YuniteMatch[]>(matchesResponse);
       console.log(`✓ Found ${matches.length} matches`);
       console.log(`📋 Match IDs:`, matches.map(m => m.sessionId || m.session || m.id));
+
+      const { resultRows } = await ctx.runQuery(
+        internal.yunite.matchDataHelpers.getImportResultsForMatchSync,
+        { importId: args.importId },
+      );
+      const resultsByDiscord = new Map(
+        resultRows.map((row) => [row.discordId, row]),
+      );
+      console.log(
+        `📋 Preloaded ${resultsByDiscord.size} result refs for import`,
+      );
       
       // Aggregate stats per player (keyed by Discord ID)
       // Note: We only track individual player kills here, NOT team kills
       // Team kills come from the tournament leaderboard and should not be recalculated
       const playerStats = new Map<string, { eliminations: number; kills: number; deaths: number; matches: number; wins: number }>();
+      const pendingMatchStats: PendingMatchPlayerStats[] = [];
       
       // Track total match kills (sum of all team kills across all matches)
       let totalMatchKills = 0;
@@ -631,69 +664,105 @@ export const syncTournamentMatchDataInternal = internalAction({
             stats.deaths += deathCount;
             
             playerStats.set(player.discordId, stats);
-            
-            // === Store detailed match-level stats ===
-            // Find the player record for this Discord ID
-            const playerRecord = await ctx.runQuery(api.yunite.findPlayerByDiscordId, {
-              discordUserId: player.discordId,
-            });
-            
-            if (playerRecord) {
-              // Identify duo partner (if team has exactly 2 players)
-              let duoDiscordId: string | undefined;
-              let duoDeathTime: number | undefined;
-              let killsAfterDuoDeath = 0;
-              let timeAliveAfterDuoDeath = 0;
-              
-              if (players.length === 2) {
-                // Find the other player in the team
-                const duoPlayer = players.find((p: { discordId: string }) => p.discordId !== player.discordId);
-                if (duoPlayer) {
-                  duoDiscordId = duoPlayer.discordId;
-                  const duoDeathLocation = deathLocations[duoPlayer.discordId];
-                  duoDeathTime = duoDeathLocation?.time;
-                  
-                  // Calculate kills after duo death
-                  if (duoDeathTime !== undefined) {
-                    const safeDuoDeathTime = duoDeathTime;
-                    killsAfterDuoDeath = playerKillFeed.filter(
-                      (k: { finish: boolean; time: number }) => k.finish && k.time > safeDuoDeathTime
-                    ).length;
-                    
-                    // Calculate time alive after duo death
-                    if (deathTime !== undefined && deathTime > safeDuoDeathTime) {
-                      timeAliveAfterDuoDeath = deathTime - safeDuoDeathTime;
-                    } else if (deathTime === undefined) {
-                      // Player survived the match after duo died
-                      // Estimate survival time (match max time ~25 minutes = 1500s)
-                      timeAliveAfterDuoDeath = 1500 - safeDuoDeathTime;
-                    }
+
+            // Identify duo partner (if team has exactly 2 players)
+            let duoDiscordId: string | undefined;
+            let duoDeathTime: number | undefined;
+            let killsAfterDuoDeath = 0;
+            let timeAliveAfterDuoDeath = 0;
+
+            if (players.length === 2) {
+              const duoPlayer = players.find(
+                (p: { discordId: string }) => p.discordId !== player.discordId,
+              );
+              if (duoPlayer) {
+                duoDiscordId = duoPlayer.discordId;
+                const duoDeathLocation = deathLocations[duoPlayer.discordId];
+                duoDeathTime = duoDeathLocation?.time;
+
+                if (duoDeathTime !== undefined) {
+                  const safeDuoDeathTime = duoDeathTime;
+                  killsAfterDuoDeath = playerKillFeed.filter(
+                    (k: { finish: boolean; time: number }) =>
+                      k.finish && k.time > safeDuoDeathTime,
+                  ).length;
+
+                  if (deathTime !== undefined && deathTime > safeDuoDeathTime) {
+                    timeAliveAfterDuoDeath = deathTime - safeDuoDeathTime;
+                  } else if (deathTime === undefined) {
+                    timeAliveAfterDuoDeath = 1500 - safeDuoDeathTime;
                   }
                 }
               }
-              
-              // Store match player stats
-              await ctx.runMutation(api.yunite.storeMatchPlayerStats, {
-                importId: args.importId,
-                sessionId,
-                playerId: playerRecord._id,
-                discordId: player.discordId,
-                teamId,
-                duoDiscordId,
-                placement,
-                eliminations,
-                knocks,
-                deaths: deathCount,
-                teamTotalKills: teamKillsFromMatch,
-                deathTime,
-                duoDeathTime,
-                killsAfterDuoDeath: killsAfterDuoDeath > 0 ? killsAfterDuoDeath : undefined,
-                timeAliveAfterDuoDeath: timeAliveAfterDuoDeath > 0 ? timeAliveAfterDuoDeath : undefined,
-              });
             }
+
+            pendingMatchStats.push({
+              sessionId,
+              discordId: player.discordId,
+              teamId,
+              duoDiscordId,
+              placement,
+              eliminations,
+              knocks,
+              deaths: deathCount,
+              teamTotalKills: teamKillsFromMatch,
+              deathTime,
+              duoDeathTime,
+              killsAfterDuoDeath:
+                killsAfterDuoDeath > 0 ? killsAfterDuoDeath : undefined,
+              timeAliveAfterDuoDeath:
+                timeAliveAfterDuoDeath > 0 ? timeAliveAfterDuoDeath : undefined,
+            });
           }
         }
       }
+
+      const uniqueDiscordIds = [
+        ...new Set([
+          ...playerStats.keys(),
+          ...pendingMatchStats.map((row) => row.discordId),
+        ]),
+      ];
+      const playersByDiscord = new Map<string, Id<"players">>();
+      for (let i = 0; i < uniqueDiscordIds.length; i += DISCORD_LOOKUP_BATCH_SIZE) {
+        const chunk = uniqueDiscordIds.slice(i, i + DISCORD_LOOKUP_BATCH_SIZE);
+        const lookup = await ctx.runQuery(
+          internal.yunite.matchDataHelpers.resolvePlayersByDiscordIds,
+          { discordIds: chunk },
+        );
+        for (const ref of lookup.playerRefs) {
+          playersByDiscord.set(ref.discordId, ref.playerId);
+        }
+      }
+      console.log(
+        `👤 Resolved ${playersByDiscord.size}/${uniqueDiscordIds.length} Discord IDs to players (${Math.ceil(uniqueDiscordIds.length / DISCORD_LOOKUP_BATCH_SIZE) || 0} lookup batches)`,
+      );
+
+      const matchStatsRows = pendingMatchStats
+        .filter((row) => playersByDiscord.has(row.discordId))
+        .map((row) => ({
+          ...row,
+          playerId: playersByDiscord.get(row.discordId)!,
+        }));
+
+      let matchStatsWritten = 0;
+      let matchStatsSkipped = 0;
+      const matchStatsAffectedPlayerIds = new Set<Id<"players">>();
+      for (let i = 0; i < matchStatsRows.length; i += MATCH_STATS_BATCH_SIZE) {
+        const chunk = matchStatsRows.slice(i, i + MATCH_STATS_BATCH_SIZE);
+        const result = await ctx.runMutation(
+          internal.yunite.matchDataHelpers.bulkStoreMatchPlayerStats,
+          { importId: args.importId, rows: chunk },
+        );
+        matchStatsWritten += result.written;
+        matchStatsSkipped += result.skippedNoChange;
+        for (const playerId of result.writtenPlayerIds) {
+          matchStatsAffectedPlayerIds.add(playerId);
+        }
+      }
+      console.log(
+        `📊 Match stats: ${matchStatsWritten} written, ${matchStatsSkipped} skipped (unchanged), ${pendingMatchStats.length - matchStatsRows.length} unmatched players`,
+      );
 
       console.log(`📊 Aggregated stats for ${playerStats.size} unique players`);
       
@@ -710,29 +779,35 @@ export const syncTournamentMatchDataInternal = internalAction({
       
       // Update existing thirdPartyResults with individual player eliminations and wins
       // Note: We DO NOT update teamKills here - those come from the tournament leaderboard
-      let updated = 0;
-      
+      const resultUpdates = [];
       for (const [discordId, stats] of playerStats.entries()) {
-        // Find the result record for this player in this tournament
-        const existingResult = await ctx.runQuery(api.yunite.findResultByDiscordId, {
-          importId: args.importId,
-          discordId,
-        });
-        
-        if (existingResult) {
-          // Update individual player eliminations, deaths, wins, and matches played
-          await ctx.runMutation(api.yunite.updateResultWithMatchData, {
-            resultId: existingResult._id,
+        const resultRef = resultsByDiscord.get(discordId);
+        if (resultRef) {
+          resultUpdates.push({
+            resultId: resultRef.resultId,
             eliminations: stats.eliminations,
             deaths: stats.deaths,
             wins: stats.wins,
             matchesPlayed: stats.matches,
           });
-          updated++;
         }
       }
-      
-      console.log(`✅ Updated ${updated} player records with match data`);
+
+      let updated = 0;
+      let resultUpdatesSkipped = 0;
+      for (let i = 0; i < resultUpdates.length; i += RESULT_UPDATE_BATCH_SIZE) {
+        const chunk = resultUpdates.slice(i, i + RESULT_UPDATE_BATCH_SIZE);
+        const result = await ctx.runMutation(
+          internal.yunite.matchDataHelpers.bulkUpdateResultWithMatchData,
+          { updates: chunk },
+        );
+        updated += result.updated;
+        resultUpdatesSkipped += result.skippedNoChange;
+      }
+
+      console.log(
+        `✅ Updated ${updated} player records with match data (${resultUpdatesSkipped} skipped unchanged)`,
+      );
       console.log(`📊 Total match kills across all matches: ${totalMatchKills}`);
       
       // Mark import as having match data synced and store total match kills
@@ -741,70 +816,29 @@ export const syncTournamentMatchDataInternal = internalAction({
         matchDataSynced: true,
         totalMatchKills,
       });
-      
-      // Calculate Contribution Score (CS) for all players with match data
-      console.log(`🎯 Calculating Contribution Score for all players...`);
-      type PlayerId = import("../_generated/dataModel.d.ts").Id<"players">;
-      const uniquePlayerIds = new Set<PlayerId>();
-      for (const [discordId] of playerStats.entries()) {
-        // Find player ID from Discord ID
-        const player = await ctx.runQuery(api.yunite.findPlayerByDiscordId, {
-          discordUserId: discordId,
+
+      const affectedPlayerIds = [...matchStatsAffectedPlayerIds];
+      if (args.jobId && affectedPlayerIds.length > 0) {
+        await ctx.runMutation(internal.importProcessing.recordMatchSyncAffectedPlayers, {
+          jobId: args.jobId,
+          playerIds: affectedPlayerIds,
         });
-        if (player) {
-          uniquePlayerIds.add(player._id);
-        }
       }
-      
-      let csCalculated = 0;
-      let csFailed = 0;
-      const duoPartnersToRecalculate = new Set<PlayerId>();
-      
-      for (const playerId of uniquePlayerIds) {
-        try {
-          const result = await ctx.runMutation(
-            internal.calculateContributionScore.calculateAndStoreCSInternal,
-            { playerId },
-          );
-          if (result) {
-            csCalculated++;
-          }
-        } catch (error) {
-          console.warn(`Failed to calculate TC for player ${playerId}:`, error);
-          csFailed++;
-        }
-      }
-      
-      // Note: We no longer track duo partners since TC analyzes all teammates
-      let duoRecalculated = 0;
-      for (const duoPlayerId of duoPartnersToRecalculate) {
-        // Skip if we just calculated this player
-        if (uniquePlayerIds.has(duoPlayerId)) continue;
-        
-        try {
-          await ctx.runMutation(
-            internal.calculateContributionScore.calculateAndStoreCSInternal,
-            { playerId: duoPlayerId },
-          );
-          duoRecalculated++;
-        } catch (error) {
-          console.warn(`Failed to recalculate CS for duo partner ${duoPlayerId}:`, error);
-        }
-      }
-      
-      console.log(`✅ Calculated CS for ${csCalculated} players (${csFailed} failed)`);
-      if (duoRecalculated > 0) {
-        console.log(`✅ Recalculated CS for ${duoRecalculated} duo partners`);
-      }
+
+      const tournamentPlayerIds = [
+        ...new Set(matchStatsRows.map((row) => row.playerId)),
+      ];
 
       return {
         success: true,
         matchesFetched: matches.length,
-        updated: updated,
+        updated,
+        resultUpdatesSkipped,
+        matchStatsWritten,
+        matchStatsSkipped,
         totalMatchKills,
-        csCalculated,
-        csFailed,
-        duoRecalculated,
+        matchStatsAffectedPlayerIds: affectedPlayerIds,
+        tournamentPlayerIds,
       };
       
     } catch (error) {
@@ -818,10 +852,12 @@ type SyncTournamentMatchDataResult = {
   success: boolean;
   matchesFetched: number;
   updated: number;
+  resultUpdatesSkipped: number;
+  matchStatsWritten: number;
+  matchStatsSkipped: number;
   totalMatchKills: number;
-  csCalculated: number;
-  csFailed: number;
-  duoRecalculated: number;
+  matchStatsAffectedPlayerIds: Id<"players">[];
+  tournamentPlayerIds: Id<"players">[];
 };
 
 export const syncTournamentMatchData = action({
@@ -830,7 +866,28 @@ export const syncTournamentMatchData = action({
   },
   handler: async (ctx, args): Promise<SyncTournamentMatchDataResult> => {
     await requireAdminAction(ctx);
-    return await ctx.runAction(internal.yunite.sync.syncTournamentMatchDataInternal, args);
+    const result = await ctx.runAction(
+      internal.yunite.sync.syncTournamentMatchDataInternal,
+      args,
+    );
+
+    if (
+      result.tournamentPlayerIds.length > 0 ||
+      result.matchStatsAffectedPlayerIds.length > 0 ||
+      result.updated > 0
+    ) {
+      const playerIds =
+        result.tournamentPlayerIds.length > 0
+          ? result.tournamentPlayerIds
+          : result.matchStatsAffectedPlayerIds;
+
+      await ctx.runMutation(internal.playerStatsCache.scheduleStatsUpdateForPlayers, {
+        playerIds,
+        matchDataChangedPlayerIds: result.matchStatsAffectedPlayerIds,
+      });
+    }
+
+    return result;
   },
 });
 

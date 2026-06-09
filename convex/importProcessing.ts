@@ -838,6 +838,28 @@ export const getProcessingContext = internalQuery({
   },
 });
 
+/** Single read for action orchestration: job, import, and next pipeline step. */
+export const getProcessingContextWithNextStep = internalQuery({
+  args: { jobId: v.id("importProcessingJobs") },
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job) {
+      return null;
+    }
+    const imp = await ctx.db.get(job.importId);
+    if (!imp) {
+      return null;
+    }
+    const step = await resolveNextStepForImport(
+      ctx,
+      imp,
+      job.forceReprocess,
+      job.completedSteps ?? [],
+    );
+    return { job, imp, step };
+  },
+});
+
 export const markJobProgress = internalMutation({
   args: {
     jobId: v.id("importProcessingJobs"),
@@ -890,6 +912,26 @@ export const completeJob = internalMutation({
   },
 });
 
+export const recordMatchSyncAffectedPlayers = internalMutation({
+  args: {
+    jobId: v.id("importProcessingJobs"),
+    playerIds: v.array(v.id("players")),
+  },
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job) {
+      return;
+    }
+    const merged = new Set([
+      ...(job.matchStatsAffectedPlayerIds ?? []).map((id) => id as string),
+      ...args.playerIds.map((id) => id as string),
+    ]);
+    await ctx.db.patch(args.jobId, {
+      matchStatsAffectedPlayerIds: [...merged] as Id<"players">[],
+    });
+  },
+});
+
 export const completeApiPipelineStep = internalMutation({
   args: {
     jobId: v.id("importProcessingJobs"),
@@ -930,10 +972,21 @@ export const processOneImportStatsPlayer = internalMutation({
 
     const playerId = playerIds[startIndex]!;
     const batchNumber = (job.batchesProcessed ?? 0) + 1;
-    let summary = { playersUpdated: 0, skippedNoChange: 0, errors: [] as string[] };
+    const matchDataChangedPlayerIds = new Set(
+      (job.matchStatsAffectedPlayerIds ?? []).map((id) => id as string),
+    );
+    let summary = {
+      playersUpdated: 0,
+      skippedNoChange: 0,
+      csCalculated: 0,
+      csSkippedNoChange: 0,
+      errors: [] as string[],
+    };
 
     try {
-      summary = await updateStatsForPlayers(ctx, [playerId]);
+      summary = await updateStatsForPlayers(ctx, [playerId], {
+        matchDataChangedPlayerIds,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       summary.errors.push(`${playerId}: ${message}`);
@@ -958,9 +1011,12 @@ export const processOneImportStatsPlayer = internalMutation({
       statsPlayerCursor: endIndex,
       playersUpdated: (job.playersUpdated ?? 0) + summary.playersUpdated,
       skippedNoChange: (job.skippedNoChange ?? 0) + summary.skippedNoChange,
+      csCalculated: (job.csCalculated ?? 0) + summary.csCalculated,
+      csSkippedNoChange: (job.csSkippedNoChange ?? 0) + summary.csSkippedNoChange,
       errors: [...(job.errors ?? []), ...summary.errors],
       batchesProcessed: batchNumber,
       contextReads: (job.contextReads ?? 0) + 1,
+      ...(done ? { matchStatsAffectedPlayerIds: undefined } : {}),
     });
 
     const lastProgressWriteRow = await maybeWriteJobProgress(ctx, {

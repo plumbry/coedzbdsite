@@ -131,13 +131,28 @@ export const updateResultWithMatchData = mutation({
     matchesPlayed: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    // Update individual player eliminations and win data
-    // Team kills come from tournament leaderboard and should not be changed
+    const existing = await ctx.db.get(args.resultId);
+    if (!existing) {
+      return { updated: false, skippedNoChange: false };
+    }
+
+    const unchanged =
+      (existing.eliminations ?? 0) === args.eliminations &&
+      (existing.deaths ?? 0) === args.deaths &&
+      (existing.wins ?? 0) === (args.wins ?? 0) &&
+      (existing.matchesPlayed ?? 0) === (args.matchesPlayed ?? 0);
+
+    if (unchanged) {
+      return { updated: false, skippedNoChange: true };
+    }
+
     await ctx.db.patch(args.resultId, {
       eliminations: args.eliminations,
+      deaths: args.deaths,
       wins: args.wins,
       matchesPlayed: args.matchesPlayed,
     });
+    return { updated: true, skippedNoChange: false };
   },
 });
 
@@ -182,7 +197,26 @@ export const storeMatchPlayerStats = mutation({
       .first();
     
     if (existing) {
-      // Update existing record
+      const unchanged =
+        existing.placement === args.placement &&
+        existing.eliminations === args.eliminations &&
+        existing.knocks === args.knocks &&
+        existing.deaths === args.deaths &&
+        existing.teamTotalKills === args.teamTotalKills &&
+        (existing.teamId ?? undefined) === (args.teamId ?? undefined) &&
+        (existing.duoDiscordId ?? undefined) === (args.duoDiscordId ?? undefined) &&
+        (existing.deathTime ?? undefined) === (args.deathTime ?? undefined) &&
+        (existing.duoDeathTime ?? undefined) === (args.duoDeathTime ?? undefined) &&
+        (existing.killsAfterDuoDeath ?? undefined) ===
+          (args.killsAfterDuoDeath ?? undefined) &&
+        (existing.timeAliveAfterDuoDeath ?? undefined) ===
+          (args.timeAliveAfterDuoDeath ?? undefined) &&
+        existing.playerId === args.playerId;
+
+      if (unchanged) {
+        return { id: existing._id, skippedNoChange: true };
+      }
+
       await ctx.db.patch(existing._id, {
         teamId: args.teamId,
         duoDiscordId: args.duoDiscordId,
@@ -195,14 +229,14 @@ export const storeMatchPlayerStats = mutation({
         duoDeathTime: args.duoDeathTime,
         killsAfterDuoDeath: args.killsAfterDuoDeath,
         timeAliveAfterDuoDeath: args.timeAliveAfterDuoDeath,
+        playerId: args.playerId,
       });
-      
-      // Set hasMatchData flag on player
+
       await ctx.db.patch(args.playerId, {
         hasMatchData: true,
       });
-      
-      return existing._id;
+
+      return { id: existing._id, skippedNoChange: false };
     } else {
       // Create new record
       const matchStatsId = await ctx.db.insert("matchPlayerStats", {
@@ -227,8 +261,8 @@ export const storeMatchPlayerStats = mutation({
       await ctx.db.patch(args.playerId, {
         hasMatchData: true,
       });
-      
-      return matchStatsId;
+
+      return { id: matchStatsId, skippedNoChange: false };
     }
   },
 });
