@@ -13,13 +13,8 @@ import {
   buildEntriesByDay,
   formatExportRangeTitle,
 } from "@/lib/potential-event-calendar-export.ts";
-import {
-  CALENDAR_ENTRY_STATUS_LABELS,
-  entryChipClass,
-  entryLegendClass,
-  type CalendarEntry,
-  type CalendarEntryStatus,
-} from "@/lib/potential-event-calendar-types.ts";
+import { entryChipClass, type CalendarEntry } from "@/lib/potential-event-calendar-types.ts";
+import CalendarStatusLegend from "./potential-event-calendar-status-legend.tsx";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MAX_EVENTS_PER_CELL = 3;
@@ -64,18 +59,12 @@ const PotentialEventCalendarImageExport = forwardRef<
       className="w-[1100px] bg-white p-6 text-gray-900"
       style={{ fontFamily: "system-ui, sans-serif" }}
     >
-      <div className="mb-4 space-y-1">
-        <h1 className="text-xl font-semibold">Potential Events Calendar</h1>
-        <p className="text-sm text-gray-600">{formatExportRangeTitle(rangeStart, rangeEnd)}</p>
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-4 text-xs text-gray-700">
-        {(["tentative", "confirmed", "admin_note", "cancelled"] as const).map((status) => (
-          <div key={status} className="flex items-center gap-1.5">
-            <span className={cn("size-2.5 rounded-full", entryLegendClass(status))} />
-            <span>{CALENDAR_ENTRY_STATUS_LABELS[status]}</span>
-          </div>
-        ))}
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold">Potential Events Calendar</h1>
+          <p className="text-sm text-gray-600">{formatExportRangeTitle(rangeStart, rangeEnd)}</p>
+        </div>
+        <CalendarStatusLegend className="text-gray-500" />
       </div>
 
       <div className="overflow-hidden rounded-lg border border-gray-200">

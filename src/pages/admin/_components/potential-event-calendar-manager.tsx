@@ -31,6 +31,7 @@ import ConfirmDialog from "@/components/confirm-dialog.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import PotentialEventCalendarEntryDialog from "./potential-event-calendar-entry-dialog.tsx";
 import PotentialEventCalendarExportDialog from "./potential-event-calendar-export-dialog.tsx";
+import CalendarStatusLegend from "./potential-event-calendar-status-legend.tsx";
 import {
   CalendarDays,
   ChevronLeft,
@@ -584,7 +585,10 @@ function PeriodCalendarGrid({
   return (
     <Card>
       <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle className="text-base font-medium">{periodTitle}</CardTitle>
+        <div className="space-y-1.5">
+          <CardTitle className="text-base font-medium">{periodTitle}</CardTitle>
+          <CalendarStatusLegend />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Tabs
             value={gridView}
