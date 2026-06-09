@@ -1,14 +1,47 @@
 import Papa from "papaparse";
+import { toPng } from "html-to-image";
 import { differenceInCalendarDays, eachDayOfInterval, format, parseISO } from "date-fns";
-import type { Doc } from "@/convex/_generated/dataModel.d.ts";
-import { entryStatusLabel } from "@/lib/potential-event-calendar-types.ts";
+import { entryStatusLabel, type CalendarEntry } from "@/lib/potential-event-calendar-types.ts";
 
-type CalendarEntry = Doc<"potentialEventCalendarEntries">;
+export type { CalendarEntry };
 
 const MAX_EXPORT_DAYS = 180;
 
 function entryEndDate(entry: CalendarEntry): string {
   return entry.endDate ?? entry.date;
+}
+
+function toDateInputValue(date: Date): string {
+  return format(date, "yyyy-MM-dd");
+}
+
+export function buildEntriesByDay(entries: CalendarEntry[]): Map<string, CalendarEntry[]> {
+  const map = new Map<string, CalendarEntry[]>();
+
+  for (const entry of entries) {
+    const start = new Date(`${entry.date}T12:00:00`);
+    const end = new Date(`${entryEndDate(entry)}T12:00:00`);
+    for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+      const key = toDateInputValue(cursor);
+      const list = map.get(key) ?? [];
+      list.push(entry);
+      map.set(key, list);
+    }
+  }
+
+  return map;
+}
+
+export function formatExportRangeTitle(rangeStart: string, rangeEnd: string): string {
+  const start = parseISO(rangeStart);
+  const end = parseISO(rangeEnd);
+  if (rangeStart === rangeEnd) {
+    return format(start, "MMMM d, yyyy");
+  }
+  if (start.getFullYear() === end.getFullYear()) {
+    return `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`;
+  }
+  return `${format(start, "MMM d, yyyy")} – ${format(end, "MMM d, yyyy")}`;
 }
 
 function entryOnDate(entry: CalendarEntry, dayKey: string): boolean {
@@ -96,4 +129,23 @@ export function downloadCalendarCsv(
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+export async function downloadCalendarImage(
+  element: HTMLElement,
+  rangeStart: string,
+  rangeEnd: string,
+): Promise<void> {
+  const dataUrl = await toPng(element, {
+    backgroundColor: "#ffffff",
+    pixelRatio: 2,
+    cacheBust: true,
+  });
+
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = `potential-events-${rangeStart}-to-${rangeEnd}.png`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }

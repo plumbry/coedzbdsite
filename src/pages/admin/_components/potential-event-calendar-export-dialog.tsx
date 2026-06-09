@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useConvex } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { toast } from "sonner";
@@ -16,8 +16,11 @@ import {
 } from "@/components/ui/dialog.tsx";
 import {
   downloadCalendarCsv,
+  downloadCalendarImage,
   validateExportDateRange,
+  type CalendarEntry,
 } from "@/lib/potential-event-calendar-export.ts";
+import PotentialEventCalendarImageExport from "./potential-event-calendar-image-export.tsx";
 
 interface PotentialEventCalendarExportDialogProps {
   open: boolean;
@@ -26,6 +29,12 @@ interface PotentialEventCalendarExportDialogProps {
   defaultRangeEnd: string;
   viewerToken?: string;
 }
+
+type ImageExportRequest = {
+  entries: CalendarEntry[];
+  rangeStart: string;
+  rangeEnd: string;
+};
 
 export default function PotentialEventCalendarExportDialog({
   open,
@@ -37,7 +46,10 @@ export default function PotentialEventCalendarExportDialog({
   const convex = useConvex();
   const [rangeStart, setRangeStart] = useState(defaultRangeStart);
   const [rangeEnd, setRangeEnd] = useState(defaultRangeEnd);
-  const [isExporting, setIsExporting] = useState(false);
+  const [isExportingCsv, setIsExportingCsv] = useState(false);
+  const [isExportingImage, setIsExportingImage] = useState(false);
+  const [imageExport, setImageExport] = useState<ImageExportRequest | null>(null);
+  const imageCaptureRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -45,78 +57,154 @@ export default function PotentialEventCalendarExportDialog({
     setRangeEnd(defaultRangeEnd);
   }, [open, defaultRangeStart, defaultRangeEnd]);
 
-  const handleExport = async () => {
+  const fetchEntries = useCallback(async () => {
     const validationError = validateExportDateRange(rangeStart, rangeEnd);
     if (validationError) {
       toast.error(validationError);
-      return;
+      return null;
     }
 
-    setIsExporting(true);
+    return await convex.query(api.potentialEventCalendar.queries.listEntries, {
+      rangeStart,
+      rangeEnd,
+      ...(viewerToken ? { viewerToken } : {}),
+    });
+  }, [convex, rangeEnd, rangeStart, viewerToken]);
+
+  const handleExportCsv = async () => {
+    setIsExportingCsv(true);
     try {
-      const entries = await convex.query(api.potentialEventCalendar.queries.listEntries, {
-        rangeStart,
-        rangeEnd,
-        ...(viewerToken ? { viewerToken } : {}),
-      });
+      const entries = await fetchEntries();
+      if (!entries) return;
       downloadCalendarCsv(entries, rangeStart, rangeEnd);
-      toast.success("Calendar exported");
+      toast.success("CSV downloaded");
       onOpenChange(false);
     } catch {
-      toast.error("Could not export calendar");
+      toast.error("Could not export CSV");
     } finally {
-      setIsExporting(false);
+      setIsExportingCsv(false);
     }
   };
 
+  const handleExportImage = async () => {
+    setIsExportingImage(true);
+    try {
+      const entries = await fetchEntries();
+      if (!entries) {
+        setIsExportingImage(false);
+        return;
+      }
+      setImageExport({ entries, rangeStart, rangeEnd });
+    } catch {
+      toast.error("Could not export image");
+      setIsExportingImage(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!imageExport) return;
+
+    let cancelled = false;
+    void (async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+      if (cancelled || !imageCaptureRef.current) return;
+
+      try {
+        await downloadCalendarImage(
+          imageCaptureRef.current,
+          imageExport.rangeStart,
+          imageExport.rangeEnd,
+        );
+        toast.success("Image downloaded");
+        onOpenChange(false);
+      } catch {
+        toast.error("Could not export image");
+      } finally {
+        if (!cancelled) {
+          setImageExport(null);
+          setIsExportingImage(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageExport, onOpenChange]);
+
+  const isExporting = isExportingCsv || isExportingImage;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="md">
-        <DialogHeader>
-          <DialogTitle>Download calendar</DialogTitle>
-          <DialogDescription>
-            Export one row per day in the range. Days without events are included with blank
-            event fields.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="export-range-start">Start date</Label>
-              <Input
-                id="export-range-start"
-                type="date"
-                value={rangeStart}
-                max={rangeEnd || undefined}
-                onChange={(e) => setRangeStart(e.target.value)}
-              />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent size="md">
+          <DialogHeader>
+            <DialogTitle>Download calendar</DialogTitle>
+            <DialogDescription>
+              Export the selected date range as a spreadsheet or calendar image. Empty days are
+              included in both formats.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="export-range-start">Start date</Label>
+                <Input
+                  id="export-range-start"
+                  type="date"
+                  value={rangeStart}
+                  max={rangeEnd || undefined}
+                  onChange={(e) => setRangeStart(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="export-range-end">End date</Label>
+                <Input
+                  id="export-range-end"
+                  type="date"
+                  value={rangeEnd}
+                  min={rangeStart || undefined}
+                  onChange={(e) => setRangeEnd(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="export-range-end">End date</Label>
-              <Input
-                id="export-range-end"
-                type="date"
-                value={rangeEnd}
-                min={rangeStart || undefined}
-                onChange={(e) => setRangeEnd(e.target.value)}
-              />
-            </div>
-          </div>
-        </DialogBody>
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isExporting}
-          >
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleExport} disabled={isExporting}>
-            {isExporting ? "Exporting..." : "Download CSV"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isExporting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleExportImage}
+              disabled={isExporting}
+            >
+              {isExportingImage ? "Exporting..." : "Download image"}
+            </Button>
+            <Button type="button" onClick={handleExportCsv} disabled={isExporting}>
+              {isExportingCsv ? "Exporting..." : "Download CSV"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {imageExport && (
+        <div className="pointer-events-none fixed top-0 -left-[12000px]">
+          <PotentialEventCalendarImageExport
+            ref={imageCaptureRef}
+            entries={imageExport.entries}
+            rangeStart={imageExport.rangeStart}
+            rangeEnd={imageExport.rangeEnd}
+          />
+        </div>
+      )}
+    </>
   );
 }
