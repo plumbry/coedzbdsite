@@ -14,7 +14,6 @@ import MatchToPlayerDialog from "./match-to-player-dialog.tsx";
 import ManageDiscordIdsDialog from "./manage-discord-ids-dialog.tsx";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Input } from "@/components/ui/input.tsx";
-import { useNavigate } from "react-router-dom";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { toast } from "sonner";
@@ -29,7 +28,6 @@ type CategoryFilter = "all" | "active" | "inactive";
 
 export default function DiscordMembers() {
   const players = useQuery(api.players.getDiscordMembersAdmin, {});
-  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [sortColumn, setSortColumn] = useState<SortColumn>("tier");
@@ -285,14 +283,6 @@ export default function DiscordMembers() {
               </Badge>
             </CardDescription>
             <div className="flex shrink-0 gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => navigate("/admin/fuzzy-matches")}
-              >
-                <Link className="mr-2 h-4 w-4" />
-                View Fuzzy Matches
-              </Button>
               <Button
                 variant="secondary"
                 size="sm"

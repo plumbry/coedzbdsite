@@ -32,7 +32,6 @@ import type * as discord_archiveNoTierRole from "../discord/archiveNoTierRole.js
 import type * as discord_eventSync from "../discord/eventSync.js";
 import type * as discord_eventSyncMutations from "../discord/eventSyncMutations.js";
 import type * as discord_femaleEvaluatedMembers from "../discord/femaleEvaluatedMembers.js";
-import type * as discord_findMatches from "../discord/findMatches.js";
 import type * as discord_removeAllTierRoles from "../discord/removeAllTierRoles.js";
 import type * as discord_roles from "../discord/roles.js";
 import type * as discord_sync from "../discord/sync.js";
@@ -223,7 +222,6 @@ declare const fullApi: ApiFromModules<{
   "discord/eventSync": typeof discord_eventSync;
   "discord/eventSyncMutations": typeof discord_eventSyncMutations;
   "discord/femaleEvaluatedMembers": typeof discord_femaleEvaluatedMembers;
-  "discord/findMatches": typeof discord_findMatches;
   "discord/removeAllTierRoles": typeof discord_removeAllTierRoles;
   "discord/roles": typeof discord_roles;
   "discord/sync": typeof discord_sync;

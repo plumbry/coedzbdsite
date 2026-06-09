@@ -14,7 +14,6 @@ import DataCacheStatus from "./pages/admin/data-cache-status.tsx";
 import DataBackup from "./pages/admin/data-backup.tsx";
 import UserManagementPage from "./pages/admin/user-management.tsx";
 import DiscordMembersPage from "./pages/admin/discord-members.tsx";
-import FuzzyMatchesPage from "./pages/admin/fuzzy-matches.tsx";
 import UnmatchedPlayers from "./pages/admin/_components/unmatched-players.tsx";
 import YuniteTournamentDetails from "./pages/admin/yunite-tournament.tsx";
 import EventsManagerPage from "./pages/admin/events-manager.tsx";
@@ -72,7 +71,6 @@ export default function App() {
             <Route path="data-maintenance" element={<DataMaintenancePage />} />
             <Route path="user-management" element={<UserManagementPage />} />
             <Route path="discord-members" element={<DiscordMembersPage />} />
-            <Route path="fuzzy-matches" element={<FuzzyMatchesPage />} />
             <Route path="unmatched/:importId" element={<UnmatchedPlayers />} />
             <Route path="yunite/:importId" element={<YuniteTournamentDetails />} />
             <Route path="yunite-debug" element={<Navigate to="/admin/uploads?tab=debug" replace />} />

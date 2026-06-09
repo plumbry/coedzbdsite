@@ -7,7 +7,6 @@ import {
   Users,
   Shield,
   ShieldAlert,
-  GitMerge,
   Calendar,
   ListChecks,
   Upload,
@@ -157,12 +156,6 @@ export default function AdminHubPage() {
                 description: "Players whose Discord tier roles don't match database tiers.",
                 href: "/admin/tier-mismatches",
                 icon: ShieldAlert,
-              },
-              {
-                title: "Fuzzy Matches",
-                description: "Review uncertain player name matches from imports.",
-                href: "/admin/fuzzy-matches",
-                icon: GitMerge,
               },
             ]
           : []),
