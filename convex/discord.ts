@@ -10,8 +10,9 @@ import {
 } from "./helpers/playerDiscordAliases";
 import { autoAcceptPendingApplicationForDiscordMember } from "./helpers/discordApplicationSync";
 import { internal } from "./_generated/api";
+import { diffPatch } from "./helpers/patchIfChanged";
 
-type SyncMatchConfidence = "exact" | "username" | "fuzzy";
+type SyncMatchConfidence = "exact" | "username" | "fuzzy" | "manual";
 
 /** Slim player row stored on a Discord sync run and used for batch fuzzy matching. */
 type DiscordBatchSyncPlayer = {
@@ -20,11 +21,15 @@ type DiscordBatchSyncPlayer = {
   discordUsername: string;
   epicUsername: string;
   nickname?: string;
+  serverJoinDate: string;
   alternateDiscordUserIds?: string[];
   tier?: string;
   status?: string;
   currentMembershipStatus?: string;
   discordRoles?: Array<{ id: string; name: string }>;
+  matchConfidence?: SyncMatchConfidence;
+  needsReview?: boolean;
+  hasLeftServer?: boolean;
 };
 
 function toDiscordBatchSyncPlayer(player: Doc<"players">): DiscordBatchSyncPlayer {
@@ -34,11 +39,15 @@ function toDiscordBatchSyncPlayer(player: Doc<"players">): DiscordBatchSyncPlaye
     discordUsername: player.discordUsername,
     epicUsername: player.epicUsername,
     nickname: player.nickname,
+    serverJoinDate: player.serverJoinDate,
     alternateDiscordUserIds: player.alternateDiscordUserIds,
     tier: player.tier,
     status: player.status,
     currentMembershipStatus: player.currentMembershipStatus,
     discordRoles: player.discordRoles,
+    matchConfidence: player.matchConfidence,
+    needsReview: player.needsReview,
+    hasLeftServer: player.hasLeftServer,
   };
 }
 
@@ -927,7 +936,7 @@ export const syncDiscordMembersBatch = internalMutation({
         },
         playersCache,
       );
-      const existingPlayer = matchedPlayer ? await ctx.db.get(matchedPlayer._id) : null;
+      const existingPlayer = matchedPlayer;
 
       if (existingPlayer) {
         const updateData: {
@@ -987,19 +996,22 @@ export const syncDiscordMembersBatch = internalMutation({
           updateData.currentMembershipStatus = "accepted";
         }
 
-        await ctx.db.patch(existingPlayer._id, updateData);
-        await syncPlayerDiscordAliases(ctx, {
-          ...existingPlayer,
-          ...updateData,
-          _id: existingPlayer._id,
-        });
+        const changedFields = diffPatch(existingPlayer, updateData);
+        if (changedFields) {
+          await ctx.db.patch(existingPlayer._id, changedFields as Partial<Doc<"players">>);
+          await syncPlayerDiscordAliases(ctx, {
+            _id: existingPlayer._id,
+            discordUserId: member.discordUserId,
+            alternateDiscordUserIds: existingPlayer.alternateDiscordUserIds,
+          });
+          updated++;
+        }
         await autoAcceptPendingApplicationForDiscordMember(ctx, {
           hasTierRole,
           discordUserId: member.discordUserId,
           discordUsername: member.discordUsername,
           playerId: existingPlayer._id,
         });
-        updated++;
       } else {
         const playerId = await ctx.db.insert("players", {
           discordUsername: member.discordUsername,
@@ -1075,7 +1087,7 @@ export const upsertDiscordMember = internalMutation({
         tier?: string;
         status?: "active" | "discord_member";
         currentMembershipStatus?: "accepted";
-        matchConfidence?: "exact" | "username" | "fuzzy";
+        matchConfidence?: SyncMatchConfidence;
         needsReview?: boolean;
         hasLeftServer?: boolean;
       } = {
@@ -1128,12 +1140,15 @@ export const upsertDiscordMember = internalMutation({
         updateData.currentMembershipStatus = "accepted";
       }
       
-      await ctx.db.patch(existingPlayer._id, updateData);
-      await syncPlayerDiscordAliases(ctx, {
-        ...existingPlayer,
-        ...updateData,
-        _id: existingPlayer._id,
-      });
+      const changedFields = diffPatch(existingPlayer, updateData);
+      if (changedFields) {
+        await ctx.db.patch(existingPlayer._id, changedFields as Partial<Doc<"players">>);
+        await syncPlayerDiscordAliases(ctx, {
+          _id: existingPlayer._id,
+          discordUserId: args.discordUserId,
+          alternateDiscordUserIds: existingPlayer.alternateDiscordUserIds,
+        });
+      }
       await autoAcceptPendingApplicationForDiscordMember(ctx, {
         hasTierRole,
         discordUserId: args.discordUserId,
@@ -1142,8 +1157,8 @@ export const upsertDiscordMember = internalMutation({
       });
 
       if (
-        updateData.tier !== undefined ||
-        updateData.currentMembershipStatus !== undefined
+        changedFields?.tier !== undefined ||
+        changedFields?.currentMembershipStatus !== undefined
       ) {
         await ctx.scheduler.runAfter(
           0,
@@ -1155,7 +1170,7 @@ export const upsertDiscordMember = internalMutation({
       return { 
         created: false, 
         playerId: existingPlayer._id, 
-        updated: true,
+        updated: !!changedFields,
         matchConfidence: matchConfidence || "unknown"
       };
     } else {

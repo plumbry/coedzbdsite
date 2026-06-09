@@ -59,9 +59,7 @@ import {
   TrendingUp,
   TrendingDown,
   Info,
-  GitCompare,
   Settings,
-  Users,
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
@@ -74,21 +72,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover.tsx";
-import { toast } from "sonner";
 import {
   PlayerStatsRebuildButton,
   PlayerStatsRebuildRunningAlert,
@@ -127,8 +116,6 @@ function TierReEvaluationContent() {
   const [hideInsufficientData, setHideInsufficientData] = useState(true);
   const [recentWeeksOnly, setRecentWeeksOnly] = useState(false);
   const RECENT_WEEKS_CUTOFF = 6;
-  const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
-  const [showComparisonDialog, setShowComparisonDialog] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState({
     tier: true,
     events: true,
@@ -523,40 +510,6 @@ function TierReEvaluationContent() {
     );
   }
 
-  // Handle player selection (max 4 players)
-  const togglePlayerSelection = (playerId: string) => {
-    const newSelected = new Set(selectedPlayers);
-    if (newSelected.has(playerId)) {
-      newSelected.delete(playerId);
-    } else {
-      if (newSelected.size >= 4) {
-        toast.error("Maximum 4 players can be compared at once");
-        return;
-      }
-      newSelected.add(playerId);
-    }
-    setSelectedPlayers(newSelected);
-  };
-
-  const toggleAllSelection = () => {
-    if (selectedPlayers.size > 0) {
-      setSelectedPlayers(new Set());
-    } else {
-      // Select first 4 players
-      const first4 = displayedEvaluations.slice(0, 4).map(e => e.playerId);
-      setSelectedPlayers(new Set(first4));
-      if (displayedEvaluations.length > 4) {
-        toast.info("Selected first 4 players (maximum for comparison)");
-      }
-    }
-  };
-
-  const getSelectedPlayerData = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return filteredAndSortedEvaluations.filter((e: any) => selectedPlayers.has(e.playerId));
-  };
-  
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Strong Promotion Outlier":
@@ -736,28 +689,6 @@ function TierReEvaluationContent() {
         </div>
       )}
 
-      {/* Tier Simulation Tool - Link to Dedicated Page */}
-      <Link to="/admin/tier-simulation">
-        <Card className="border-purple-200 bg-purple-50/50 dark:bg-purple-950/20 dark:border-purple-900 hover:bg-purple-100/50 dark:hover:bg-purple-950/30 transition-colors cursor-pointer py-3">
-          <CardContent className="p-0 px-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                <div>
-                  <p className="font-semibold text-sm">Tier Simulation Tool</p>
-                  <p className="text-xs text-muted-foreground">
-                    Preview how tier median changes would look if you changed specific players' tiers
-                  </p>
-                </div>
-              </div>
-              <Button variant="ghost" size="sm">
-                Open Tool →
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </Link>
-
       {/* Summary Cards */}
       <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
         <Card className="py-2">
@@ -928,15 +859,6 @@ function TierReEvaluationContent() {
                 <option value="Insufficient Data">Insufficient Data</option>
               </select>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowComparisonDialog(true)}
-              disabled={selectedPlayers.size < 2}
-            >
-              <GitCompare className="mr-2 h-4 w-4" />
-              Compare ({selectedPlayers.size})
-            </Button>
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -1222,12 +1144,6 @@ function TierReEvaluationContent() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">
-                    <Checkbox
-                      checked={selectedPlayers.size === displayedEvaluations.length && displayedEvaluations.length > 0}
-                      onCheckedChange={toggleAllSelection}
-                    />
-                  </TableHead>
                   <TableHead
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => handleSort("playerName")}
@@ -1419,12 +1335,6 @@ function TierReEvaluationContent() {
                           : ""
                     }
                   >
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedPlayers.has(evaluation.playerId)}
-                        onCheckedChange={() => togglePlayerSelection(evaluation.playerId)}
-                      />
-                    </TableCell>
                     <TableCell className="font-medium">
                       <Link
                         to={`/player/${evaluation.playerName}`}
@@ -1782,191 +1692,6 @@ function TierReEvaluationContent() {
           )}
         </CardContent>
       </Card>
-
-      {/* Player Comparison Dialog */}
-      <Dialog open={showComparisonDialog} onOpenChange={setShowComparisonDialog}>
-        <DialogContent size="full">
-          <DialogHeader>
-            <DialogTitle>Player Comparison</DialogTitle>
-            <DialogDescription>
-              Side-by-side comparison of {selectedPlayers.size} selected player{selectedPlayers.size !== 1 ? "s" : ""}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody>
-          <div className="space-y-4">
-            {getSelectedPlayerData().length > 0 ? (
-              <>
-                {/* Comparison Table */}
-                <div className="rounded-lg border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[180px]">Metric</TableHead>
-                        {getSelectedPlayerData().map((player) => (
-                          <TableHead key={player.playerId} className="text-center">
-                            <div className="space-y-1">
-                              <Link
-                                to={`/player/${player.playerName}`}
-                                className="font-semibold hover:underline block"
-                              >
-                                {player.playerName}
-                              </Link>
-                              <Badge variant="outline" className="text-xs">
-                                {player.tier}
-                              </Badge>
-                            </div>
-                          </TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell className="font-medium">Total Events</TableCell>
-                        {getSelectedPlayerData().map((player) => (
-                          <TableCell key={player.playerId} className="text-center font-mono">
-                            {player.totalEvents}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="cursor-help border-b border-dashed border-muted-foreground">
-                                  Recent Top 3s
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <div className="text-xs">
-                                  Last 5 leaderboards (excludes "No Money" scrims)
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </TableCell>
-                        {getSelectedPlayerData().map((player) => (
-                          <TableCell key={player.playerId} className="text-center">
-                            {player.recentTop3Count >= 3 ? (
-                              <div className="flex items-center justify-center gap-1 text-green-600 font-semibold text-xs">
-                                <span>✨</span>
-                                <span>{player.recentTop3Count}</span>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">{player.recentTop3Count}</span>
-                            )}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="cursor-help border-b border-dashed border-muted-foreground">
-                                  Recent Top 5s
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <div className="text-xs">
-                                  Last 5 leaderboards (excludes "No Money" scrims)
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </TableCell>
-                        {getSelectedPlayerData().map((player) => (
-                          <TableCell key={player.playerId} className="text-center">
-                            {player.recentTop5Count >= 4 ? (
-                              <div className="flex items-center justify-center gap-1 text-orange-600 font-semibold text-xs">
-                                <span>🔥</span>
-                                <span>{player.recentTop5Count}</span>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">{player.recentTop5Count}</span>
-                            )}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">Last Event Played</TableCell>
-                        {getSelectedPlayerData().map((player) => (
-                          <TableCell key={player.playerId} className="text-center">
-                            {player.lastEventDate ? (
-                              <span className="text-xs font-mono">{player.lastEventDate}</span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">N/A</span>
-                            )}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">Status</TableCell>
-                        {getSelectedPlayerData().map((player) => (
-                          <TableCell key={player.playerId} className="text-center">
-                            {getStatusBadge(player.evaluationStatus)}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* Player vs Player Comparisons */}
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-sm">Player vs Player Comparison</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {getSelectedPlayerData().map((player, idx) => {
-                      const otherPlayers = getSelectedPlayerData().filter((_, i) => i !== idx);
-                      return (
-                        <Card key={player.playerId}>
-                          <CardHeader className="pb-3">
-                            <CardTitle className="text-sm font-semibold">
-                              {player.playerName} vs Others
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-2">
-                            {otherPlayers.map((otherPlayer) => {
-                              const diff = otherPlayer.holisticScore > 0
-                                ? ((player.holisticScore - otherPlayer.holisticScore) / otherPlayer.holisticScore) * 100
-                                : 0;
-                              return (
-                                <div key={otherPlayer.playerId} className="flex items-center justify-between text-xs">
-                                  <span className="text-muted-foreground">vs {otherPlayer.playerName}:</span>
-                                  <span
-                                    className={
-                                      diff >= 15
-                                        ? "font-bold text-green-600"
-                                        : diff >= 5
-                                          ? "font-semibold text-green-600"
-                                          : diff <= -15
-                                            ? "font-bold text-destructive"
-                                            : diff <= -5
-                                              ? "font-semibold text-orange-600"
-                                              : ""
-                                    }
-                                  >
-                                    {diff >= 0 ? `+${diff.toFixed(1)}%` : `${diff.toFixed(1)}%`}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="text-center text-muted-foreground py-8">
-                No players selected. Select up to 4 players to compare.
-              </div>
-            )}
-          </div>
-          </DialogBody>
-        </DialogContent>
-      </Dialog>
 
       {/* Important Note */}
       <Card className="border-yellow-200 dark:border-yellow-900 bg-yellow-50 dark:bg-yellow-950/20">

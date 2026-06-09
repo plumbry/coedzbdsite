@@ -304,13 +304,7 @@ export const syncYuniteTournaments = action({
               },
             );
 
-            const player = matchedPlayerDoc
-              ? await ctx.runQuery(
-                  internal.players.importMatching.getPlayerDocumentById,
-                  { playerId: matchedPlayerDoc._id },
-                )
-              : null;
-
+            const player = matchedPlayerDoc;
             const matched = !!player;
             let epicUsername: string | undefined = user.epicName;
 
@@ -319,20 +313,11 @@ export const syncYuniteTournaments = action({
             }
             
             // If matched and we have an epicId from Yunite, update the player's epicId (with history tracking)
-            if (matched && player && user.epicId) {
-              if (!player.epicId) {
-                // First time setting epicId
-                await ctx.runMutation(api.yunite.updatePlayerEpicId, {
-                  playerId: player._id,
-                  epicId: user.epicId,
-                });
-              } else if (player.epicId !== user.epicId) {
-                // Epic ID changed — save old one to history
-                await ctx.runMutation(api.yunite.updatePlayerEpicId, {
-                  playerId: player._id,
-                  epicId: user.epicId,
-                });
-              }
+            if (matched && player && user.epicId && player.epicId !== user.epicId) {
+              await ctx.runMutation(api.yunite.updatePlayerEpicId, {
+                playerId: player._id,
+                epicId: user.epicId,
+              });
             }
             
             if (matched) {

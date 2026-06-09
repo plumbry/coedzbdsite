@@ -280,6 +280,7 @@ export default defineSchema({
     eventId: v.optional(v.id("events")), // Link to Event from Event Manager
   })
     .index("by_player", ["playerId"])
+    .index("by_event", ["eventId"])
     .index("by_event_date", ["eventDate"])
     .index("by_import", ["importId"]),
   
@@ -342,10 +343,11 @@ export default defineSchema({
     finalizedAt: v.optional(v.number()),
     finalizedBy: v.optional(v.id("users")),
     pipelineLocked: v.optional(v.boolean()),
-  }).index("by_leaderboard_id", ["leaderboardId"])
+  })    .index("by_leaderboard_id", ["leaderboardId"])
     .index("by_event", ["eventId"])
     .index("by_manual", ["isManualImport"])
     .index("by_source", ["source"])
+    .index("by_import_method", ["importMethod"])
     .index("by_pipeline_status", ["pipelineStatus"]),
 
   importProcessingJobs: defineTable({
@@ -860,6 +862,7 @@ export default defineSchema({
         discordUsername: v.string(),
         epicUsername: v.string(),
         nickname: v.optional(v.string()),
+        serverJoinDate: v.string(),
         alternateDiscordUserIds: v.optional(v.array(v.string())),
         tier: v.optional(v.string()),
         status: v.optional(v.string()),
@@ -872,6 +875,16 @@ export default defineSchema({
             }),
           ),
         ),
+        matchConfidence: v.optional(
+          v.union(
+            v.literal("exact"),
+            v.literal("username"),
+            v.literal("fuzzy"),
+            v.literal("manual"),
+          ),
+        ),
+        needsReview: v.optional(v.boolean()),
+        hasLeftServer: v.optional(v.boolean()),
       }),
     ),
     createdAt: v.number(),
@@ -1382,13 +1395,6 @@ export default defineSchema({
   }).index("by_admin_token", ["adminToken"])
     .index("by_link_code", ["linkCode"])
     .index("by_slug", ["slug"]),
-
-  // Admin team chat messages
-  chatMessages: defineTable({
-    userId: v.id("users"),
-    userName: v.string(),
-    text: v.string(),
-  }),
 
   // Female verifications synced from Mod Log "Girl Role" sheet
   girlRoleVerifications: defineTable({

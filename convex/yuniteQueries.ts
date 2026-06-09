@@ -33,7 +33,7 @@ export const getRecentYuniteImports = query({
   handler: async (ctx) => {
     const imports = await ctx.db
       .query("thirdPartyImports")
-      .filter((q) => q.eq(q.field("importMethod"), "api"))
+      .withIndex("by_import_method", (q) => q.eq("importMethod", "api"))
       .order("desc")
       .take(20);
     
@@ -56,13 +56,29 @@ export const getTournamentDetails = query({
       .withIndex("by_import", (q) => q.eq("importId", args.importId))
       .collect();
     
-    // Get matched players with their database info
+    const playerIds = [
+      ...new Set(
+        results
+          .filter((result) => result.matched && result.playerId)
+          .map((result) => result.playerId!),
+      ),
+    ];
+    const playersById = new Map<Id<"players">, Doc<"players">>();
+    await Promise.all(
+      playerIds.map(async (playerId) => {
+        const player = await ctx.db.get(playerId);
+        if (player) {
+          playersById.set(playerId, player);
+        }
+      }),
+    );
+
     const matchedResults = [];
     const unmatchedResults = [];
-    
+
     for (const result of results) {
       if (result.matched && result.playerId) {
-        const player = await ctx.db.get(result.playerId);
+        const player = playersById.get(result.playerId);
         matchedResults.push({
           ...result,
           playerName: player?.discordUsername || "Unknown",

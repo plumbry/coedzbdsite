@@ -3,13 +3,11 @@ import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import {
   Trophy,
   TrendingUp,
-  GitCompare,
   DollarSign,
   Target,
   Brain,
   LineChart,
   Database,
-  FlaskConical,
   Wrench,
   Users,
   type LucideIcon,
@@ -32,7 +30,7 @@ type StatsSection = {
 const statsSections: StatsSection[] = [
   {
     title: "Tier & holistic",
-    description: "Promotion/demotion signals, holistic components, and what-if simulation.",
+    description: "Promotion/demotion signals and holistic score components.",
     links: [
       {
         title: "Tier Re-Evaluation",
@@ -47,22 +45,10 @@ const statsSections: StatsSection[] = [
         icon: Brain,
       },
       {
-        title: "Tier Simulation",
-        description: "Preview how tier median changes would affect standings.",
-        href: "/admin/tier-simulation",
-        icon: FlaskConical,
-      },
-      {
         title: "Tier Impact",
         description: "How tier placement affects performance over time.",
         href: "/admin/tier-impact",
         icon: Target,
-      },
-      {
-        title: "Compare Players",
-        description: "Side-by-side internal stats across events.",
-        href: "/admin/player-comparison",
-        icon: GitCompare,
       },
     ],
   },

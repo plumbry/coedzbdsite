@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
-import { UserCheck, UserX, UserMinus, Loader2, ExternalLink, AlertTriangle, Edit, Award, ArrowUpDown, Search, Trash2, ShieldAlert, Plus, RefreshCw, Users } from "lucide-react";
+import { UserCheck, UserX, UserMinus, Loader2, ExternalLink, AlertTriangle, Edit, Award, ArrowUpDown, Search, Trash2, ShieldAlert, Plus, RefreshCw, Users, Download } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import MergeMembersDialog from "./_components/merge-members-dialog.tsx";
 import { toast } from "sonner";
@@ -255,6 +255,44 @@ export default function MemberManagement() {
     } finally {
       setIsSyncingDiscordMembers(false);
     }
+  };
+
+  const handleExportRejectedCsv = () => {
+    if (!rejectedMembers || rejectedMembers.length === 0) {
+      toast.error("No rejected applications to export");
+      return;
+    }
+
+    const rowsToExport = sortedRejectedMembers.length > 0 ? sortedRejectedMembers : rejectedMembers;
+    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const headers = [
+      "discordUsername",
+      "discordUserId",
+      "epicUsername",
+      "tier",
+      "rejectionReason",
+      "createdAt",
+    ];
+    const csvRows = rowsToExport.map((member) => [
+      escapeCsv(member.discordUsername),
+      escapeCsv(member.discordUserId ?? ""),
+      escapeCsv(member.epicUsername),
+      escapeCsv(member.tier ?? ""),
+      escapeCsv(member.rejectionReason ?? ""),
+      escapeCsv(format(new Date(member._creationTime), "yyyy-MM-dd")),
+    ]);
+
+    const csv = [headers.join(","), ...csvRows.map((row) => row.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `rejected-players-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${rowsToExport.length} rejected application(s) to CSV`);
   };
 
   const handleSyncGirlRole = async () => {
@@ -1339,10 +1377,23 @@ export default function MemberManagement() {
             <TabsContent value="rejected">
             <Card className="p-0 sm:p-6">
               <CardHeader className="px-3 py-4 sm:px-6 sm:py-6">
-                <CardTitle>Rejected Applications</CardTitle>
-                <CardDescription>
-                  {rejectedMembers?.length || 0} rejected application(s)
-                </CardDescription>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <CardTitle>Rejected Applications</CardTitle>
+                    <CardDescription>
+                      {rejectedMembers?.length || 0} rejected application(s)
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportRejectedCsv}
+                    disabled={!rejectedMembers || rejectedMembers.length === 0}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export CSV
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="px-3 sm:px-6">
                 {rejectedMembers === undefined ? (

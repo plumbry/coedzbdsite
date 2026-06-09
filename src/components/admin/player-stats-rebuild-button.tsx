@@ -96,10 +96,6 @@ export function PlayerStatsRebuildRunningAlert() {
   useEffect(() => {
     if (!isRunning) return;
     void reconcileStatsRebuild({});
-    const intervalId = window.setInterval(() => {
-      void reconcileStatsRebuild({});
-    }, 30_000);
-    return () => window.clearInterval(intervalId);
   }, [isRunning, reconcileStatsRebuild]);
 
   const runCancelStatsRebuild = async () => {

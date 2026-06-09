@@ -3,7 +3,7 @@ import { mutation, query, action, internalMutation } from "../_generated/server"
 import { requireAdmin, requireModeratorOrAdmin, getDisplayName } from "../auth_helpers";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel.d.ts";
-import type { MutationCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { appendLeaderboardUrlToEvent } from "../lib/eventLeaderboardLinks";
 import { refreshEventCache } from "../lib/eventCache";
 import { applyLinkedScrimSeries } from "../lib/scrimSeriesEventLink";
@@ -13,6 +13,23 @@ import {
 } from "../lib/eventWorkflow";
 import { normalizeEventType } from "../lib/eventTypes";
 import { collectEventLeaderboardUrls, extractTournamentIdFromUrl } from "../lib/yunite";
+
+async function countManualResultsByEvent(
+  ctx: QueryCtx,
+  eventIds: Id<"events">[],
+): Promise<Map<Id<"events">, number>> {
+  const counts = new Map<Id<"events">, number>();
+  for (const eventId of eventIds) {
+    const results = await ctx.db
+      .query("eventResults")
+      .withIndex("by_event", (q) => q.eq("eventId", eventId))
+      .collect();
+    if (results.length > 0) {
+      counts.set(eventId, results.length);
+    }
+  }
+  return counts;
+}
 
 // Auto-link existing unlinked imports to an event based on matching leaderboard URLs
 async function autoLinkImportsToEvent(
@@ -113,16 +130,7 @@ export const getAllEvents = query({
       }
     }
 
-    const manualResults = await ctx.db.query("eventResults").collect();
-    const manualResultCountByEvent = new Map<Id<"events">, number>();
-    for (const result of manualResults) {
-      if (result.eventId) {
-        manualResultCountByEvent.set(
-          result.eventId,
-          (manualResultCountByEvent.get(result.eventId) ?? 0) + 1,
-        );
-      }
-    }
+    const manualResultCountByEvent = await countManualResultsByEvent(ctx, events.map((event) => event._id));
 
     const scrimSeriesScorePresence = new Map<Id<"scrimSeries">, boolean>();
     for (const event of events) {
@@ -226,16 +234,10 @@ export const getOperationsSummary = query({
       importsByEventId.set(importRecord.eventId, existing);
     }
 
-    const manualResults = await ctx.db.query("eventResults").collect();
-    const manualResultCountByEvent = new Map<Id<"events">, number>();
-    for (const result of manualResults) {
-      if (result.eventId && eventIds.has(result.eventId)) {
-        manualResultCountByEvent.set(
-          result.eventId,
-          (manualResultCountByEvent.get(result.eventId) ?? 0) + 1,
-        );
-      }
-    }
+    const manualResultCountByEvent = await countManualResultsByEvent(
+      ctx,
+      events.map((event) => event._id),
+    );
 
     const scrimSeriesScorePresence = new Map<Id<"scrimSeries">, boolean>();
     for (const event of events) {

@@ -236,10 +236,6 @@ function AudienceInsightsContent() {
   useEffect(() => {
     if (!isJobRunning) return;
     void reconcileRebuild({});
-    const intervalId = window.setInterval(() => {
-      void reconcileRebuild({});
-    }, 30_000);
-    return () => window.clearInterval(intervalId);
   }, [isJobRunning, reconcileRebuild]);
 
   const progressPercent =

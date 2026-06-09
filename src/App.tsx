@@ -1,16 +1,13 @@
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { DefaultProviders } from "./components/providers/default.tsx";
 import AdminLayout from "./components/admin-layout.tsx";
-import AdminChatWidget from "./components/admin-chat-widget.tsx";
 import UsernameSetupDialog from "./components/username-setup-dialog.tsx";
 import Index from "./pages/Index.tsx";
 import PlayerProfile from "./pages/player-profile/page.tsx";
 
 import TierReEvaluation from "./pages/admin/tier-re-evaluation.tsx";
-import TierSimulation from "./pages/admin/tier-simulation.tsx";
 import AverageStats from "./pages/admin/average-stats.tsx";
 import HolisticScoreStats from "./pages/admin/holistic-score-stats.tsx";
-import PlayerComparison from "./pages/admin/player-comparison.tsx";
 import TopFiveDetails from "./pages/admin/top-five-details.tsx";
 import LeaderboardStats from "./pages/admin/leaderboard-stats.tsx";
 import DataCacheStatus from "./pages/admin/data-cache-status.tsx";
@@ -69,10 +66,8 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminHubPage />} />
             <Route path="tier-re-evaluation" element={<TierReEvaluation />} />
-            <Route path="tier-simulation" element={<TierSimulation />} />
             <Route path="average-stats" element={<AverageStats />} />
             <Route path="holistic-score-stats" element={<HolisticScoreStats />} />
-            <Route path="player-comparison" element={<PlayerComparison />} />
             <Route path="top-five-details" element={<TopFiveDetails />} />
             <Route path="leaderboard-stats" element={<LeaderboardStats />} />
             <Route path="data-cache-status" element={<DataCacheStatus />} />
@@ -125,7 +120,6 @@ export default function App() {
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
-        <AdminChatWidget />
         <UsernameSetupDialog />
       </BrowserRouter>
     </DefaultProviders>

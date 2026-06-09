@@ -81,6 +81,10 @@ export const updatePlayerEpicId = mutation({
     const player = await ctx.db.get(args.playerId);
     if (!player) return;
 
+    if (player.epicId === args.epicId) {
+      return;
+    }
+
     if (player.epicId && player.epicId !== args.epicId) {
       // Epic ID changed — save old one to history
       const previousEpicIds = player.previousEpicIds ?? [];
