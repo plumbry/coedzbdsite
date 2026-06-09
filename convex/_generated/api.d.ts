@@ -111,6 +111,7 @@ import type * as lib_stats_computeInternalPlayerStats from "../lib/stats/compute
 import type * as lib_stats_evaluationStatus from "../lib/stats/evaluationStatus.js";
 import type * as lib_stats_filterYuniteResults from "../lib/stats/filterYuniteResults.js";
 import type * as lib_stats_holisticScore from "../lib/stats/holisticScore.js";
+import type * as lib_stats_importRecordCache from "../lib/stats/importRecordCache.js";
 import type * as lib_stats_listEligiblePlayers from "../lib/stats/listEligiblePlayers.js";
 import type * as lib_stats_matchPlayerFromLookup from "../lib/stats/matchPlayerFromLookup.js";
 import type * as lib_stats_playerStatsCacheEligibility from "../lib/stats/playerStatsCacheEligibility.js";
@@ -299,6 +300,7 @@ declare const fullApi: ApiFromModules<{
   "lib/stats/evaluationStatus": typeof lib_stats_evaluationStatus;
   "lib/stats/filterYuniteResults": typeof lib_stats_filterYuniteResults;
   "lib/stats/holisticScore": typeof lib_stats_holisticScore;
+  "lib/stats/importRecordCache": typeof lib_stats_importRecordCache;
   "lib/stats/listEligiblePlayers": typeof lib_stats_listEligiblePlayers;
   "lib/stats/matchPlayerFromLookup": typeof lib_stats_matchPlayerFromLookup;
   "lib/stats/playerStatsCacheEligibility": typeof lib_stats_playerStatsCacheEligibility;

@@ -56,20 +56,26 @@ export const runProcessingStep = internalAction({
     });
 
     if (!step) {
+      const completed = new Set(context.job.completedSteps ?? []);
+      if (!completed.has("finalize") && context.imp.pipelineStatus !== "Finalized") {
+        await ctx.scheduler.runAfter(0, internal.importProcessing.processImportBatch, {
+          jobId: args.jobId,
+        });
+        return { delegated: true, reason: "finalize_step_scheduled" };
+      }
       await ctx.runMutation(internal.importProcessing.completeJob, {
         jobId: args.jobId,
         status: "completed",
-        pipelineStatus:
-          context.imp.pipelineStatus === "Finalized" ? "Finalized" : "Results Generated",
+        pipelineStatus: "Finalized",
       });
       return { done: true, reason: "no_steps_remaining" };
     }
 
     if (!isApiPipelineStep(step)) {
-      await ctx.runMutation(internal.importProcessing.processImportBatch, {
+      await ctx.scheduler.runAfter(0, internal.importProcessing.processImportBatch, {
         jobId: args.jobId,
       });
-      return { delegated: true, reason: "batch_step" };
+      return { delegated: true, reason: "batch_step_scheduled" };
     }
 
     await ctx.runMutation(internal.importProcessing.incrementJobMetric, {

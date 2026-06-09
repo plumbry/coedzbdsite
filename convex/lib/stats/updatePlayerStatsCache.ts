@@ -9,6 +9,7 @@ import {
   STATS_REEVAL_MIN_EVENTS,
 } from "./thresholds";
 import { FORMULA_VERSION } from "./versions";
+import { getCachedImportRecord, type ImportRecordCache } from "./importRecordCache";
 
 export type PlayerStatsCacheFields = {
   playerId: Id<"players">;
@@ -65,12 +66,13 @@ export async function computePlayerStatsCacheFields(
   }
 
   const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
+  const importCache: ImportRecordCache = new Map();
   const matchedYuniteResults = [];
   for (const result of thirdPartyResults) {
     if (!result.matched) {
       continue;
     }
-    const importRecord = await ctx.db.get(result.importId);
+    const importRecord = await getCachedImportRecord(ctx, importCache, result.importId);
     if (!importRecord || !isYuniteImport(importRecord)) {
       continue;
     }

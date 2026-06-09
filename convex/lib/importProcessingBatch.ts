@@ -1,6 +1,9 @@
 /** Rows processed per import pipeline batch mutation. */
 export const IMPORT_ROW_BATCH_SIZE = 75;
 
+/** Players per update_player_stats batch — one player (heavy per-player result + import reads). */
+export const IMPORT_STATS_PLAYER_BATCH_SIZE = 1;
+
 /** Max automatic retries for transient Yunite/network errors before failing the job. */
 export const MAX_PIPELINE_RETRIES = 8;
 

@@ -49,9 +49,12 @@ export const populateForImportInternal = internalAction({
       message: "populate_start",
     });
 
-    const { resultsByDiscord } = await ctx.runQuery(
+    const { resultRefs } = await ctx.runQuery(
       internal.yunite.populateTeamMembersHelpers.getImportResultRefsByDiscord,
       { importId: args.importId },
+    );
+    const resultsByDiscord = new Map(
+      resultRefs.map((ref) => [ref.discordId, ref]),
     );
 
     const tournamentId = imp.leaderboardId.replace("yunite-", "");
@@ -88,7 +91,9 @@ export const populateForImportInternal = internalAction({
         internal.yunite.populateTeamMembersHelpers.lookupEpicUsernamesByDiscordIds,
         { discordIds: chunk },
       );
-      Object.assign(discordToEpic, lookup.discordToEpic);
+      for (const row of lookup.epicLookups) {
+        discordToEpic[row.discordId] = row.epicUsername;
+      }
       logImportPipelineEvent({
         importId: args.importId,
         jobId: args.jobId,
@@ -116,7 +121,7 @@ export const populateForImportInternal = internalAction({
       }
 
       for (const user of entry.users) {
-        const resultRef = resultsByDiscord[user.discordId];
+        const resultRef = resultsByDiscord.get(user.discordId);
         if (!resultRef) {
           continue;
         }
@@ -159,6 +164,13 @@ export const populateForImportInternal = internalAction({
       elapsedMs: Date.now() - pipelineStart,
       message: "populate_complete",
     });
+
+    if (args.jobId) {
+      await ctx.runMutation(internal.importProcessing.incrementJobMetric, {
+        jobId: args.jobId,
+        rowsProcessed: updated,
+      });
+    }
 
     return { success: true, updated };
   },

@@ -171,6 +171,7 @@ export default function ImportThirdParty() {
   const replaceCSVData = useMutation(api.thirdPartyMutations.replaceCSVData);
   const refreshAllImports = useMutation(api.thirdPartyMutations.refreshAllImports);
   const startProcessImport = useMutation(api.importProcessing.startProcessImport);
+  const cancelRunningImportJob = useMutation(api.importProcessing.cancelRunningImportJob);
   const unlockImport = useMutation(api.importProcessing.unlockImport);
   const reprocessImport = useMutation(api.importProcessing.reprocessImport);
   const recalculateStatsForImport = useMutation(api.playerStatsCache.recalculateStatsForImport);
@@ -192,6 +193,9 @@ export default function ImportThirdParty() {
       setProcessingImportId(null);
     } else if (job.status === "waiting") {
       toast.info(job.errorMessage || "Import needs admin action before continuing.");
+      setProcessingImportId(null);
+    } else if (job.status === "cancelled") {
+      toast.message(job.progressMessage || "Import processing cancelled.");
       setProcessingImportId(null);
     }
   }, [importProcessingState?.job?.status, processingImportId]);
@@ -1809,10 +1813,41 @@ export default function ImportThirdParty() {
                             </Badge>
                             {processingImportId === imp._id &&
                               importProcessingState?.job?.status === "running" && (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1 line-clamp-2">
-                                  <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
-                                  {importProcessingState.job.progressMessage}
-                                </span>
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1 line-clamp-2">
+                                    <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                                    {importProcessingState.job.progressMessage}
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 w-fit px-2 text-[11px]"
+                                    onClick={async () => {
+                                      try {
+                                        const result = await cancelRunningImportJob({
+                                          importId: imp._id,
+                                        });
+                                        if (result.cancelled) {
+                                          toast.success(result.message ?? "Import cancelled.");
+                                          setProcessingImportId(null);
+                                        } else {
+                                          toast.message(
+                                            result.message ?? "No running job to cancel.",
+                                          );
+                                        }
+                                      } catch (error) {
+                                        toast.error(
+                                          error instanceof Error
+                                            ? error.message
+                                            : "Failed to cancel import",
+                                        );
+                                      }
+                                    }}
+                                  >
+                                    Cancel processing
+                                  </Button>
+                                </div>
                               )}
                             {imp.pipelineError && (
                               <span

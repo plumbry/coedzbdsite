@@ -2,6 +2,7 @@ import type { MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel.d.ts";
 import { fetchThirdPartyResultsForPlayer } from "../../helpers/playerResults";
 import { isYuniteImport } from "../importSource";
+import { getCachedImportRecord, type ImportRecordCache } from "./importRecordCache";
 
 /** Recompute `eventsPlayedCount` (Yunite imports only) and `lastEventDate` for a player. */
 export async function syncInternalEventParticipation(
@@ -14,11 +15,12 @@ export async function syncInternalEventParticipation(
   }
 
   const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
+  const importCache: ImportRecordCache = new Map();
   const yuniteImportIds = new Set<string>();
   let lastEventDate: string | undefined;
 
   for (const result of thirdPartyResults) {
-    const importRecord = await ctx.db.get(result.importId);
+    const importRecord = await getCachedImportRecord(ctx, importCache, result.importId);
     if (!importRecord || !isYuniteImport(importRecord)) {
       continue;
     }

@@ -24,7 +24,7 @@ export async function importHasTeamMembersPopulated(
   return results.every((result) => (result.teamMembers?.length ?? 0) > 0);
 }
 
-async function isStepEligible(
+export async function isStepEligible(
   ctx: QueryCtx,
   imp: Doc<"thirdPartyImports">,
   step: ImportPipelineStep,
@@ -39,6 +39,46 @@ async function isStepEligible(
     }
   }
   return true;
+}
+
+/** Steps already done or not needed for the current import state (implicit completions). */
+export async function collectImplicitlyCompletedSteps(
+  ctx: QueryCtx,
+  imp: Doc<"thirdPartyImports">,
+  forceReprocess: boolean,
+  completedSteps: readonly string[],
+): Promise<ImportPipelineStep[]> {
+  const completed = new Set(completedSteps);
+  const implicit: ImportPipelineStep[] = [];
+
+  for (const step of pipelineStepsForImport(imp.source)) {
+    if (completed.has(step)) {
+      continue;
+    }
+    if (!(await isStepEligible(ctx, imp, step, forceReprocess))) {
+      implicit.push(step);
+    }
+  }
+
+  return implicit;
+}
+
+export function mergeCompletedSteps(
+  priorSteps: readonly string[],
+  ...additional: ImportPipelineStep[]
+): ImportPipelineStep[] {
+  const merged: ImportPipelineStep[] = [];
+  const seen = new Set<string>();
+
+  for (const step of [...priorSteps, ...additional]) {
+    if (seen.has(step)) {
+      continue;
+    }
+    seen.add(step);
+    merged.push(step as ImportPipelineStep);
+  }
+
+  return merged;
 }
 
 export async function resolveNextStepForImport(
