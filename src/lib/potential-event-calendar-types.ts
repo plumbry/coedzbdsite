@@ -25,7 +25,7 @@ export function entryDotClass(entry: CalendarEntry): string {
     case "cancelled":
       return "bg-destructive";
     case "admin_note":
-      return "bg-amber-500";
+      return "bg-amber-700";
     case "confirmed":
       return "bg-primary";
     default:
@@ -38,7 +38,7 @@ export function entryChipClass(entry: CalendarEntry): string {
     case "cancelled":
       return "bg-destructive/10 text-destructive line-through hover:bg-destructive/15";
     case "admin_note":
-      return "bg-amber-500/15 text-amber-900 hover:bg-amber-500/25 dark:text-amber-100";
+      return "bg-amber-700 text-white hover:bg-amber-800";
     case "confirmed":
       return "bg-primary/15 text-primary hover:bg-primary/25";
     default:

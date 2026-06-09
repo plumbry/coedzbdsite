@@ -36,7 +36,7 @@ function exportChipClass(entry: CalendarEntry): string {
     case "cancelled":
       return "bg-red-100 text-red-800 line-through";
     case "admin_note":
-      return "bg-amber-100 text-amber-950";
+      return "bg-amber-700 text-white";
     case "confirmed":
       return "bg-sky-100 text-sky-950";
     default:
@@ -49,7 +49,7 @@ function legendSwatchClass(status: CalendarEntryStatus): string {
     case "cancelled":
       return "bg-red-500";
     case "admin_note":
-      return "bg-amber-500";
+      return "bg-amber-700";
     case "confirmed":
       return "bg-sky-600";
     default:

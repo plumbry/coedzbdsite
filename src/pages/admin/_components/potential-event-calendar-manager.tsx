@@ -642,6 +642,7 @@ function PeriodCalendarGrid({
                 const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
                 const visibleEntries = dayEntries.slice(0, maxEventsPerCell);
                 const hiddenCount = dayEntries.length - visibleEntries.length;
+                const showMonthLabel = isNinetyDayView && inPeriod && day.getDate() === 1;
 
                 return (
                   <div
@@ -664,16 +665,23 @@ function PeriodCalendarGrid({
                       canEdit && inPeriod && "cursor-pointer hover:bg-muted/30",
                     )}
                   >
-                    <span
-                      className={cn(
-                        "mb-1 flex size-7 shrink-0 items-center justify-center self-start rounded-full text-sm",
-                        isToday(day) && inPeriod && "bg-primary font-semibold text-primary-foreground",
-                        !isToday(day) && inPeriod && "font-medium",
-                        !inPeriod && "text-muted-foreground",
+                    <div className="mb-1 flex flex-col self-start">
+                      {showMonthLabel && (
+                        <span className="mb-0.5 text-[10px] font-semibold leading-none text-muted-foreground">
+                          {format(day, "MMMM")}
+                        </span>
                       )}
-                    >
-                      {format(day, "d")}
-                    </span>
+                      <span
+                        className={cn(
+                          "flex size-7 shrink-0 items-center justify-center rounded-full text-sm",
+                          isToday(day) && inPeriod && "bg-primary font-semibold text-primary-foreground",
+                          !isToday(day) && inPeriod && "font-medium",
+                          !inPeriod && "text-muted-foreground",
+                        )}
+                      >
+                        {format(day, "d")}
+                      </span>
+                    </div>
                     <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
                       {visibleEntries.map((entry) => (
                         <button
@@ -739,7 +747,7 @@ function EntryCard({
               variant={statusBadgeVariant(entry.status)}
               className={
                 entry.status === "admin_note"
-                  ? "border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-100"
+                  ? "border-amber-700 bg-amber-700 text-white hover:bg-amber-800"
                   : undefined
               }
             >
