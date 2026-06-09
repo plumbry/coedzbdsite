@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 
-const CACHE_KEY = "eventManagerTitlesCache";
+const CACHE_KEY = "eventManagerTitlesCacheV2";
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
 type TitleCache = {

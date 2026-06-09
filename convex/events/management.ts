@@ -391,19 +391,22 @@ export const getPublicEvents = query({
   },
 });
 
-/** Unique event names from Events Manager — for calendar title suggestions. */
+/** Unique event names from Events Manager — most recent first, for calendar title suggestions. */
 export const listEventTitles = query({
   args: {},
   handler: async (ctx) => {
     await requireEventBanAccess(ctx);
 
-    const events = await ctx.db.query("events").collect();
-    const titles = new Set<string>();
+    const events = await ctx.db.query("events").order("desc").collect();
+    const seen = new Set<string>();
+    const titles: string[] = [];
     for (const event of events) {
       const name = event.name.trim();
-      if (name) titles.add(name);
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      titles.push(name);
     }
-    return Array.from(titles).sort((a, b) => a.localeCompare(b));
+    return titles;
   },
 });
 
