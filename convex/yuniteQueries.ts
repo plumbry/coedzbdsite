@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin } from "./auth_helpers";
@@ -16,14 +16,27 @@ export const countPlayerMatchStats = query({
   },
 });
 
-// Get all match player stats (for diagnostics)
-export const getAllMatchPlayerStats = query({
+/** Admin diagnostics only — paginated match stats scan. */
+export const listMatchPlayerStatsPage = query({
+  args: {
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const limit = Math.min(Math.max(args.limit ?? 500, 1), 1000);
+    const page = await ctx.db
+      .query("matchPlayerStats")
+      .paginate({ cursor: args.cursor ?? null, numItems: limit });
+    return page;
+  },
+});
+
+// Internal full scan for admin backfill actions only.
+export const getAllMatchPlayerStatsInternal = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const matchStats = await ctx.db
-      .query("matchPlayerStats")
-      .collect();
-    return matchStats;
+    return await ctx.db.query("matchPlayerStats").collect();
   },
 });
 

@@ -152,6 +152,12 @@ export const runProcessingStep = internalAction({
           }
           break;
         }
+        case "update_player_stats": {
+          await ctx.runMutation(internal.importProcessing.runUpdatePlayerStatsStep, {
+            jobId: args.jobId,
+          });
+          break;
+        }
         case "finalize": {
           await ctx.runMutation(internal.importProcessing.completeJob, {
             jobId: args.jobId,

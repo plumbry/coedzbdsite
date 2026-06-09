@@ -1,7 +1,7 @@
 "use node";
 
 import { action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { v } from "convex/values";
 import { requireAdminAction } from "./auth_helpers";
@@ -57,7 +57,9 @@ export const checkMatchDataStats = action({
     await requireAdminAction(ctx);
 
     // Get all players with match data (from matchPlayerStats table)
-    const allMatchStats = await ctx.runQuery(api.yuniteQueries.getAllMatchPlayerStats);
+    const allMatchStats = await ctx.runQuery(
+      internal.yuniteQueries.getAllMatchPlayerStatsInternal,
+    );
     const playersWithMatchDataSet = new Set(allMatchStats.map((stat: typeof allMatchStats[number]) => stat.playerId));
     
     const allPlayers = await ctx.runQuery(api.players.getPlayers);

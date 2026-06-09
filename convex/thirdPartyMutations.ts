@@ -14,19 +14,21 @@ import {
   extractTournamentIdFromLeaderboardId,
   extractTournamentIdFromUrl,
 } from "./lib/yunite";
-import { matchPlayerForImport } from "./lib/playerIdentity";
+import { matchPlayerForImportFromLookup } from "./lib/stats/matchPlayerFromLookup";
+import { rematchImportResults } from "./lib/importRematch";
 import type { Doc } from "./_generated/dataModel.d.ts";
 
-function findPlayerForImportEntry(
-  players: Doc<"players">[],
+async function findPlayerIdForImportEntry(
+  ctx: MutationCtx,
   entry: {
     discordId?: string | null;
     epicId?: string | null;
     epicUsername?: string | null;
     discordUsername?: string | null;
   },
-) {
-  return matchPlayerForImport(players, entry).player;
+): Promise<Id<"players"> | undefined> {
+  const { playerId } = await matchPlayerForImportFromLookup(ctx, entry);
+  return playerId ?? undefined;
 }
 
 // Helper to check existing import
@@ -69,14 +71,9 @@ export const saveImport = internalMutation({
       throw new Error("User not found");
     }
     
-    // Get all active players for matching (including those without status field)
-    const allPlayersList = await ctx.db.query("players").collect();
-    const allPlayers = allPlayersList.filter(
-      p => p.status === "active" || p.status === undefined
-    );
-    
     let playersMatched = 0;
     let playersUnmatched = 0;
+    const affectedPlayerIds = new Set<Id<"players">>();
     
     // Create the import record
     // Auto-link: find a matching event that has this leaderboard URL
@@ -120,31 +117,22 @@ export const saveImport = internalMutation({
     
     // Process each entry
     for (const entry of args.entries) {
-      const matchedPlayer = findPlayerForImportEntry(allPlayers, {
+      const matchedPlayerId = await findPlayerIdForImportEntry(ctx, {
         discordId: entry.discordId,
         epicUsername: entry.epicUsername,
         discordUsername: entry.discordUsername,
       });
 
-      if (matchedPlayer) {
+      if (matchedPlayerId) {
         playersMatched++;
+        affectedPlayerIds.add(matchedPlayerId);
       } else {
         playersUnmatched++;
       }
 
-      // Save the result
-      if (matchedPlayer?._id) {
-        await touchPlayerEventParticipationOnInsert(
-          ctx,
-          matchedPlayer._id,
-          args.eventName,
-          undefined,
-        );
-      }
-
       await ctx.db.insert("thirdPartyResults", {
         importId,
-        playerId: matchedPlayer?._id,
+        playerId: matchedPlayerId,
         eventName: args.eventName,
         source: "Yunite",
         leaderboardUrl: args.leaderboardUrl,
@@ -155,7 +143,7 @@ export const saveImport = internalMutation({
         points: entry.points,
         eliminations: entry.eliminations,
         teamMembers: entry.teamMembers,
-        matched: !!matchedPlayer,
+        matched: !!matchedPlayerId,
       });
     }
     
@@ -164,12 +152,20 @@ export const saveImport = internalMutation({
       playersMatched,
       playersUnmatched,
     });
+
+    if (affectedPlayerIds.size > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.helpers.eventDrivenRebuilds.scheduleStatsForAffectedPlayers,
+        { playerIds: [...affectedPlayerIds] },
+      );
+    }
     
     // Log to audit
     await ctx.db.insert("auditLogs", {
       userId: user._id,
       userName: args.importedByName,
-      action: "third_party_import",
+      action: "third_party_import_created",
       entityType: "thirdPartyImport",
       entityId: importId,
       details: JSON.stringify({
@@ -232,14 +228,9 @@ export const importFromCSV = mutation({
     // Generate a unique ID for this import
     const leaderboardId = `csv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    // Get all active players for matching (including those without status field)
-    const allPlayersList = await ctx.db.query("players").collect();
-    const allPlayers = allPlayersList.filter(
-      p => p.status === "active" || p.status === undefined
-    );
-    
     let playersMatched = 0;
     let playersUnmatched = 0;
+    const affectedPlayerIds = new Set<Id<"players">>();
     
     // Create the import record
     const importId = await ctx.db.insert("thirdPartyImports", {
@@ -259,31 +250,22 @@ export const importFromCSV = mutation({
     
     // Process each entry
     for (const entry of args.entries) {
-      const matchedPlayer = findPlayerForImportEntry(allPlayers, {
+      const matchedPlayerId = await findPlayerIdForImportEntry(ctx, {
         discordId: entry.discordId,
         epicUsername: entry.epicUsername,
         discordUsername: entry.discordUsername,
       });
 
-      if (matchedPlayer) {
+      if (matchedPlayerId) {
         playersMatched++;
+        affectedPlayerIds.add(matchedPlayerId);
       } else {
         playersUnmatched++;
       }
 
-      // Save the result
-      if (matchedPlayer?._id) {
-        await touchPlayerEventParticipationOnInsert(
-          ctx,
-          matchedPlayer._id,
-          args.eventName,
-          args.eventDate,
-        );
-      }
-
       await ctx.db.insert("thirdPartyResults", {
         importId,
-        playerId: matchedPlayer?._id,
+        playerId: matchedPlayerId,
         eventName: args.eventName,
         source: args.source,
         leaderboardUrl: args.leaderboardUrl || `CSV Import: ${args.eventName}`,
@@ -296,7 +278,7 @@ export const importFromCSV = mutation({
         wins: entry.wins,
         teamId: entry.teamId,
         teamName: entry.teamName,
-        matched: !!matchedPlayer,
+        matched: !!matchedPlayerId,
       });
     }
     
@@ -322,11 +304,13 @@ export const importFromCSV = mutation({
       }),
     });
 
-    await ctx.scheduler.runAfter(
-      0,
-      internal.helpers.eventDrivenRebuilds.scheduleEventParticipationRebuild,
-      {},
-    );
+    if (affectedPlayerIds.size > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.helpers.eventDrivenRebuilds.scheduleStatsForAffectedPlayers,
+        { playerIds: [...affectedPlayerIds] },
+      );
+    }
 
     if (args.eventId) {
       await refreshEventCache(ctx, args.eventId);
@@ -422,57 +406,22 @@ export const rematchImport = mutation({
       throw new Error("Import not found");
     }
     
-    // Get all results for this import
+    const rematch = await rematchImportResults(ctx, args.importId);
+    const playersMatched = rematch.playersMatched;
+    const playersUnmatched = rematch.playersUnmatched;
+    const newMatches = rematch.newMatches;
     const results = await ctx.db
       .query("thirdPartyResults")
-      .filter((q) => q.eq(q.field("importId"), args.importId))
+      .withIndex("by_import", (q) => q.eq("importId", args.importId))
       .collect();
-    
-    // Get all active players for matching (including those without status field)
-    const allPlayersList = await ctx.db.query("players").collect();
-    const allPlayers = allPlayersList.filter(
-      p => p.status === "active" || p.status === undefined
-    );
-    
-    let playersMatched = 0;
-    let playersUnmatched = 0;
-    let newMatches = 0;
-    
-    // Re-match each result
-    for (const result of results) {
-      const matchedPlayer = findPlayerForImportEntry(allPlayers, {
-        discordId: result.discordId,
-        epicId: result.epicId,
-        epicUsername: result.epicUsername,
-        discordUsername: result.discordUsername,
-      });
 
-      const wasMatched = result.matched;
-      const isNowMatched = !!matchedPlayer;
-      
-      if (isNowMatched) {
-        playersMatched++;
-        if (!wasMatched) {
-          newMatches++;
-        }
-      } else {
-        playersUnmatched++;
-      }
-      
-      // Update the result if match status changed
-      if (wasMatched !== isNowMatched || result.playerId !== matchedPlayer?._id) {
-        await ctx.db.patch(result._id, {
-          playerId: matchedPlayer?._id,
-          matched: isNowMatched,
-        });
-      }
+    if (rematch.affectedPlayerIds.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.helpers.eventDrivenRebuilds.scheduleStatsForAffectedPlayers,
+        { playerIds: rematch.affectedPlayerIds },
+      );
     }
-    
-    // Update import record with new match counts
-    await ctx.db.patch(args.importId, {
-      playersMatched,
-      playersUnmatched,
-    });
     
     // Get user for audit log
     const user = await ctx.db
@@ -534,63 +483,25 @@ export const refreshAllImports = mutation({
     let totalRematchedImports = 0;
     let totalNewMatches = 0;
     
+    const allAffectedPlayerIds = new Set<Id<"players">>();
+
     for (const importRecord of allImports) {
-      // Get all results for this import
-      const results = await ctx.db
-        .query("thirdPartyResults")
-        .withIndex("by_import", (q) => q.eq("importId", importRecord._id))
-        .collect();
-      
-      // Get all active players (including those without status field)
-      const allPlayersList = await ctx.db.query("players").collect();
-      const allPlayers = allPlayersList.filter(
-        p => p.status === "active" || p.status === undefined
+      const rematch = await rematchImportResults(ctx, importRecord._id);
+      if (rematch.newMatches > 0) {
+        totalRematchedImports += 1;
+        totalNewMatches += rematch.newMatches;
+      }
+      for (const playerId of rematch.affectedPlayerIds) {
+        allAffectedPlayerIds.add(playerId);
+      }
+    }
+
+    if (allAffectedPlayerIds.size > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.helpers.eventDrivenRebuilds.scheduleStatsForAffectedPlayers,
+        { playerIds: [...allAffectedPlayerIds] },
       );
-      
-      let playersMatched = 0;
-      let playersUnmatched = 0;
-      let newMatches = 0;
-      
-      // Re-match each result
-      for (const result of results) {
-        const wasMatched = result.matched;
-
-        const matchedPlayer = findPlayerForImportEntry(allPlayers, {
-          discordId: result.discordId,
-          epicId: result.epicId,
-          epicUsername: result.epicUsername,
-          discordUsername: result.discordUsername,
-        });
-
-        // Update the result
-        if (matchedPlayer) {
-          playersMatched++;
-          if (!wasMatched) {
-            newMatches++;
-          }
-          await ctx.db.patch(result._id, {
-            playerId: matchedPlayer._id,
-            matched: true,
-          });
-        } else {
-          playersUnmatched++;
-          await ctx.db.patch(result._id, {
-            playerId: undefined,
-            matched: false,
-          });
-        }
-      }
-      
-      // Update import stats
-      await ctx.db.patch(importRecord._id, {
-        playersMatched,
-        playersUnmatched,
-      });
-      
-      if (newMatches > 0) {
-        totalRematchedImports++;
-        totalNewMatches += newMatches;
-      }
     }
     
     // Log to audit
@@ -648,14 +559,9 @@ export const saveYuniteAPIImport = internalMutation({
       throw new Error("User not found");
     }
     
-    // Get all active players for matching (including those without status field)
-    const allPlayersList = await ctx.db.query("players").collect();
-    const allPlayers = allPlayersList.filter(
-      p => p.status === "active" || p.status === undefined
-    );
-    
     let playersMatched = 0;
     let playersUnmatched = 0;
+    const affectedPlayerIds = new Set<Id<"players">>();
     
     // Create the import record
     const importId = await ctx.db.insert("thirdPartyImports", {
@@ -674,35 +580,22 @@ export const saveYuniteAPIImport = internalMutation({
     
     // Process each entry
     for (const entry of args.entries) {
-      let matchedPlayer = findPlayerForImportEntry(allPlayers, {
+      const matchedPlayerId = await findPlayerIdForImportEntry(ctx, {
         discordId: entry.discordId,
         epicId: entry.epicId,
+        epicUsername: entry.epicId,
       });
-      if (!matchedPlayer && entry.epicId) {
-        matchedPlayer = allPlayers.find(
-          (p) => p.epicUsername.toLowerCase() === entry.epicId!.toLowerCase(),
-        ) ?? null;
-      }
       
-      if (matchedPlayer) {
+      if (matchedPlayerId) {
         playersMatched++;
+        affectedPlayerIds.add(matchedPlayerId);
       } else {
         playersUnmatched++;
-      }
-      
-      // Save the result
-      if (matchedPlayer?._id) {
-        await touchPlayerEventParticipationOnInsert(
-          ctx,
-          matchedPlayer._id,
-          args.eventName,
-          args.eventDate,
-        );
       }
 
       await ctx.db.insert("thirdPartyResults", {
         importId,
-        playerId: matchedPlayer?._id,
+        playerId: matchedPlayerId,
         eventName: args.eventName,
         source: "Yunite API",
         leaderboardUrl: args.leaderboardUrl,
@@ -717,7 +610,7 @@ export const saveYuniteAPIImport = internalMutation({
         averagePlacement: entry.averagePlacement,
         averageSecondsSurvived: entry.averageSecondsSurvived,
         teamMembers: entry.teamMembers,
-        matched: !!matchedPlayer,
+        matched: !!matchedPlayerId,
       });
     }
     
@@ -726,6 +619,14 @@ export const saveYuniteAPIImport = internalMutation({
       playersMatched,
       playersUnmatched,
     });
+
+    if (affectedPlayerIds.size > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.helpers.eventDrivenRebuilds.scheduleStatsForAffectedPlayers,
+        { playerIds: [...affectedPlayerIds] },
+      );
+    }
     
     // Log to audit
     await ctx.db.insert("auditLogs", {
@@ -1052,57 +953,28 @@ export const replaceCSVData = mutation({
       await ctx.db.delete(result._id);
     }
     
-    // Get all active players for matching
-    const allPlayersList = await ctx.db.query("players").collect();
-    const allPlayers = allPlayersList.filter(
-      p => p.status === "active" || p.status === undefined
-    );
-    
     let playersMatched = 0;
     let playersUnmatched = 0;
+    const affectedPlayerIds = new Set<Id<"players">>();
     
     // Process each entry from the new CSV
     for (const entry of args.entries) {
-      // Try to match player
-      let matchedPlayer = null;
+      const matchedPlayerId = await findPlayerIdForImportEntry(ctx, {
+        discordId: entry.discordId,
+        epicUsername: entry.epicUsername,
+        discordUsername: entry.discordUsername,
+      });
       
-      // First try Epic username match (case-insensitive)
-      matchedPlayer = allPlayers.find(
-        p => p.epicUsername.toLowerCase() === entry.epicUsername.toLowerCase()
-      );
-      
-      // If no match, try Discord username
-      if (!matchedPlayer && entry.discordUsername) {
-        matchedPlayer = allPlayers.find(
-          p => p.discordUsername.toLowerCase() === entry.discordUsername!.toLowerCase()
-        );
-      }
-      
-      if (!matchedPlayer && entry.discordId) {
-        matchedPlayer = findPlayerForImportEntry(allPlayers, {
-          discordId: entry.discordId,
-        });
-      }
-      
-      if (matchedPlayer) {
+      if (matchedPlayerId) {
         playersMatched++;
+        affectedPlayerIds.add(matchedPlayerId);
       } else {
         playersUnmatched++;
-      }
-      
-      // Insert new result
-      if (matchedPlayer?._id) {
-        await touchPlayerEventParticipationOnInsert(
-          ctx,
-          matchedPlayer._id,
-          importRecord.eventName,
-          importRecord.eventDate,
-        );
       }
 
       await ctx.db.insert("thirdPartyResults", {
         importId: args.importId,
-        playerId: matchedPlayer?._id,
+        playerId: matchedPlayerId,
         eventName: importRecord.eventName,
         source: importRecord.source,
         leaderboardUrl: importRecord.leaderboardUrl,
@@ -1115,7 +987,7 @@ export const replaceCSVData = mutation({
         wins: entry.wins,
         teamId: entry.teamId,
         teamName: entry.teamName,
-        matched: !!matchedPlayer,
+        matched: !!matchedPlayerId,
       });
     }
     
@@ -1125,6 +997,14 @@ export const replaceCSVData = mutation({
       playersUnmatched,
       totalPlayers: args.entries.length,
     });
+
+    if (affectedPlayerIds.size > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.helpers.eventDrivenRebuilds.scheduleStatsForAffectedPlayers,
+        { playerIds: [...affectedPlayerIds] },
+      );
+    }
     
     // Get user for audit log
     const user = await ctx.db
@@ -1252,17 +1132,7 @@ export const createResult = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
 
-    const importRecord = await ctx.db.get(args.importId);
-    if (args.playerId) {
-      await touchPlayerEventParticipationOnInsert(
-        ctx,
-        args.playerId,
-        args.eventName,
-        importRecord?.eventDate,
-      );
-    }
-
-    return await ctx.db.insert("thirdPartyResults", {
+    const resultId = await ctx.db.insert("thirdPartyResults", {
       importId: args.importId,
       playerId: args.playerId,
       eventName: args.eventName,
@@ -1283,6 +1153,16 @@ export const createResult = mutation({
       teamName: args.teamName,
       matched: args.matched,
     });
+
+    if (args.playerId && args.matched) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.helpers.eventDrivenRebuilds.scheduleStatsForAffectedPlayers,
+        { playerIds: [args.playerId] },
+      );
+    }
+
+    return resultId;
   },
 });
 

@@ -413,7 +413,7 @@ export default function EventBansManager({
                     {roleSyncVisibility.pendingRoleAdds === 1 ? "" : "s"} and{" "}
                     {roleSyncVisibility.pendingRoleRemovals} removal
                     {roleSyncVisibility.pendingRoleRemovals === 1 ? "" : "s"} are waiting
-                    for Discord. Use Role Sync to process them now, or wait for the bot poll.
+                    for Discord. Use Role Sync or Member Management → Sync pending role changes.
                     {roleSyncVisibility.oldestPendingAddAgeMs !== null && (
                       <>
                         {" "}

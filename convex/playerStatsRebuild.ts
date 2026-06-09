@@ -501,10 +501,13 @@ export const processRebuildStep = internalMutation({
       let totalProcessed = job.totalProcessed;
 
       if (phase === "event_participation") {
-        const page = await paginateActivePlayers(ctx, playersCursor, EVENT_BATCH);
+        const page = await ctx.db.query("playerStatsCache").paginate({
+          numItems: EVENT_BATCH,
+          cursor: playersCursor,
+        });
 
-        for (const player of page.page) {
-          await syncInternalEventParticipation(ctx, player._id);
+        for (const row of page.page) {
+          await syncInternalEventParticipation(ctx, row.playerId);
           processedInPhase += 1;
           totalProcessed += 1;
         }

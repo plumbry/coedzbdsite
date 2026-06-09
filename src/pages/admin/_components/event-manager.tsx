@@ -327,6 +327,7 @@ export default function EventManager() {
 
   const events = useQuery(api.events.management.getAllEvents, {
     resolveImageUrls: false,
+    includeWorkflow: true,
   });
   const scrimSeriesOptions = useQuery(api.scrimSeries.queries.listSeries);
   const createEvent = useMutation(api.events.management.createEvent);

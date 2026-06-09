@@ -51,6 +51,9 @@ export default function DataMaintenanceTools() {
     api.clearDeprecatedTierEvalPrFields.clearDeprecatedTierEvalPrFields,
   );
   const activeStatsRebuild = useQuery(api.playerStatsRebuild.getActiveRebuildJob, {});
+  const activeCacheRebuild = useQuery(api.playerStatsCache.getActiveCacheRebuildJob, {});
+  const rebuildAllPlayerStatsCache = useMutation(api.playerStatsCache.rebuildAllPlayerStatsCache);
+  const rebuildTierReevaluation = useMutation(api.playerStatsCache.rebuildTierReevaluationForEligible);
 
   const [isDeletingDiscordOnly, setIsDeletingDiscordOnly] = useState(false);
   const [isDeletingAllPlayers, setIsDeletingAllPlayers] = useState(false);
@@ -300,6 +303,48 @@ export default function DataMaintenanceTools() {
               label="Average stats only"
               aggregateStatsOnly
             />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!!activeCacheRebuild}
+              onClick={() =>
+                setPendingConfirm({
+                  title: "Rebuild all player stats cache?",
+                  description:
+                    "Rebuilds per-player stats cache rows for every matched import result. Runs in batches and only touches players with imported data.",
+                  confirmLabel: "Rebuild cache",
+                  onConfirm: async () => {
+                    const result = await rebuildAllPlayerStatsCache({ confirm: true });
+                    toast.success(
+                      result.collectingPlayerIds
+                        ? "Player stats cache rebuild started (collecting players with import data)…"
+                        : `Player stats cache rebuild started for ${result.playerCount} players.`,
+                    );
+                  },
+                })
+              }
+            >
+              Rebuild stats cache
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!!activeStatsRebuild}
+              onClick={() =>
+                setPendingConfirm({
+                  title: "Rebuild tier re-evaluation cache?",
+                  description:
+                    "Rebuilds tier evaluation entries for players with 8+ Yunite import events only.",
+                  confirmLabel: "Rebuild tier eval",
+                  onConfirm: async () => {
+                    const result = await rebuildTierReevaluation({ confirm: true });
+                    toast.success(result.message);
+                  },
+                })
+              }
+            >
+              Rebuild tier re-eval
+            </Button>
           </div>
         </CardContent>
       </Card>

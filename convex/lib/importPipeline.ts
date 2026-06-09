@@ -25,6 +25,7 @@ export type ImportPipelineStep =
   | "match_players"
   | "link_event"
   | "validate_results"
+  | "update_player_stats"
   | "finalize";
 
 export const YUNITE_PIPELINE_STEPS: ImportPipelineStep[] = [
@@ -33,6 +34,7 @@ export const YUNITE_PIPELINE_STEPS: ImportPipelineStep[] = [
   "match_players",
   "link_event",
   "validate_results",
+  "update_player_stats",
   "finalize",
 ];
 
@@ -40,6 +42,7 @@ export const CSV_PIPELINE_STEPS: ImportPipelineStep[] = [
   "match_players",
   "link_event",
   "validate_results",
+  "update_player_stats",
   "finalize",
 ];
 
@@ -63,8 +66,14 @@ export function statusForStep(step: ImportPipelineStep): ImportPipelineStatus {
       return "Linking Event";
     case "validate_results":
       return "Generating Results";
+    case "update_player_stats":
+      return "Generating Results";
     case "finalize":
       return "Finalized";
+    default: {
+      const exhaustiveCheck: never = step;
+      throw new Error(`Unknown pipeline step: ${exhaustiveCheck}`);
+    }
   }
 }
 
@@ -87,6 +96,11 @@ export function progressMessageForStep(
       return `Linking event…${suffix}`;
     case "validate_results":
       return `Validating normalized results…${suffix}`;
+    case "update_player_stats":
+      if (detail?.current != null && detail?.total != null) {
+        return `Updating player stats (${detail.current}/${detail.total})…`;
+      }
+      return `Updating player stats for affected players…${suffix}`;
     case "finalize":
       return `Finalizing import…${suffix}`;
   }
@@ -120,6 +134,8 @@ export function shouldSkipStep(
     case "link_event":
       return imp.eventId != null;
     case "validate_results":
+      return false;
+    case "update_player_stats":
       return false;
     case "finalize":
       return imp.pipelineStatus === "Finalized";
@@ -159,6 +175,8 @@ export function postStepStatus(
     case "link_event":
       return imp.eventId ? "Linked To Event" : "Event Link Required";
     case "validate_results":
+      return "Results Generated";
+    case "update_player_stats":
       return "Results Generated";
     case "finalize":
       return "Finalized";

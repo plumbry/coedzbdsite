@@ -43,72 +43,24 @@ http.route({
   }),
 });
 
-// Webhook endpoint for Discord bot to sync member data.
-// Uses upsertDiscordMember (indexed lookups only — safe for high-volume per-member calls).
+// Retired: Discord member sync is admin-triggered only (Member Management → Discord sync tools).
 http.route({
   path: "/api/discord/sync-member",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    // Verify API key (try both possible env var names)
-    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
-    const authHeader = request.headers.get("Authorization");
-    
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "Server configuration error: API key not set" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-    
-    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
-    
-    try {
-      const body = await request.json();
-      
-      // Validate required fields
-      if (!body.id || !body.username) {
-        return new Response(
-          JSON.stringify({ error: "Missing required fields: id and username" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        );
-      }
-      
-      // Debug: log what date we're receiving
-      console.log(`Syncing ${body.username}: joined_at = ${body.joined_at}`);
-      
-      // Call internal mutation to upsert the Discord member
-      await ctx.runMutation(internal.discord.upsertDiscordMember, {
-        discordUserId: body.id,
-        discordUsername: body.username,
-        nickname: body.nickname || null,
-        joinedAt: body.joined_at || new Date().toISOString(),
-        roles: body.roles || null,
-      });
-      
-      return new Response(
-        JSON.stringify({ success: true, message: "Member synced successfully" }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    } catch (error) {
-      console.error("Error syncing Discord member:", error);
-      return new Response(
-        JSON.stringify({ 
-          error: "Internal server error", 
-          message: error instanceof Error ? error.message : "Unknown error" 
-        }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
+  handler: httpAction(async () => {
+    return new Response(
+      JSON.stringify({
+        error: "Endpoint retired",
+        message:
+          "Automatic Discord member sync is disabled. Use the admin Discord sync tools in Member Management.",
+      }),
+      { status: 410, headers: { "Content-Type": "application/json" } },
+    );
   }),
 });
 
 // Retired: archive-missing ran a full players scan per webhook call.
-// Missing members are archived during the daily Discord member sync cron instead.
+// Retired: missing-member archival is not run automatically.
 http.route({
   path: "/api/discord/archive-missing",
   method: "POST",
@@ -117,7 +69,7 @@ http.route({
       JSON.stringify({
         error: "Endpoint retired",
         message:
-          "Archive missing members is handled by the daily Discord member sync (05:00 UTC). Remove calls to this endpoint from the bot.",
+          "Automatic Discord member archival is disabled. Use admin data-maintenance tools if needed.",
       }),
       { status: 410, headers: { "Content-Type": "application/json" } },
     );
@@ -323,156 +275,57 @@ http.route({
   }),
 });
 
-// GET endpoint for Discord bot to poll for pending role syncs (event bans and probations only)
+// Retired: role sync queue is processed via admin "Sync pending role changes".
 http.route({
   path: "/api/discord/pending-role-syncs",
   method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    // Verify API key
-    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
-    const authHeader = request.headers.get("Authorization");
-
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "Server configuration error: API key not set" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    try {
-      const pendingSyncs = await ctx.runQuery(
-        internal.eventBans.queries.getPendingRoleSyncs,
-        {}
-      );
-
-      return new Response(
-        JSON.stringify({ pending: pendingSyncs }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    } catch (error) {
-      console.error("Error fetching pending role syncs:", error);
-      return new Response(
-        JSON.stringify({
-          error: "Internal server error",
-          message: error instanceof Error ? error.message : "Unknown error",
-        }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
+  handler: httpAction(async () => {
+    return new Response(
+      JSON.stringify({
+        error: "Endpoint retired",
+        message:
+          "Automatic Discord role sync polling is disabled. Use admin Sync pending role changes.",
+        pending: [],
+      }),
+      { status: 410, headers: { "Content-Type": "application/json" } },
+    );
   }),
 });
 
-// POST endpoint for Discord bot to acknowledge that role syncs have been processed
+// Retired: role sync acknowledgements are handled by admin forceRoleSync mutations.
 http.route({
   path: "/api/discord/acknowledge-role-syncs",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    // Verify API key
-    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
-    const authHeader = request.headers.get("Authorization");
-
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "Server configuration error: API key not set" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    try {
-      const body = await request.json();
-
-      if (!body.banIds || !Array.isArray(body.banIds)) {
-        return new Response(
-          JSON.stringify({ error: "Missing required field: banIds (array of ban IDs)" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        );
-      }
-
-      const result = await ctx.runMutation(
-        internal.eventBans.mutations.acknowledgeRoleSyncs,
-        { banIds: body.banIds }
-      );
-
-      return new Response(
-        JSON.stringify({ success: true, acknowledged: result.acknowledged }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    } catch (error) {
-      console.error("Error acknowledging role syncs:", error);
-      return new Response(
-        JSON.stringify({
-          error: "Internal server error",
-          message: error instanceof Error ? error.message : "Unknown error",
-        }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
+  handler: httpAction(async () => {
+    return new Response(
+      JSON.stringify({
+        error: "Endpoint retired",
+        message:
+          "Automatic Discord role sync is disabled. Use admin Sync pending role changes.",
+      }),
+      { status: 410, headers: { "Content-Type": "application/json" } },
+    );
   }),
 });
 
-// GET endpoint for Discord bot to poll for roles that should be removed
-// Returns bans where: event ban has ENDED, or probation is older than 28 days
+// Retired: role removal queue is processed via admin "Sync pending role changes".
 http.route({
   path: "/api/discord/pending-role-removals",
   method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    // Verify API key
-    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
-    const authHeader = request.headers.get("Authorization");
-
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "Server configuration error: API key not set" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    try {
-      const pendingRemovals = await ctx.runQuery(
-        internal.eventBans.queries.getPendingRoleRemovals,
-        {}
-      );
-
-      return new Response(
-        JSON.stringify({ pending: pendingRemovals }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    } catch (error) {
-      console.error("Error fetching pending role removals:", error);
-      return new Response(
-        JSON.stringify({
-          error: "Internal server error",
-          message: error instanceof Error ? error.message : "Unknown error",
-        }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
+  handler: httpAction(async () => {
+    return new Response(
+      JSON.stringify({
+        error: "Endpoint retired",
+        message:
+          "Automatic Discord role sync polling is disabled. Use admin Sync pending role changes.",
+        pending: [],
+      }),
+      { status: 410, headers: { "Content-Type": "application/json" } },
+    );
   }),
 });
 
-// Manual / rare reconciliation only — not part of normal bot workflow.
-// Primary paths: guildMemberAdd → GET /api/member; evaluation save → signed webhook to bot.
+// Manual / rare reconciliation only — not part of automatic sync workflows.
 // GET endpoint for Discord bot — website-evaluated female members (gender = 50)
 http.route({
   path: "/api/discord/female-evaluated-members",
@@ -518,68 +371,19 @@ http.route({
   }),
 });
 
-// POST endpoint for Discord bot to acknowledge that roles have been removed
+// Retired: role removal acknowledgements are handled by admin forceRoleSync mutations.
 http.route({
   path: "/api/discord/acknowledge-role-removals",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    // Verify API key
-    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
-    const authHeader = request.headers.get("Authorization");
-
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "Server configuration error: API key not set" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    try {
-      const body = await request.json();
-
-      if (!body.banIds || !Array.isArray(body.banIds)) {
-        return new Response(
-          JSON.stringify({ error: "Missing required field: banIds (array of ban IDs)" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        );
-      }
-
-      const result = await ctx.runMutation(
-        internal.eventBans.mutations.acknowledgeRoleRemovals,
-        { banIds: body.banIds }
-      );
-
-      // Also acknowledge any queued pending role removals (from deleted bans)
-      let queueAcknowledged = 0;
-      if (body.pendingRoleRemovalIds && Array.isArray(body.pendingRoleRemovalIds) && body.pendingRoleRemovalIds.length > 0) {
-        const queueResult = await ctx.runMutation(
-          internal.eventBans.mutations.acknowledgePendingRoleRemovals,
-          { ids: body.pendingRoleRemovalIds }
-        );
-        queueAcknowledged = queueResult.acknowledged;
-      }
-
-      return new Response(
-        JSON.stringify({ success: true, acknowledged: result.acknowledged + queueAcknowledged }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    } catch (error) {
-      console.error("Error acknowledging role removals:", error);
-      return new Response(
-        JSON.stringify({
-          error: "Internal server error",
-          message: error instanceof Error ? error.message : "Unknown error",
-        }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
+  handler: httpAction(async () => {
+    return new Response(
+      JSON.stringify({
+        error: "Endpoint retired",
+        message:
+          "Automatic Discord role sync is disabled. Use admin Sync pending role changes.",
+      }),
+      { status: 410, headers: { "Content-Type": "application/json" } },
+    );
   }),
 });
 

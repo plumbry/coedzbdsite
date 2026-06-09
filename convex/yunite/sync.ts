@@ -6,6 +6,7 @@ import { api, internal } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
 import { matchPlayerForImport } from "../lib/playerIdentity";
 import type { PlayerMatchFields } from "../lib/playerIdentity";
+import type { Id } from "../_generated/dataModel.d.ts";
 import {
   normalizeYuniteLeaderboardPayload,
   yuniteTournamentHasImportableData,
@@ -87,10 +88,17 @@ export const syncYuniteTournaments = action({
         status: "in_progress",
       });
 
-      const playersForMatching: PlayerMatchFields[] = await ctx.runQuery(
+      let playersForMatching: PlayerMatchFields[] = await ctx.runQuery(
         internal.players.importMatching.listPlayersForImportMatching,
         {},
       );
+      if (playersForMatching.length === 0) {
+        await ctx.runMutation(internal.players.importLookup.rebuildCache, {});
+        playersForMatching = await ctx.runQuery(
+          internal.players.importMatching.listPlayersForImportMatching,
+          {},
+        );
+      }
 
       let tournaments: YuniteTournament[] = [];
       
@@ -126,6 +134,7 @@ export const syncYuniteTournaments = action({
       let updated = 0;
       let successfulTournaments = 0;
       let failedTournaments = 0;
+      const affectedPlayerIds = new Set<Id<"players">>();
       
       // Get current user for audit logs
       const identity = await ctx.auth.getUserIdentity();
@@ -322,6 +331,9 @@ export const syncYuniteTournaments = action({
             
             if (matched) {
               playersMatched++;
+              if (player?._id) {
+                affectedPlayerIds.add(player._id);
+              }
             } else {
               playersUnmatched++;
             }
@@ -381,10 +393,10 @@ export const syncYuniteTournaments = action({
         recordsUpdated: updated,
       });
 
-      if (added > 0) {
+      if (affectedPlayerIds.size > 0) {
         await ctx.runMutation(
-          internal.helpers.eventDrivenRebuilds.scheduleEventParticipationRebuild,
-          {},
+          internal.helpers.eventDrivenRebuilds.scheduleStatsForAffectedPlayers,
+          { playerIds: [...affectedPlayerIds] },
         );
       }
       

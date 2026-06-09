@@ -352,6 +352,8 @@ export default defineSchema({
 
   importProcessingJobs: defineTable({
     importId: v.id("thirdPartyImports"),
+    eventId: v.optional(v.id("events")),
+    affectedPlayerIds: v.optional(v.array(v.id("players"))),
     status: v.union(
       v.literal("running"),
       v.literal("completed"),
@@ -373,9 +375,56 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
     errorCode: v.optional(v.string()),
     resumeAt: v.optional(v.number()),
+    rowsProcessed: v.optional(v.number()),
+    playersUpdated: v.optional(v.number()),
+    skippedNoChange: v.optional(v.number()),
+    errors: v.optional(v.array(v.string())),
   })
     .index("by_import", ["importId"])
     .index("by_status", ["status"]),
+
+  playerStatsCache: defineTable({
+    playerId: v.id("players"),
+    eventCount: v.number(),
+    totalKills: v.number(),
+    totalPlacement: v.number(),
+    averagePlacement: v.number(),
+    averageKills: v.number(),
+    averageScore: v.number(),
+    winRate: v.number(),
+    top3Rate: v.number(),
+    lastEventAt: v.optional(v.string()),
+    statsEligible: v.boolean(),
+    reevaluationEligible: v.boolean(),
+    sourceVersion: v.number(),
+    lastCalculatedAt: v.number(),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_stats_eligible", ["statsEligible"])
+    .index("by_reevaluation_eligible", ["reevaluationEligible"]),
+
+  playerStatsCacheRebuildJobs: defineTable({
+    status: v.union(
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+    ),
+    mode: v.union(v.literal("all_with_results"), v.literal("import"), v.literal("single")),
+    importId: v.optional(v.id("thirdPartyImports")),
+    playerId: v.optional(v.id("players")),
+    playerIds: v.array(v.id("players")),
+    nextPlayerIndex: v.number(),
+    processedCount: v.number(),
+    playersUpdated: v.number(),
+    skippedNoChange: v.number(),
+    errors: v.array(v.string()),
+    resultsCursor: v.union(v.string(), v.null()),
+    collectingPlayerIds: v.optional(v.boolean()),
+    startedAt: v.number(),
+    lastProgressAt: v.number(),
+    completedAt: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+  }).index("by_status", ["status"]),
 
   thirdPartyResults: defineTable({
     importId: v.id("thirdPartyImports"),
@@ -832,6 +881,23 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
     pipelineVersion: v.optional(v.number()),
   }).index("by_status", ["status"]),
+
+  /** Slim player identity rows for Yunite/import matching (avoids full player doc scans). */
+  playerImportLookup: defineTable({
+    playerId: v.id("players"),
+    discordUserId: v.optional(v.string()),
+    alternateDiscordUserIds: v.optional(v.array(v.string())),
+    epicId: v.optional(v.string()),
+    epicUsername: v.string(),
+    normalizedEpicUsername: v.string(),
+    discordUsername: v.string(),
+    normalizedDiscordUsername: v.string(),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_discord_user_id", ["discordUserId"])
+    .index("by_epic_id", ["epicId"])
+    .index("by_normalized_epic_username", ["normalizedEpicUsername"])
+    .index("by_normalized_discord_username", ["normalizedDiscordUsername"]),
 
   // Precomputed public home member directory (one row; avoids N full player reads per visitor).
   publicMemberDirectoryCache: defineTable({

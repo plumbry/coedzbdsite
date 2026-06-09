@@ -32,6 +32,7 @@ import PlayerProfileLink from "@/components/player-profile-link.tsx";
 import FemaleVerifiedBadge from "@/components/female-verified-badge.tsx";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { compareTierField } from "@/lib/tier-sort.ts";
+import { DiscordSyncTools } from "./_components/discord-sync-tools.tsx";
 
 const ADMIN_TABS = ["applications", "accepted", "rejected", "former", "discord"];
 const MOD_TABS = ["applications", "accepted", "former"];
@@ -112,7 +113,6 @@ export default function MemberManagement() {
   const [applicationToDelete, setApplicationToDelete] = useState<Id<"applications"> | null>(null);
   const [playerDeleteConfirmOpen, setPlayerDeleteConfirmOpen] = useState(false);
   const [playerToDelete, setPlayerToDelete] = useState<Id<"players"> | null>(null);
-  const [isSyncingDiscordMembers, setIsSyncingDiscordMembers] = useState(false);
   const [isSyncingGirlRole, setIsSyncingGirlRole] = useState(false);
   const [mergeSelectedIds, setMergeSelectedIds] = useState<Id<"players">[]>([]);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
@@ -157,7 +157,6 @@ export default function MemberManagement() {
   const acceptApplication = useMutation(api.memberManagement.acceptApplication);
   const rejectApplication = useMutation(api.memberManagement.rejectApplication);
   const convertToPlayer = useMutation(api.discord.convertToPlayer);
-  const syncDiscordMembers = useAction(api.discord.sync.syncDiscordMembers);
   const syncGirlRole = useAction(api.girlRole.sync.syncGirlRole);
   const girlRoleSyncStatus = useQuery(
     api.girlRole.queries.getVerificationCount,
@@ -240,20 +239,6 @@ export default function MemberManagement() {
       setPlayerToDelete(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete player");
-    }
-  };
-
-  const handleSyncDiscordMembers = async () => {
-    setIsSyncingDiscordMembers(true);
-    try {
-      const result = await syncDiscordMembers();
-      toast.success(
-        `Discord sync complete: ${result.totalMembers} members processed, ${result.added} added, ${result.updated} updated, ${result.archived} archived`,
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to sync Discord members");
-    } finally {
-      setIsSyncingDiscordMembers(false);
     }
   };
 
@@ -643,11 +628,12 @@ export default function MemberManagement() {
       header={{
         actions: isAdmin ? (
           <div className="flex flex-wrap items-center gap-2">
+            <DiscordSyncTools compact />
             <Button
               size="sm"
               variant="secondary"
               onClick={handleSyncGirlRole}
-              disabled={isSyncingGirlRole || isSyncingDiscordMembers}
+              disabled={isSyncingGirlRole}
               title={
                 girlRoleSyncStatus?.lastSyncedAt
                   ? `${girlRoleSyncStatus.count} verifications · last synced ${format(new Date(girlRoleSyncStatus.lastSyncedAt), "MMM d, yyyy h:mm a")}`
@@ -666,21 +652,6 @@ export default function MemberManagement() {
                 </Badge>
               )}
             </Button>
-            {isAdmin && (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handleSyncDiscordMembers}
-                disabled={isSyncingDiscordMembers || isSyncingGirlRole}
-              >
-                {isSyncingDiscordMembers ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                )}
-                Sync Discord
-              </Button>
-            )}
           </div>
         ) : undefined,
       }}

@@ -79,7 +79,7 @@ async function fetchAndSyncDiscordEvents(ctx: ActionCtx): Promise<SyncResult> {
   };
 }
 
-// Admin manual sync — daily cron uses syncDiscordEventsInternal.
+// Admin manual sync for Discord scheduled events (not member/role sync).
 export const syncDiscordEvents = action({
   args: {},
   handler: async (ctx): Promise<SyncResult> => {

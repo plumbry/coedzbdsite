@@ -24,6 +24,7 @@ import {
   pickCanonicalManualScore,
 } from "./helpers/manualScores";
 import { sortByTier } from "./helpers/tierSort";
+import { upsertPlayerImportLookup } from "./helpers/playerImportLookup";
 
 export type AcceptedMemberListRow = {
   _id: Id<"players">;
@@ -580,6 +581,13 @@ export const acceptApplication = mutation({
           status: "active",
           matchConfidence: "manual",
         });
+        await upsertPlayerImportLookup(ctx, {
+          _id: playerId,
+          discordUserId: application.discordId,
+          epicUsername:
+            application.fortniteProfileLink.split("/").pop() || application.discordUsername,
+          discordUsername: application.discordUsername,
+        });
       }
     } else {
       // Player exists (created for evaluation), update status to accepted
@@ -770,6 +778,12 @@ export const createPlayerForApplication = mutation({
       currentMembershipStatus: "rejected", // Temporary status, will be updated on acceptance
       status: "rejected",
       matchConfidence: "manual",
+    });
+    await upsertPlayerImportLookup(ctx, {
+      _id: playerId,
+      discordUserId: application.discordId,
+      epicUsername,
+      discordUsername: application.discordUsername,
     });
     
     // Link player to application

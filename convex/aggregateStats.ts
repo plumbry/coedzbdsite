@@ -7,6 +7,7 @@ import { requireAdmin } from "./auth_helpers";
 import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerStats";
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 import { FORMULA_VERSION } from "./lib/stats/versions";
+import { listStatsEligiblePlayerIds } from "./lib/stats/listEligiblePlayers";
 
 /** Population averages use `computeInternalPlayerStats` (Yunite imports) via `aggregateStatsCache`. */
 const PLAYERS_PER_BATCH = 2;
@@ -32,12 +33,29 @@ const isValidDiscordId = (id: string | undefined): boolean => {
 };
 
 async function listActivePlayersWithMatchData(ctx: MutationCtx) {
+  const statsEligibleIds = await listStatsEligiblePlayerIds(ctx);
+  if (statsEligibleIds.length > 0) {
+    const players = [];
+    for (const playerId of statsEligibleIds) {
+      const player = await ctx.db.get(playerId);
+      if (
+        player &&
+        (player.status === "active" || player.status === undefined) &&
+        isValidDiscordId(player.discordUserId)
+      ) {
+        players.push(player);
+      }
+    }
+    return players;
+  }
+
   const allPlayers = await ctx.db.query("players").collect();
   return allPlayers.filter(
     (p) =>
       (p.status === "active" || p.status === undefined) &&
       isValidDiscordId(p.discordUserId) &&
-      p.hasMatchData === true,
+      p.hasMatchData === true &&
+      (p.eventsPlayedCount ?? 0) >= 3,
   );
 }
 

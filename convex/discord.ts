@@ -1,18 +1,24 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import type { MutationCtx } from "./_generated/server";
 import { getDisplayName, requireAdmin } from "./auth_helpers";
 import { relinkEventResultsForPlayer } from "./helpers/playerResults";
-import {
-  findPlayerByDiscordUserId,
-  syncPlayerDiscordAliases,
-} from "./helpers/playerDiscordAliases";
-import { autoAcceptPendingApplicationForDiscordMember } from "./helpers/discordApplicationSync";
+import { syncPlayerDiscordAliases } from "./helpers/playerDiscordAliases";
 import { internal } from "./_generated/api";
 import { diffPatch } from "./helpers/patchIfChanged";
+import {
+  syncPlayerImportLookupForPlayer,
+  upsertPlayerImportLookup,
+} from "./helpers/playerImportLookup";
 
 type SyncMatchConfidence = "exact" | "username" | "fuzzy" | "manual";
+
+const ADMIN_CACHE_RUN_ID = "admin-cache";
+
+function hasRealDiscordUserId(discordUserId: string | undefined): boolean {
+  return !!discordUserId && !discordUserId.startsWith("placeholder_");
+}
 
 /** Slim player row stored on a Discord sync run and used for batch fuzzy matching. */
 type DiscordBatchSyncPlayer = {
@@ -53,55 +59,6 @@ function toDiscordBatchSyncPlayer(player: Doc<"players">): DiscordBatchSyncPlaye
 
 function isDiscordPlaceholderId(id?: string): boolean {
   return !id || id.startsWith("placeholder_") || id === "imported";
-}
-
-/**
- * Webhook-safe player lookup for `upsertDiscordMember` (Discord bot POST /api/discord/sync-member).
- * Uses indexed reads only — never scans the full `players` table.
- * Fuzzy username matching is intentionally omitted here; use daily batch sync for that.
- */
-async function resolveExistingPlayerForWebhookSync(
-  ctx: MutationCtx,
-  args: {
-    discordUserId: string;
-    discordUsername: string;
-    nickname?: string | null;
-  },
-): Promise<{
-  existingPlayer: Doc<"players"> | null;
-  matchConfidence: SyncMatchConfidence | null;
-}> {
-  const byPrimary = await findPlayerByDiscordUserId(ctx, args.discordUserId);
-  if (byPrimary) {
-    return { existingPlayer: byPrimary, matchConfidence: "exact" };
-  }
-
-  const byDiscordName = await ctx.db
-    .query("players")
-    .withIndex("by_discord_username", (q) =>
-      q.eq("discordUsername", args.discordUsername),
-    )
-    .collect();
-  const placeholderByDiscord = byDiscordName.find((player) =>
-    isDiscordPlaceholderId(player.discordUserId),
-  );
-  if (placeholderByDiscord) {
-    return { existingPlayer: placeholderByDiscord, matchConfidence: "username" };
-  }
-
-  const epicUsername = args.nickname || args.discordUsername;
-  const byEpicName = await ctx.db
-    .query("players")
-    .withIndex("by_epic_username", (q) => q.eq("epicUsername", epicUsername))
-    .collect();
-  const placeholderByEpic = byEpicName.find((player) =>
-    isDiscordPlaceholderId(player.discordUserId),
-  );
-  if (placeholderByEpic) {
-    return { existingPlayer: placeholderByEpic, matchConfidence: "username" };
-  }
-
-  return { existingPlayer: null, matchConfidence: null };
 }
 
 /**
@@ -858,7 +815,53 @@ function getLevenshteinDistance(str1: string, str2: string): number {
   return dp[m][n];
 }
 
-/** Load all players once per daily/manual Discord sync (shared across batches). */
+export const listAcceptedDiscordUserIds = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const players = await ctx.db.query("players").collect();
+    return players
+      .filter(
+        (player) =>
+          player.currentMembershipStatus === "accepted" &&
+          hasRealDiscordUserId(player.discordUserId),
+      )
+      .map((player) => player.discordUserId as string);
+  },
+});
+
+export const getDiscordSyncCacheRun = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("discordMemberSyncRuns")
+      .withIndex("by_sync_run_id", (q) => q.eq("syncRunId", ADMIN_CACHE_RUN_ID))
+      .first();
+  },
+});
+
+/** Recompute the player matching cache without calling Discord. */
+export const rebuildDiscordSyncCache = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const existingRuns = await ctx.db.query("discordMemberSyncRuns").collect();
+    for (const run of existingRuns) {
+      await ctx.db.delete(run._id);
+    }
+
+    const allPlayers = await ctx.db.query("players").collect();
+    await ctx.db.insert("discordMemberSyncRuns", {
+      syncRunId: ADMIN_CACHE_RUN_ID,
+      players: allPlayers.map(toDiscordBatchSyncPlayer),
+      createdAt: Date.now(),
+    });
+
+    return { playerCount: allPlayers.length };
+  },
+});
+
+/** Load all players once per manual Discord sync (shared across batches). */
 export const beginDiscordMemberSyncRun = internalMutation({
   args: { syncRunId: v.string() },
   handler: async (ctx, args) => {
@@ -1004,14 +1007,9 @@ export const syncDiscordMembersBatch = internalMutation({
             discordUserId: member.discordUserId,
             alternateDiscordUserIds: existingPlayer.alternateDiscordUserIds,
           });
+          await syncPlayerImportLookupForPlayer(ctx, existingPlayer._id);
           updated++;
         }
-        await autoAcceptPendingApplicationForDiscordMember(ctx, {
-          hasTierRole,
-          discordUserId: member.discordUserId,
-          discordUsername: member.discordUsername,
-          playerId: existingPlayer._id,
-        });
       } else {
         const playerId = await ctx.db.insert("players", {
           discordUsername: member.discordUsername,
@@ -1029,185 +1027,16 @@ export const syncDiscordMembersBatch = internalMutation({
           discordUserId: member.discordUserId,
           alternateDiscordUserIds: undefined,
         });
-        await autoAcceptPendingApplicationForDiscordMember(ctx, {
-          hasTierRole,
+        await upsertPlayerImportLookup(ctx, {
+          _id: playerId,
           discordUserId: member.discordUserId,
+          epicUsername,
           discordUsername: member.discordUsername,
-          playerId,
         });
         added++;
       }
     }
 
     return { added, updated };
-  },
-});
-
-// Webhook-safe: Discord bot POST /api/discord/sync-member — indexed lookups only (see resolveExistingPlayerForWebhookSync).
-export const upsertDiscordMember = internalMutation({
-  args: {
-    discordUserId: v.string(),
-    discordUsername: v.string(),
-    nickname: v.union(v.string(), v.null()),
-    joinedAt: v.string(),
-    roles: v.union(
-      v.array(v.object({
-        id: v.string(),
-        name: v.string(),
-      })),
-      v.null()
-    ),
-  },
-  handler: async (ctx, args) => {
-    // Server nickname is the Epic username
-    // Fall back to Discord username if no nickname is set
-    const epicUsername = args.nickname || args.discordUsername;
-    
-    // Check if user has a tier role (Tier S, A, B, C, or D)
-    const tierRoleNames = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
-    const hasTierRole = args.roles?.some(role => tierRoleNames.includes(role.name)) || false;
-
-    const { existingPlayer, matchConfidence } = await resolveExistingPlayerForWebhookSync(ctx, {
-      discordUserId: args.discordUserId,
-      discordUsername: args.discordUsername,
-      nickname: args.nickname,
-    });
-
-    if (existingPlayer) {
-      // Update existing player/member
-      // Discord ID: Set/update to incoming ID (protected by matching logic above)
-      // Usernames: Always update to latest from Discord (they can change)
-      const updateData: {
-        discordUsername: string;
-        discordUserId: string;
-        nickname?: string;
-        epicUsername: string;
-        serverJoinDate: string;
-        discordRoles?: Array<{ id: string; name: string }>;
-        tier?: string;
-        status?: "active" | "discord_member";
-        currentMembershipStatus?: "accepted";
-        matchConfidence?: SyncMatchConfidence;
-        needsReview?: boolean;
-        hasLeftServer?: boolean;
-      } = {
-        discordUsername: args.discordUsername, // Update username (can change)
-        discordUserId: args.discordUserId, // Set Discord ID (stays static once set)
-        nickname: args.nickname || undefined,
-        epicUsername: epicUsername, // Update Epic username (can change)
-        serverJoinDate: args.joinedAt,
-        hasLeftServer: false, // Clear left server flag when member syncs back
-      };
-      
-      // Add roles if provided
-      if (args.roles) {
-        updateData.discordRoles = args.roles;
-        
-        // Auto-update website tier to match Discord tier role
-        const discordTierRole = args.roles.find(role => tierRoleNames.includes(role.name));
-        if (discordTierRole) {
-          const discordTier = discordTierRole.name.replace("Tier ", "");
-          if (existingPlayer.tier !== discordTier) {
-            updateData.tier = discordTier;
-          }
-        }
-      }
-      
-      // Set match confidence
-      if (matchConfidence) {
-        updateData.matchConfidence = matchConfidence;
-        
-        // Flag fuzzy matches for review
-        if (matchConfidence === "fuzzy") {
-          updateData.needsReview = true;
-        }
-      }
-      
-      // If player was archived or former, only reactivate them if they have a tier role
-      // Also restore former members back to accepted status
-      if ((existingPlayer.status === "archived" || existingPlayer.currentMembershipStatus === "former") && hasTierRole) {
-        updateData.status = "active";
-        updateData.currentMembershipStatus = "accepted";
-      }
-
-      // Promote joined Discord members with tier roles from application flow to accepted
-      if (
-        hasTierRole &&
-        (existingPlayer.status === "discord_member" ||
-          existingPlayer.currentMembershipStatus === "rejected")
-      ) {
-        updateData.status = "active";
-        updateData.currentMembershipStatus = "accepted";
-      }
-      
-      const changedFields = diffPatch(existingPlayer, updateData);
-      if (changedFields) {
-        await ctx.db.patch(existingPlayer._id, changedFields as Partial<Doc<"players">>);
-        await syncPlayerDiscordAliases(ctx, {
-          _id: existingPlayer._id,
-          discordUserId: args.discordUserId,
-          alternateDiscordUserIds: existingPlayer.alternateDiscordUserIds,
-        });
-      }
-      await autoAcceptPendingApplicationForDiscordMember(ctx, {
-        hasTierRole,
-        discordUserId: args.discordUserId,
-        discordUsername: args.discordUsername,
-        playerId: existingPlayer._id,
-      });
-
-      if (
-        changedFields?.tier !== undefined ||
-        changedFields?.currentMembershipStatus !== undefined
-      ) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.memberManagement.storePublicMemberDirectoryCache,
-          {},
-        );
-      }
-      
-      return { 
-        created: false, 
-        playerId: existingPlayer._id, 
-        updated: !!changedFields,
-        matchConfidence: matchConfidence || "unknown"
-      };
-    } else {
-      // Create as Discord member (not full player yet)
-      // Status "discord_member" means they're synced from Discord but not evaluated
-      const playerId = await ctx.db.insert("players", {
-        discordUsername: args.discordUsername,
-        discordUserId: args.discordUserId,
-        nickname: args.nickname || undefined,
-        serverJoinDate: args.joinedAt,
-        epicUsername: epicUsername,
-        discordRoles: args.roles || undefined,
-        status: hasTierRole ? "active" as const : "discord_member" as const,
-        currentMembershipStatus: hasTierRole ? "accepted" as const : undefined,
-        matchConfidence: "exact" as const, // New Discord members are exact matches
-      });
-      await syncPlayerDiscordAliases(ctx, {
-        _id: playerId,
-        discordUserId: args.discordUserId,
-        alternateDiscordUserIds: undefined,
-      });
-      await autoAcceptPendingApplicationForDiscordMember(ctx, {
-        hasTierRole,
-        discordUserId: args.discordUserId,
-        discordUsername: args.discordUsername,
-        playerId,
-      });
-
-      if (hasTierRole) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.memberManagement.storePublicMemberDirectoryCache,
-          {},
-        );
-      }
-      
-      return { created: true, playerId, matchConfidence: "exact" };
-    }
   },
 });

@@ -31,6 +31,23 @@ async function countManualResultsByEvent(
   return counts;
 }
 
+async function loadLinkedImportsByEventId(
+  ctx: QueryCtx,
+  eventIds: Id<"events">[],
+): Promise<Map<Id<"events">, Doc<"thirdPartyImports">[]>> {
+  const importsByEventId = new Map<Id<"events">, Doc<"thirdPartyImports">[]>();
+  for (const eventId of eventIds) {
+    const linkedImports = await ctx.db
+      .query("thirdPartyImports")
+      .withIndex("by_event", (q) => q.eq("eventId", eventId))
+      .collect();
+    if (linkedImports.length > 0) {
+      importsByEventId.set(eventId, linkedImports);
+    }
+  }
+  return importsByEventId;
+}
+
 // Auto-link existing unlinked imports to an event based on matching leaderboard URLs
 async function autoLinkImportsToEvent(
   ctx: MutationCtx,
@@ -108,40 +125,40 @@ function computeEventStatus(startDate: string, endDate: string): "upcoming" | "o
   }
 }
 
-// Admin event list — linked import counts; image URLs resolved only when requested.
+// Admin event list — lightweight rows; workflow uses per-event indexed import reads.
 export const getAllEvents = query({
   args: {
     resolveImageUrls: v.optional(v.boolean()),
+    includeWorkflow: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const resolveImageUrls = args.resolveImageUrls === true;
+    const includeWorkflow = args.includeWorkflow !== false;
     const events = await ctx.db
       .query("events")
       .order("desc")
       .collect();
 
-    const imports = await ctx.db.query("thirdPartyImports").collect();
-    const importsByEventId = new Map<Id<"events">, typeof imports>();
-    for (const imp of imports) {
-      if (imp.eventId) {
-        const existing = importsByEventId.get(imp.eventId) ?? [];
-        existing.push(imp);
-        importsByEventId.set(imp.eventId, existing);
-      }
-    }
-
-    const manualResultCountByEvent = await countManualResultsByEvent(ctx, events.map((event) => event._id));
+    const eventIds = events.map((event) => event._id);
+    const importsByEventId = includeWorkflow
+      ? await loadLinkedImportsByEventId(ctx, eventIds)
+      : new Map<Id<"events">, Doc<"thirdPartyImports">[]>();
+    const manualResultCountByEvent = includeWorkflow
+      ? await countManualResultsByEvent(ctx, eventIds)
+      : new Map<Id<"events">, number>();
 
     const scrimSeriesScorePresence = new Map<Id<"scrimSeries">, boolean>();
-    for (const event of events) {
-      if (!event.linkedScrimSeriesId || scrimSeriesScorePresence.has(event.linkedScrimSeriesId)) {
-        continue;
+    if (includeWorkflow) {
+      for (const event of events) {
+        if (!event.linkedScrimSeriesId || scrimSeriesScorePresence.has(event.linkedScrimSeriesId)) {
+          continue;
+        }
+        const sample = await ctx.db
+          .query("scrimSeriesScores")
+          .withIndex("by_series", (q) => q.eq("seriesId", event.linkedScrimSeriesId!))
+          .take(1);
+        scrimSeriesScorePresence.set(event.linkedScrimSeriesId, sample.length > 0);
       }
-      const sample = await ctx.db
-        .query("scrimSeriesScores")
-        .withIndex("by_series", (q) => q.eq("seriesId", event.linkedScrimSeriesId!))
-        .take(1);
-      scrimSeriesScorePresence.set(event.linkedScrimSeriesId, sample.length > 0);
     }
 
     const eventsWithDetails = await Promise.all(
@@ -153,6 +170,7 @@ export const getAllEvents = query({
 
         const computedStatus = computeEventStatus(event.startDate, event.endDate);
         const linkedImports = importsByEventId.get(event._id) ?? [];
+
         const workflowContext = {
           linkedImports: mapImportsForWorkflow(linkedImports),
           manualResultCount: manualResultCountByEvent.get(event._id) ?? 0,
@@ -182,6 +200,34 @@ export const getAllEvents = query({
     );
 
     return eventsWithDetails;
+  },
+});
+
+/** Linked imports and manual results for a single event (load on demand). */
+export const getEventAdminDetails = query({
+  args: { eventId: v.id("events") },
+  handler: async (ctx, args) => {
+    await requireModeratorOrAdmin(ctx);
+
+    const event = await ctx.db.get(args.eventId);
+    if (!event) return null;
+
+    const linkedImports = await ctx.db
+      .query("thirdPartyImports")
+      .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+      .collect();
+    const manualResults = await ctx.db
+      .query("eventResults")
+      .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
+      .collect();
+
+    return {
+      eventId: args.eventId,
+      linkedImports,
+      manualResults,
+      manualResultCount: manualResults.length,
+      linkedImportCount: linkedImports.length,
+    };
   },
 });
 

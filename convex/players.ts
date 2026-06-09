@@ -19,6 +19,11 @@ import { playerMatchesSearchTerm } from "./helpers/playerDiscordId";
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 import { matchPlayerForImport } from "./lib/playerIdentity";
 import { sortByTier } from "./helpers/tierSort";
+import {
+  removePlayerImportLookup,
+  syncPlayerImportLookupForPlayer,
+  upsertPlayerImportLookup,
+} from "./helpers/playerImportLookup";
 
 export const getPlayers = query({
   args: {},
@@ -179,93 +184,6 @@ export const getArchivedPlayers = query({
       }),
     );
 
-    return enrichedPlayers;
-  },
-});
-
-// Admin and Moderator: Get all players including archived and rejected
-export const getAllPlayersAdmin = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError({
-        message: "Staff access required",
-        code: "UNAUTHENTICATED",
-      });
-    }
-    
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier)
-      )
-      .unique();
-    
-    if (!user || (user.role !== "admin" && user.role !== "event_mod")) {
-      throw new ConvexError({
-        message: "Admin or moderator access required",
-        code: "FORBIDDEN",
-      });
-    }
-    
-    const allPlayers = await ctx.db
-      .query("players")
-      .order("desc")
-      .collect();
-    
-    // Build duplicate detection maps
-    const epicUsernameCounts = new Map<string, number>();
-    const discordUsernameCounts = new Map<string, number>();
-    const discordIdCounts = new Map<string, number>();
-    
-    for (const player of allPlayers) {
-      const epicLower = player.epicUsername.toLowerCase();
-      const discordLower = player.discordUsername.toLowerCase();
-      
-      epicUsernameCounts.set(epicLower, (epicUsernameCounts.get(epicLower) || 0) + 1);
-      discordUsernameCounts.set(discordLower, (discordUsernameCounts.get(discordLower) || 0) + 1);
-      
-      if (player.discordUserId && !player.discordUserId.startsWith("placeholder_")) {
-        discordIdCounts.set(player.discordUserId, (discordIdCounts.get(player.discordUserId) || 0) + 1);
-      }
-    }
-    
-    const verificationLookup = await loadFemaleVerificationLookup(ctx);
-
-    const enrichedPlayers = await Promise.all(
-      allPlayers.map(async (player) => {
-        const score = await ctx.db
-          .query("manualScores")
-          .withIndex("by_player", (q) => q.eq("playerId", player._id))
-          .first();
-
-        const eventsPlayed = player.eventsPlayedCount ?? 0;
-        
-        const epicLower = player.epicUsername.toLowerCase();
-        const discordLower = player.discordUsername.toLowerCase();
-        const duplicateEpicCount = epicUsernameCounts.get(epicLower) || 0;
-        const duplicateDiscordCount = discordUsernameCounts.get(discordLower) || 0;
-        const duplicateDiscordIdCount = player.discordUserId && !player.discordUserId.startsWith("placeholder_") 
-          ? discordIdCounts.get(player.discordUserId) || 0
-          : 0;
-        
-        return {
-          ...enrichPlayerWithFemaleVerification(
-            {
-              ...player,
-              gender: score?.gender,
-            },
-            verificationLookup,
-          ),
-          duplicateEpicCount: duplicateEpicCount > 1 ? duplicateEpicCount : 0,
-          duplicateDiscordCount: duplicateDiscordCount > 1 ? duplicateDiscordCount : 0,
-          duplicateDiscordIdCount: duplicateDiscordIdCount > 1 ? duplicateDiscordIdCount : 0,
-          eventsPlayed,
-        };
-      })
-    );
-    
     return enrichedPlayers;
   },
 });
@@ -452,6 +370,12 @@ export const createPlayer = mutation({
       adminComments: args.adminComments,
       createdBy: user._id,
     });
+    await upsertPlayerImportLookup(ctx, {
+      _id: playerId,
+      discordUserId: args.discordUserId,
+      epicUsername: args.epicUsername,
+      discordUsername: args.discordUsername,
+    });
     
     // Log audit
     await logAudit(ctx, {
@@ -609,6 +533,12 @@ export const bulkCreatePlayers = mutation({
             currentMembershipStatus,
             ...(args.archiveOnImport && { archiveReason: "other" }),
             ...(args.markForReview && { needsReview: true }),
+          });
+          await upsertPlayerImportLookup(ctx, {
+            _id: playerId,
+            discordUserId,
+            epicUsername: playerData.epicUsername,
+            discordUsername: playerData.discordUsername,
           });
           
           successCount++;
@@ -807,6 +737,7 @@ export const updatePlayer = mutation({
 
     // Update player
     await ctx.db.patch(args.playerId, patchData);
+    await syncPlayerImportLookupForPlayer(ctx, args.playerId);
     
     // Log audit
     await logAudit(ctx, {
@@ -882,6 +813,7 @@ export const updatePlayerProfile = mutation({
 
     // Update player
     await ctx.db.patch(args.playerId, patchData);
+    await syncPlayerImportLookupForPlayer(ctx, args.playerId);
     
     // Log audit
     await logAudit(ctx, {
@@ -1109,6 +1041,7 @@ export const deletePlayer = mutation({
     
     // Delete the player
     await ctx.db.delete(args.playerId);
+    await removePlayerImportLookup(ctx, args.playerId);
     
     // Log audit
     await logAudit(ctx, {
@@ -1549,6 +1482,8 @@ export const mergePlayers = mutation({
     }
     
     await ctx.db.delete(args.secondaryPlayerId);
+    await syncPlayerImportLookupForPlayer(ctx, args.primaryPlayerId);
+    await removePlayerImportLookup(ctx, args.secondaryPlayerId);
     
     await logAudit(ctx, {
       userId: user._id,

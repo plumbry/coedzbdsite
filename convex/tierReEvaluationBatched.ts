@@ -18,6 +18,7 @@ import {
 } from "./lib/stats/holisticScore";
 import { deriveEvaluationStatus } from "./lib/stats/evaluationStatus";
 import { FORMULA_VERSION } from "./lib/stats/versions";
+import { STATS_REEVAL_MIN_EVENTS } from "./lib/stats/thresholds";
 
 const BATCH_SIZE = 1; // One player per batch — heavy per-player reads (results, imports, match stats)
 const CACHE_CLEAR_BATCH = 50;
@@ -180,7 +181,7 @@ async function scorePlayerForTierMedians(
   killsPerMatch: number;
 } | null> {
   const internal = await computeInternalPlayerStats(ctx, player._id);
-  if (internal.eventsPlayed === 0) {
+  if (internal.eventsPlayed < STATS_REEVAL_MIN_EVENTS) {
     return null;
   }
 
@@ -634,7 +635,9 @@ async function processBatchHandler(
       }
 
       const internal = await computeInternalPlayerStats(ctx, player._id);
-      if (internal.eventsPlayed === 0) continue;
+      if (internal.eventsPlayed < STATS_REEVAL_MIN_EVENTS) {
+        continue;
+      }
 
       const playerTier = player.tier || "Unranked";
       if (!["S", "A", "B", "C"].includes(playerTier)) {

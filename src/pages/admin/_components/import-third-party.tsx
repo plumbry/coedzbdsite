@@ -132,6 +132,8 @@ export default function ImportThirdParty() {
   
   // Shared state
   const [rematchingId, setRematchingId] = useState<Id<"thirdPartyImports"> | null>(null);
+  const [recalculatingStatsId, setRecalculatingStatsId] =
+    useState<Id<"thirdPartyImports"> | null>(null);
   const [deletingId, setDeletingId] = useState<Id<"thirdPartyImports"> | null>(null);
   const [downloadingId, setDownloadingId] = useState<Id<"thirdPartyImports"> | null>(null);
   const [syncingId, setSyncingId] = useState<Id<"thirdPartyImports"> | null>(null);
@@ -171,6 +173,7 @@ export default function ImportThirdParty() {
   const startProcessImport = useMutation(api.importProcessing.startProcessImport);
   const unlockImport = useMutation(api.importProcessing.unlockImport);
   const reprocessImport = useMutation(api.importProcessing.reprocessImport);
+  const recalculateStatsForImport = useMutation(api.playerStatsCache.recalculateStatsForImport);
   const importProcessingState = useQuery(
     api.importProcessing.getImportProcessingJob,
     processingImportId ? { importId: processingImportId } : "skip",
@@ -200,7 +203,9 @@ export default function ImportThirdParty() {
     { initialNumItems: 50 }
   );
   const importHistoryPagination = useClientPagination(importHistory);
-  const events = useQuery(api.events.management.getAllEvents, {});
+  const events = useQuery(api.events.management.getAllEvents, {
+    includeWorkflow: false,
+  });
   const csvDuplicateMatches = useQuery(
     api.thirdPartyQueries.findPotentialDuplicateImports,
     isAdmin && activeTab === "csv" && (
@@ -803,6 +808,20 @@ export default function ImportThirdParty() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to reprocess import");
       setProcessingImportId(null);
+    }
+  };
+
+  const handleRecalculateImportStats = async (importId: Id<"thirdPartyImports">) => {
+    setRecalculatingStatsId(importId);
+    try {
+      const result = await recalculateStatsForImport({ importId });
+      toast.success(
+        `Updated stats for ${result.affectedPlayers} players (${result.playersUpdated} changed, ${result.skippedNoChange} unchanged).`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to recalculate import stats");
+    } finally {
+      setRecalculatingStatsId(null);
     }
   };
 
@@ -1913,6 +1932,17 @@ export default function ImportThirdParty() {
                                     Rematch players
                                   </DropdownMenuItem>
                                 )}
+                                <DropdownMenuItem
+                                  onClick={() => handleRecalculateImportStats(imp._id)}
+                                  disabled={recalculatingStatsId === imp._id}
+                                >
+                                  {recalculatingStatsId === imp._id ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <RefreshCw className="mr-2 h-4 w-4" />
+                                  )}
+                                  Recalculate import stats
+                                </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => openCreateEventDialog(imp)}
                                   disabled={!!imp.eventId}

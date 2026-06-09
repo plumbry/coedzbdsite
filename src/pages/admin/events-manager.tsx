@@ -108,7 +108,9 @@ function SolosMeetsDuosSection({
 }
 
 export default function EventsManagerPage() {
-  const events = useQuery(api.events.management.getAllEvents, {});
+  const events = useQuery(api.events.management.getAllEvents, {
+    includeWorkflow: false,
+  });
 
   return (
     <AdminPageLayout requireModerator

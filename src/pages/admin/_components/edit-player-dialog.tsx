@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
-import { Loader2, Plus, Trash2, ArrowUpCircle } from "lucide-react";
+import { Loader2, Plus, Trash2, ArrowUpCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { ConvexError } from "convex/values";
 import {
@@ -29,7 +29,8 @@ export default function EditPlayerDialog({ open, onOpenChange, playerId }: EditP
   const addAlternateId = useMutation(api.discord.addAlternateDiscordId);
   const removeAlternateId = useMutation(api.discord.removeAlternateDiscordId);
   const setAsPrimary = useMutation(api.discord.setAlternateAsPrimary);
-  
+  const syncSingleDiscordMember = useAction(api.discord.sync.syncSingleDiscordMember);
+
   const [values, setValues] = useState<EditPlayerFormValues>({
     discordUsername: "",
     nickname: "",
@@ -45,7 +46,30 @@ export default function EditPlayerDialog({ open, onOpenChange, playerId }: EditP
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newAlternateId, setNewAlternateId] = useState("");
   const [isAddingAlternate, setIsAddingAlternate] = useState(false);
-  
+  const [isSyncingDiscord, setIsSyncingDiscord] = useState(false);
+
+  const handleSyncFromDiscord = async () => {
+    if (!player?.discordUserId) {
+      toast.error("No Discord user ID on this player");
+      return;
+    }
+    setIsSyncingDiscord(true);
+    try {
+      const result = await syncSingleDiscordMember({ discordUserId: player.discordUserId });
+      if (result.unchanged) {
+        toast.info("Discord profile unchanged — no database write");
+      } else {
+        toast.success(
+          `Discord sync complete${result.added ? " (new data)" : result.updated ? " (updated)" : ""}`,
+        );
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to sync from Discord");
+    } finally {
+      setIsSyncingDiscord(false);
+    }
+  };
+
   // Populate form when player data loads
   useEffect(() => {
     if (player) {
@@ -135,6 +159,22 @@ export default function EditPlayerDialog({ open, onOpenChange, playerId }: EditP
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">Primary</span>
                 <code className="text-sm font-mono flex-1">{player.discordUserId}</code>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0"
+                  disabled={isSyncingDiscord}
+                  onClick={handleSyncFromDiscord}
+                  title="Fetch profile and roles from Discord"
+                >
+                  {isSyncingDiscord ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  <span className="ml-1">Sync</span>
+                </Button>
               </div>
               
               {/* Alternate Discord IDs */}

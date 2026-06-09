@@ -9,8 +9,9 @@ import { internal } from "./_generated/api";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
-import { matchPlayerForImport } from "./lib/playerIdentity";
+import { rematchImportResults, collectAffectedPlayerIdsForImport } from "./lib/importRematch";
 import { appendLeaderboardUrlToEvent } from "./lib/eventLeaderboardLinks";
+import { updateStatsForPlayers } from "./lib/stats/updatePlayerStatsCache";
 import { refreshEventCache, refreshEventCacheForImport } from "./lib/eventCache";
 import {
   collectEventLeaderboardUrls,
@@ -52,44 +53,7 @@ async function rematchImportInternal(ctx: MutationCtx, importId: Id<"thirdPartyI
     throw new Error("Import not found");
   }
 
-  const results = await ctx.db
-    .query("thirdPartyResults")
-    .withIndex("by_import", (q) => q.eq("importId", importId))
-    .collect();
-
-  const allPlayersList = await ctx.db.query("players").collect();
-  const allPlayers = allPlayersList.filter(
-    (p) => p.status === "active" || p.status === undefined,
-  );
-
-  let playersMatched = 0;
-  let playersUnmatched = 0;
-
-  for (const result of results) {
-    const matchedPlayer = matchPlayerForImport(allPlayers, {
-      discordId: result.discordId,
-      epicId: result.epicId,
-      epicUsername: result.epicUsername,
-      discordUsername: result.discordUsername,
-    }).player;
-
-    const isNowMatched = !!matchedPlayer;
-    if (isNowMatched) {
-      playersMatched += 1;
-    } else {
-      playersUnmatched += 1;
-    }
-
-    if (result.matched !== isNowMatched || result.playerId !== matchedPlayer?._id) {
-      await ctx.db.patch(result._id, {
-        playerId: matchedPlayer?._id,
-        matched: isNowMatched,
-      });
-    }
-  }
-
-  await ctx.db.patch(importId, { playersMatched, playersUnmatched });
-  return { playersMatched, playersUnmatched };
+  return await rematchImportResults(ctx, importId);
 }
 
 async function findCandidateEventsForImport(
@@ -553,13 +517,83 @@ export const runMatchPlayersStep = internalMutation({
       throw new Error("Job not found");
     }
     const counts = await rematchImportInternal(ctx, job.importId);
+    await ctx.db.patch(args.jobId, {
+      affectedPlayerIds: counts.affectedPlayerIds,
+      rowsProcessed: counts.rowsProcessed,
+      skippedNoChange: counts.skippedNoChange,
+    });
     const imp = await ctx.db.get(job.importId);
     if (!imp) {
       throw new Error("Import not found");
     }
     return {
-      ...counts,
+      playersMatched: counts.playersMatched,
+      playersUnmatched: counts.playersUnmatched,
       pipelineStatus: postStepStatus(imp, "match_players"),
+    };
+  },
+});
+
+export const runUpdatePlayerStatsStep = internalMutation({
+  args: { jobId: v.id("importProcessingJobs") },
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job) {
+      throw new Error("Job not found");
+    }
+
+    const playerIds =
+      job.affectedPlayerIds && job.affectedPlayerIds.length > 0
+        ? job.affectedPlayerIds
+        : await collectAffectedPlayerIdsForImport(ctx, job.importId);
+
+    const summary = await updateStatsForPlayers(ctx, playerIds);
+
+    let tierEvalUpdated = 0;
+    for (const playerId of playerIds) {
+      const cacheRow = await ctx.db
+        .query("playerStatsCache")
+        .withIndex("by_player", (q) => q.eq("playerId", playerId))
+        .first();
+      if (cacheRow?.reevaluationEligible) {
+        const medians = await ctx.db.query("tierMediansCache").first();
+        if (medians) {
+          await ctx.runMutation(internal.tierReEvaluationBatched.processBatch, {
+            batchNumber: 0,
+            playerIds: [playerId],
+          });
+          tierEvalUpdated += 1;
+        }
+      } else {
+        const existing = await ctx.db
+          .query("tierReEvaluationCache")
+          .withIndex("by_player", (q) => q.eq("playerId", playerId))
+          .first();
+        if (existing) {
+          await ctx.db.delete(existing._id);
+        }
+      }
+    }
+
+    await ctx.db.patch(args.jobId, {
+      affectedPlayerIds: playerIds,
+      playersUpdated: summary.playersUpdated,
+      skippedNoChange: summary.skippedNoChange,
+      errors: summary.errors,
+      progressCurrent: playerIds.length,
+      progressTotal: playerIds.length,
+    });
+
+    const imp = await ctx.db.get(job.importId);
+    if (!imp) {
+      throw new Error("Import not found");
+    }
+
+    return {
+      ...summary,
+      tierEvalUpdated,
+      affectedPlayers: playerIds.length,
+      pipelineStatus: postStepStatus(imp, "update_player_stats"),
     };
   },
 });
