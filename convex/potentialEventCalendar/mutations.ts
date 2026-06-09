@@ -13,6 +13,7 @@ const statusValidator = v.optional(
   v.union(
     v.literal("tentative"),
     v.literal("confirmed"),
+    v.literal("admin_note"),
     v.literal("cancelled"),
   ),
 );

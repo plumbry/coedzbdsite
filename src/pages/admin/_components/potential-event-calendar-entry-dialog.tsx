@@ -26,9 +26,12 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
+import {
+  CALENDAR_ENTRY_STATUS_LABELS,
+  type CalendarEntryStatus,
+} from "@/lib/potential-event-calendar-types.ts";
 
 type CalendarEntry = Doc<"potentialEventCalendarEntries">;
-type EntryStatus = NonNullable<CalendarEntry["status"]>;
 type RecurrenceInterval = "daily" | "weekly" | "monthly";
 
 function toDateInputValue(date: Date): string {
@@ -59,21 +62,23 @@ export default function PotentialEventCalendarEntryDialog({
   const [endDate, setEndDate] = useState("");
   const [time, setTime] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState<EntryStatus>("tentative");
+  const [status, setStatus] = useState<CalendarEntryStatus>("tentative");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceInterval, setRecurrenceInterval] = useState<RecurrenceInterval>("weekly");
   const [recurrenceUntil, setRecurrenceUntil] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
 
-  const { titles: cachedEventTitles } = useCachedEventTitles(open);
+  const isAdminNote = status === "admin_note";
+  const { titles: cachedEventTitles } = useCachedEventTitles(open && !isAdminNote);
   const titleSuggestions = useMemo(() => {
+    if (isAdminNote) return [];
     const query = title.trim().toLowerCase();
     if (!query) return cachedEventTitles.slice(0, 12);
     return cachedEventTitles
       .filter((name) => name.toLowerCase().includes(query))
       .slice(0, 12);
-  }, [cachedEventTitles, title]);
+  }, [cachedEventTitles, isAdminNote, title]);
 
   const isEditing = Boolean(entry);
 
@@ -133,7 +138,7 @@ export default function PotentialEventCalendarEntryDialog({
     try {
       if (entry) {
         await updateEntry({ id: entry._id as Id<"potentialEventCalendarEntries">, ...payload });
-        toast.success("Event updated");
+        toast.success(isAdminNote ? "Note updated" : "Event updated");
       } else {
         const result = await createEntry({
           ...payload,
@@ -144,17 +149,19 @@ export default function PotentialEventCalendarEntryDialog({
         });
         toast.success(
           result.createdCount > 1
-            ? `Added ${result.createdCount} recurring events`
-            : "Event added",
+            ? `Added ${result.createdCount} recurring entries`
+            : isAdminNote
+              ? "Note added"
+              : "Event added",
         );
       }
       onOpenChange(false);
     } catch (err) {
       if (err instanceof ConvexError) {
         const data = err.data as { message?: string };
-        toast.error(data.message ?? "Could not save event");
+        toast.error(data.message ?? "Could not save entry");
       } else {
-        toast.error("Could not save event");
+        toast.error("Could not save entry");
       }
     } finally {
       setIsSubmitting(false);
@@ -166,9 +173,19 @@ export default function PotentialEventCalendarEntryDialog({
       <DialogContent size="md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{isEditing ? "Edit potential event" : "Add potential event"}</DialogTitle>
+            <DialogTitle>
+              {isEditing
+                ? isAdminNote
+                  ? "Edit admin note"
+                  : "Edit potential event"
+                : isAdminNote
+                  ? "Add admin note"
+                  : "Add potential event"}
+            </DialogTitle>
             <DialogDescription>
-              Planning entries are separate from the main events system.
+              {isAdminNote
+                ? "Mark staff holidays, Fortnite season dates, and other admin planning notes."
+                : "Planning entries are separate from the main events system."}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
@@ -186,7 +203,11 @@ export default function PotentialEventCalendarEntryDialog({
                   onBlur={() => {
                     window.setTimeout(() => setShowTitleSuggestions(false), 150);
                   }}
-                  placeholder="e.g. Community scrim night"
+                  placeholder={
+                    isAdminNote
+                      ? "e.g. Staff holiday, Fortnite season start"
+                      : "e.g. Community scrim night"
+                  }
                   autoComplete="off"
                   required
                 />
@@ -209,9 +230,11 @@ export default function PotentialEventCalendarEntryDialog({
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Pick from Events Manager titles or type a custom name.
-              </p>
+              {!isAdminNote && (
+                <p className="text-xs text-muted-foreground">
+                  Pick from Events Manager titles or type a custom name.
+                </p>
+              )}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -302,14 +325,23 @@ export default function PotentialEventCalendarEntryDialog({
               </div>
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as EntryStatus)}>
+                <Select value={status} onValueChange={(v) => setStatus(v as CalendarEntryStatus)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="tentative">Tentative</SelectItem>
-                    <SelectItem value="confirmed">Confirmed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="tentative">
+                      {CALENDAR_ENTRY_STATUS_LABELS.tentative}
+                    </SelectItem>
+                    <SelectItem value="confirmed">
+                      {CALENDAR_ENTRY_STATUS_LABELS.confirmed}
+                    </SelectItem>
+                    <SelectItem value="admin_note">
+                      {CALENDAR_ENTRY_STATUS_LABELS.admin_note}
+                    </SelectItem>
+                    <SelectItem value="cancelled">
+                      {CALENDAR_ENTRY_STATUS_LABELS.cancelled}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -320,7 +352,11 @@ export default function PotentialEventCalendarEntryDialog({
                 id="calendar-entry-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Format, hosts, links, or other planning notes"
+                placeholder={
+                  isAdminNote
+                    ? "Details, links, or context for this note"
+                    : "Format, hosts, links, or other planning notes"
+                }
                 rows={3}
               />
             </div>

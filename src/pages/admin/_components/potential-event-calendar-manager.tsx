@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
 import {
+  addDays,
   addMonths,
   eachDayOfInterval,
   endOfMonth,
@@ -11,8 +12,11 @@ import {
   isSameDay,
   isSameMonth,
   isToday,
+  isWithinInterval,
+  startOfDay,
   startOfMonth,
   startOfWeek,
+  subDays,
   subMonths,
 } from "date-fns";
 import { toast } from "sonner";
@@ -21,6 +25,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import ConfirmDialog from "@/components/confirm-dialog.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
@@ -37,8 +42,17 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
+import {
+  entryChipClass,
+  entryDotClass,
+  entryStatusLabel,
+  statusBadgeVariant,
+} from "@/lib/potential-event-calendar-types.ts";
 
 type CalendarEntry = Doc<"potentialEventCalendarEntries">;
+type CalendarGridView = "month" | "ninety-day";
+
+const NINETY_DAY_COUNT = 90;
 
 function toDateInputValue(date: Date): string {
   return format(date, "yyyy-MM-dd");
@@ -51,19 +65,6 @@ function entryEndDate(entry: CalendarEntry): string {
 function entryOnDate(entry: CalendarEntry, date: Date): boolean {
   const day = toDateInputValue(date);
   return entry.date <= day && entryEndDate(entry) >= day;
-}
-
-function statusBadgeVariant(
-  status: CalendarEntry["status"],
-): "default" | "secondary" | "destructive" | "outline" {
-  switch (status) {
-    case "confirmed":
-      return "default";
-    case "cancelled":
-      return "destructive";
-    default:
-      return "secondary";
-  }
 }
 
 function formatEntryDateRange(entry: CalendarEntry): string {
@@ -88,19 +89,43 @@ export default function PotentialEventCalendarManager({
   const canEdit = !readOnly && hasEventBanAccess;
 
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
+  const [gridView, setGridView] = useState<CalendarGridView>("month");
+  const [periodStart, setPeriodStart] = useState(() => startOfDay(new Date()));
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<CalendarEntry | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CalendarEntry | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
 
-  const exportRangeStart = toDateInputValue(startOfMonth(month));
-  const exportRangeEnd = toDateInputValue(endOfMonth(month));
-
-  const rangeStart = toDateInputValue(
-    startOfWeek(startOfMonth(month), { weekStartsOn: 0 }),
+  const periodEnd = useMemo(
+    () => addDays(periodStart, NINETY_DAY_COUNT - 1),
+    [periodStart],
   );
-  const rangeEnd = toDateInputValue(endOfWeek(endOfMonth(month), { weekStartsOn: 0 }));
+
+  const { rangeStart, rangeEnd, exportRangeStart, exportRangeEnd, gridPeriodStart, gridPeriodEnd } =
+    useMemo(() => {
+      if (gridView === "month") {
+        const monthStart = startOfMonth(month);
+        const monthEnd = endOfMonth(month);
+        return {
+          rangeStart: toDateInputValue(startOfWeek(monthStart, { weekStartsOn: 0 })),
+          rangeEnd: toDateInputValue(endOfWeek(monthEnd, { weekStartsOn: 0 })),
+          exportRangeStart: toDateInputValue(monthStart),
+          exportRangeEnd: toDateInputValue(monthEnd),
+          gridPeriodStart: monthStart,
+          gridPeriodEnd: monthEnd,
+        };
+      }
+
+      return {
+        rangeStart: toDateInputValue(startOfWeek(periodStart, { weekStartsOn: 0 })),
+        rangeEnd: toDateInputValue(endOfWeek(periodEnd, { weekStartsOn: 0 })),
+        exportRangeStart: toDateInputValue(periodStart),
+        exportRangeEnd: toDateInputValue(periodEnd),
+        gridPeriodStart: periodStart,
+        gridPeriodEnd: periodEnd,
+      };
+    }, [gridView, month, periodStart, periodEnd]);
 
   const queryArgs = {
     rangeStart,
@@ -156,10 +181,24 @@ export default function PotentialEventCalendarManager({
     setDialogOpen(true);
   };
 
+  const ensureDateInNinetyDayWindow = (date: Date) => {
+    if (
+      !isWithinInterval(startOfDay(date), {
+        start: periodStart,
+        end: periodEnd,
+      })
+    ) {
+      setPeriodStart(startOfDay(date));
+    }
+  };
+
   const selectDate = (date: Date) => {
     setSelectedDate(date);
     if (!isSameMonth(date, month)) {
       setMonth(startOfMonth(date));
+    }
+    if (gridView === "ninety-day") {
+      ensureDateInNinetyDayWindow(date);
     }
   };
 
@@ -173,6 +212,16 @@ export default function PotentialEventCalendarManager({
   const openEditDialog = (entry: CalendarEntry) => {
     setEditingEntry(entry);
     setDialogOpen(true);
+  };
+
+  const handleGridViewChange = (view: CalendarGridView) => {
+    const anchor = startOfDay(selectedDate ?? new Date());
+    if (view === "ninety-day") {
+      setPeriodStart(anchor);
+    } else {
+      setMonth(startOfMonth(anchor));
+    }
+    setGridView(view);
   };
 
   const handleDelete = async () => {
@@ -289,14 +338,7 @@ export default function PotentialEventCalendarManager({
                           {dayEntries.slice(0, 3).map((entry) => (
                             <span
                               key={entry._id}
-                              className={cn(
-                                "size-1 rounded-full",
-                                entry.status === "cancelled"
-                                  ? "bg-destructive"
-                                  : entry.status === "confirmed"
-                                    ? "bg-primary"
-                                    : "bg-muted-foreground",
-                              )}
+                              className={cn("size-1 rounded-full", entryDotClass(entry))}
                             />
                           ))}
                         </span>
@@ -375,13 +417,8 @@ export default function PotentialEventCalendarManager({
                       className="flex items-center gap-2 py-1.5 first:pt-0 last:pb-0"
                     >
                       <span
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full",
-                          entry.status === "confirmed"
-                            ? "bg-primary"
-                            : "bg-muted-foreground",
-                        )}
-                        title={entry.status ?? "tentative"}
+                        className={cn("size-1.5 shrink-0 rounded-full", entryDotClass(entry))}
+                        title={entryStatusLabel(entry.status)}
                       />
                       <button
                         type="button"
@@ -419,13 +456,36 @@ export default function PotentialEventCalendarManager({
         </div>
       </div>
 
-      <MonthlyCalendarGrid
-        month={month}
+      <PeriodCalendarGrid
+        gridView={gridView}
+        onGridViewChange={handleGridViewChange}
+        periodStart={gridPeriodStart}
+        periodEnd={gridPeriodEnd}
         selectedDate={selectedDate}
         entriesByDay={entriesByDay}
         onDayClick={handleDateSelect}
         onSelectDate={selectDate}
         onSelectEntry={openEditDialog}
+        onPreviousPeriod={() => {
+          if (gridView === "month") {
+            setMonth((current) => subMonths(current, 1));
+            return;
+          }
+          setPeriodStart((current) => subDays(current, NINETY_DAY_COUNT));
+        }}
+        onNextPeriod={() => {
+          if (gridView === "month") {
+            setMonth((current) => addMonths(current, 1));
+            return;
+          }
+          setPeriodStart((current) => addDays(current, NINETY_DAY_COUNT));
+        }}
+        onGoToToday={() => {
+          const today = startOfDay(new Date());
+          setSelectedDate(today);
+          setMonth(startOfMonth(today));
+          setPeriodStart(today);
+        }}
         canEdit={canEdit}
       />
 
@@ -462,54 +522,104 @@ export default function PotentialEventCalendarManager({
 }
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-const MAX_EVENTS_PER_CELL = 4;
+const MAX_EVENTS_PER_MONTH_CELL = 4;
+const MAX_EVENTS_PER_NINETY_DAY_CELL = 2;
 
 function formatGridEventLabel(entry: CalendarEntry): string {
   const timePrefix = entry.time ? `${entry.time} ` : "";
   return `${timePrefix}${entry.title}`;
 }
 
-function entryStatusClass(status: CalendarEntry["status"]): string {
-  switch (status) {
-    case "confirmed":
-      return "bg-primary/15 text-primary hover:bg-primary/25";
-    case "cancelled":
-      return "bg-destructive/10 text-destructive line-through hover:bg-destructive/15";
-    default:
-      return "bg-muted text-foreground hover:bg-muted/80";
-  }
-}
-
-function MonthlyCalendarGrid({
-  month,
+function PeriodCalendarGrid({
+  gridView,
+  onGridViewChange,
+  periodStart,
+  periodEnd,
   selectedDate,
   entriesByDay,
   onDayClick,
   onSelectDate,
   onSelectEntry,
+  onPreviousPeriod,
+  onNextPeriod,
+  onGoToToday,
   canEdit,
 }: {
-  month: Date;
+  gridView: CalendarGridView;
+  onGridViewChange: (view: CalendarGridView) => void;
+  periodStart: Date;
+  periodEnd: Date;
   selectedDate: Date | undefined;
   entriesByDay: Map<string, CalendarEntry[]>;
   onDayClick: (date: Date) => void;
   onSelectDate: (date: Date) => void;
   onSelectEntry: (entry: CalendarEntry) => void;
+  onPreviousPeriod: () => void;
+  onNextPeriod: () => void;
+  onGoToToday: () => void;
   canEdit: boolean;
 }) {
+  const isNinetyDayView = gridView === "ninety-day";
+  const maxEventsPerCell = isNinetyDayView
+    ? MAX_EVENTS_PER_NINETY_DAY_CELL
+    : MAX_EVENTS_PER_MONTH_CELL;
+  const cellMinHeight = isNinetyDayView ? "min-h-20" : "min-h-28";
+
   const gridDays = useMemo(() => {
-    const monthStart = startOfMonth(month);
-    const monthEnd = endOfMonth(month);
     return eachDayOfInterval({
-      start: startOfWeek(monthStart, { weekStartsOn: 0 }),
-      end: endOfWeek(monthEnd, { weekStartsOn: 0 }),
+      start: startOfWeek(periodStart, { weekStartsOn: 0 }),
+      end: endOfWeek(periodEnd, { weekStartsOn: 0 }),
     });
-  }, [month]);
+  }, [periodStart, periodEnd]);
+
+  const periodTitle =
+    gridView === "month"
+      ? format(periodStart, "MMMM yyyy")
+      : `${format(periodStart, "MMM d, yyyy")} – ${format(periodEnd, "MMM d, yyyy")}`;
+
+  const isInPeriod = (day: Date) =>
+    isWithinInterval(startOfDay(day), { start: periodStart, end: periodEnd });
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base font-medium">Monthly calendar view</CardTitle>
+      <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <CardTitle className="text-base font-medium">{periodTitle}</CardTitle>
+        <div className="flex flex-wrap items-center gap-2">
+          <Tabs
+            value={gridView}
+            onValueChange={(value) => onGridViewChange(value as CalendarGridView)}
+          >
+            <TabsList>
+              <TabsTrigger value="month">Month</TabsTrigger>
+              <TabsTrigger value="ninety-day">90 days</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onPreviousPeriod}
+              aria-label={isNinetyDayView ? "Previous 90 days" : "Previous month"}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={onGoToToday}>
+              Today
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onNextPeriod}
+              aria-label={isNinetyDayView ? "Next 90 days" : "Next month"}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="p-0 sm:p-0">
         <div className="overflow-x-auto">
@@ -528,37 +638,38 @@ function MonthlyCalendarGrid({
               {gridDays.map((day) => {
                 const dayKey = toDateInputValue(day);
                 const dayEntries = entriesByDay.get(dayKey) ?? [];
-                const inMonth = isSameMonth(day, month);
+                const inPeriod = isInPeriod(day);
                 const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
-                const visibleEntries = dayEntries.slice(0, MAX_EVENTS_PER_CELL);
+                const visibleEntries = dayEntries.slice(0, maxEventsPerCell);
                 const hiddenCount = dayEntries.length - visibleEntries.length;
 
                 return (
                   <div
                     key={dayKey}
-                    role={canEdit ? "button" : undefined}
-                    tabIndex={canEdit ? 0 : undefined}
-                    title={canEdit ? "Add event on this day" : undefined}
-                    onClick={() => onDayClick(day)}
+                    role={canEdit && inPeriod ? "button" : undefined}
+                    tabIndex={canEdit && inPeriod ? 0 : undefined}
+                    title={canEdit && inPeriod ? "Add event on this day" : undefined}
+                    onClick={() => inPeriod && onDayClick(day)}
                     onKeyDown={(e) => {
-                      if (canEdit && (e.key === "Enter" || e.key === " ")) {
+                      if (canEdit && inPeriod && (e.key === "Enter" || e.key === " ")) {
                         e.preventDefault();
                         onDayClick(day);
                       }
                     }}
                     className={cn(
-                      "flex min-h-28 flex-col border-b border-r p-1.5 last:border-r-0",
-                      !inMonth && "bg-muted/20",
-                      isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/30",
-                      canEdit && "cursor-pointer hover:bg-muted/30",
+                      "flex flex-col border-b border-r p-1.5 last:border-r-0",
+                      cellMinHeight,
+                      !inPeriod && "bg-muted/20",
+                      isSelected && inPeriod && "bg-primary/5 ring-1 ring-inset ring-primary/30",
+                      canEdit && inPeriod && "cursor-pointer hover:bg-muted/30",
                     )}
                   >
                     <span
                       className={cn(
                         "mb-1 flex size-7 shrink-0 items-center justify-center self-start rounded-full text-sm",
-                        isToday(day) && "bg-primary font-semibold text-primary-foreground",
-                        !isToday(day) && inMonth && "font-medium",
-                        !inMonth && "text-muted-foreground",
+                        isToday(day) && inPeriod && "bg-primary font-semibold text-primary-foreground",
+                        !isToday(day) && inPeriod && "font-medium",
+                        !inPeriod && "text-muted-foreground",
                       )}
                     >
                       {format(day, "d")}
@@ -576,7 +687,7 @@ function MonthlyCalendarGrid({
                           }}
                           className={cn(
                             "w-full truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight",
-                            entryStatusClass(entry.status),
+                            entryChipClass(entry),
                             !canEdit && "cursor-default",
                           )}
                         >
@@ -624,8 +735,15 @@ function EntryCard({
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-medium">{entry.title}</h3>
-            <Badge variant={statusBadgeVariant(entry.status)}>
-              {entry.status ?? "tentative"}
+            <Badge
+              variant={statusBadgeVariant(entry.status)}
+              className={
+                entry.status === "admin_note"
+                  ? "border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-100"
+                  : undefined
+              }
+            >
+              {entryStatusLabel(entry.status)}
             </Badge>
             {entry.recurrenceSeriesId && (
               <Badge variant="outline">Recurring</Badge>

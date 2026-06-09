@@ -1,6 +1,7 @@
 import Papa from "papaparse";
 import { differenceInCalendarDays, eachDayOfInterval, format, parseISO } from "date-fns";
 import type { Doc } from "@/convex/_generated/dataModel.d.ts";
+import { entryStatusLabel } from "@/lib/potential-event-calendar-types.ts";
 
 type CalendarEntry = Doc<"potentialEventCalendarEntries">;
 
@@ -69,7 +70,7 @@ export function buildCalendarExportRows(
         Time: entry.time ?? "",
         "Event start": entry.date,
         "Event end": entryEndDate(entry),
-        Status: entry.status ?? "tentative",
+        Status: entryStatusLabel(entry.status),
         Notes: entry.description ?? "",
         "Added by": entry.createdBy ?? "",
       });
