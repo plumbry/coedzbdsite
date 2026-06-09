@@ -25,8 +25,6 @@ import AuditPage from "./pages/admin/audit.tsx";
 import FeaturesPage from "./pages/admin/features/page.tsx";
 import PlayerEarningsPage from "./pages/admin/player-earnings.tsx";
 import MemberManagement from "./pages/admin/member-management.tsx";
-import WrappedEditorPage from "./pages/admin/wrapped-editor.tsx";
-import WrappedPreviewPage from "./pages/admin/wrapped-preview.tsx";
 import TierImpactPage from "./pages/admin/tier-impact.tsx";
 import StatsPage from "./pages/admin/stats.tsx";
 import AudienceInsightsPage from "./pages/admin/audience-insights.tsx";
@@ -35,7 +33,6 @@ import AdminHubPage from "./pages/admin/hub.tsx";
 import DataMaintenancePage from "./pages/admin/data-maintenance.tsx";
 import InGameEarningsPage from "./pages/admin/in-game-earnings.tsx";
 import TierMismatchesPage from "./pages/admin/tier-mismatches.tsx";
-import Wrapped2025Page from "./pages/wrapped/page.tsx";
 import EventsPage from "./pages/events/page.tsx";
 import EventDetail from "./pages/events/_components/event-detail.tsx";
 import SupportPage from "./pages/support/page.tsx";
@@ -88,8 +85,6 @@ export default function App() {
             <Route path="player-earnings" element={<PlayerEarningsPage />} />
             <Route path="member-management/:tab?" element={<MemberManagement />} />
             <Route path="members/:tab?" element={<MemberManagement />} />
-            <Route path="2025-wrapped-editor" element={<WrappedEditorPage />} />
-            <Route path="2025-wrapped-preview" element={<WrappedPreviewPage />} />
             <Route path="tier-impact" element={<TierImpactPage />} />
             <Route path="stats" element={<StatsPage />} />
             <Route
@@ -106,7 +101,6 @@ export default function App() {
             <Route path="spin-moderation" element={<SpinModerationPage />} />
           </Route>
 
-          <Route path="/2025-wrapped" element={<Wrapped2025Page />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/events/:eventId" element={<EventDetail />} />
           <Route path="/support" element={<SupportPage />} />

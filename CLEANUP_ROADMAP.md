@@ -125,7 +125,6 @@ Priority key:
 | 3.15 | Product glossary in repo (`PRODUCT_GLOSSARY.md`) | Onboarding |
 | 3.16 | Route map diagram in docs | Staff training |
 | 3.17 | E2E smoke tests for critical flows (import, member apply, support) | Regression safety |
-| 3.18 | Year-agnostic wrapped routes (`/wrapped/:year`) | Seasonal reuse |
 
 ---
 

@@ -48,15 +48,14 @@ These are **three separate products**. Do not consolidate or cross-link them as 
 | `/spin`, `/spin/:eventId` | **Spin** — pairing/event pages (staff landing; event pages public) | **No** |
 | `/scrim-series`, `/scrim-series/:slug` | **Scrim Series** — multi-session leaderboard series (separate from Spin) | **No** |
 | `/scrim` | *(none — deprecated, not routed)* | N/A |
-| `/2025-wrapped` | Seasonal wrapped experience | **No** |
 
 ### Admin routes (40+)
 
 Grouped by sidebar section in `admin-sidebar.tsx`. **Notable:** `/admin` currently redirects to `/admin/member-management` (reserved for a future admin home).
 
-**In sidebar:** member-management, discord-members, tier-mismatches, tier-re-evaluation, stats hub, events-manager, event-results, uploads, scrim-series admin, event-bans, punishment-matrix, spin page link, spin-moderation, features, support, audit, user-management, data-cache, data-backup, wrapped editor.
+**In sidebar:** member-management, discord-members, tier-mismatches, tier-re-evaluation, stats hub, events-manager, event-results, uploads, scrim-series admin, event-bans, punishment-matrix, spin page link, spin-moderation, features, support, audit, user-management, data-cache, data-backup.
 
-**Not in sidebar (deep-link only):** tier-simulation, average-stats, holistic-score-stats, top-five-details, all stats-hub child pages individually, upset-kills sub-routes, fuzzy-matches, unmatched/yunite import detail, yunite-debug, wrapped-preview.
+**Not in sidebar (deep-link only):** tier-simulation, average-stats, holistic-score-stats, top-five-details, all stats-hub child pages individually, upset-kills sub-routes, fuzzy-matches, unmatched/yunite import detail, yunite-debug.
 
 ---
 
@@ -74,7 +73,6 @@ Grouped by sidebar section in `admin-sidebar.tsx`. **Notable:** `/admin` current
 | **Events calendar types** | `/events` filters (`scrim`, `scrim-series` types) vs live products | Calendar taxonomy may overlap naming | Audit whether calendar `scrim` type is legacy; link to Scrim Series slug only if same backend entity |
 | **Tier mismatch** | `/admin/tier-mismatches`, incomplete eval section on same page | Overlaps with discord-members role tooling | Keep one page; link out to score/eval flows |
 | **Support** | `/support` (public), `/admin/support` | **Appropriate split** — not duplicate | Optional: ticket status for submitters later |
-| **Wrapped** | `/2025-wrapped`, `/admin/2025-wrapped-editor`, `/admin/2025-wrapped-preview` | Editor in sidebar; public/preview not linked from nav | Add seasonal nav item when published |
 
 ### 1.2 Duplicate forms
 
@@ -381,13 +379,12 @@ src/components/
 - `/admin` redirect to member-management (placeholder; no admin home yet)
 - **Features** as a grab-bag page name
 - Orphan dialog files still in repo
-- Public nav missing major product areas (Spin, Series, Wrapped)
+- Public nav missing major product areas (Spin, Series)
 - `window.confirm` / `prompt` for destructive ops (Features, imports)
 - Full page reload on public nav links
 
 ### 8.2 Feels temporary
 
-- 2025 Wrapped hard-coded year in routes and copy
 - Yunite debug page feels dev-only but production-accessible
 - Spin landing staff-gated while spin event pages are public share links (intentional ops model)
 - Legacy “Scrim” strings still in Spin UI (`Create Scrim Event`, empty state “No scrim events”)

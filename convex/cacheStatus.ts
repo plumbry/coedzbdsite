@@ -1,76 +1,76 @@
-import { query, mutation, internalMutation, type MutationCtx } from "./_generated/server";
+import {
+  query,
+  mutation,
+  internalMutation,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { internal, api } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel.d.ts";
 import { requireAdmin } from "./auth_helpers";
 import { filterVisibleMembers } from "./helpers/playerAlt";
-import { isActivePlayerWithMatchData } from "./lib/stats/listEligiblePlayers";
 import { refreshEventCache } from "./lib/eventCache";
 import { buildPlayerStatsCacheStatusReport } from "./lib/stats/playerStatsCacheStatus";
 
 // Split into focused queries to avoid exceeding Convex scan limits
 const STATUS_SAMPLE_LIMIT = 1000;
-const TIER_EVAL_TIERS = new Set(["S", "A", "B", "C"]);
 
-const isValidDiscordId = (id: string | undefined): boolean => {
-  if (!id || id === "") return false;
-  if (id === "imported") return false;
-  if (id.startsWith("placeholder_")) return false;
-  return true;
-};
+async function readMainDiagnosticsSnapshot(ctx: QueryCtx) {
+  return await ctx.db
+    .query("dataCacheDiagnostics")
+    .withIndex("by_key", (q) => q.eq("snapshotKey", "main"))
+    .first();
+}
 
-/** Stats rebuild pool: active members with Yunite match data (excludes alts). */
-function buildCompetitivePoolStats(
-  allPlayers: Doc<"players">[],
-  tierEvalCacheCount: number,
-) {
-  const eligibleMatchData = filterVisibleMembers(
-    allPlayers.filter(
-      (p) => isActivePlayerWithMatchData(p) && isValidDiscordId(p.discordUserId),
-    ),
-  );
-  const tierEvalEligible = eligibleMatchData.filter((p) =>
-    TIER_EVAL_TIERS.has(p.tier || ""),
-  );
+/** Pool sizes from playerStatsCache (no hasMatchData player scan). */
+async function buildCompetitivePoolStatsFromCache(ctx: MutationCtx | QueryCtx) {
+  const cacheReport = await buildPlayerStatsCacheStatusReport(ctx);
+
+  const statsEligibleRows = await ctx.db
+    .query("playerStatsCache")
+    .withIndex("by_stats_eligible", (q) => q.eq("statsEligible", true))
+    .collect();
+
+  let withContributionScore = 0;
+  let withTopFiveCache = 0;
+  for (const row of statsEligibleRows) {
+    const player = await ctx.db.get(row.playerId);
+    if (!player) continue;
+    if (player.contributionScore) withContributionScore += 1;
+    if (player.topFiveCache) withTopFiveCache += 1;
+  }
+
+  const tierEvalCacheCount = await ctx.db.query("tierReEvaluationCache").collect();
+  const acceptedMembers = await ctx.db
+    .query("players")
+    .withIndex("by_membership_status", (q) =>
+      q.eq("currentMembershipStatus", "accepted"),
+    )
+    .collect();
 
   return {
-    totalMembers: allPlayers.length,
-    eligibleMatchDataPool: eligibleMatchData.length,
-    tierEvalEligiblePool: tierEvalEligible.length,
-    withContributionScore: eligibleMatchData.filter((p) => p.contributionScore)
-      .length,
-    withTopFiveCache: eligibleMatchData.filter((p) => p.topFiveCache).length,
-    withTierEvalCache: tierEvalCacheCount,
+    totalMembers: filterVisibleMembers(acceptedMembers).length,
+    eligibleMatchDataPool: cacheReport.statsEligibleCount,
+    tierEvalEligiblePool: cacheReport.reevaluationEligibleCount,
+    withContributionScore,
+    withTopFiveCache,
+    withTierEvalCache: tierEvalCacheCount.length,
   };
 }
 
 export const getPlayerStats = query({
   args: {},
   handler: async (ctx) => {
-    const allPlayers = await ctx.db.query("players").collect();
-    
-    const playersWithSync = allPlayers.filter(p => p.lastDiscordSync);
-    const mostRecentPlayerSync = playersWithSync.length > 0
-      ? Math.max(...playersWithSync.map(p => p.lastDiscordSync || 0))
-      : undefined;
-    
-    const tierEvalCache = await ctx.db.query("tierReEvaluationCache").collect();
-    const competitivePool = buildCompetitivePoolStats(
-      allPlayers,
-      tierEvalCache.length,
-    );
-
-    return {
-      ...competitivePool,
-      /** @deprecated Use totalMembers — kept for older UI paths */
-      total: allPlayers.length,
-      withEpicId: allPlayers.filter(p => p.epicId).length,
-      withName: allPlayers.filter(p => p.name).length,
-      withAvatarUrl: allPlayers.filter(p => p.avatarUrl).length,
-      withLastDiscordSync: playersWithSync.length,
-      lastUpdated: mostRecentPlayerSync,
-    };
+    await requireAdmin(ctx);
+    const snapshot = await readMainDiagnosticsSnapshot(ctx);
+    if (!snapshot) {
+      return {
+        needsRefresh: true as const,
+        message: 'Click "Refresh diagnostics" on Data Cache to build the first snapshot.',
+      };
+    }
+    return snapshot.playerStats;
   },
 });
 
@@ -170,175 +170,44 @@ export const getResultStats = query({
 export const getCacheMetadata = query({
   args: {},
   handler: async (ctx) => {
-    // Small tables - safe to collect directly
-    const aggregateStatsCache = await ctx.db.query("aggregateStatsCache").first();
-    const tierReEvaluationCache = await ctx.db.query("tierReEvaluationCache").collect();
-    const tierMediansCache = await ctx.db.query("tierMediansCache").first();
-    
-    const allPlayers = await ctx.db.query("players").collect();
-    const competitivePool = buildCompetitivePoolStats(
-      allPlayers,
-      tierReEvaluationCache.length,
-    );
-
+    await requireAdmin(ctx);
+    const snapshot = await readMainDiagnosticsSnapshot(ctx);
+    if (!snapshot) {
+      return {
+        needsRefresh: true as const,
+        message: 'Click "Refresh diagnostics" on Data Cache to build the first snapshot.',
+      };
+    }
     return {
-      aggregateStatsCache: aggregateStatsCache ? {
-        lastUpdated: aggregateStatsCache.lastUpdated,
-        playerCount: aggregateStatsCache.playerCount,
-        rebuildPoolCount: aggregateStatsCache.rebuildPoolCount,
-        excludedNoYuniteEvents: aggregateStatsCache.excludedNoYuniteEvents,
-      } : null,
-      tierReEvaluationCache: {
-        evaluationCount: tierReEvaluationCache.length,
-        lastUpdated: tierMediansCache?.lastUpdated || null,
-      },
-      competitivePool,
-      lastChecked: Date.now(),
+      ...snapshot.cacheMetadata,
+      lastChecked: snapshot.lastUpdated,
     };
   },
 });
 
-// Keep the old getCacheStatus for backward compatibility but mark as deprecated
-// This will now delegate to the split queries internally
+/** @deprecated Prefer getDataCacheDashboard — reads the stored diagnostics snapshot only. */
 export const getCacheStatus = query({
   args: {},
   handler: async (ctx) => {
-    // Players - should be manageable size
-    const allPlayers = await ctx.db.query("players").collect();
-    
-    const playersWithSync = allPlayers.filter(p => p.lastDiscordSync);
-    const mostRecentPlayerSync = playersWithSync.length > 0
-      ? Math.max(...playersWithSync.map(p => p.lastDiscordSync || 0))
-      : undefined;
-    
-    const tierEvalCache = await ctx.db.query("tierReEvaluationCache").collect();
-    const competitivePool = buildCompetitivePoolStats(
-      allPlayers,
-      tierEvalCache.length,
-    );
+    await requireAdmin(ctx);
+    const snapshot = await readMainDiagnosticsSnapshot(ctx);
+    if (!snapshot) {
+      return {
+        needsRefresh: true as const,
+        message: 'Click "Refresh diagnostics" on Data Cache to build the first snapshot.',
+      };
+    }
 
-    const playerStats = {
-      ...competitivePool,
-      total: allPlayers.length,
-      withEpicId: allPlayers.filter(p => p.epicId).length,
-      withName: allPlayers.filter(p => p.name).length,
-      withAvatarUrl: allPlayers.filter(p => p.avatarUrl).length,
-      withLastDiscordSync: playersWithSync.length,
-      lastUpdated: mostRecentPlayerSync,
-    };
-    
-    // Events - should be small
-    const allEvents = await ctx.db.query("events").collect();
-    const eventsWithSync = allEvents.filter(e => e.lastYunitSync);
-    const mostRecentEventSync = eventsWithSync.length > 0
-      ? Math.max(...eventsWithSync.map(e => e.lastYunitSync || 0))
-      : undefined;
-    
-    const eventStats = {
-      total: allEvents.length,
-      withLastYunitSync: eventsWithSync.length,
-      withTotalTeams: allEvents.filter(e => e.totalTeams).length,
-      withTotalPlayers: allEvents.filter(e => e.totalPlayers).length,
-      withTeamsOrPlayers: allEvents.filter((e) => e.totalTeams || e.totalPlayers).length,
-      completed: allEvents.filter(e => e.status === "completed").length,
-      lastUpdated: mostRecentEventSync,
-    };
-    
-    // Imports - should be small
-    const allImports = await ctx.db.query("thirdPartyImports").collect();
-    const importsWithSync = allImports.filter(i => i.matchDataSyncedAt);
-    const mostRecentImportSync = importsWithSync.length > 0
-      ? Math.max(...importsWithSync.map(i => i.matchDataSyncedAt || 0))
-      : undefined;
-    
-    const importStats = {
-      total: allImports.length,
-      withMatchDataSynced: allImports.filter(i => i.matchDataSynced).length,
-      withMatchDataSyncedAt: importsWithSync.length,
-      withDataFullyCached: allImports.filter(i => i.dataFullyCached).length,
-      fromYuniteAPI: allImports.filter(i => i.source === "Yunite API").length,
-      fromCSV: allImports.filter(i => i.source === "CSV").length,
-      lastUpdated: mostRecentImportSync,
-    };
-    
-    // Match stats - use paginated counting to avoid scan limits
-    let matchStatsCount = 0;
-    let mostRecentMatchStat: number | undefined = undefined;
-    let matchStatsCursor: string | null = null;
-    let matchStatsDone = false;
-    
-    while (!matchStatsDone) {
-      const page = await ctx.db
-        .query("matchPlayerStats")
-        .paginate({ numItems: 2000, cursor: matchStatsCursor });
-      matchStatsCount += page.page.length;
-      for (const doc of page.page) {
-        if (!mostRecentMatchStat || doc._creationTime > mostRecentMatchStat) {
-          mostRecentMatchStat = doc._creationTime;
-        }
-      }
-      matchStatsDone = page.isDone;
-      matchStatsCursor = page.continueCursor;
-    }
-    
-    // Results - use paginated counting
-    let resultsTotal = 0;
-    let resultsMatched = 0;
-    let resultsWithEpicId = 0;
-    let resultsWithDiscordId = 0;
-    let resultsWithTeamMembers = 0;
-    let resultsWithMatchData = 0;
-    let resultsCursor: string | null = null;
-    let resultsDone = false;
-    
-    while (!resultsDone) {
-      const page = await ctx.db
-        .query("thirdPartyResults")
-        .paginate({ numItems: 2000, cursor: resultsCursor });
-      for (const r of page.page) {
-        resultsTotal++;
-        if (r.matched) resultsMatched++;
-        if (r.epicId) resultsWithEpicId++;
-        if (r.discordId) resultsWithDiscordId++;
-        if (r.teamMembers && r.teamMembers.length > 0) resultsWithTeamMembers++;
-        if (r.wins !== undefined || r.matchesPlayed !== undefined) resultsWithMatchData++;
-      }
-      resultsDone = page.isDone;
-      resultsCursor = page.continueCursor;
-    }
-    
-    const resultStats = {
-      total: resultsTotal,
-      matched: resultsMatched,
-      withEpicId: resultsWithEpicId,
-      withDiscordId: resultsWithDiscordId,
-      withTeamMembers: resultsWithTeamMembers,
-      withMatchData: resultsWithMatchData,
-    };
-    
-    // Small tables
-    const aggregateStatsCache = await ctx.db.query("aggregateStatsCache").first();
-    const tierReEvaluationCache = await ctx.db.query("tierReEvaluationCache").collect();
-    const tierMediansCache = await ctx.db.query("tierMediansCache").first();
-    
     return {
-      playerStats,
-      eventStats,
-      importStats,
-      matchStatsCount,
-      matchStatsLastUpdated: mostRecentMatchStat,
-      resultStats,
-      aggregateStatsCache: aggregateStatsCache ? {
-        lastUpdated: aggregateStatsCache.lastUpdated,
-        playerCount: aggregateStatsCache.playerCount,
-        rebuildPoolCount: aggregateStatsCache.rebuildPoolCount,
-        excludedNoYuniteEvents: aggregateStatsCache.excludedNoYuniteEvents,
-      } : null,
-      tierReEvaluationCache: {
-        evaluationCount: tierReEvaluationCache.length,
-        lastUpdated: tierMediansCache?.lastUpdated || null,
-      },
-      lastChecked: Date.now(),
+      playerStats: snapshot.playerStats,
+      eventStats: snapshot.eventStats,
+      importStats: snapshot.importStats,
+      matchStatsCount: snapshot.matchStats.matchStatsCount,
+      matchStatsLastUpdated: snapshot.matchStats.matchStatsLastUpdated,
+      resultStats: snapshot.resultStats,
+      aggregateStatsCache: snapshot.cacheMetadata.aggregateStatsCache,
+      tierReEvaluationCache: snapshot.cacheMetadata.tierReEvaluationCache,
+      lastChecked: snapshot.lastUpdated,
     };
   },
 });
@@ -618,8 +487,7 @@ async function buildDiagnosticsSnapshot(ctx: MutationCtx) {
       ? Math.max(...playersWithSync.map((p) => p.lastDiscordSync || 0))
       : undefined;
 
-  const tierEvalCache = await ctx.db.query("tierReEvaluationCache").collect();
-  const competitivePool = buildCompetitivePoolStats(allPlayers, tierEvalCache.length);
+  const competitivePool = await buildCompetitivePoolStatsFromCache(ctx);
 
   const playerStats = {
     ...competitivePool,
@@ -710,7 +578,7 @@ async function buildDiagnosticsSnapshot(ctx: MutationCtx) {
         }
       : null,
     tierReEvaluationCache: {
-      evaluationCount: tierEvalCache.length,
+      evaluationCount: competitivePool.withTierEvalCache,
       lastUpdated: tierMediansCache?.lastUpdated || null,
     },
     competitivePool,
@@ -718,8 +586,7 @@ async function buildDiagnosticsSnapshot(ctx: MutationCtx) {
     lastChecked: Date.now(),
   };
 
-  const recentPlayers = await ctx.db.query("players").order("desc").take(200);
-  const recentPlayerSyncs = recentPlayers
+  const recentPlayerSyncs = allPlayers
     .filter((p) => p.lastDiscordSync)
     .sort((a, b) => (b.lastDiscordSync || 0) - (a.lastDiscordSync || 0))
     .slice(0, 10)

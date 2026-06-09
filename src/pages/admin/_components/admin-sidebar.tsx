@@ -29,7 +29,6 @@ import {
   HardDrive,
   LogOut,
   User,
-  Sparkles,
   ShieldAlert,
   Ban,
   Dices,
@@ -369,7 +368,6 @@ export default function AdminSidebar() {
           { path: "/admin/data-cache-status", label: "Data Cache", icon: Database },
           { path: "/admin/data-backup", label: "Data Backup", icon: HardDrive },
           { path: "/admin/data-maintenance", label: "Data Maintenance", icon: Wrench },
-          { path: "/admin/2025-wrapped-editor", label: "2025 Wrapped", icon: Sparkles },
         ],
       });
     }

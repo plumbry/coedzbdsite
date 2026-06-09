@@ -209,10 +209,6 @@ function AudienceInsightsContent() {
   };
   const hasCache = insights !== undefined && insights.totalMembers > 0;
   const eventsReady = insights?.eventsReady === true;
-  const eventCoverage = useQuery(
-    api.players.getAcceptedMemberEventCountCoverage,
-    insights !== undefined && !eventsReady ? {} : "skip",
-  );
   const [watchRebuild, setWatchRebuild] = useState(false);
   const rebuildJob = useQuery(
     api.audienceInsights.getRebuildJobStatus,
@@ -284,9 +280,7 @@ function AudienceInsightsContent() {
     }
   };
 
-  const showEventBackfillHint =
-    eventCoverage?.needsBackfill === true ||
-    (hasCache && eventsReady && (eventCoverage?.overFiveEvents ?? 0) === 0);
+  const showEventBackfillHint = hasCache && !eventsReady;
 
   if (insights === undefined) {
     return (
@@ -332,22 +326,8 @@ function AudienceInsightsContent() {
           <AlertDescription className="space-y-3">
             <p>
               The &quot;Played more than 5 events&quot; chart uses each member&apos;s{" "}
-              <strong>events played count</strong> on their player record.
-              {eventCoverage && eventCoverage.needsBackfill ? (
-                <>
-                  {" "}
-                  Many members are still missing a count (
-                  {eventCoverage.withEventCount} / {eventCoverage.totalAccepted} have one).
-                </>
-              ) : eventCoverage && eventCoverage.overFiveEvents === 0 ? (
-                <>
-                  {" "}
-                  Counts are set for {eventCoverage.withEventCount} /{" "}
-                  {eventCoverage.totalAccepted} members, but none are above 5 yet — refresh the
-                  chart after confirming backfill on Data Cache.
-                </>
-              ) : null}{" "}
-              Until counts reflect real participation, everyone can appear in the 5-or-fewer bucket.
+              <strong>events played count</strong> on their player record. Event counts are not
+              ready in the current snapshot — run the backfill below, then refresh stats.
             </p>
             <ol className="list-decimal list-inside text-sm space-y-1">
               <li>Click Backfill event counts (runs in the background, a few minutes).</li>

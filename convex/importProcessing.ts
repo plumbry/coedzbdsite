@@ -24,6 +24,7 @@ import {
 import { logImportPipelineEvent } from "./lib/importPipelineLogging";
 import { appendLeaderboardUrlToEvent } from "./lib/eventLeaderboardLinks";
 import { updateStatsForPlayers } from "./lib/stats/updatePlayerStatsCache";
+import { updateTierEvalForPlayerIfEligible } from "./lib/stats/updateTierEvalForPlayer";
 import { refreshEventCache, refreshEventCacheForImport } from "./lib/eventCache";
 import {
   collectEventLeaderboardUrls,
@@ -210,38 +211,6 @@ async function completePipelineStepAndContinue(
 
   const delayMs = completedStep === "sync_match_data" ? 1000 : 0;
   await schedulePipelineContinuation(ctx, jobId, nextStep, delayMs);
-}
-
-async function updateTierEvalForPlayerIfEligible(
-  ctx: MutationCtx,
-  playerId: Id<"players">,
-) {
-  const cacheRow = await ctx.db
-    .query("playerStatsCache")
-    .withIndex("by_player", (q) => q.eq("playerId", playerId))
-    .first();
-
-  if (!cacheRow?.reevaluationEligible) {
-    const existing = await ctx.db
-      .query("tierReEvaluationCache")
-      .withIndex("by_player", (q) => q.eq("playerId", playerId))
-      .first();
-    if (existing) {
-      await ctx.db.delete(existing._id);
-    }
-    return false;
-  }
-
-  const medians = await ctx.db.query("tierMediansCache").first();
-  if (!medians) {
-    return false;
-  }
-
-  await ctx.runMutation(internal.tierReEvaluationBatched.processBatch, {
-    batchNumber: 0,
-    playerIds: [playerId],
-  });
-  return true;
 }
 
 type FinalizeJobArgs = {
@@ -1015,7 +984,8 @@ export const processImportBatch = internalMutation({
         const summary = await updateStatsForPlayers(ctx, batchPlayerIds);
         let tierEvalUpdated = 0;
         for (const playerId of batchPlayerIds) {
-          if (await updateTierEvalForPlayerIfEligible(ctx, playerId)) {
+          const tierEvalResult = await updateTierEvalForPlayerIfEligible(ctx, playerId);
+          if (tierEvalResult.tierEvalUpdated) {
             tierEvalUpdated += 1;
           }
         }

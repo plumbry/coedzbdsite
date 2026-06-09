@@ -130,13 +130,21 @@ export const rebuildDCACache = mutation({
     
     const forceRebuild = args.forceRebuild ?? false;
     
-    // Get all players once — avoid querying the full table multiple times
-    const allPlayers = await ctx.db.query("players").collect();
-    const activePlayers = allPlayers.filter(p => 
-      (p.status === "active" || p.status === undefined) && 
-      isValidDiscordId(p.discordUserId) &&
-      p.hasMatchData === true
-    );
+    const statsEligibleRows = await ctx.db
+      .query("playerStatsCache")
+      .withIndex("by_stats_eligible", (q) => q.eq("statsEligible", true))
+      .collect();
+    const activePlayers: Doc<"players">[] = [];
+    for (const row of statsEligibleRows) {
+      const player = await ctx.db.get(row.playerId);
+      if (
+        player &&
+        (player.status === "active" || player.status === undefined) &&
+        isValidDiscordId(player.discordUserId)
+      ) {
+        activePlayers.push(player);
+      }
+    }
     
     // When force rebuilding, skip players updated in the last hour to prevent loops
     const now = Date.now();
@@ -399,22 +407,33 @@ async function computeAndStoreDCA(
 export const getDCACacheStatus = query({
   args: {},
   handler: async (ctx) => {
-    const allPlayers = await ctx.db.query("players").collect();
-    const activePlayers = allPlayers.filter(p => 
-      (p.status === "active" || p.status === undefined) && 
-      isValidDiscordId(p.discordUserId) &&
-      p.hasMatchData === true
-    );
-    
-    const totalPlayers = activePlayers.length;
-    const cachedPlayers = activePlayers.filter(p => p.dcaCache !== undefined).length;
-    
-    // Check for stale cache (older than 7 days)
-    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    const stalePlayers = activePlayers.filter(p => 
-      p.dcaCache === undefined || p.dcaCache.lastUpdated < sevenDaysAgo
-    ).length;
-    
+    const statsEligibleRows = await ctx.db
+      .query("playerStatsCache")
+      .withIndex("by_stats_eligible", (q) => q.eq("statsEligible", true))
+      .collect();
+
+    let totalPlayers = 0;
+    let cachedPlayers = 0;
+    let stalePlayers = 0;
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+    for (const row of statsEligibleRows) {
+      const player = await ctx.db.get(row.playerId);
+      if (
+        !player ||
+        (player.status !== "active" && player.status !== undefined) ||
+        !isValidDiscordId(player.discordUserId)
+      ) {
+        continue;
+      }
+      totalPlayers += 1;
+      if (player.dcaCache !== undefined) {
+        cachedPlayers += 1;
+      }
+      if (player.dcaCache === undefined || player.dcaCache.lastUpdated < sevenDaysAgo) {
+        stalePlayers += 1;
+      }
+    }
     return {
       totalPlayers,
       cachedPlayers,

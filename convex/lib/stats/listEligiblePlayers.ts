@@ -14,12 +14,12 @@ export async function paginateActivePlayers(
     .paginate({ numItems, cursor });
 }
 
+/** Active competitive member (pool membership is determined by playerStatsCache, not hasMatchData). */
 export function isActivePlayerWithMatchData(
-  player: Pick<Doc<"players">, "status" | "hasMatchData" | "isAlt">,
+  player: Pick<Doc<"players">, "status" | "isAlt">,
 ): boolean {
   return (
-    player.status === "active" &&
-    player.hasMatchData === true &&
+    (player.status === "active" || player.status === undefined) &&
     !isAltAccount(player)
   );
 }
@@ -43,7 +43,11 @@ export async function listEligibleMatchDataPlayerIds(
   const players: Doc<"players">[] = [];
   for (const row of fromCache) {
     const player = await ctx.db.get(row.playerId);
-    if (player && isActivePlayerWithMatchData(player) && isValidDiscordId(player.discordUserId)) {
+    if (
+      player &&
+      isActivePlayerWithMatchData(player) &&
+      isValidDiscordId(player.discordUserId)
+    ) {
       players.push(player);
     }
   }

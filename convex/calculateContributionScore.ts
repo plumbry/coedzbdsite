@@ -36,9 +36,10 @@ export const calculateAndStoreCSInternal = internalMutation({
       return null;
     }
 
-    if (!player.hasMatchData) {
+    const eligibility = await getPlayerDisplayStatsEligibility(ctx, args.playerId);
+    if (!eligibility.statsEligible) {
       console.log(
-        `Player ${player.discordUsername} does not have match data flag set - skipping TC calculation`,
+        `Player ${player.discordUsername} is below stats display threshold - skipping TC calculation`,
       );
       return null;
     }
