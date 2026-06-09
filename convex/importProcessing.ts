@@ -17,7 +17,6 @@ import {
 } from "./lib/importRematch";
 import {
   IMPORT_ROW_BATCH_SIZE,
-  IMPORT_STATS_PLAYER_BATCH_SIZE,
   isApiPipelineStep,
   shouldWriteImportProgress,
   type ImportProgressWriteReason,
@@ -905,6 +904,117 @@ export const completeApiPipelineStep = internalMutation({
   },
 });
 
+/** One player per mutation — always advances cursor so doc-limit failures cannot stall the job. */
+export const processOneImportStatsPlayer = internalMutation({
+  args: { jobId: v.id("importProcessingJobs") },
+  handler: async (ctx, args) => {
+    const batchStart = Date.now();
+    const step = "update_player_stats" as const;
+    const context = await loadJobContext(ctx, args.jobId);
+    if (!context || context.job.status !== "running") {
+      return { done: true, reason: "job_not_running" as const };
+    }
+
+    const { job } = context;
+    let playerIds = job.affectedPlayerIds;
+    if (!playerIds || playerIds.length === 0) {
+      playerIds = await collectAffectedPlayerIdsForImport(ctx, job.importId);
+      await ctx.db.patch(args.jobId, { affectedPlayerIds: playerIds });
+    }
+
+    const startIndex = job.statsPlayerCursor ?? 0;
+    if (startIndex >= playerIds.length) {
+      await completePipelineStepAndContinue(ctx, args.jobId, step);
+      return { done: true, reason: "stats_already_complete" as const };
+    }
+
+    const playerId = playerIds[startIndex]!;
+    const batchNumber = (job.batchesProcessed ?? 0) + 1;
+    let summary = { playersUpdated: 0, skippedNoChange: 0, errors: [] as string[] };
+
+    try {
+      summary = await updateStatsForPlayers(ctx, [playerId]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      summary.errors.push(`${playerId}: ${message}`);
+      logImportPipelineEvent({
+        importId: job.importId,
+        jobId: args.jobId,
+        step,
+        batchNumber,
+        elapsedMs: Date.now() - batchStart,
+        error: message,
+        message: "update_player_stats_player_failed",
+      });
+    }
+
+    const endIndex = startIndex + 1;
+    const done = endIndex >= playerIds.length;
+    const deferredPlayerIds =
+      summary.errors.length > 0 ? [playerId] : [];
+
+    await ctx.db.patch(args.jobId, {
+      currentStep: step,
+      statsPlayerCursor: endIndex,
+      playersUpdated: (job.playersUpdated ?? 0) + summary.playersUpdated,
+      skippedNoChange: (job.skippedNoChange ?? 0) + summary.skippedNoChange,
+      errors: [...(job.errors ?? []), ...summary.errors],
+      batchesProcessed: batchNumber,
+      contextReads: (job.contextReads ?? 0) + 1,
+    });
+
+    const lastProgressWriteRow = await maybeWriteJobProgress(ctx, {
+      jobId: args.jobId,
+      importId: job.importId,
+      step,
+      progressMessage: progressMessageForStep(step, {
+        current: endIndex,
+        total: playerIds.length,
+      }),
+      progressCurrent: endIndex,
+      progressTotal: playerIds.length,
+      lastProgressWriteRow: job.lastProgressWriteRow ?? 0,
+      reason: done ? "step_complete" : "interval",
+    });
+    await ctx.db.patch(args.jobId, { lastProgressWriteRow });
+
+    logImportPipelineEvent({
+      importId: job.importId,
+      jobId: args.jobId,
+      step,
+      batchNumber,
+      rowsInBatch: 1,
+      elapsedMs: Date.now() - batchStart,
+      message: done ? "update_player_stats_batch_done" : "update_player_stats_batch",
+    });
+
+    if (!done) {
+      await ctx.scheduler.runAfter(0, internal.importProcessing.processOneImportStatsPlayer, {
+        jobId: args.jobId,
+      });
+      return { continuing: true, playersProcessed: 1, cursor: endIndex };
+    }
+
+    if (playerIds.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.memberManagement.markPlayersRecentlyActiveInternal,
+        { playerIds },
+      );
+    }
+    if (deferredPlayerIds.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.helpers.eventDrivenRebuilds.scheduleStatsForAffectedPlayers,
+        { playerIds: deferredPlayerIds },
+      );
+    }
+
+    await completePipelineStepAndContinue(ctx, args.jobId, step);
+    return { completedStep: step, cursor: endIndex };
+  },
+});
+
 export const processImportBatch = internalMutation({
   args: { jobId: v.id("importProcessingJobs") },
   handler: async (ctx, args) => {
@@ -1131,75 +1241,10 @@ export const processImportBatch = internalMutation({
       }
 
       case "update_player_stats": {
-        let playerIds = job.affectedPlayerIds;
-        if (!playerIds || playerIds.length === 0) {
-          playerIds = await collectAffectedPlayerIdsForImport(ctx, job.importId);
-          await ctx.db.patch(args.jobId, { affectedPlayerIds: playerIds });
-        }
-
-        const startIndex = job.statsPlayerCursor ?? 0;
-        const endIndex = Math.min(
-          startIndex + IMPORT_STATS_PLAYER_BATCH_SIZE,
-          playerIds.length,
-        );
-        const batchPlayerIds = playerIds.slice(startIndex, endIndex);
-
-        const summary = await updateStatsForPlayers(ctx, batchPlayerIds);
-
-        const done = endIndex >= playerIds.length;
-        await ctx.db.patch(args.jobId, {
-          currentStep: step,
-          statsPlayerCursor: endIndex,
-          playersUpdated: (job.playersUpdated ?? 0) + summary.playersUpdated,
-          skippedNoChange: (job.skippedNoChange ?? 0) + summary.skippedNoChange,
-          errors: [...(job.errors ?? []), ...summary.errors],
-        });
-
-        lastProgressWriteRow = await maybeWriteJobProgress(ctx, {
+        await ctx.scheduler.runAfter(0, internal.importProcessing.processOneImportStatsPlayer, {
           jobId: args.jobId,
-          importId: job.importId,
-          step,
-          progressMessage: progressMessageForStep(step, {
-            current: endIndex,
-            total: playerIds.length,
-          }),
-          progressCurrent: endIndex,
-          progressTotal: playerIds.length,
-          lastProgressWriteRow,
-          reason: done ? "step_complete" : "interval",
         });
-
-        logImportPipelineEvent({
-          importId: job.importId,
-          jobId: args.jobId,
-          step,
-          batchNumber,
-          rowsInBatch: batchPlayerIds.length,
-          elapsedMs: Date.now() - batchStart,
-          message: done ? "update_player_stats_batch_done" : "update_player_stats_batch",
-        });
-
-        if (!done) {
-          await ctx.scheduler.runAfter(0, internal.importProcessing.processImportBatch, {
-            jobId: args.jobId,
-          });
-          return {
-            continuing: true,
-            step,
-            playersProcessed: batchPlayerIds.length,
-          };
-        }
-
-        if (playerIds.length > 0) {
-          await ctx.scheduler.runAfter(
-            0,
-            internal.memberManagement.markPlayersRecentlyActiveInternal,
-            { playerIds },
-          );
-        }
-
-        await completePipelineStepAndContinue(ctx, args.jobId, step);
-        return { completedStep: step };
+        return { delegated: true, step };
       }
 
       case "sync_match_data":

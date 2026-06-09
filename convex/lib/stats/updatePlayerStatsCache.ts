@@ -3,7 +3,7 @@ import type { Doc, Id } from "../../_generated/dataModel.d.ts";
 import { fetchThirdPartyResultsForPlayer } from "../../helpers/playerResults";
 import { isYuniteImport } from "../importSource";
 import { computeInternalPlayerStats } from "./computeInternalPlayerStats";
-import { syncInternalEventParticipation } from "./syncInternalEventParticipation";
+import { syncInternalEventParticipationFromResults } from "./syncInternalEventParticipation";
 import {
   STATS_DISPLAY_MIN_EVENTS,
   STATS_REEVAL_MIN_EVENTS,
@@ -56,16 +56,16 @@ function cacheFieldsEqual(
   );
 }
 
-export async function computePlayerStatsCacheFields(
+export async function computePlayerStatsCacheFieldsFromResults(
   ctx: MutationCtx,
   playerId: Id<"players">,
+  thirdPartyResults: Doc<"thirdPartyResults">[],
 ): Promise<PlayerStatsCacheFields | null> {
   const player = await ctx.db.get(playerId);
   if (!player) {
     return null;
   }
 
-  const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
   const importCache: ImportRecordCache = new Map();
   const matchedYuniteResults = [];
   for (const result of thirdPartyResults) {
@@ -148,20 +148,33 @@ export async function computePlayerStatsCacheFields(
   };
 }
 
+export async function computePlayerStatsCacheFields(
+  ctx: MutationCtx,
+  playerId: Id<"players">,
+): Promise<PlayerStatsCacheFields | null> {
+  const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
+  return computePlayerStatsCacheFieldsFromResults(ctx, playerId, thirdPartyResults);
+}
+
 export type UpsertPlayerStatsCacheResult = {
   action: "inserted" | "updated" | "skipped" | "deleted" | "none";
 };
 
-export async function upsertPlayerStatsCache(
+export async function upsertPlayerStatsCacheFromResults(
   ctx: MutationCtx,
   playerId: Id<"players">,
+  thirdPartyResults: Doc<"thirdPartyResults">[],
 ): Promise<UpsertPlayerStatsCacheResult> {
   const existing = await ctx.db
     .query("playerStatsCache")
     .withIndex("by_player", (q) => q.eq("playerId", playerId))
     .first();
 
-  const next = await computePlayerStatsCacheFields(ctx, playerId);
+  const next = await computePlayerStatsCacheFieldsFromResults(
+    ctx,
+    playerId,
+    thirdPartyResults,
+  );
 
   if (!next) {
     if (existing) {
@@ -182,6 +195,14 @@ export async function upsertPlayerStatsCache(
 
   await ctx.db.insert("playerStatsCache", next);
   return { action: "inserted" };
+}
+
+export async function upsertPlayerStatsCache(
+  ctx: MutationCtx,
+  playerId: Id<"players">,
+): Promise<UpsertPlayerStatsCacheResult> {
+  const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
+  return upsertPlayerStatsCacheFromResults(ctx, playerId, thirdPartyResults);
 }
 
 export async function removeTierReEvaluationCacheForPlayer(
@@ -210,9 +231,13 @@ export async function updateStatsForPlayer(
   ctx: MutationCtx,
   playerId: Id<"players">,
 ): Promise<UpdatePlayerStatsOutcome> {
-  await syncInternalEventParticipation(ctx, playerId);
-
-  const statsCache = await upsertPlayerStatsCache(ctx, playerId);
+  const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
+  await syncInternalEventParticipationFromResults(ctx, playerId, thirdPartyResults);
+  const statsCache = await upsertPlayerStatsCacheFromResults(
+    ctx,
+    playerId,
+    thirdPartyResults,
+  );
   const cacheRow = await ctx.db
     .query("playerStatsCache")
     .withIndex("by_player", (q) => q.eq("playerId", playerId))

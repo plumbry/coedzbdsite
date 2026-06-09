@@ -1,20 +1,15 @@
 import type { MutationCtx } from "../../_generated/server";
-import type { Id } from "../../_generated/dataModel.d.ts";
+import type { Doc, Id } from "../../_generated/dataModel.d.ts";
 import { fetchThirdPartyResultsForPlayer } from "../../helpers/playerResults";
 import { isYuniteImport } from "../importSource";
 import { getCachedImportRecord, type ImportRecordCache } from "./importRecordCache";
 
 /** Recompute `eventsPlayedCount` (Yunite imports only) and `lastEventDate` for a player. */
-export async function syncInternalEventParticipation(
+export async function syncInternalEventParticipationFromResults(
   ctx: MutationCtx,
   playerId: Id<"players">,
+  thirdPartyResults: Doc<"thirdPartyResults">[],
 ) {
-  const player = await ctx.db.get(playerId);
-  if (!player) {
-    return;
-  }
-
-  const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
   const importCache: ImportRecordCache = new Map();
   const yuniteImportIds = new Set<string>();
   let lastEventDate: string | undefined;
@@ -37,4 +32,17 @@ export async function syncInternalEventParticipation(
     eventsPlayedCount: yuniteImportIds.size,
     lastEventDate,
   });
+}
+
+export async function syncInternalEventParticipation(
+  ctx: MutationCtx,
+  playerId: Id<"players">,
+) {
+  const player = await ctx.db.get(playerId);
+  if (!player) {
+    return;
+  }
+
+  const thirdPartyResults = await fetchThirdPartyResultsForPlayer(ctx, playerId);
+  await syncInternalEventParticipationFromResults(ctx, playerId, thirdPartyResults);
 }
