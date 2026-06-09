@@ -129,17 +129,39 @@ export default function PotentialEventCalendarManager({
       .sort((a, b) => a.title.localeCompare(b.title));
   }, [entries, selectedDate]);
 
-  const upcomingEntries = useMemo(() => {
-    if (!entries) return [];
+  const { upcomingEntries, upcomingTotal } = useMemo(() => {
+    if (!entries) return { upcomingEntries: [], upcomingTotal: 0 };
     const today = toDateInputValue(new Date());
-    return entries
+    const upcoming = entries
       .filter((entry) => entryEndDate(entry) >= today && entry.status !== "cancelled")
-      .slice(0, 8);
+      .sort((a, b) => {
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return dateCompare;
+        return a.title.localeCompare(b.title);
+      });
+    return {
+      upcomingEntries: upcoming.slice(0, 3),
+      upcomingTotal: upcoming.length,
+    };
   }, [entries]);
 
   const openCreateDialog = () => {
     setEditingEntry(null);
     setDialogOpen(true);
+  };
+
+  const selectDate = (date: Date) => {
+    setSelectedDate(date);
+    if (!isSameMonth(date, month)) {
+      setMonth(startOfMonth(date));
+    }
+  };
+
+  const handleDateSelect = (date: Date) => {
+    selectDate(date);
+    if (canEdit) {
+      openCreateDialog();
+    }
   };
 
   const openEditDialog = (entry: CalendarEntry) => {
@@ -177,7 +199,7 @@ export default function PotentialEventCalendarManager({
               </Button>
             )}
             {canEdit && (
-              <Button size="sm" onClick={openCreateDialog}>
+              <Button size="sm" onClick={() => openCreateDialog()}>
                 <Plus className="mr-2 h-4 w-4" />
                 Add event
               </Button>
@@ -233,7 +255,7 @@ export default function PotentialEventCalendarManager({
               month={month}
               onMonthChange={setMonth}
               selected={selectedDate}
-              onSelect={setSelectedDate}
+              onSelect={(date) => date && handleDateSelect(date)}
               className="p-0"
               modifiers={{
                 hasEvent: (date) => (entriesByDay.get(toDateInputValue(date))?.length ?? 0) > 0,
@@ -296,7 +318,7 @@ export default function PotentialEventCalendarManager({
                       <button
                         type="button"
                         className="text-primary underline-offset-4 hover:underline"
-                        onClick={openCreateDialog}
+                        onClick={() => openCreateDialog()}
                       >
                         Add one
                       </button>
@@ -319,47 +341,68 @@ export default function PotentialEventCalendarManager({
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base font-medium">
-                <CalendarDays className="h-4 w-4" />
-                Upcoming
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between text-sm font-medium">
+                <span className="flex items-center gap-1.5">
+                  <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                  Upcoming
+                </span>
+                {upcomingTotal > 3 && (
+                  <span className="text-xs font-normal text-muted-foreground">
+                    next 3 of {upcomingTotal}
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="pt-0">
               {upcomingEntries.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No upcoming events this month.</p>
+                <p className="text-xs text-muted-foreground">No upcoming events.</p>
               ) : (
-                upcomingEntries.map((entry) => (
-                  <div
-                    key={entry._id}
-                    className="flex items-start justify-between gap-3 rounded-md border p-3"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium">{entry.title}</p>
-                        <Badge variant={statusBadgeVariant(entry.status)}>
-                          {entry.status ?? "tentative"}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {formatEntryDateRange(entry)}
-                        {entry.time ? ` · ${entry.time}` : ""}
-                      </p>
-                    </div>
-                    {canEdit && (
-                      <Button
+                <ul className="divide-y">
+                  {upcomingEntries.map((entry) => (
+                    <li
+                      key={entry._id}
+                      className="flex items-center gap-2 py-1.5 first:pt-0 last:pb-0"
+                    >
+                      <span
+                        className={cn(
+                          "size-1.5 shrink-0 rounded-full",
+                          entry.status === "confirmed"
+                            ? "bg-primary"
+                            : "bg-muted-foreground",
+                        )}
+                        title={entry.status ?? "tentative"}
+                      />
+                      <button
                         type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0"
-                        onClick={() => openEditDialog(entry)}
-                        aria-label={`Edit ${entry.title}`}
+                        className="min-w-0 flex-1 truncate text-left text-xs hover:underline"
+                        onClick={() => {
+                          setSelectedDate(new Date(`${entry.date}T12:00:00`));
+                          setMonth(startOfMonth(new Date(`${entry.date}T12:00:00`)));
+                        }}
                       >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))
+                        <span className="tabular-nums text-muted-foreground">
+                          {format(new Date(`${entry.date}T12:00:00`), "MMM d")}
+                          {entry.time ? ` ${entry.time}` : ""}
+                        </span>
+                        <span className="mx-1 text-muted-foreground">·</span>
+                        <span>{entry.title}</span>
+                      </button>
+                      {canEdit && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          onClick={() => openEditDialog(entry)}
+                          aria-label={`Edit ${entry.title}`}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
             </CardContent>
           </Card>
@@ -370,7 +413,8 @@ export default function PotentialEventCalendarManager({
         month={month}
         selectedDate={selectedDate}
         entriesByDay={entriesByDay}
-        onSelectDate={setSelectedDate}
+        onDayClick={handleDateSelect}
+        onSelectDate={selectDate}
         onSelectEntry={openEditDialog}
         canEdit={canEdit}
       />
@@ -422,6 +466,7 @@ function MonthlyCalendarGrid({
   month,
   selectedDate,
   entriesByDay,
+  onDayClick,
   onSelectDate,
   onSelectEntry,
   canEdit,
@@ -429,6 +474,7 @@ function MonthlyCalendarGrid({
   month: Date;
   selectedDate: Date | undefined;
   entriesByDay: Map<string, CalendarEntry[]>;
+  onDayClick: (date: Date) => void;
   onSelectDate: (date: Date) => void;
   onSelectEntry: (entry: CalendarEntry) => void;
   canEdit: boolean;
@@ -472,15 +518,24 @@ function MonthlyCalendarGrid({
                 return (
                   <div
                     key={dayKey}
+                    role={canEdit ? "button" : undefined}
+                    tabIndex={canEdit ? 0 : undefined}
+                    title={canEdit ? "Add event on this day" : undefined}
+                    onClick={() => onDayClick(day)}
+                    onKeyDown={(e) => {
+                      if (canEdit && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        onDayClick(day);
+                      }
+                    }}
                     className={cn(
                       "flex min-h-28 flex-col border-b border-r p-1.5 last:border-r-0",
                       !inMonth && "bg-muted/20",
                       isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/30",
+                      canEdit && "cursor-pointer hover:bg-muted/30",
                     )}
                   >
-                    <button
-                      type="button"
-                      onClick={() => onSelectDate(day)}
+                    <span
                       className={cn(
                         "mb-1 flex size-7 shrink-0 items-center justify-center self-start rounded-full text-sm",
                         isToday(day) && "bg-primary font-semibold text-primary-foreground",
@@ -489,14 +544,15 @@ function MonthlyCalendarGrid({
                       )}
                     >
                       {format(day, "d")}
-                    </button>
+                    </span>
                     <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
                       {visibleEntries.map((entry) => (
                         <button
                           key={`${dayKey}-${entry._id}`}
                           type="button"
                           title={formatGridEventLabel(entry)}
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             onSelectDate(day);
                             if (canEdit) onSelectEntry(entry);
                           }}
@@ -512,7 +568,10 @@ function MonthlyCalendarGrid({
                       {hiddenCount > 0 && (
                         <button
                           type="button"
-                          onClick={() => onSelectDate(day)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDayClick(day);
+                          }}
                           className="truncate px-1 text-left text-[11px] text-muted-foreground hover:text-foreground"
                         >
                           +{hiddenCount} more
