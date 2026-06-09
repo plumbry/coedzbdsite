@@ -53,7 +53,11 @@ export default function DataMaintenanceTools() {
   );
   const activeStatsRebuild = useQuery(api.playerStatsRebuild.getActiveRebuildJob, {});
   const activeCacheRebuild = useQuery(api.playerStatsCache.getActiveCacheRebuildJob, {});
+  const statsCacheStatus = useQuery(api.playerStatsCache.getStatsCacheStatus, {});
   const rebuildAllPlayerStatsCache = useMutation(api.playerStatsCache.rebuildAllPlayerStatsCache);
+  const recalculateAffectedPlayerStatsCache = useMutation(
+    api.playerStatsCache.recalculateAffectedPlayerStatsCache,
+  );
   const rebuildTierReevaluation = useMutation(api.playerStatsCache.rebuildTierReevaluationForEligible);
 
   const [isDeletingDiscordOnly, setIsDeletingDiscordOnly] = useState(false);
@@ -285,6 +289,28 @@ export default function DataMaintenanceTools() {
             <PlayerStatsRebuildProgress className="text-xs text-muted-foreground" />
           )}
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              disabled={
+                !!activeCacheRebuild || statsCacheStatus?.recommendation !== "incremental"
+              }
+              onClick={async () => {
+                try {
+                  const result = await recalculateAffectedPlayerStatsCache({});
+                  if (result.started) {
+                    toast.success(result.message);
+                  } else {
+                    toast.info(result.message);
+                  }
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error ? error.message : "Failed to recalculate affected players",
+                  );
+                }
+              }}
+            >
+              Recalculate affected players
+            </Button>
             <PlayerStatsRebuildButton
               size="sm"
               label="Rebuild all player stats"
@@ -311,10 +337,15 @@ export default function DataMaintenanceTools() {
               disabled={!!activeCacheRebuild}
               onClick={() =>
                 setPendingConfirm({
-                  title: "Rebuild all player stats cache?",
+                  title: "Emergency: rebuild all player stats cache?",
                   description:
-                    "Rebuilds per-player stats cache rows for every matched import result. Runs in batches and only touches players with imported data.",
-                  confirmLabel: "Rebuild cache",
+                    statsCacheStatus?.recommendation === "none"
+                      ? "The stats cache status check reports the cache is current. Only use a full rebuild after formula/schema changes or if you suspect widespread cache corruption.\n\nRebuilds every matched import player in batches."
+                      : statsCacheStatus?.recommendationReason ??
+                        "Rebuilds per-player stats cache rows for every matched import result.",
+                  confirmLabel: "Emergency full rebuild",
+                  variant:
+                    statsCacheStatus?.recommendation === "none" ? "destructive" : "default",
                   onConfirm: async () => {
                     const result = await rebuildAllPlayerStatsCache({ confirm: true });
                     toast.success(
@@ -326,7 +357,7 @@ export default function DataMaintenanceTools() {
                 })
               }
             >
-              Rebuild stats cache
+              Emergency: full stats cache rebuild
             </Button>
             <Button
               size="sm"

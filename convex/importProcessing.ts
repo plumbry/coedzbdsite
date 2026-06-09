@@ -9,7 +9,19 @@ import { internal } from "./_generated/api";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin, getDisplayName } from "./auth_helpers";
-import { rematchImportResults, collectAffectedPlayerIdsForImport } from "./lib/importRematch";
+import {
+  countImportMatchStatus,
+  rematchImportResults,
+  rematchImportResultsBatch,
+  collectAffectedPlayerIdsForImport,
+} from "./lib/importRematch";
+import {
+  IMPORT_ROW_BATCH_SIZE,
+  isApiPipelineStep,
+  shouldWriteImportProgress,
+  type ImportProgressWriteReason,
+} from "./lib/importProcessingBatch";
+import { logImportPipelineEvent } from "./lib/importPipelineLogging";
 import { appendLeaderboardUrlToEvent } from "./lib/eventLeaderboardLinks";
 import { updateStatsForPlayers } from "./lib/stats/updatePlayerStatsCache";
 import { refreshEventCache, refreshEventCacheForImport } from "./lib/eventCache";
@@ -25,12 +37,275 @@ import {
   postStepStatus,
   progressMessageForStep,
   retryDelayMsForRateLimit,
+  statusForStep,
   type ImportPipelineStep,
 } from "./lib/importPipeline";
 import {
   importIsEligibleForBatchQueue,
   resolveNextStepForImport,
 } from "./lib/resolveImportPipelineStep";
+
+async function loadJobContext(ctx: MutationCtx, jobId: Id<"importProcessingJobs">) {
+  const job = await ctx.db.get(jobId);
+  if (!job) {
+    return null;
+  }
+  const imp = await ctx.db.get(job.importId);
+  if (!imp) {
+    return null;
+  }
+  return { job, imp };
+}
+
+async function patchJobMetrics(
+  ctx: MutationCtx,
+  jobId: Id<"importProcessingJobs">,
+  patch: {
+    contextReads?: number;
+    batchesProcessed?: number;
+    progressWrites?: number;
+    rowsProcessed?: number;
+  },
+) {
+  const job = await ctx.db.get(jobId);
+  if (!job) {
+    return;
+  }
+  await ctx.db.patch(jobId, {
+    contextReads: (job.contextReads ?? 0) + (patch.contextReads ?? 0),
+    batchesProcessed: (job.batchesProcessed ?? 0) + (patch.batchesProcessed ?? 0),
+    progressWrites: (patch.progressWrites ?? 0) > 0
+      ? (job.progressWrites ?? 0) + (patch.progressWrites ?? 0)
+      : job.progressWrites,
+    rowsProcessed:
+      patch.rowsProcessed != null
+        ? (job.rowsProcessed ?? 0) + patch.rowsProcessed
+        : job.rowsProcessed,
+  });
+}
+
+async function maybeWriteJobProgress(
+  ctx: MutationCtx,
+  args: {
+    jobId: Id<"importProcessingJobs">;
+    importId: Id<"thirdPartyImports">;
+    step: ImportPipelineStep;
+    progressMessage: string;
+    progressCurrent?: number;
+    progressTotal?: number;
+    pipelineStatus?: string;
+    lastProgressWriteRow: number;
+    reason: ImportProgressWriteReason;
+  },
+): Promise<number> {
+  const current = args.progressCurrent ?? 0;
+  const total = args.progressTotal ?? 0;
+  if (
+    !shouldWriteImportProgress({
+      current,
+      total,
+      lastWriteRow: args.lastProgressWriteRow,
+      reason: args.reason,
+    })
+  ) {
+    return args.lastProgressWriteRow;
+  }
+
+  const now = Date.now();
+  await ctx.db.patch(args.jobId, {
+    currentStep: args.step,
+    progressMessage: args.progressMessage,
+    progressCurrent: args.progressCurrent,
+    progressTotal: args.progressTotal,
+    lastProgressAt: now,
+    lastProgressWriteRow: current,
+  });
+
+  if (args.pipelineStatus) {
+    await ctx.db.patch(args.importId, {
+      pipelineStatus: args.pipelineStatus,
+      pipelineStatusUpdatedAt: now,
+    });
+  }
+
+  await patchJobMetrics(ctx, args.jobId, { progressWrites: 1 });
+  return current;
+}
+
+async function schedulePipelineContinuation(
+  ctx: MutationCtx,
+  jobId: Id<"importProcessingJobs">,
+  nextStep: ImportPipelineStep | null,
+  delayMs = 0,
+) {
+  if (nextStep && isApiPipelineStep(nextStep)) {
+    await ctx.scheduler.runAfter(
+      delayMs,
+      internal.importProcessingActions.runProcessingStep,
+      { jobId },
+    );
+    return;
+  }
+
+  await ctx.scheduler.runAfter(delayMs, internal.importProcessing.processImportBatch, {
+    jobId,
+  });
+}
+
+async function completePipelineStepAndContinue(
+  ctx: MutationCtx,
+  jobId: Id<"importProcessingJobs">,
+  completedStep: ImportPipelineStep,
+) {
+  const context = await loadJobContext(ctx, jobId);
+  if (!context || context.job.status !== "running") {
+    return;
+  }
+
+  const { job, imp } = context;
+  const priorSteps = job.completedSteps ?? [];
+  if (priorSteps.includes(completedStep)) {
+    logImportPipelineEvent({
+      importId: job.importId,
+      jobId,
+      step: completedStep,
+      message: "step_already_completed_skipping_duplicate",
+    });
+    return;
+  }
+  const completedSteps = [...priorSteps, completedStep];
+  const pipelineStatus = postStepStatus(imp, completedStep);
+
+  await ctx.db.patch(jobId, {
+    completedSteps,
+    stepRowCursor: undefined,
+    statsPlayerCursor: undefined,
+    lastProgressWriteRow: undefined,
+    currentStep: undefined,
+    progressCurrent: undefined,
+    progressTotal: undefined,
+  });
+
+  await ctx.db.patch(job.importId, {
+    pipelineStatus,
+    pipelineStatusUpdatedAt: Date.now(),
+  });
+
+  const nextStep = await resolveNextStepForImport(
+    ctx,
+    { ...imp, pipelineStatus },
+    job.forceReprocess,
+    completedSteps,
+  );
+
+  if (!nextStep) {
+    await finalizeImportJob(ctx, {
+      jobId,
+      status: "completed",
+      pipelineStatus:
+        imp.pipelineStatus === "Finalized" ? "Finalized" : "Results Generated",
+    });
+    return;
+  }
+
+  const delayMs = completedStep === "sync_match_data" ? 1000 : 0;
+  await schedulePipelineContinuation(ctx, jobId, nextStep, delayMs);
+}
+
+async function updateTierEvalForPlayerIfEligible(
+  ctx: MutationCtx,
+  playerId: Id<"players">,
+) {
+  const cacheRow = await ctx.db
+    .query("playerStatsCache")
+    .withIndex("by_player", (q) => q.eq("playerId", playerId))
+    .first();
+
+  if (!cacheRow?.reevaluationEligible) {
+    const existing = await ctx.db
+      .query("tierReEvaluationCache")
+      .withIndex("by_player", (q) => q.eq("playerId", playerId))
+      .first();
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+    return false;
+  }
+
+  const medians = await ctx.db.query("tierMediansCache").first();
+  if (!medians) {
+    return false;
+  }
+
+  await ctx.runMutation(internal.tierReEvaluationBatched.processBatch, {
+    batchNumber: 0,
+    playerIds: [playerId],
+  });
+  return true;
+}
+
+type FinalizeJobArgs = {
+  jobId: Id<"importProcessingJobs">;
+  status: "completed" | "failed" | "waiting" | "running";
+  errorMessage?: string;
+  errorCode?: string;
+  pipelineStatus?: string;
+  resumeAt?: number;
+};
+
+async function finalizeImportJob(ctx: MutationCtx, args: FinalizeJobArgs) {
+  const job = await ctx.db.get(args.jobId);
+  if (!job) {
+    return;
+  }
+
+  const now = Date.now();
+  const jobPatch: Record<string, unknown> = {
+    status: args.status,
+    lastProgressAt: now,
+    errorMessage: args.errorMessage,
+    errorCode: args.errorCode,
+    resumeAt: args.resumeAt,
+    progressMessage:
+      args.errorMessage ??
+      (args.status === "completed" ? "Import processing complete." : job.progressMessage),
+  };
+  if (args.status !== "running") {
+    jobPatch.completedAt = now;
+  }
+  await ctx.db.patch(args.jobId, jobPatch);
+
+  const importPatch: Record<string, unknown> = {
+    pipelineStatusUpdatedAt: now,
+  };
+  if (args.pipelineStatus) {
+    importPatch.pipelineStatus = args.pipelineStatus;
+  }
+  if (args.errorMessage) {
+    importPatch.pipelineError = args.errorMessage;
+    importPatch.pipelineErrorCode = args.errorCode;
+  }
+  if (args.status === "completed" && args.pipelineStatus === "Finalized") {
+    importPatch.finalizedAt = now;
+    importPatch.finalizedBy = job.startedBy;
+    importPatch.pipelineLocked = true;
+    importPatch.dataFullyCached = true;
+    importPatch.pipelineError = undefined;
+    importPatch.pipelineErrorCode = undefined;
+  }
+
+  await ctx.db.patch(job.importId, importPatch);
+
+  if (args.status === "completed" && args.pipelineStatus === "Finalized") {
+    await refreshEventCacheForImport(ctx, job.importId);
+  }
+
+  if (args.status === "completed" || args.status === "failed" || args.status === "waiting") {
+    console.log(
+      `[importProcessing] job ${args.jobId} ${args.status}: rowsProcessed=${job.rowsProcessed ?? 0} batchesProcessed=${job.batchesProcessed ?? 0} progressWrites=${job.progressWrites ?? 0} contextReads=${job.contextReads ?? 0}`,
+    );
+  }
+}
 
 async function getUserFromIdentity(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -298,6 +573,34 @@ export const startProcessImport = mutation({
   },
 });
 
+export const cancelRunningImportJob = mutation({
+  args: {
+    importId: v.id("thirdPartyImports"),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const running = await ctx.db
+      .query("importProcessingJobs")
+      .withIndex("by_import", (q) => q.eq("importId", args.importId))
+      .filter((q) => q.eq(q.field("status"), "running"))
+      .first();
+    if (!running) {
+      return { cancelled: false };
+    }
+
+    await ctx.db.patch(running._id, {
+      status: "cancelled",
+      completedAt: Date.now(),
+      lastProgressAt: Date.now(),
+      progressMessage: args.reason ?? "Cancelled by admin.",
+    });
+
+    return { cancelled: true, jobId: running._id };
+  },
+});
+
 export const unlockImport = mutation({
   args: {
     importId: v.id("thirdPartyImports"),
@@ -461,50 +764,371 @@ export const completeJob = internalMutation({
     resumeAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const job = await ctx.db.get(args.jobId);
-    if (!job) {
-      return;
+    await finalizeImportJob(ctx, args);
+  },
+});
+
+export const completeApiPipelineStep = internalMutation({
+  args: {
+    jobId: v.id("importProcessingJobs"),
+    completedStep: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await completePipelineStepAndContinue(
+      ctx,
+      args.jobId,
+      args.completedStep as ImportPipelineStep,
+    );
+  },
+});
+
+export const processImportBatch = internalMutation({
+  args: { jobId: v.id("importProcessingJobs") },
+  handler: async (ctx, args) => {
+    const batchStart = Date.now();
+    const context = await loadJobContext(ctx, args.jobId);
+    if (!context || context.job.status !== "running") {
+      return { done: true, reason: "job_not_running" as const };
     }
 
-    const now = Date.now();
-    const jobPatch: Record<string, unknown> = {
-      status: args.status,
-      lastProgressAt: now,
-      errorMessage: args.errorMessage,
-      errorCode: args.errorCode,
-      resumeAt: args.resumeAt,
-      progressMessage:
-        args.errorMessage ??
-        (args.status === "completed" ? "Import processing complete." : job.progressMessage),
-    };
-    if (args.status !== "running") {
-      jobPatch.completedAt = now;
-    }
-    await ctx.db.patch(args.jobId, jobPatch);
+    let { job, imp } = context;
+    const batchNumber = (job.batchesProcessed ?? 0) + 1;
+    await patchJobMetrics(ctx, args.jobId, { contextReads: 1, batchesProcessed: 1 });
 
-    const importPatch: Record<string, unknown> = {
-      pipelineStatusUpdatedAt: now,
-    };
-    if (args.pipelineStatus) {
-      importPatch.pipelineStatus = args.pipelineStatus;
-    }
-    if (args.errorMessage) {
-      importPatch.pipelineError = args.errorMessage;
-      importPatch.pipelineErrorCode = args.errorCode;
-    }
-    if (args.status === "completed" && args.pipelineStatus === "Finalized") {
-      importPatch.finalizedAt = now;
-      importPatch.finalizedBy = job.startedBy;
-      importPatch.pipelineLocked = true;
-      importPatch.dataFullyCached = true;
-      importPatch.pipelineError = undefined;
-      importPatch.pipelineErrorCode = undefined;
+    if (job.resumeAt && Date.now() < job.resumeAt) {
+      const delay = job.resumeAt - Date.now();
+      await ctx.scheduler.runAfter(delay, internal.importProcessingActions.runProcessingStep, {
+        jobId: args.jobId,
+      });
+      return { waiting: true, reason: "resume_scheduled" as const };
     }
 
-    await ctx.db.patch(job.importId, importPatch);
+    const step = await resolveNextStepForImport(
+      ctx,
+      imp,
+      job.forceReprocess,
+      job.completedSteps ?? [],
+    );
 
-    if (args.status === "completed" && args.pipelineStatus === "Finalized") {
-      await refreshEventCacheForImport(ctx, job.importId);
+    if (!step) {
+      await finalizeImportJob(ctx, {
+        jobId: args.jobId,
+        status: "completed",
+        pipelineStatus:
+          imp.pipelineStatus === "Finalized" ? "Finalized" : "Results Generated",
+      });
+      return { done: true, reason: "no_steps_remaining" as const };
+    }
+
+    if (isApiPipelineStep(step)) {
+      await ctx.scheduler.runAfter(0, internal.importProcessingActions.runProcessingStep, {
+        jobId: args.jobId,
+      });
+      return { delegated: true, step };
+    }
+
+    const enteringStep = job.currentStep !== step;
+    let lastProgressWriteRow = job.lastProgressWriteRow ?? 0;
+
+    if (enteringStep) {
+      lastProgressWriteRow = await maybeWriteJobProgress(ctx, {
+        jobId: args.jobId,
+        importId: job.importId,
+        step,
+        progressMessage: progressMessageForStep(step),
+        pipelineStatus: statusForStep(step),
+        lastProgressWriteRow,
+        reason: "step_start",
+      });
+    }
+
+    try {
+    switch (step) {
+      case "match_players": {
+        const startIndex = job.stepRowCursor ?? 0;
+        const batch = await rematchImportResultsBatch(
+          ctx,
+          job.importId,
+          startIndex,
+          IMPORT_ROW_BATCH_SIZE,
+          job.affectedPlayerIds ?? [],
+        );
+
+        await ctx.db.patch(args.jobId, {
+          currentStep: step,
+          stepRowCursor: batch.nextRowIndex,
+          affectedPlayerIds: batch.affectedPlayerIds,
+          skippedNoChange: (job.skippedNoChange ?? 0) + batch.skippedNoChange,
+        });
+
+        lastProgressWriteRow = await maybeWriteJobProgress(ctx, {
+          jobId: args.jobId,
+          importId: job.importId,
+          step,
+          progressMessage: progressMessageForStep(step, {
+            current: batch.nextRowIndex,
+            total: batch.totalRows,
+          }),
+          progressCurrent: batch.nextRowIndex,
+          progressTotal: batch.totalRows,
+          lastProgressWriteRow,
+          reason: batch.done ? "step_complete" : "interval",
+        });
+
+        await patchJobMetrics(ctx, args.jobId, {
+          rowsProcessed: batch.batchRowsProcessed,
+        });
+
+        logImportPipelineEvent({
+          importId: job.importId,
+          jobId: args.jobId,
+          step,
+          batchNumber,
+          rowsInBatch: batch.batchRowsProcessed,
+          elapsedMs: Date.now() - batchStart,
+          message: batch.done ? "match_players_batch_done" : "match_players_batch",
+        });
+
+        if (!batch.done) {
+          await ctx.scheduler.runAfter(0, internal.importProcessing.processImportBatch, {
+            jobId: args.jobId,
+          });
+          return {
+            continuing: true,
+            step,
+            rowsProcessed: batch.batchRowsProcessed,
+          };
+        }
+
+        const counts = await countImportMatchStatus(ctx, job.importId);
+        await ctx.db.patch(job.importId, {
+          playersMatched: counts.playersMatched,
+          playersUnmatched: counts.playersUnmatched,
+        });
+
+        if (counts.playersUnmatched > 0) {
+          await finalizeImportJob(ctx, {
+            jobId: args.jobId,
+            status: "waiting",
+            pipelineStatus: "Player Matching Required",
+            errorMessage: `${counts.playersUnmatched} players could not be matched. Review unmatched players, then run Process Import again.`,
+            errorCode: "unmatched_players",
+          });
+          return { waiting: true, reason: "unmatched_players" as const };
+        }
+
+        await completePipelineStepAndContinue(ctx, args.jobId, step);
+        return { completedStep: step };
+      }
+
+      case "link_event": {
+        const linkResult = await tryAutoLinkImport(ctx, job.importId);
+        imp = (await ctx.db.get(job.importId))!;
+
+        if (!linkResult.linked) {
+          if (linkResult.reason === "ambiguous") {
+            await finalizeImportJob(ctx, {
+              jobId: args.jobId,
+              status: "waiting",
+              pipelineStatus: "Event Link Required",
+              errorMessage: `Event link failed because multiple events matched this import (${linkResult.candidateCount}). Link the event manually.`,
+              errorCode: "event_link_ambiguous",
+            });
+            return { waiting: true, reason: "event_link_ambiguous" as const };
+          }
+          await finalizeImportJob(ctx, {
+            jobId: args.jobId,
+            status: "waiting",
+            pipelineStatus: "Event Link Required",
+            errorMessage:
+              "No matching event was found for this import. Link the event manually, then run Process Import again.",
+            errorCode: "event_link_missing",
+          });
+          return { waiting: true, reason: "event_link_missing" as const };
+        }
+
+        await maybeWriteJobProgress(ctx, {
+          jobId: args.jobId,
+          importId: job.importId,
+          step,
+          progressMessage: progressMessageForStep(step),
+          lastProgressWriteRow,
+          reason: "step_complete",
+        });
+        await completePipelineStepAndContinue(ctx, args.jobId, step);
+        return { completedStep: step };
+      }
+
+      case "validate_results": {
+        const validation = await validateImportResults(ctx, imp);
+        if (!validation.valid) {
+          const isWaiting =
+            validation.code === "unmatched_players" ||
+            validation.code === "event_link_missing";
+          await maybeWriteJobProgress(ctx, {
+            jobId: args.jobId,
+            importId: job.importId,
+            step,
+            progressMessage: validation.reason,
+            pipelineStatus: isWaiting ? statusForStep(step) : "Failed",
+            lastProgressWriteRow,
+            reason: "error",
+          });
+          await finalizeImportJob(ctx, {
+            jobId: args.jobId,
+            status: isWaiting ? "waiting" : "failed",
+            pipelineStatus:
+              validation.code === "event_link_missing"
+                ? "Event Link Required"
+                : validation.code === "unmatched_players"
+                  ? "Player Matching Required"
+                  : "Failed",
+            errorMessage: validation.reason,
+            errorCode: validation.code ?? "validation_failed",
+          });
+          return { done: !isWaiting, waiting: isWaiting };
+        }
+
+        await maybeWriteJobProgress(ctx, {
+          jobId: args.jobId,
+          importId: job.importId,
+          step,
+          progressMessage: progressMessageForStep(step),
+          lastProgressWriteRow,
+          reason: "step_complete",
+        });
+        await completePipelineStepAndContinue(ctx, args.jobId, step);
+        return { completedStep: step };
+      }
+
+      case "update_player_stats": {
+        let playerIds = job.affectedPlayerIds;
+        if (!playerIds || playerIds.length === 0) {
+          playerIds = await collectAffectedPlayerIdsForImport(ctx, job.importId);
+          await ctx.db.patch(args.jobId, { affectedPlayerIds: playerIds });
+        }
+
+        const startIndex = job.statsPlayerCursor ?? 0;
+        const endIndex = Math.min(startIndex + IMPORT_ROW_BATCH_SIZE, playerIds.length);
+        const batchPlayerIds = playerIds.slice(startIndex, endIndex);
+
+        const summary = await updateStatsForPlayers(ctx, batchPlayerIds);
+        let tierEvalUpdated = 0;
+        for (const playerId of batchPlayerIds) {
+          if (await updateTierEvalForPlayerIfEligible(ctx, playerId)) {
+            tierEvalUpdated += 1;
+          }
+        }
+
+        const done = endIndex >= playerIds.length;
+        await ctx.db.patch(args.jobId, {
+          currentStep: step,
+          statsPlayerCursor: endIndex,
+          playersUpdated: (job.playersUpdated ?? 0) + summary.playersUpdated,
+          skippedNoChange: (job.skippedNoChange ?? 0) + summary.skippedNoChange,
+          errors: [...(job.errors ?? []), ...summary.errors],
+        });
+
+        lastProgressWriteRow = await maybeWriteJobProgress(ctx, {
+          jobId: args.jobId,
+          importId: job.importId,
+          step,
+          progressMessage: progressMessageForStep(step, {
+            current: endIndex,
+            total: playerIds.length,
+          }),
+          progressCurrent: endIndex,
+          progressTotal: playerIds.length,
+          lastProgressWriteRow,
+          reason: done ? "step_complete" : "interval",
+        });
+
+        logImportPipelineEvent({
+          importId: job.importId,
+          jobId: args.jobId,
+          step,
+          batchNumber,
+          rowsInBatch: batchPlayerIds.length,
+          elapsedMs: Date.now() - batchStart,
+          message: done ? "update_player_stats_batch_done" : "update_player_stats_batch",
+        });
+
+        if (!done) {
+          await ctx.scheduler.runAfter(0, internal.importProcessing.processImportBatch, {
+            jobId: args.jobId,
+          });
+          return {
+            continuing: true,
+            step,
+            playersProcessed: batchPlayerIds.length,
+            tierEvalUpdated,
+          };
+        }
+
+        if (playerIds.length > 0) {
+          await ctx.scheduler.runAfter(
+            0,
+            internal.memberManagement.markPlayersRecentlyActiveInternal,
+            { playerIds },
+          );
+        }
+
+        await completePipelineStepAndContinue(ctx, args.jobId, step);
+        return { completedStep: step, tierEvalUpdated };
+      }
+
+      case "sync_match_data":
+      case "populate_team_members":
+        throw new Error(`${step} is handled by importProcessingActions, not processImportBatch`);
+
+      case "finalize": {
+        await maybeWriteJobProgress(ctx, {
+          jobId: args.jobId,
+          importId: job.importId,
+          step,
+          progressMessage: progressMessageForStep(step),
+          pipelineStatus: "Finalized",
+          lastProgressWriteRow,
+          reason: "step_complete",
+        });
+        await finalizeImportJob(ctx, {
+          jobId: args.jobId,
+          status: "completed",
+          pipelineStatus: "Finalized",
+        });
+        const finalizePrior = job.completedSteps ?? [];
+        await ctx.db.patch(args.jobId, {
+          completedSteps: finalizePrior.includes(step)
+            ? finalizePrior
+            : [...finalizePrior, step],
+        });
+        return { done: true, finalized: true };
+      }
+
+      default: {
+        const exhaustiveCheck: never = step;
+        throw new Error(`Unhandled pipeline step in batch processor: ${exhaustiveCheck}`);
+      }
+    }
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      logImportPipelineEvent({
+        importId: job.importId,
+        jobId: args.jobId,
+        step: job.currentStep ?? step,
+        batchNumber,
+        elapsedMs: Date.now() - batchStart,
+        error: rawMessage,
+        message: "batch_step_failed",
+      });
+      await finalizeImportJob(ctx, {
+        jobId: args.jobId,
+        status: "failed",
+        pipelineStatus: "Failed",
+        errorMessage: rawMessage,
+        errorCode: "batch_processing_error",
+      });
+      return { failed: true, error: rawMessage };
     }
   },
 });
@@ -584,6 +1208,14 @@ export const runUpdatePlayerStatsStep = internalMutation({
       progressTotal: playerIds.length,
     });
 
+    if (playerIds.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.memberManagement.markPlayersRecentlyActiveInternal,
+        { playerIds },
+      );
+    }
+
     const imp = await ctx.db.get(job.importId);
     if (!imp) {
       throw new Error("Import not found");
@@ -638,11 +1270,42 @@ export const scheduleProcessingStep = internalMutation({
     delayMs: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await ctx.scheduler.runAfter(
-      args.delayMs ?? 0,
-      internal.importProcessingActions.runProcessingStep,
-      { jobId: args.jobId },
+    const job = await ctx.db.get(args.jobId);
+    if (!job) {
+      return;
+    }
+
+    const imp = await ctx.db.get(job.importId);
+    if (!imp) {
+      return;
+    }
+
+    const nextStep = await resolveNextStepForImport(
+      ctx,
+      imp,
+      job.forceReprocess,
+      job.completedSteps ?? [],
     );
+
+    await schedulePipelineContinuation(ctx, args.jobId, nextStep, args.delayMs ?? 0);
+  },
+});
+
+export const incrementJobMetric = internalMutation({
+  args: {
+    jobId: v.id("importProcessingJobs"),
+    contextReads: v.optional(v.number()),
+    batchesProcessed: v.optional(v.number()),
+    progressWrites: v.optional(v.number()),
+    rowsProcessed: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await patchJobMetrics(ctx, args.jobId, {
+      contextReads: args.contextReads,
+      batchesProcessed: args.batchesProcessed,
+      progressWrites: args.progressWrites,
+      rowsProcessed: args.rowsProcessed,
+    });
   },
 });
 
@@ -690,13 +1353,19 @@ export const resolveNextProcessingStep = internalQuery({
   args: {
     importId: v.id("thirdPartyImports"),
     forceReprocess: v.boolean(),
+    completedSteps: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const imp = await ctx.db.get(args.importId);
     if (!imp) {
       return null;
     }
-    return resolveNextStepForImport(ctx, imp, args.forceReprocess);
+    return resolveNextStepForImport(
+      ctx,
+      imp,
+      args.forceReprocess,
+      args.completedSteps ?? [],
+    );
   },
 });
 

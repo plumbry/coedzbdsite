@@ -62,6 +62,33 @@ function LeaderboardStatsContent() {
     );
   }
 
+  if (!stats.available) {
+    return (
+      <div className="space-y-4 rounded-lg border border-dashed p-8 text-center">
+        <p className="text-muted-foreground">{stats.message}</p>
+        <Button
+          disabled={isRebuilding}
+          onClick={async () => {
+            setIsRebuilding(true);
+            try {
+              await rebuildCache({});
+              toast.success("Leaderboard stats cache rebuild started");
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Rebuild failed");
+            } finally {
+              setIsRebuilding(false);
+            }
+          }}
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${isRebuilding ? "animate-spin" : ""}`} />
+          Rebuild leaderboard cache
+        </Button>
+      </div>
+    );
+  }
+
+  const statRows = stats.stats;
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -83,7 +110,7 @@ function LeaderboardStatsContent() {
   };
 
   // Filter stats based on hideNoMoney, hideReload, and showLast90Days
-  let filteredStats = stats;
+  let filteredStats = statRows;
   
   if (hideNoMoney) {
     filteredStats = filteredStats.filter((stat) => {

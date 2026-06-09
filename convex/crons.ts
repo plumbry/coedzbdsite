@@ -7,11 +7,11 @@ const crons = cronJobs();
 // Manual admin buttons trigger Yunite/stats syncs on demand.
 // Imports and score changes schedule targeted cache rebuilds (see helpers/eventDrivenRebuilds).
 
-// Refresh member activity flags for public directory
+// Clear recently-active flags for players past the inactivity threshold
 crons.daily(
-  "refresh member activity flags",
+  "mark inactive members",
   { hourUTC: 3, minuteUTC: 30 },
-  internal.memberManagement.refreshRecentlyActiveFlags,
+  internal.memberManagement.markInactivePlayersPastThreshold,
 );
 
 // Sync event bans from Google Sheet daily
@@ -26,13 +26,6 @@ crons.daily(
   "refresh tournament scan cache",
   { hourUTC: 4, minuteUTC: 0 }, // 4:00 AM UTC daily
   internal.inGameEarnings.actions.refreshTournamentCache,
-);
-
-// Continue in-flight aggregate stats cache rebuilds (cron-driven; no deep scheduler chains)
-crons.interval(
-  "tick aggregate stats rebuilds",
-  { seconds: 5 },
-  internal.aggregateStats.tickAggregateStatsRebuilds,
 );
 
 export default crons;

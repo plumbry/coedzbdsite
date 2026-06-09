@@ -139,7 +139,7 @@ export const getLeaderboardStats = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      return [];
+      return { available: false as const, stats: [] as LeaderboardStatRow[], message: "Unauthorized" };
     }
 
     const user = await ctx.db
@@ -148,15 +148,20 @@ export const getLeaderboardStats = query({
       .unique();
 
     if (!user || user.role !== "admin") {
-      return [];
+      return { available: false as const, stats: [] as LeaderboardStatRow[], message: "Forbidden" };
     }
 
     const cache = await ctx.db.query("leaderboardStatsCache").first();
     if (cache) {
-      return cache.stats;
+      return { available: true as const, stats: cache.stats, lastUpdated: cache.lastUpdated };
     }
 
-    return await computeLeaderboardStats(ctx);
+    return {
+      available: false as const,
+      stats: [] as LeaderboardStatRow[],
+      message:
+        "Leaderboard stats cache is empty. Use Rebuild leaderboard cache in admin tools.",
+    };
   },
 });
 

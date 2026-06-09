@@ -134,9 +134,15 @@ export function shouldSkipStep(
     case "link_event":
       return imp.eventId != null;
     case "validate_results":
-      return false;
+      return (
+        imp.eventId != null &&
+        imp.playersUnmatched === 0 &&
+        imp.totalPlayers > 0 &&
+        (!isYuniteSource(imp.source) || imp.matchDataSynced === true) &&
+        (imp.pipelineStatus === "Results Generated" || imp.pipelineStatus === "Finalized")
+      );
     case "update_player_stats":
-      return false;
+      return imp.pipelineStatus === "Finalized";
     case "finalize":
       return imp.pipelineStatus === "Finalized";
   }

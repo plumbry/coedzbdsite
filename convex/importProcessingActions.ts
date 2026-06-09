@@ -2,7 +2,8 @@
 
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
+import { isApiPipelineStep, MAX_PIPELINE_RETRIES } from "./lib/importProcessingBatch";
 import {
   isTransientYuniteError,
   progressMessageForStep,
@@ -11,6 +12,7 @@ import {
   statusForStep,
   type ImportPipelineStep,
 } from "./lib/importPipeline";
+import { logImportPipelineEvent } from "./lib/importPipelineLogging";
 
 type ProcessingStepResult = {
   done?: boolean;
@@ -18,6 +20,7 @@ type ProcessingStepResult = {
   retrying?: boolean;
   failed?: boolean;
   finalized?: boolean;
+  delegated?: boolean;
   reason?: string;
   error?: string;
   delayMs?: number;
@@ -35,7 +38,7 @@ export const runProcessingStep = internalAction({
       return { done: true, reason: "job_not_running" };
     }
 
-    const { job, imp: initialImp } = context;
+    const { job } = context;
 
     if (job.resumeAt && Date.now() < job.resumeAt) {
       const delay = job.resumeAt - Date.now();
@@ -49,27 +52,48 @@ export const runProcessingStep = internalAction({
     const step = await ctx.runQuery(internal.importProcessing.resolveNextProcessingStep, {
       importId: job.importId,
       forceReprocess: job.forceReprocess,
+      completedSteps: job.completedSteps ?? [],
     });
 
     if (!step) {
       await ctx.runMutation(internal.importProcessing.completeJob, {
         jobId: args.jobId,
         status: "completed",
-        pipelineStatus: initialImp.pipelineStatus === "Finalized" ? "Finalized" : "Results Generated",
+        pipelineStatus:
+          context.imp.pipelineStatus === "Finalized" ? "Finalized" : "Results Generated",
       });
       return { done: true, reason: "no_steps_remaining" };
     }
 
-    const pipelineStatus = statusForStep(step);
-    await ctx.runMutation(internal.importProcessing.markJobProgress, {
+    if (!isApiPipelineStep(step)) {
+      await ctx.runMutation(internal.importProcessing.processImportBatch, {
+        jobId: args.jobId,
+      });
+      return { delegated: true, reason: "batch_step" };
+    }
+
+    await ctx.runMutation(internal.importProcessing.incrementJobMetric, {
       jobId: args.jobId,
-      currentStep: step,
-      progressMessage: progressMessageForStep(step),
-      pipelineStatus,
+      contextReads: 1,
     });
 
+    const pipelineStep = step as ImportPipelineStep;
+    const enteringStep = job.currentStep !== pipelineStep;
+    if (enteringStep) {
+      await ctx.runMutation(internal.importProcessing.markJobProgress, {
+        jobId: args.jobId,
+        currentStep: pipelineStep,
+        progressMessage: progressMessageForStep(pipelineStep),
+        pipelineStatus: statusForStep(pipelineStep),
+      });
+      await ctx.runMutation(internal.importProcessing.incrementJobMetric, {
+        jobId: args.jobId,
+        progressWrites: 1,
+      });
+    }
+
     try {
-      switch (step as ImportPipelineStep) {
+      switch (pipelineStep) {
         case "sync_match_data": {
           await ctx.runAction(internal.yunite.sync.syncTournamentMatchDataInternal, {
             importId: job.importId,
@@ -79,113 +103,76 @@ export const runProcessingStep = internalAction({
         case "populate_team_members": {
           await ctx.runAction(internal.yunite.populateTeamMembers.populateForImportInternal, {
             importId: job.importId,
-          });
-          break;
-        }
-        case "match_players": {
-          const matchResult = await ctx.runMutation(
-            internal.importProcessing.runMatchPlayersStep,
-            { jobId: args.jobId },
-          );
-          if (matchResult.playersUnmatched > 0) {
-            await ctx.runMutation(internal.importProcessing.completeJob, {
-              jobId: args.jobId,
-              status: "waiting",
-              pipelineStatus: "Player Matching Required",
-              errorMessage: `${matchResult.playersUnmatched} players could not be matched. Review unmatched players, then run Process Import again.`,
-              errorCode: "unmatched_players",
-            });
-            return { waiting: true, reason: "unmatched_players" };
-          }
-          break;
-        }
-        case "link_event": {
-          const linkResult = await ctx.runMutation(
-            internal.importProcessing.runLinkEventStep,
-            { jobId: args.jobId },
-          );
-          if (!linkResult.linked) {
-            if (linkResult.reason === "ambiguous") {
-              await ctx.runMutation(internal.importProcessing.completeJob, {
-                jobId: args.jobId,
-                status: "waiting",
-                pipelineStatus: "Event Link Required",
-                errorMessage: `Event link failed because multiple events matched this import (${linkResult.candidateCount}). Link the event manually.`,
-                errorCode: "event_link_ambiguous",
-              });
-              return { waiting: true, reason: "event_link_ambiguous" };
-            }
-            await ctx.runMutation(internal.importProcessing.completeJob, {
-              jobId: args.jobId,
-              status: "waiting",
-              pipelineStatus: "Event Link Required",
-              errorMessage:
-                "No matching event was found for this import. Link the event manually, then run Process Import again.",
-              errorCode: "event_link_missing",
-            });
-            return { waiting: true, reason: "event_link_missing" };
-          }
-          break;
-        }
-        case "validate_results": {
-          const validation = await ctx.runMutation(
-            internal.importProcessing.runValidateResultsStep,
-            { jobId: args.jobId },
-          );
-          if (!validation.valid) {
-            const isWaiting =
-              validation.code === "unmatched_players" ||
-              validation.code === "event_link_missing";
-            await ctx.runMutation(internal.importProcessing.completeJob, {
-              jobId: args.jobId,
-              status: isWaiting ? "waiting" : "failed",
-              pipelineStatus:
-                validation.code === "event_link_missing"
-                  ? "Event Link Required"
-                  : validation.code === "unmatched_players"
-                    ? "Player Matching Required"
-                    : "Failed",
-              errorMessage: validation.reason,
-              errorCode: validation.code ?? "validation_failed",
-            });
-            return { done: !isWaiting, waiting: isWaiting };
-          }
-          break;
-        }
-        case "update_player_stats": {
-          await ctx.runMutation(internal.importProcessing.runUpdatePlayerStatsStep, {
             jobId: args.jobId,
           });
           break;
         }
-        case "finalize": {
-          await ctx.runMutation(internal.importProcessing.completeJob, {
-            jobId: args.jobId,
-            status: "completed",
-            pipelineStatus: "Finalized",
-          });
-          return { done: true, finalized: true };
-        }
+        default:
+          throw new Error(`Unexpected API pipeline step: ${pipelineStep}`);
       }
 
-      if (step !== "finalize") {
-        await ctx.runMutation(internal.importProcessing.scheduleProcessingStep, {
-          jobId: args.jobId,
-          delayMs: step === "sync_match_data" ? 1000 : 0,
-        });
-      }
-      return { done: false, completedStep: step };
+      await ctx.runMutation(internal.importProcessing.completeApiPipelineStep, {
+        jobId: args.jobId,
+        completedStep: pipelineStep,
+      });
+
+      return { done: false, completedStep: pipelineStep };
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : String(error);
       const message = sanitizePipelineErrorMessage(rawMessage);
+      const elapsedMs =
+        error instanceof Error && "elapsedMs" in error
+          ? Number((error as Error & { elapsedMs?: number }).elapsedMs)
+          : undefined;
+
+      logImportPipelineEvent({
+        importId: job.importId,
+        jobId: args.jobId,
+        step: pipelineStep,
+        elapsedMs,
+        error: message,
+        message: "api_step_failed",
+      });
+
+      await ctx.runMutation(internal.importProcessing.markJobProgress, {
+        jobId: args.jobId,
+        currentStep: pipelineStep,
+        progressMessage: message,
+      });
+      await ctx.runMutation(internal.importProcessing.incrementJobMetric, {
+        jobId: args.jobId,
+        progressWrites: 1,
+      });
 
       if (isTransientYuniteError(rawMessage)) {
         const { retryCount } = await ctx.runMutation(
           internal.importProcessing.incrementJobRetry,
           { jobId: args.jobId },
         );
+
+        if (retryCount >= MAX_PIPELINE_RETRIES) {
+          const maxRetryMessage = `${message} (gave up after ${retryCount} retries)`;
+          await ctx.runMutation(internal.importProcessing.completeJob, {
+            jobId: args.jobId,
+            status: "failed",
+            pipelineStatus: "Failed",
+            errorMessage: maxRetryMessage,
+            errorCode: "max_retries_exceeded",
+          });
+          return { failed: true, error: maxRetryMessage };
+        }
+
         const delayMs = retryDelayMsForRateLimit(retryCount);
         const resumeAt = Date.now() + delayMs;
+
+        logImportPipelineEvent({
+          importId: job.importId,
+          jobId: args.jobId,
+          step: pipelineStep,
+          batchNumber: retryCount,
+          error: message,
+          message: "api_step_retry_scheduled",
+        });
 
         await ctx.runMutation(internal.importProcessing.setJobResumeAt, {
           jobId: args.jobId,
@@ -205,7 +192,10 @@ export const runProcessingStep = internalAction({
         status: "failed",
         pipelineStatus: "Failed",
         errorMessage: message,
-        errorCode: "yunite_api_error",
+        errorCode:
+          pipelineStep === "populate_team_members"
+            ? "team_populate_error"
+            : "yunite_api_error",
       });
       return { failed: true, error: message };
     }

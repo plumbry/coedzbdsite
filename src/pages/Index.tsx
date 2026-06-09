@@ -30,8 +30,9 @@ export default function Index() {
     DEFAULT_PLAYER_LIST_SORT,
   );
   
-  const acceptedMembers = useQuery(api.memberManagement.getPublicMemberDirectory);
-  
+  const directory = useQuery(api.memberManagement.getPublicMemberDirectory);
+  const acceptedMembers = directory?.available ? directory.members : undefined;
+
   const filteredMembers = acceptedMembers?.filter((member) => {
     const searchLower = search.toLowerCase();
     const matchesSearch = (
@@ -100,10 +101,35 @@ export default function Index() {
   });
   const displayedMembers = membersPagination.pageItems ?? [];
   
-  if (acceptedMembers === undefined) {
+  if (directory === undefined) {
     return (
       <PageShell>
         <Skeleton className="h-64 w-full" />
+      </PageShell>
+    );
+  }
+
+  if (!directory.available) {
+    return (
+      <PageShell>
+        <PageHeader
+          title="Members"
+          icon={Users}
+          description="Member directory is temporarily unavailable."
+        />
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Users />
+            </EmptyMedia>
+            <EmptyTitle>Directory cache not built</EmptyTitle>
+            <EmptyDescription>
+              {isModeratorOrAdmin
+                ? directory.message
+                : "Please check back later."}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </PageShell>
     );
   }
@@ -116,18 +142,18 @@ export default function Index() {
         description="All ZBD competitive players. Active = played in the last 6 weeks."
       />
 
-      {isAdmin && (
+      {isAdmin && directory.available && (
         <div className="grid gap-3 sm:grid-cols-3">
-          <StatCard label="Total Members" value={acceptedMembers.length} icon={Users} />
+          <StatCard label="Total Members" value={directory.members.length} icon={Users} />
           <StatCard
             label="S-Tier Players"
-            value={acceptedMembers.filter((m) => m.tier === "S").length}
+            value={directory.members.filter((m) => m.tier === "S").length}
             icon={Trophy}
             variant="primary"
           />
           <StatCard
             label="A-Tier Players"
-            value={acceptedMembers.filter((m) => m.tier === "A").length}
+            value={directory.members.filter((m) => m.tier === "A").length}
             icon={Trophy}
           />
         </div>

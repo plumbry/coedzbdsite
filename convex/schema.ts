@@ -1,6 +1,5 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { VALID_STAT_IDS } from "./wrappedStatsConfig.js";
 
 export default defineSchema({
   users: defineTable({
@@ -91,8 +90,10 @@ export default defineSchema({
     needsReview: v.optional(v.boolean()),
     // Flag if player has left Discord server (no longer appears in member sync)
     hasLeftServer: v.optional(v.boolean()),
-    /** Cached: played in an event linked to a recent import (refreshed by cron). */
+    /** Cached: played in an event linked to a recent import (set on import; cleared by cron). */
     isRecentlyActive: v.optional(v.boolean()),
+    /** Timestamp of most recent import-linked activity (used for inactivity sweep). */
+    lastActiveAt: v.optional(v.number()),
     /** Denormalized unique event count across eventResults + thirdPartyResults. */
     eventsPlayedCount: v.optional(v.number()),
     /** Denormalized most recent event date (ISO string). */
@@ -164,7 +165,8 @@ export default defineSchema({
     .index("by_epic_username", ["epicUsername"])
     .index("by_status", ["status"])
     .index("by_membership_status", ["currentMembershipStatus"])
-    .index("by_is_alt", ["isAlt"]),
+    .index("by_is_alt", ["isAlt"])
+    .index("by_recently_active", ["isRecentlyActive", "lastActiveAt"]),
 
   /** Indexed Discord ID → player lookup for alternates (webhook-safe; no full-table scan). */
   playerDiscordAliases: defineTable({
@@ -379,9 +381,21 @@ export default defineSchema({
     playersUpdated: v.optional(v.number()),
     skippedNoChange: v.optional(v.number()),
     errors: v.optional(v.array(v.string())),
+    /** Steps finished in the current processing run (prevents re-running the same step). */
+    completedSteps: v.optional(v.array(v.string())),
+    /** Row cursor for batched match_players processing. */
+    stepRowCursor: v.optional(v.number()),
+    /** Player cursor for batched update_player_stats processing. */
+    statsPlayerCursor: v.optional(v.number()),
+    /** Row index at the last throttled progress write within the current step. */
+    lastProgressWriteRow: v.optional(v.number()),
+    batchesProcessed: v.optional(v.number()),
+    progressWrites: v.optional(v.number()),
+    contextReads: v.optional(v.number()),
   })
     .index("by_import", ["importId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_status_completed_at", ["status", "completedAt"]),
 
   playerStatsCache: defineTable({
     playerId: v.id("players"),
@@ -401,7 +415,8 @@ export default defineSchema({
   })
     .index("by_player", ["playerId"])
     .index("by_stats_eligible", ["statsEligible"])
-    .index("by_reevaluation_eligible", ["reevaluationEligible"]),
+    .index("by_reevaluation_eligible", ["reevaluationEligible"])
+    .index("by_last_calculated", ["lastCalculatedAt"]),
 
   playerStatsCacheRebuildJobs: defineTable({
     status: v.union(
@@ -409,7 +424,12 @@ export default defineSchema({
       v.literal("completed"),
       v.literal("failed"),
     ),
-    mode: v.union(v.literal("all_with_results"), v.literal("import"), v.literal("single")),
+    mode: v.union(
+      v.literal("all_with_results"),
+      v.literal("import"),
+      v.literal("single"),
+      v.literal("batch"),
+    ),
     importId: v.optional(v.id("thirdPartyImports")),
     playerId: v.optional(v.id("players")),
     playerIds: v.array(v.id("players")),
@@ -424,7 +444,9 @@ export default defineSchema({
     lastProgressAt: v.number(),
     completedAt: v.optional(v.number()),
     errorMessage: v.optional(v.string()),
-  }).index("by_status", ["status"]),
+  })
+    .index("by_status", ["status"])
+    .index("by_status_completed_at", ["status", "completedAt"]),
 
   thirdPartyResults: defineTable({
     importId: v.id("thirdPartyImports"),
@@ -918,6 +940,21 @@ export default defineSchema({
     lastUpdated: v.number(),
   }),
 
+  /** Singleton admin diagnostics snapshot — refreshed explicitly, not on page subscribe. */
+  dataCacheDiagnostics: defineTable({
+    snapshotKey: v.literal("main"),
+    lastUpdated: v.number(),
+    playerStats: v.any(),
+    eventStats: v.any(),
+    importStats: v.any(),
+    matchStats: v.any(),
+    resultStats: v.any(),
+    cacheMetadata: v.any(),
+    recentPlayerSyncs: v.any(),
+    recentEventSyncs: v.any(),
+    recentImportSyncs: v.any(),
+  }).index("by_key", ["snapshotKey"]),
+
   // Player snapshot for a single Discord member sync run (reused across batches).
   discordMemberSyncRuns: defineTable({
     syncRunId: v.string(),
@@ -1363,57 +1400,6 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
     lastError: v.optional(v.string()),
   }),
-
-  // 2025 Wrapped content (year-end review page)
-  wrappedContent: defineTable({
-    year: v.number(), // 2025
-    isPublished: v.boolean(), // Whether the wrapped page is live
-    introTagline: v.optional(v.string()), // Tagline for intro slide (e.g., "Your year in competitive Fortnite")
-    sponsors: v.array(v.object({
-      name: v.string(),
-      logoUrl: v.optional(v.string()),
-    })),
-    customMessage: v.optional(v.string()), // Optional message from admin
-    sections: v.array(v.object({
-      name: v.string(), // Section title (e.g., "Player Stats", "Tier Breakdown")
-      tagline: v.optional(v.string()), // Optional tagline/comment for section (e.g., "Celebrating our top competitors")
-      stats: v.array(v.object({
-        type: v.union(
-          // Dynamically generated from wrappedStatsConfig.ts
-          ...VALID_STAT_IDS.map(id => v.literal(id))
-        ),
-        customText: v.string(), // Display text for the stat
-        playerCount: v.optional(v.number()), // How many players to show (for player list stats)
-        customValue: v.optional(v.string()), // Manual value for custom stats
-      })),
-    })),
-    publishedBy: v.optional(v.id("users")),
-    publishedAt: v.optional(v.number()),
-    lastEditedBy: v.id("users"),
-    /** Precomputed stat sections — populated on publish to avoid live full-table scans. */
-    computedSections: v.optional(v.array(v.object({
-      name: v.string(),
-      tagline: v.optional(v.string()),
-      stats: v.array(v.object({
-        type: v.string(),
-        label: v.string(),
-        value: v.optional(v.number()),
-        subtitle: v.optional(v.string()),
-        players: v.optional(v.array(v.object({
-          name: v.string(),
-          value: v.number(),
-          metric: v.string(),
-        }))),
-        tierData: v.optional(v.array(v.object({
-          tier: v.string(),
-          count: v.number(),
-          percentage: v.number(),
-        }))),
-        breakdown: v.optional(v.record(v.string(), v.union(v.number(), v.string()))),
-      })),
-    }))),
-    computedSectionsUpdatedAt: v.optional(v.number()),
-  }).index("by_year", ["year"]),
 
   // Scrim random squad pairing events (created via Discord bot)
   scrimEvents: defineTable({

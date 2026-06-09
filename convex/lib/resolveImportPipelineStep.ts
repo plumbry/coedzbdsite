@@ -24,25 +24,42 @@ export async function importHasTeamMembersPopulated(
   return results.every((result) => (result.teamMembers?.length ?? 0) > 0);
 }
 
+async function isStepEligible(
+  ctx: QueryCtx,
+  imp: Doc<"thirdPartyImports">,
+  step: ImportPipelineStep,
+  forceReprocess: boolean,
+): Promise<boolean> {
+  if (shouldSkipStep(imp, step, forceReprocess)) {
+    return false;
+  }
+  if (step === "populate_team_members" && !forceReprocess) {
+    if (await importHasTeamMembersPopulated(ctx, imp._id)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export async function resolveNextStepForImport(
   ctx: QueryCtx,
   imp: Doc<"thirdPartyImports">,
   forceReprocess: boolean,
+  completedSteps: readonly string[] = [],
 ): Promise<ImportPipelineStep | null> {
   if (!forceReprocess && imp.pipelineStatus === "Finalized") {
     return null;
   }
 
+  const completed = new Set(completedSteps);
+
   for (const step of pipelineStepsForImport(imp.source)) {
-    if (shouldSkipStep(imp, step, forceReprocess)) {
+    if (completed.has(step)) {
       continue;
     }
-    if (step === "populate_team_members" && !forceReprocess) {
-      if (await importHasTeamMembersPopulated(ctx, imp._id)) {
-        continue;
-      }
+    if (await isStepEligible(ctx, imp, step, forceReprocess)) {
+      return step;
     }
-    return step;
   }
 
   return null;

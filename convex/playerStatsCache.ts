@@ -10,39 +10,18 @@ import type { Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin } from "./auth_helpers";
 import { collectAffectedPlayerIdsForImport } from "./lib/importRematch";
 import {
-  removeTierReEvaluationCacheForPlayer,
+  buildPlayerStatsCacheStatusReport,
+  collectAffectedPlayerIdsSince,
+  getLastSuccessfulCacheRebuildAt,
+} from "./lib/stats/playerStatsCacheStatus";
+import { updateTierEvalForPlayerIfEligible } from "./lib/stats/updateTierEvalForPlayer";
+import {
   updateStatsForPlayer,
   updateStatsForPlayers,
 } from "./lib/stats/updatePlayerStatsCache";
 
 const REBUILD_BATCH_SIZE = 3;
 const COLLECT_RESULTS_PAGE = 500;
-
-async function updateTierEvalForPlayerIfEligible(
-  ctx: MutationCtx,
-  playerId: Id<"players">,
-) {
-  const cacheRow = await ctx.db
-    .query("playerStatsCache")
-    .withIndex("by_player", (q) => q.eq("playerId", playerId))
-    .first();
-
-  if (!cacheRow?.reevaluationEligible) {
-    await removeTierReEvaluationCacheForPlayer(ctx, playerId);
-    return { tierEvalUpdated: false };
-  }
-
-  const medians = await ctx.db.query("tierMediansCache").first();
-  if (!medians) {
-    return { tierEvalUpdated: false, reason: "no_medians" as const };
-  }
-
-  await ctx.runMutation(internal.tierReEvaluationBatched.processBatch, {
-    batchNumber: 0,
-    playerIds: [playerId],
-  });
-  return { tierEvalUpdated: true };
-}
 
 export const getPlayerStatsCache = query({
   args: { playerId: v.id("players") },
@@ -54,39 +33,37 @@ export const getPlayerStatsCache = query({
   },
 });
 
+/** Indexed health check — estimates whether a full rebuild is needed. */
+export const getStatsCacheStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    return await buildPlayerStatsCacheStatusReport(ctx);
+  },
+});
+
 /** Admin summary for post-deploy backfill verification. */
 export const getCacheStatusSummary = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-
-    const allRows = await ctx.db.query("playerStatsCache").collect();
-    const statsEligible = allRows.filter((row) => row.statsEligible).length;
-    const reevaluationEligible = allRows.filter((row) => row.reevaluationEligible).length;
-
-    const activeRebuild = await ctx.db
-      .query("playerStatsCacheRebuildJobs")
-      .withIndex("by_status", (q) => q.eq("status", "running"))
-      .first();
+    const report = await buildPlayerStatsCacheStatusReport(ctx);
 
     return {
-      populated: allRows.length > 0,
-      totalRows: allRows.length,
-      statsEligible,
-      reevaluationEligible,
-      belowDisplayThreshold: allRows.filter((row) => !row.statsEligible).length,
-      betweenDisplayAndReeval: allRows.filter(
-        (row) => row.statsEligible && !row.reevaluationEligible,
-      ).length,
-      activeRebuild: activeRebuild
-        ? {
-            jobId: activeRebuild._id,
-            processedCount: activeRebuild.processedCount,
-            totalPlayers: activeRebuild.playerIds.length,
-            collectingPlayerIds: activeRebuild.collectingPlayerIds ?? false,
-          }
-        : null,
-      lastCheckedAt: Date.now(),
+      populated: report.rowCount > 0,
+      totalRows: report.rowCount,
+      statsEligible: report.statsEligibleCount,
+      reevaluationEligible: report.reevaluationEligibleCount,
+      belowDisplayThreshold: report.belowDisplayThreshold,
+      betweenDisplayAndReeval:
+        report.statsEligibleCount -
+        report.reevaluationEligibleCount,
+      activeRebuild: report.activeRebuild,
+      recommendation: report.recommendation,
+      recommendationReason: report.recommendationReason,
+      appearsStale: report.appearsStale,
+      estimatedAffectedPlayers: report.estimatedAffectedPlayers,
+      lastCheckedAt: report.checkedAt,
     };
   },
 });
@@ -139,7 +116,7 @@ export const getActiveCacheRebuildJob = query({
 async function startCacheRebuildJob(
   ctx: MutationCtx,
   args: {
-    mode: "all_with_results" | "import" | "single";
+    mode: "all_with_results" | "import" | "single" | "batch";
     importId?: Id<"thirdPartyImports">;
     playerId?: Id<"players">;
     playerIds?: Id<"players">[];
@@ -162,6 +139,14 @@ async function startCacheRebuildJob(
 
   if (args.mode === "single" && args.playerId) {
     playerIds = [args.playerId];
+  } else if (args.mode === "batch") {
+    if (!args.playerIds || args.playerIds.length === 0) {
+      throw new ConvexError({
+        message: "Batch stats cache rebuild requires at least one player ID",
+        code: "INVALID_ARGUMENT",
+      });
+    }
+    playerIds = [...new Set(args.playerIds.map((id) => id as string))] as Id<"players">[];
   } else if (args.mode === "import" && args.importId) {
     playerIds = await collectAffectedPlayerIdsForImport(ctx, args.importId);
   } else if (args.mode === "all_with_results") {
@@ -200,6 +185,48 @@ export const rebuildAllPlayerStatsCache = mutation({
   handler: async (ctx) => {
     await requireAdmin(ctx);
     return await startCacheRebuildJob(ctx, { mode: "all_with_results" });
+  },
+});
+
+/** Recalculate cache rows only for players touched since the last successful rebuild. */
+export const recalculateAffectedPlayerStatsCache = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const report = await buildPlayerStatsCacheStatusReport(ctx);
+    if (report.recommendation === "full_rebuild") {
+      throw new ConvexError({
+        message: report.recommendationReason,
+        code: "PRECONDITION_FAILED",
+      });
+    }
+
+    const watermark =
+      (await getLastSuccessfulCacheRebuildAt(ctx)) ??
+      report.lastCalculatedAt.newest ??
+      0;
+    const { playerIds } = await collectAffectedPlayerIdsSince(ctx, watermark);
+
+    if (playerIds.length === 0) {
+      return {
+        started: false,
+        playerCount: 0,
+        message: "No affected players since the last successful cache rebuild.",
+      };
+    }
+
+    const result = await startCacheRebuildJob(ctx, {
+      mode: "batch",
+      playerIds,
+    });
+
+    return {
+      started: true,
+      playerCount: result.playerCount,
+      jobId: result.jobId,
+      message: `Recalculating stats cache for ${playerIds.length} affected player(s).`,
+    };
   },
 });
 

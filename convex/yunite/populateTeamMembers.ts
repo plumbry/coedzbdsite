@@ -5,9 +5,11 @@ import { action, internalAction } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
 import { yuniteFetchOrThrow, yuniteResponseJson } from "../lib/yuniteRateLimit";
+import { logImportPipelineEvent } from "../lib/importPipelineLogging";
 import type { Id } from "../_generated/dataModel.d.ts";
 
 const BULK_UPDATE_CHUNK_SIZE = 100;
+const DISCORD_LOOKUP_BATCH_SIZE = 75;
 
 interface LeaderboardUser {
   discordId: string;
@@ -20,8 +22,14 @@ interface LeaderboardEntry {
 }
 
 export const populateForImportInternal = internalAction({
-  args: { importId: v.id("thirdPartyImports") },
+  args: {
+    importId: v.id("thirdPartyImports"),
+    jobId: v.optional(v.id("importProcessingJobs")),
+  },
   handler: async (ctx, args): Promise<{ success: boolean; updated: number }> => {
+    const step = "populate_team_members";
+    const pipelineStart = Date.now();
+
     const apiKey = process.env.YUNITE_API_KEY;
     const guildId = process.env.YUNITE_GUILD_ID;
 
@@ -30,22 +38,74 @@ export const populateForImportInternal = internalAction({
     }
 
     const imp = await ctx.runQuery(api.thirdParty.getImportById, { importId: args.importId });
-    if (!imp) throw new Error("Import not found");
+    if (!imp) {
+      throw new Error("Import not found");
+    }
 
-    const { resultsByDiscord, discordToEpic } = await ctx.runQuery(
-      internal.yunite.populateTeamMembersHelpers.getTeamPopulateContext,
+    logImportPipelineEvent({
+      importId: args.importId,
+      jobId: args.jobId,
+      step,
+      message: "populate_start",
+    });
+
+    const { resultsByDiscord } = await ctx.runQuery(
+      internal.yunite.populateTeamMembersHelpers.getImportResultRefsByDiscord,
       { importId: args.importId },
     );
 
     const tournamentId = imp.leaderboardId.replace("yunite-", "");
     const url = `https://yunite.xyz/api/v3/guild/${guildId}/tournaments/${tournamentId}/leaderboard`;
 
+    const fetchStart = Date.now();
     const res = await yuniteFetchOrThrow(url, apiKey, {}, { skipSpacing: true });
     const data = await yuniteResponseJson<LeaderboardEntry[]>(res);
+    logImportPipelineEvent({
+      importId: args.importId,
+      jobId: args.jobId,
+      step,
+      batchNumber: 0,
+      rowsInBatch: data.length,
+      elapsedMs: Date.now() - fetchStart,
+      message: "yunite_leaderboard_fetched",
+    });
+
+    const leaderboardDiscordIds = new Set<string>();
+    for (const entry of data) {
+      for (const user of entry.users ?? []) {
+        leaderboardDiscordIds.add(user.discordId);
+      }
+    }
+
+    const discordToEpic: Record<string, string> = {};
+    const discordIdList = [...leaderboardDiscordIds];
+    let lookupBatchNumber = 0;
+    for (let i = 0; i < discordIdList.length; i += DISCORD_LOOKUP_BATCH_SIZE) {
+      lookupBatchNumber += 1;
+      const chunk = discordIdList.slice(i, i + DISCORD_LOOKUP_BATCH_SIZE);
+      const batchStart = Date.now();
+      const lookup = await ctx.runQuery(
+        internal.yunite.populateTeamMembersHelpers.lookupEpicUsernamesByDiscordIds,
+        { discordIds: chunk },
+      );
+      Object.assign(discordToEpic, lookup.discordToEpic);
+      logImportPipelineEvent({
+        importId: args.importId,
+        jobId: args.jobId,
+        step,
+        batchNumber: lookupBatchNumber,
+        rowsInBatch: chunk.length,
+        elapsedMs: Date.now() - batchStart,
+        message: "discord_epic_lookup_batch",
+      });
+    }
+
     const updatesByResult = new Map<Id<"thirdPartyResults">, string[]>();
 
     for (const entry of data) {
-      if (!entry.users || entry.users.length === 0) continue;
+      if (!entry.users || entry.users.length === 0) {
+        continue;
+      }
 
       const epics: string[] = [];
       for (const user of entry.users) {
@@ -60,27 +120,45 @@ export const populateForImportInternal = internalAction({
         if (!resultRef) {
           continue;
         }
-
         updatesByResult.set(resultRef.resultId, epics);
       }
     }
 
-    const pendingUpdates = [...updatesByResult.entries()].map(
-      ([resultId, teamMembers]) => ({
-        resultId,
-        teamMembers,
-      }),
-    );
+    const pendingUpdates = [...updatesByResult.entries()].map(([resultId, teamMembers]) => ({
+      resultId,
+      teamMembers,
+    }));
 
     let updated = 0;
+    let updateBatchNumber = 0;
     for (let i = 0; i < pendingUpdates.length; i += BULK_UPDATE_CHUNK_SIZE) {
+      updateBatchNumber += 1;
       const chunk = pendingUpdates.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+      const batchStart = Date.now();
       const result = await ctx.runMutation(
         internal.yunite.populateTeamMembersHelpers.bulkUpdateResultTeamMembers,
         { updates: chunk },
       );
       updated += result.updated;
+      logImportPipelineEvent({
+        importId: args.importId,
+        jobId: args.jobId,
+        step,
+        batchNumber: updateBatchNumber,
+        rowsInBatch: chunk.length,
+        elapsedMs: Date.now() - batchStart,
+        message: "team_members_update_batch",
+      });
     }
+
+    logImportPipelineEvent({
+      importId: args.importId,
+      jobId: args.jobId,
+      step,
+      rowsInBatch: updated,
+      elapsedMs: Date.now() - pipelineStart,
+      message: "populate_complete",
+    });
 
     return { success: true, updated };
   },

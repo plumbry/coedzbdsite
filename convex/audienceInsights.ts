@@ -626,33 +626,21 @@ export const getAudienceInsights = query({
       return emptyInsights;
     }
 
-    const hasCachedActiveTier = snapshotHasActiveTierCache(cached);
-    let tierActive = cached.tierActive ?? [];
-    let totalActiveMembers = cached.totalActiveMembers ?? 0;
-    let tierActiveSource: "cache" | "live" = "cache";
-
-    if (!hasCachedActiveTier) {
-      const live = await computeActiveTierBreakdown(ctx);
-      tierActive = live.tierActive;
-      totalActiveMembers = live.totalActiveMembers;
-      tierActiveSource = "live";
-    }
-
     return {
       totalMembers: cached.totalMembers,
-      totalActiveMembers,
+      totalActiveMembers: cached.totalActiveMembers ?? 0,
       gender: cached.gender ?? [],
       tier: cached.tier ?? [],
-      tierActive,
+      tierActive: cached.tierActive ?? [],
       tenure: cached.tenure ?? [],
       events: cached.events ?? [],
       recentEvents: cached.recentEvents ?? [],
       eventsReady: cached.eventsReady,
       segmentMembersIndexed: cached.segmentMembersIndexed === true,
       lastUpdated: cached.lastUpdated,
-      needsRebuild: false,
-      tierActiveReady: true,
-      tierActiveSource,
+      needsRebuild: !snapshotHasActiveTierCache(cached),
+      tierActiveReady: snapshotHasActiveTierCache(cached),
+      tierActiveSource: "cache" as const,
     };
   },
 });

@@ -8,7 +8,6 @@ import { computeInternalPlayerStats } from "./lib/stats/computeInternalPlayerSta
 import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 import { FORMULA_VERSION } from "./lib/stats/versions";
 import { listStatsEligiblePlayerIds } from "./lib/stats/listEligiblePlayers";
-import { isPlayerStatsCachePopulated } from "./lib/stats/playerStatsCacheEligibility";
 
 /** Population averages use `computeInternalPlayerStats` (Yunite imports) via `aggregateStatsCache`. */
 const PLAYERS_PER_BATCH = 2;
@@ -34,31 +33,19 @@ const isValidDiscordId = (id: string | undefined): boolean => {
 };
 
 async function listActivePlayersWithMatchData(ctx: MutationCtx) {
-  if (await isPlayerStatsCachePopulated(ctx)) {
-    const statsEligibleIds = await listStatsEligiblePlayerIds(ctx);
-    const players = [];
-    for (const playerId of statsEligibleIds) {
-      const player = await ctx.db.get(playerId);
-      if (
-        player &&
-        (player.status === "active" || player.status === undefined) &&
-        isValidDiscordId(player.discordUserId)
-      ) {
-        players.push(player);
-      }
+  const statsEligibleIds = await listStatsEligiblePlayerIds(ctx);
+  const players = [];
+  for (const playerId of statsEligibleIds) {
+    const player = await ctx.db.get(playerId);
+    if (
+      player &&
+      (player.status === "active" || player.status === undefined) &&
+      isValidDiscordId(player.discordUserId)
+    ) {
+      players.push(player);
     }
-    return players;
   }
-
-  // Pre-backfill only until first playerStatsCache rebuild.
-  const allPlayers = await ctx.db.query("players").collect();
-  return allPlayers.filter(
-    (p) =>
-      (p.status === "active" || p.status === undefined) &&
-      isValidDiscordId(p.discordUserId) &&
-      p.hasMatchData === true &&
-      (p.eventsPlayedCount ?? 0) >= 3,
-  );
+  return players;
 }
 
 function getMedian(sorted: number[]) {
@@ -460,7 +447,9 @@ async function scheduleAggregateStatsRebuildHandler(ctx: MutationCtx) {
     lastProgressAt: now,
   });
 
-  await ctx.scheduler.runAfter(0, internal.aggregateStats.tickAggregateStatsRebuilds, {});
+  await ctx.scheduler.runAfter(0, internal.aggregateStats.advanceAggregateStatsJobStep, {
+    jobId,
+  });
 
   return { started: true, playerCount: players.length, jobId };
 }
@@ -637,33 +626,28 @@ export const recoverAggregateStatsCache = internalMutation({
   },
 });
 
-/** Cron/manual driver — processes a batch per running job without deep scheduler chains. */
-export const tickAggregateStatsRebuilds = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const running = await ctx.db
-      .query("aggregateStatsJobs")
-      .withIndex("by_status", (q) => q.eq("status", "running"))
-      .collect();
-
-    const results = [];
-    for (const job of running) {
-      if (job.nextPlayerIndex >= job.players.length) {
-        const finalized = await finalizeAggregateJobHandler(ctx, job._id);
-        results.push({ jobId: job._id, finalized });
-        continue;
-      }
-
-      const advanced = await advanceAggregateJob(ctx, job._id, PLAYERS_PER_TICK);
-      if (advanced.needsFinalize) {
-        const finalized = await finalizeAggregateJobHandler(ctx, job._id);
-        results.push({ jobId: job._id, ...advanced, finalized });
-      } else {
-        results.push({ jobId: job._id, ...advanced });
-      }
+/** Self-scheduled driver — one batch per invocation while a job is running. */
+export const advanceAggregateStatsJobStep = internalMutation({
+  args: { jobId: v.id("aggregateStatsJobs") },
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.status !== "running") {
+      return { done: true as const, reason: "no_running_job" as const };
     }
 
-    return { jobs: results.length, results };
+    if (job.nextPlayerIndex >= job.players.length) {
+      return await finalizeAggregateJobHandler(ctx, args.jobId);
+    }
+
+    const advanced = await advanceAggregateJob(ctx, args.jobId, PLAYERS_PER_TICK);
+    if (advanced.needsFinalize) {
+      return await finalizeAggregateJobHandler(ctx, args.jobId);
+    }
+
+    await ctx.scheduler.runAfter(0, internal.aggregateStats.advanceAggregateStatsJobStep, {
+      jobId: args.jobId,
+    });
+    return advanced;
   },
 });
 
@@ -741,7 +725,9 @@ export const finalizeStalledAggregateStatsJob = internalMutation({
       return { started: false, reason: "no_running_job" };
     }
 
-    await ctx.scheduler.runAfter(0, internal.aggregateStats.tickAggregateStatsRebuilds, {});
+    await ctx.scheduler.runAfter(0, internal.aggregateStats.advanceAggregateStatsJobStep, {
+      jobId: job._id,
+    });
 
     return {
       started: true,
@@ -770,7 +756,9 @@ export const kickAggregateStatsRebuild = internalMutation({
       return { kicked: false, reason: "no_running_job" };
     }
 
-    await ctx.scheduler.runAfter(0, internal.aggregateStats.tickAggregateStatsRebuilds, {});
+    await ctx.scheduler.runAfter(0, internal.aggregateStats.advanceAggregateStatsJobStep, {
+      jobId: job._id,
+    });
 
     return {
       kicked: true,

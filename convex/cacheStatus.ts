@@ -1,11 +1,13 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation, type MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { internal, api } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel.d.ts";
+import { requireAdmin } from "./auth_helpers";
 import { filterVisibleMembers } from "./helpers/playerAlt";
 import { isActivePlayerWithMatchData } from "./lib/stats/listEligiblePlayers";
 import { refreshEventCache } from "./lib/eventCache";
+import { buildPlayerStatsCacheStatusReport } from "./lib/stats/playerStatsCacheStatus";
 
 // Split into focused queries to avoid exceeding Convex scan limits
 const STATUS_SAMPLE_LIMIT = 1000;
@@ -604,6 +606,250 @@ export const rebuildAggregateStatsCache = mutation({
     return {
       success: true,
       message: result.message,
+    };
+  },
+});
+
+async function buildDiagnosticsSnapshot(ctx: MutationCtx) {
+  const allPlayers = await ctx.db.query("players").collect();
+  const playersWithSync = allPlayers.filter((p) => p.lastDiscordSync);
+  const mostRecentPlayerSync =
+    playersWithSync.length > 0
+      ? Math.max(...playersWithSync.map((p) => p.lastDiscordSync || 0))
+      : undefined;
+
+  const tierEvalCache = await ctx.db.query("tierReEvaluationCache").collect();
+  const competitivePool = buildCompetitivePoolStats(allPlayers, tierEvalCache.length);
+
+  const playerStats = {
+    ...competitivePool,
+    total: allPlayers.length,
+    withEpicId: allPlayers.filter((p) => p.epicId).length,
+    withName: allPlayers.filter((p) => p.name).length,
+    withAvatarUrl: allPlayers.filter((p) => p.avatarUrl).length,
+    withLastDiscordSync: playersWithSync.length,
+    lastUpdated: mostRecentPlayerSync,
+  };
+
+  const allEvents = await ctx.db.query("events").collect();
+  const eventsWithSync = allEvents.filter((e) => e.lastYunitSync);
+  const eventStats = {
+    total: allEvents.length,
+    withLastYunitSync: eventsWithSync.length,
+    withTotalTeams: allEvents.filter((e) => e.totalTeams).length,
+    withTotalPlayers: allEvents.filter((e) => e.totalPlayers).length,
+    withTeamsOrPlayers: allEvents.filter((e) => e.totalTeams || e.totalPlayers).length,
+    completed: allEvents.filter((e) => e.status === "completed").length,
+    lastUpdated:
+      eventsWithSync.length > 0
+        ? Math.max(...eventsWithSync.map((e) => e.lastYunitSync || 0))
+        : undefined,
+  };
+
+  const allImports = await ctx.db.query("thirdPartyImports").collect();
+  const importsWithSync = allImports.filter((i) => i.matchDataSyncedAt);
+  const importStats = {
+    total: allImports.length,
+    withMatchDataSynced: allImports.filter((i) => i.matchDataSynced).length,
+    withMatchDataSyncedAt: importsWithSync.length,
+    withDataFullyCached: allImports.filter((i) => i.dataFullyCached).length,
+    fromYuniteAPI: allImports.filter((i) => i.source === "Yunite API").length,
+    fromCSV: allImports.filter((i) => i.source === "CSV").length,
+    lastUpdated:
+      importsWithSync.length > 0
+        ? Math.max(...importsWithSync.map((i) => i.matchDataSyncedAt || 0))
+        : undefined,
+  };
+
+  const matchPage = await ctx.db
+    .query("matchPlayerStats")
+    .paginate({ numItems: STATUS_SAMPLE_LIMIT, cursor: null });
+  const latestMatch = await ctx.db.query("matchPlayerStats").order("desc").first();
+  const matchStats = {
+    matchStatsCount: matchPage.page.length,
+    matchStatsCountIsSampled: !matchPage.isDone,
+    matchStatsLastUpdated: latestMatch?._creationTime,
+  };
+
+  const resultsPage = await ctx.db
+    .query("thirdPartyResults")
+    .paginate({ numItems: STATUS_SAMPLE_LIMIT, cursor: null });
+  let resultsTotal = 0;
+  let resultsMatched = 0;
+  let resultsWithEpicId = 0;
+  let resultsWithDiscordId = 0;
+  let resultsWithTeamMembers = 0;
+  let resultsWithMatchData = 0;
+  for (const r of resultsPage.page) {
+    resultsTotal++;
+    if (r.matched) resultsMatched++;
+    if (r.epicId) resultsWithEpicId++;
+    if (r.discordId) resultsWithDiscordId++;
+    if (r.teamMembers && r.teamMembers.length > 0) resultsWithTeamMembers++;
+    if (r.wins !== undefined || r.matchesPlayed !== undefined) resultsWithMatchData++;
+  }
+  const resultStats = {
+    total: resultsTotal,
+    totalIsSampled: !resultsPage.isDone,
+    matched: resultsMatched,
+    withEpicId: resultsWithEpicId,
+    withDiscordId: resultsWithDiscordId,
+    withTeamMembers: resultsWithTeamMembers,
+    withMatchData: resultsWithMatchData,
+  };
+
+  const aggregateStatsCache = await ctx.db.query("aggregateStatsCache").first();
+  const tierMediansCache = await ctx.db.query("tierMediansCache").first();
+  const cacheMetadata = {
+    aggregateStatsCache: aggregateStatsCache
+      ? {
+          lastUpdated: aggregateStatsCache.lastUpdated,
+          playerCount: aggregateStatsCache.playerCount,
+          rebuildPoolCount: aggregateStatsCache.rebuildPoolCount,
+          excludedNoYuniteEvents: aggregateStatsCache.excludedNoYuniteEvents,
+        }
+      : null,
+    tierReEvaluationCache: {
+      evaluationCount: tierEvalCache.length,
+      lastUpdated: tierMediansCache?.lastUpdated || null,
+    },
+    competitivePool,
+    playerStatsCache: await buildPlayerStatsCacheStatusReport(ctx),
+    lastChecked: Date.now(),
+  };
+
+  const recentPlayers = await ctx.db.query("players").order("desc").take(200);
+  const recentPlayerSyncs = recentPlayers
+    .filter((p) => p.lastDiscordSync)
+    .sort((a, b) => (b.lastDiscordSync || 0) - (a.lastDiscordSync || 0))
+    .slice(0, 10)
+    .map((p) => ({
+      playerId: p._id,
+      discordUsername: p.discordUsername,
+      name: p.name,
+      epicUsername: p.epicUsername,
+      lastDiscordSync: p.lastDiscordSync,
+      hasEpicId: !!p.epicId,
+      hasAvatar: !!p.avatarUrl,
+      hasTierEvalCache: false,
+      hasTopFiveCache: !!p.topFiveCache,
+    }));
+
+  for (const row of recentPlayerSyncs) {
+    const tierCache = await ctx.db
+      .query("tierReEvaluationCache")
+      .withIndex("by_player", (q) => q.eq("playerId", row.playerId))
+      .first();
+    row.hasTierEvalCache = tierCache !== null;
+  }
+
+  const recentEventSyncs = allEvents
+    .filter((e) => e.lastYunitSync)
+    .sort((a, b) => (b.lastYunitSync || 0) - (a.lastYunitSync || 0))
+    .slice(0, 10)
+    .map((e) => ({
+      eventId: e._id,
+      name: e.name,
+      type: e.type,
+      status: e.status,
+      lastYunitSync: e.lastYunitSync,
+      totalTeams: e.totalTeams,
+      totalPlayers: e.totalPlayers,
+    }));
+
+  const recentImportSyncs = allImports
+    .filter((i) => i.matchDataSyncedAt)
+    .sort((a, b) => (b.matchDataSyncedAt || 0) - (a.matchDataSyncedAt || 0))
+    .slice(0, 10)
+    .map((i) => ({
+      importId: i._id,
+      eventName: i.eventName,
+      source: i.source,
+      matchDataSynced: i.matchDataSynced,
+      matchDataSyncedAt: i.matchDataSyncedAt,
+      dataFullyCached: i.dataFullyCached,
+      totalPlayers: i.totalPlayers,
+      playersMatched: i.playersMatched,
+    }));
+
+  return {
+    playerStats,
+    eventStats,
+    importStats,
+    matchStats,
+    resultStats,
+    cacheMetadata,
+    recentPlayerSyncs,
+    recentEventSyncs,
+    recentImportSyncs,
+  };
+}
+
+/** Lightweight dashboard read — single snapshot document (no table scans on subscribe). */
+export const getDataCacheDashboard = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const snapshot = await ctx.db
+      .query("dataCacheDiagnostics")
+      .withIndex("by_key", (q) => q.eq("snapshotKey", "main"))
+      .first();
+
+    if (!snapshot) {
+      return {
+        needsRefresh: true as const,
+        lastUpdated: null,
+        message: 'Click "Refresh diagnostics" to build the first snapshot.',
+      };
+    }
+
+    return {
+      needsRefresh: false as const,
+      lastUpdated: snapshot.lastUpdated,
+      playerStats: snapshot.playerStats,
+      eventStats: snapshot.eventStats,
+      importStats: snapshot.importStats,
+      matchStats: snapshot.matchStats,
+      resultStats: snapshot.resultStats,
+      cacheMetadata: snapshot.cacheMetadata,
+      recentPlayerSyncs: snapshot.recentPlayerSyncs,
+      recentEventSyncs: snapshot.recentEventSyncs,
+      recentImportSyncs: snapshot.recentImportSyncs,
+    };
+  },
+});
+
+export const storeDataCacheDiagnostics = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const built = await buildDiagnosticsSnapshot(ctx);
+    const payload = {
+      snapshotKey: "main" as const,
+      lastUpdated: Date.now(),
+      ...built,
+    };
+
+    const existing = await ctx.db
+      .query("dataCacheDiagnostics")
+      .withIndex("by_key", (q) => q.eq("snapshotKey", "main"))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, payload);
+    } else {
+      await ctx.db.insert("dataCacheDiagnostics", payload);
+    }
+  },
+});
+
+export const refreshDataCacheDiagnostics = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    await ctx.scheduler.runAfter(0, internal.cacheStatus.storeDataCacheDiagnostics, {});
+    return {
+      started: true,
+      message: "Refreshing data cache diagnostics snapshot…",
     };
   },
 });

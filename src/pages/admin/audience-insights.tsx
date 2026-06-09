@@ -302,7 +302,7 @@ function AudienceInsightsContent() {
     ? `Cached ${new Date(insights.lastUpdated).toLocaleString()}`
     : "Not cached yet";
 
-  const tierActiveUsesLiveData = insights.tierActiveSource === "live";
+  const tierActiveUsesLiveData = insights.needsRebuild;
   const tierChartData =
     tierScope === "active"
       ? chartSegments(insights.tierActive)

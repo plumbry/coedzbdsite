@@ -98,6 +98,7 @@ import type * as lib_eventTypes from "../lib/eventTypes.js";
 import type * as lib_eventWorkflow from "../lib/eventWorkflow.js";
 import type * as lib_eventYuniteRequirement from "../lib/eventYuniteRequirement.js";
 import type * as lib_importPipeline from "../lib/importPipeline.js";
+import type * as lib_importPipelineLogging from "../lib/importPipelineLogging.js";
 import type * as lib_importProcessingBatch from "../lib/importProcessingBatch.js";
 import type * as lib_importRematch from "../lib/importRematch.js";
 import type * as lib_importSource from "../lib/importSource.js";
@@ -285,6 +286,7 @@ declare const fullApi: ApiFromModules<{
   "lib/eventWorkflow": typeof lib_eventWorkflow;
   "lib/eventYuniteRequirement": typeof lib_eventYuniteRequirement;
   "lib/importPipeline": typeof lib_importPipeline;
+  "lib/importPipelineLogging": typeof lib_importPipelineLogging;
   "lib/importProcessingBatch": typeof lib_importProcessingBatch;
   "lib/importRematch": typeof lib_importRematch;
   "lib/importSource": typeof lib_importSource;

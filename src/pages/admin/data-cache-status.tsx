@@ -63,18 +63,10 @@ class DataCacheStatusErrorBoundary extends Component<
 
 function DataCacheStatusContent() {
   const { isAdmin } = useUserRole();
-  // Split into separate queries to avoid exceeding Convex scan/time limits
-  const playerStats = useQuery(api.cacheStatus.getPlayerStats, {});
-  const eventStats = useQuery(api.cacheStatus.getEventStats, {});
-  const importStats = useQuery(api.cacheStatus.getImportStats, {});
-  const matchStatsData = useQuery(api.cacheStatus.getMatchStatsCount, {});
-  const resultStats = useQuery(api.cacheStatus.getResultStats, {});
-  const cacheMetadata = useQuery(api.cacheStatus.getCacheMetadata, {});
-  const recentPlayerSyncs = useQuery(api.cacheStatus.getRecentPlayerCacheUpdates, { limit: 10 });
-  const recentEventSyncs = useQuery(api.cacheStatus.getRecentEventSyncs, { limit: 10 });
-  const recentImportSyncs = useQuery(api.cacheStatus.getRecentImportSyncs, { limit: 10 });
+  const dashboard = useQuery(api.cacheStatus.getDataCacheDashboard, {});
   const activeStatsRebuild = useQuery(api.playerStatsRebuild.getActiveRebuildJob, {});
 
+  const refreshDiagnostics = useMutation(api.cacheStatus.refreshDataCacheDiagnostics);
   const rebuildPlayerCache = useMutation(api.cacheStatus.rebuildPlayerCache);
   const rebuildEventCache = useMutation(api.cacheStatus.rebuildEventCache);
   const rebuildImportCache = useMutation(api.cacheStatus.rebuildImportCache);
@@ -83,6 +75,19 @@ function DataCacheStatusContent() {
   const backfillPlayerEventStats = useMutation(api.cacheStatus.backfillPlayerEventParticipationStats);
 
   const [rebuildingCache, setRebuildingCache] = useState<string | null>(null);
+  const [refreshingDiagnostics, setRefreshingDiagnostics] = useState(false);
+
+  const handleRefreshDiagnostics = async () => {
+    setRefreshingDiagnostics(true);
+    try {
+      const result = await refreshDiagnostics({});
+      toast.success(result.message);
+    } catch (error) {
+      toast.error("Failed to refresh diagnostics: " + (error as Error).message);
+    } finally {
+      setRefreshingDiagnostics(false);
+    }
+  };
 
   const handleRebuildCache = async (cacheType: "players" | "events" | "imports" | "matchStats" | "aggregateStats" | "playerEventStats") => {
     setRebuildingCache(cacheType);
@@ -157,6 +162,19 @@ function DataCacheStatusContent() {
     return `${covered} / ${pool} (${getPercentage(covered, pool)}%)`;
   };
 
+  const playerStats = dashboard && !dashboard.needsRefresh ? dashboard.playerStats : undefined;
+  const eventStats = dashboard && !dashboard.needsRefresh ? dashboard.eventStats : undefined;
+  const importStats = dashboard && !dashboard.needsRefresh ? dashboard.importStats : undefined;
+  const matchStatsData = dashboard && !dashboard.needsRefresh ? dashboard.matchStats : undefined;
+  const resultStats = dashboard && !dashboard.needsRefresh ? dashboard.resultStats : undefined;
+  const cacheMetadata = dashboard && !dashboard.needsRefresh ? dashboard.cacheMetadata : undefined;
+  const recentPlayerSyncs =
+    dashboard && !dashboard.needsRefresh ? dashboard.recentPlayerSyncs : undefined;
+  const recentEventSyncs =
+    dashboard && !dashboard.needsRefresh ? dashboard.recentEventSyncs : undefined;
+  const recentImportSyncs =
+    dashboard && !dashboard.needsRefresh ? dashboard.recentImportSyncs : undefined;
+
   const aggregateCoverage = cacheMetadata?.aggregateStatsCache
     ? {
         included: cacheMetadata.aggregateStatsCache.playerCount,
@@ -179,10 +197,38 @@ function DataCacheStatusContent() {
 
   return (
     <div className="space-y-4">
-      {playerStats === undefined || eventStats === undefined || importStats === undefined || matchStatsData === undefined || resultStats === undefined || cacheMetadata === undefined ? (
+      {dashboard === undefined ? (
         <Skeleton className="h-96 w-full" />
+      ) : dashboard.needsRefresh ? (
+        <div className="space-y-4">
+          <Alert>
+            <AlertTitle>Diagnostics snapshot required</AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p>{dashboard.message}</p>
+              <Button size="sm" onClick={handleRefreshDiagnostics} disabled={refreshingDiagnostics}>
+                {refreshingDiagnostics ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Refresh diagnostics
+              </Button>
+            </AlertDescription>
+          </Alert>
+          <PlayerStatsCacheBackfillChecklist />
+        </div>
       ) : (
         <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              Snapshot updated {formatRelativeTime(dashboard.lastUpdated)}
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleRefreshDiagnostics}
+              disabled={refreshingDiagnostics}
+            >
+              {refreshingDiagnostics ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Refresh diagnostics
+            </Button>
+          </div>
           <PlayerStatsCacheBackfillChecklist />
           <PlayerStatsMigrationChecklist variant="cache" />
 
@@ -645,7 +691,16 @@ function DataCacheStatusContent() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recentPlayerSyncs.map((player) => (
+                    {recentPlayerSyncs.map((player: {
+                      playerId: string;
+                      discordUsername?: string;
+                      epicUsername?: string;
+                      hasEpicId: boolean;
+                      hasAvatar: boolean;
+                      hasTierEvalCache: boolean;
+                      hasTopFiveCache: boolean;
+                      lastDiscordSync?: number;
+                    }) => (
                       <TableRow key={player.playerId}>
                         <TableCell>
                           <div>
@@ -713,7 +768,15 @@ function DataCacheStatusContent() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recentEventSyncs.map((event) => (
+                    {recentEventSyncs.map((event: {
+                      eventId: string;
+                      name: string;
+                      type: string;
+                      status: string;
+                      totalTeams?: number;
+                      totalPlayers?: number;
+                      lastYunitSync?: number;
+                    }) => (
                       <TableRow key={event.eventId}>
                         <TableCell className="font-medium">{event.name}</TableCell>
                         <TableCell>
@@ -758,7 +821,15 @@ function DataCacheStatusContent() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recentImportSyncs.map((imp) => (
+                    {recentImportSyncs.map((imp: {
+                      importId: string;
+                      eventName: string;
+                      source: string;
+                      totalPlayers: number;
+                      playersMatched: number;
+                      dataFullyCached?: boolean;
+                      matchDataSyncedAt?: number;
+                    }) => (
                       <TableRow key={imp.importId}>
                         <TableCell className="font-medium">{imp.eventName}</TableCell>
                         <TableCell>

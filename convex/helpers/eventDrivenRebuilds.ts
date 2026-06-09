@@ -38,12 +38,3 @@ export const scheduleEventParticipationRebuild = internalMutation({
   },
 });
 
-/** After manual score evaluation — refresh tier evaluation cache. */
-export const scheduleTierEvalRebuild = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    await ctx.scheduler.runAfter(0, internal.playerStatsRebuild.scheduleFullRebuild, {
-      tierEvalOnly: true,
-    });
-  },
-});
