@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import {
+  entryBadgeClass,
   entryChipClass,
   entryDotClass,
   entryStatusLabel,
@@ -743,14 +744,7 @@ function EntryCard({
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-medium">{entry.title}</h3>
-            <Badge
-              variant={statusBadgeVariant(entry.status)}
-              className={
-                entry.status === "admin_note"
-                  ? "border-amber-700 bg-amber-700 text-white hover:bg-amber-800"
-                  : undefined
-              }
-            >
+            <Badge variant={statusBadgeVariant(entry.status)} className={entryBadgeClass(entry)}>
               {entryStatusLabel(entry.status)}
             </Badge>
             {entry.recurrenceSeriesId && (

@@ -20,43 +20,51 @@ export function entryStatusLabel(status: CalendarEntry["status"] | undefined): s
   return CALENDAR_ENTRY_STATUS_LABELS[normalizeEntryStatus(status)];
 }
 
-export function entryDotClass(entry: CalendarEntry): string {
-  switch (entry.status) {
+export function entryLegendClass(status: CalendarEntryStatus): string {
+  switch (status) {
     case "cancelled":
-      return "bg-destructive";
+      return "bg-red-500";
     case "admin_note":
-      return "bg-amber-700";
+      return "bg-purple-600";
     case "confirmed":
-      return "bg-primary";
+      return "bg-green-500";
     default:
-      return "bg-muted-foreground";
+      return "bg-orange-500";
   }
+}
+
+export function entryDotClass(entry: CalendarEntry): string {
+  return entryLegendClass(normalizeEntryStatus(entry.status));
 }
 
 export function entryChipClass(entry: CalendarEntry): string {
   switch (entry.status) {
     case "cancelled":
-      return "bg-destructive/10 text-destructive line-through hover:bg-destructive/15";
+      return "bg-red-400 text-black line-through hover:bg-red-500";
     case "admin_note":
-      return "bg-amber-700 text-white hover:bg-amber-800";
+      return "bg-purple-600 text-white hover:bg-purple-700";
     case "confirmed":
-      return "bg-primary/15 text-primary hover:bg-primary/25";
+      return "bg-green-400 text-black hover:bg-green-500";
     default:
-      return "bg-muted text-foreground hover:bg-muted/80";
+      return "bg-orange-500 text-white hover:bg-orange-600";
+  }
+}
+
+export function entryBadgeClass(entry: CalendarEntry): string {
+  switch (entry.status) {
+    case "cancelled":
+      return "border-red-500 bg-red-400 text-black line-through";
+    case "admin_note":
+      return "border-purple-600 bg-purple-600 text-white";
+    case "confirmed":
+      return "border-green-500 bg-green-400 text-black";
+    default:
+      return "border-orange-500 bg-orange-500 text-white";
   }
 }
 
 export function statusBadgeVariant(
   status: CalendarEntry["status"],
 ): "default" | "secondary" | "destructive" | "outline" {
-  switch (status) {
-    case "confirmed":
-      return "default";
-    case "cancelled":
-      return "destructive";
-    case "admin_note":
-      return "outline";
-    default:
-      return "secondary";
-  }
+  return "outline";
 }

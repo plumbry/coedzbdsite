@@ -15,6 +15,8 @@ import {
 } from "@/lib/potential-event-calendar-export.ts";
 import {
   CALENDAR_ENTRY_STATUS_LABELS,
+  entryChipClass,
+  entryLegendClass,
   type CalendarEntry,
   type CalendarEntryStatus,
 } from "@/lib/potential-event-calendar-types.ts";
@@ -29,32 +31,6 @@ function toDateInputValue(date: Date): string {
 function formatGridEventLabel(entry: CalendarEntry): string {
   const timePrefix = entry.time ? `${entry.time} ` : "";
   return `${timePrefix}${entry.title}`;
-}
-
-function exportChipClass(entry: CalendarEntry): string {
-  switch (entry.status) {
-    case "cancelled":
-      return "bg-red-100 text-red-800 line-through";
-    case "admin_note":
-      return "bg-amber-700 text-white";
-    case "confirmed":
-      return "bg-sky-100 text-sky-950";
-    default:
-      return "bg-gray-100 text-gray-900";
-  }
-}
-
-function legendSwatchClass(status: CalendarEntryStatus): string {
-  switch (status) {
-    case "cancelled":
-      return "bg-red-500";
-    case "admin_note":
-      return "bg-amber-700";
-    case "confirmed":
-      return "bg-sky-600";
-    default:
-      return "bg-gray-500";
-  }
 }
 
 interface PotentialEventCalendarImageExportProps {
@@ -96,7 +72,7 @@ const PotentialEventCalendarImageExport = forwardRef<
       <div className="mb-4 flex flex-wrap gap-4 text-xs text-gray-700">
         {(["tentative", "confirmed", "admin_note", "cancelled"] as const).map((status) => (
           <div key={status} className="flex items-center gap-1.5">
-            <span className={cn("size-2.5 rounded-full", legendSwatchClass(status))} />
+            <span className={cn("size-2.5 rounded-full", entryLegendClass(status))} />
             <span>{CALENDAR_ENTRY_STATUS_LABELS[status]}</span>
           </div>
         ))}
@@ -143,7 +119,7 @@ const PotentialEventCalendarImageExport = forwardRef<
                       key={`${dayKey}-${entry._id}`}
                       className={cn(
                         "truncate rounded px-1 py-0.5 text-[11px] leading-tight",
-                        exportChipClass(entry),
+                        entryChipClass(entry),
                       )}
                       title={formatGridEventLabel(entry)}
                     >
