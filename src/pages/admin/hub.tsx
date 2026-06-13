@@ -228,9 +228,9 @@ export default function AdminHubPage() {
           icon: CalendarDays,
         },
         {
-          title: "Punishment Matrix",
-          description: "Reference guide for minor and major infractions.",
-          href: "/admin/punishment-matrix",
+          title: "Resources",
+          description: "Punishment matrix and Discord bot command reference.",
+          href: "/admin/resources",
           icon: ScrollText,
         },
         {

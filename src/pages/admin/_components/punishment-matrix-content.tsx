@@ -1,4 +1,3 @@
-import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { AlertTriangle, ShieldAlert, ArrowRight } from "lucide-react";
@@ -39,12 +38,9 @@ const PROBATION_INFO = {
   description: "Full server ban for 28 days. The player is removed from the server entirely and cannot participate in any activities during this period. Applied at moderator/admin discretion for severe or repeated violations.",
 };
 
-export default function PunishmentMatrixPage() {
+export default function PunishmentMatrixContent() {
   return (
-    <AdminPageLayout requireEventBanAccess
-      title="Punishment Matrix"
-      description="Offense progression tracks for event bans and disciplinary actions"
-    >
+    <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -143,6 +139,6 @@ export default function PunishmentMatrixPage() {
           <p className="text-sm text-muted-foreground">{PROBATION_INFO.description}</p>
         </CardContent>
       </Card>
-    </AdminPageLayout>
+    </div>
   );
 }

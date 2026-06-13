@@ -44,7 +44,7 @@ import SsoCallbackPage from "./pages/auth/sso-callback.tsx";
 
 import EventBansPage from "./pages/admin/event-bans.tsx";
 import PotentialEventCalendarPage from "./pages/admin/potential-event-calendar.tsx";
-import PunishmentMatrixPage from "./pages/admin/punishment-matrix.tsx";
+import ResourcesPage from "./pages/admin/resources.tsx";
 import ScrimSeriesAdminPage from "./pages/admin/scrim-series.tsx";
 import SpinModerationPage from "./pages/admin/spin-moderation.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -94,7 +94,8 @@ export default function App() {
             <Route path="in-game-earnings" element={<InGameEarningsPage />} />
             <Route path="event-bans" element={<EventBansPage />} />
             <Route path="potential-event-calendar" element={<PotentialEventCalendarPage />} />
-            <Route path="punishment-matrix" element={<PunishmentMatrixPage />} />
+            <Route path="resources" element={<ResourcesPage />} />
+            <Route path="punishment-matrix" element={<Navigate to="/admin/resources" replace />} />
             <Route path="scrim-series" element={<ScrimSeriesAdminPage />} />
             <Route path="spin-moderation" element={<SpinModerationPage />} />
           </Route>
