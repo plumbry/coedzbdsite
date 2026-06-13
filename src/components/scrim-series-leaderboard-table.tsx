@@ -2,7 +2,6 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Columns3, EyeOff } from "lucide-react";
-import ScrimSeriesLeaderboardExportButton from "@/components/scrim-series-leaderboard-export-button.tsx";
 
 export type ScrimSeriesLeaderboardEntry = {
   playerId: string;
@@ -35,14 +34,12 @@ export default function ScrimSeriesLeaderboardTable({
   participationThreshold,
   penaltyAmount,
   gamesPerSession,
-  seriesName,
 }: {
   entries: ScrimSeriesLeaderboardEntry[];
   bestN: number;
   participationThreshold: number;
   penaltyAmount: number;
   gamesPerSession: number[];
-  seriesName?: string;
 }) {
   const [showDetails, setShowDetails] = useState(false);
   const [minGamesOnly, setMinGamesOnly] = useState(false);
@@ -111,8 +108,6 @@ export default function ScrimSeriesLeaderboardTable({
     }
   }
 
-  const totalGames = gamesPerSession.reduce((sum, count) => sum + count, 0);
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -136,18 +131,6 @@ export default function ScrimSeriesLeaderboardTable({
           <span className="text-xs text-muted-foreground">
             {displayedEntries.length} of {entries.length} players
           </span>
-          {seriesName && (
-            <ScrimSeriesLeaderboardExportButton
-              seriesName={seriesName}
-              bestN={bestN}
-              participationThreshold={participationThreshold}
-              penaltyAmount={penaltyAmount}
-              totalGames={totalGames}
-              entries={displayedEntries}
-              disabled={displayedEntries.length === 0}
-              variant="ghost"
-            />
-          )}
           <Button
             variant="ghost"
             size="sm"

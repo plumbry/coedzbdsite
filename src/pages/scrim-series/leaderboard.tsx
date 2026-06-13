@@ -121,7 +121,6 @@ export default function ScrimSeriesLeaderboardPage() {
           participationThreshold={series.participationThreshold}
           penaltyAmount={series.penaltyAmount}
           gamesPerSession={series.gamesPerSession}
-          seriesName={series.name}
         />
       )}
     </PageShell>

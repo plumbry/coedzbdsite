@@ -1,5 +1,24 @@
 import { toPng } from "html-to-image";
 
+export const SCRIM_SERIES_EXPORT_LIMITS = [50, 75] as const;
+export type ScrimSeriesLeaderboardExportLimit = (typeof SCRIM_SERIES_EXPORT_LIMITS)[number];
+
+export type ScrimSeriesLeaderboardExportOptions = {
+  showScoringRules: boolean;
+  showPlayerCount: boolean;
+  showGamesColumn: boolean;
+  showParticipationPercent: boolean;
+  showPenaltiesColumn: boolean;
+};
+
+export const DEFAULT_SCRIM_SERIES_EXPORT_OPTIONS: ScrimSeriesLeaderboardExportOptions = {
+  showScoringRules: true,
+  showPlayerCount: true,
+  showGamesColumn: true,
+  showParticipationPercent: true,
+  showPenaltiesColumn: true,
+};
+
 export function sanitizeLeaderboardExportFilename(seriesName: string): string {
   const slug = seriesName
     .toLowerCase()
