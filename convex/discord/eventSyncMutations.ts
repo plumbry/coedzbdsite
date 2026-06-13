@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
+import { generateUniqueEventSlug } from "../lib/eventSlug";
 
 export const processDiscordEventSync = internalMutation({
   args: {
@@ -144,8 +145,10 @@ export const processDiscordEventSync = internalMutation({
         }
 
         // Create the event with needsSetup flag
+        const slug = await generateUniqueEventSlug(ctx, discordEvent.name);
         await ctx.db.insert("events", {
           name: discordEvent.name,
+          slug,
           type: "scrim", // Default type - admin must change
           mode: "ZB Main Map", // Default mode - admin must change
           startDate: discordEvent.startTime,

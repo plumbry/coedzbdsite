@@ -494,6 +494,8 @@ export default defineSchema({
   
   events: defineTable({
     name: v.string(),
+    // URL-friendly slug derived from event name (e.g. "zbd-scrim-series-2")
+    slug: v.optional(v.string()),
     type: v.union(
       v.literal("scrim"), 
       v.literal("minicup"), 
@@ -580,7 +582,8 @@ export default defineSchema({
     .index("by_date", ["startDate"])
     .index("by_season_id", ["seasonId"])
     .index("by_discord_event_id", ["discordEventId"])
-    .index("by_linked_scrim_series", ["linkedScrimSeriesId"]),
+    .index("by_linked_scrim_series", ["linkedScrimSeriesId"])
+    .index("by_slug", ["slug"]),
   
   // Pre-assigned groups for solos-meets-duos events (duos or trios)
   eventDuoPairs: defineTable({

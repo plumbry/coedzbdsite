@@ -23,7 +23,9 @@ import {
   CommandList,
 } from "@/components/ui/command.tsx";
 import { cn } from "@/lib/utils.ts";
+import { eventPublicPath } from "@/lib/event-path.ts";
 import { Link } from "react-router-dom";
+import ScrimSeriesLeaderboardExportButton from "@/components/scrim-series-leaderboard-export-button.tsx";
 import {
   parseScrimSeriesGameCsv,
   scrimSeriesGameCsvTemplate,
@@ -470,6 +472,8 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
 
   if (!series || !leaderboard) return <Skeleton className="h-60 w-full" />;
 
+  const totalGames = series.gamesPerSession.reduce((sum, count) => sum + count, 0);
+
   if (leaderboard.length === 0) {
     return (
       <Card>
@@ -490,9 +494,20 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
           <CardTitle className="text-base flex items-center gap-2">
             <Trophy className="h-4 w-4" /> Best {series.bestN} Leaderboard
           </CardTitle>
-          <Badge variant="secondary">
-            {displayedLeaderboard.length} of {leaderboard.length} players
-          </Badge>
+          <div className="flex items-center gap-2">
+            <ScrimSeriesLeaderboardExportButton
+              seriesName={series.name}
+              bestN={series.bestN}
+              participationThreshold={series.participationThreshold}
+              penaltyAmount={series.penaltyAmount}
+              totalGames={totalGames}
+              entries={displayedLeaderboard}
+              disabled={displayedLeaderboard.length === 0}
+            />
+            <Badge variant="secondary">
+              {displayedLeaderboard.length} of {leaderboard.length} players
+            </Badge>
+          </div>
         </div>
         <CardDescription className="text-xs">
           Ranked by Best {series.bestN} score minus penalties. Amber = below min games, red = below participation %.
@@ -1600,7 +1615,7 @@ function LinkedCalendarEventBanner({ seriesId }: { seriesId: Id<"scrimSeries"> }
         </p>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" asChild>
-            <Link to={`/events/${linkedEvent._id}`} target="_blank" rel="noopener noreferrer">
+            <Link to={eventPublicPath(linkedEvent)} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="mr-1 h-3.5 w-3.5" /> Public event
             </Link>
           </Button>

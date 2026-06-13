@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -16,20 +16,38 @@ import PageHeader from "@/components/page-header.tsx";
 import PlayerProfileLink from "@/components/player-profile-link.tsx";
 import LinkedScrimSeriesResults from "./linked-scrim-series-results.tsx";
 import { getPublicEventTypeLabel } from "@/lib/event-types.ts";
+import { eventPublicPath, isConvexDocumentId } from "@/lib/event-path.ts";
 
 export default function EventDetail() {
-  const { eventId } = useParams<{ eventId: string }>();
+  const { eventId: eventParam } = useParams<{ eventId: string }>();
   const { isAdmin } = useUserRole();
-  
-  const event = useQuery(
-    api.events.management.getEvent,
-    eventId ? { eventId: eventId as Id<"events"> } : "skip"
+
+  const isConvexId = eventParam ? isConvexDocumentId(eventParam) : false;
+
+  const eventBySlug = useQuery(
+    api.events.management.getEventBySlug,
+    eventParam && !isConvexId ? { slug: eventParam } : "skip",
   );
-  
+
+  const eventById = useQuery(
+    api.events.management.getEvent,
+    eventParam && isConvexId ? { eventId: eventParam as Id<"events"> } : "skip",
+  );
+
+  const eventByIdFallback = useQuery(
+    api.events.management.getEvent,
+    eventParam && !isConvexId && eventBySlug === null
+      ? { eventId: eventParam as Id<"events"> }
+      : "skip",
+  );
+
+  const event = eventBySlug ?? eventById ?? eventByIdFallback;
+  const resolvedEventId = event?._id;
+
   const eventLeaderboards = useQuery(
     api.events.results.getEventLeaderboards,
-    eventId && event && !event.linkedScrimSeriesId
-      ? { eventId: eventId as Id<"events"> }
+    resolvedEventId && event && !event.linkedScrimSeriesId
+      ? { eventId: resolvedEventId }
       : "skip",
   );
 
@@ -40,7 +58,7 @@ export default function EventDetail() {
       : "skip",
   );
   
-  if (!eventId) {
+  if (!eventParam) {
     return (
       <PageShell>
         <p>Invalid event ID</p>
@@ -70,6 +88,10 @@ export default function EventDetail() {
         </div>
       </PageShell>
     );
+  }
+
+  if (isConvexId && event.slug) {
+    return <Navigate to={eventPublicPath(event)} replace />;
   }
 
   const publicLeaderboardLinks: Array<{ url: string; label: string }> = [];
@@ -117,23 +139,18 @@ export default function EventDetail() {
     }
   });
 
-  if (event.linkedScrimSeriesId && event.linkedScrimSeries) {
-    const seriesPath = event.linkedScrimSeries.slug ?? event.linkedScrimSeriesId;
-    addLeaderboardLink(
-      `/scrim-series/${seriesPath}`,
-      `Full Scrim Series page (${event.linkedScrimSeries.name})`,
+  if (event.linkedScrimSeriesId && event.linkedScrimSeries && linkedScrimImportLog) {
+    const seenTournaments = new Set<string>();
+    const sortedImportLog = [...linkedScrimImportLog].sort(
+      (a, b) => a.sessionNumber - b.sessionNumber,
     );
-
-    if (linkedScrimImportLog) {
-      const seenTournaments = new Set<string>();
-      for (const log of linkedScrimImportLog) {
-        if (seenTournaments.has(log.tournamentId)) continue;
-        seenTournaments.add(log.tournamentId);
-        addLeaderboardLink(
-          `https://yunite.xyz/leaderboard/${log.tournamentId}`,
-          `Yunite — Session ${log.sessionNumber}`,
-        );
-      }
+    for (const log of sortedImportLog) {
+      if (seenTournaments.has(log.tournamentId)) continue;
+      seenTournaments.add(log.tournamentId);
+      addLeaderboardLink(
+        `https://yunite.xyz/leaderboard/${log.tournamentId}`,
+        `Yunite — Session ${log.sessionNumber}`,
+      );
     }
   }
 
@@ -163,7 +180,7 @@ export default function EventDetail() {
               {event.status}
             </Badge>
             {isAdmin && (
-              <Link to={`/admin/events-manager?event=${eventId}`}>
+              <Link to={`/admin/events-manager?event=${resolvedEventId}`}>
                 <Button size="sm" variant="outline">
                   {event.type === "showdown" ? "Edit & penalties" : "Edit Event"}
                 </Button>
@@ -184,80 +201,80 @@ export default function EventDetail() {
       <div className="space-y-4">
       
       {/* Event Info */}
-      <div className="grid gap-6 md:grid-cols-3 mb-8">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Event Type</CardTitle>
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 mb-6">
+        <Card className="gap-1 py-3 shadow-none">
+          <CardHeader className="px-3 pb-0">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Event Type</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Badge variant="secondary">
+          <CardContent className="px-3 pt-1.5 flex flex-wrap items-center gap-1.5">
+            <Badge variant="secondary" className="text-xs">
               {getPublicEventTypeLabel(event.type)}
             </Badge>
             {event.type === "scrim-series" && event.linkedScrimSeries && (
-              <Badge variant="outline" className="text-xs">
+              <Badge variant="outline" className="text-xs font-normal">
                 Linked: {event.linkedScrimSeries.name}
               </Badge>
             )}
             {event.type === "scrim-series" && !event.linkedScrimSeriesId && event.bestNGames && (
-              <p className="text-xs text-muted-foreground mt-2">
+              <p className="text-xs text-muted-foreground w-full">
                 Best {event.bestNGames} games per player
               </p>
             )}
             {event.type === "showdown" && (
-              <p className="text-xs text-muted-foreground mt-2">
+              <p className="text-xs text-muted-foreground w-full">
                 Total points (all games)
               </p>
             )}
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Game Mode</CardTitle>
+        <Card className="gap-1 py-3 shadow-none">
+          <CardHeader className="px-3 pb-0">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Game Mode</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Badge variant="outline">
+          <CardContent className="px-3 pt-1.5">
+            <Badge variant="outline" className="text-xs">
               <MapPin className="mr-1 h-3 w-3" />
               {event.mode}
             </Badge>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Date Range</CardTitle>
+        <Card className="gap-1 py-3 shadow-none">
+          <CardHeader className="px-3 pb-0">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Date Range</CardTitle>
           </CardHeader>
-          <CardContent className="flex items-center gap-2 text-sm">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+          <CardContent className="px-3 pt-1.5 flex items-center gap-1.5 text-xs">
+            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             {format(new Date(event.startDate), "MMM d")} - {format(new Date(event.endDate), "MMM d, yyyy")}
           </CardContent>
         </Card>
 
         {event.type === "scrim-series" && event.seriesDurationWeeks && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Series Duration</CardTitle>
+          <Card className="gap-1 py-3 shadow-none">
+            <CardHeader className="px-3 pb-0">
+              <CardTitle className="text-xs font-medium text-muted-foreground">Series Duration</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm">
+            <CardContent className="px-3 pt-1.5 text-xs">
               {event.seriesDurationWeeks} weeks
             </CardContent>
           </Card>
         )}
 
         {event.type === "showdown" && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Format</CardTitle>
+          <Card className="gap-1 py-3 shadow-none">
+            <CardHeader className="px-3 pb-0">
+              <CardTitle className="text-xs font-medium text-muted-foreground">Format</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm space-y-1">
-              <div className="flex items-center gap-2">
-                <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
+            <CardContent className="px-3 pt-1.5 text-xs space-y-1">
+              <div className="flex items-center gap-1.5">
+                <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 <span>
                   Tier-locked at start · best {event.showdownBestWeeks ?? 2} weekly totals
                 </span>
               </div>
               {(event.penaltyAmount ?? 0) > 0 && (
-                <p className="text-xs text-muted-foreground pl-6">
+                <p className="text-xs text-muted-foreground pl-5">
                   Default penalty: {event.penaltyAmount} pts per infraction
                 </p>
               )}

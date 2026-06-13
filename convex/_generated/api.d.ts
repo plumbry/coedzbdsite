@@ -93,6 +93,7 @@ import type * as lib_eventLeaderboards_index from "../lib/eventLeaderboards/inde
 import type * as lib_eventLeaderboards_sortImports from "../lib/eventLeaderboards/sortImports.js";
 import type * as lib_eventLeaderboards_teamGrouping from "../lib/eventLeaderboards/teamGrouping.js";
 import type * as lib_eventLeaderboards_types from "../lib/eventLeaderboards/types.js";
+import type * as lib_eventSlug from "../lib/eventSlug.js";
 import type * as lib_eventTypes from "../lib/eventTypes.js";
 import type * as lib_eventWorkflow from "../lib/eventWorkflow.js";
 import type * as lib_eventYuniteRequirement from "../lib/eventYuniteRequirement.js";
@@ -283,6 +284,7 @@ declare const fullApi: ApiFromModules<{
   "lib/eventLeaderboards/sortImports": typeof lib_eventLeaderboards_sortImports;
   "lib/eventLeaderboards/teamGrouping": typeof lib_eventLeaderboards_teamGrouping;
   "lib/eventLeaderboards/types": typeof lib_eventLeaderboards_types;
+  "lib/eventSlug": typeof lib_eventSlug;
   "lib/eventTypes": typeof lib_eventTypes;
   "lib/eventWorkflow": typeof lib_eventWorkflow;
   "lib/eventYuniteRequirement": typeof lib_eventYuniteRequirement;

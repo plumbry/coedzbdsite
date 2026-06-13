@@ -66,6 +66,7 @@ export default function LinkedScrimSeriesResults({
       participationThreshold={series.participationThreshold}
       penaltyAmount={series.penaltyAmount}
       gamesPerSession={series.gamesPerSession}
+      seriesName={series.name}
     />
   );
 }

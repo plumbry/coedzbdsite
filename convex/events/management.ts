@@ -17,6 +17,7 @@ import {
   type EventWorkflowImportSummary,
 } from "../lib/eventWorkflow";
 import { normalizeEventType } from "../lib/eventTypes";
+import { generateUniqueEventSlug } from "../lib/eventSlug";
 import { collectEventLeaderboardUrls, extractTournamentIdFromUrl } from "../lib/yunite";
 
 async function countManualResultsByEvent(
@@ -128,6 +129,53 @@ function computeEventStatus(startDate: string, endDate: string): "upcoming" | "o
   } else {
     return "ongoing";
   }
+}
+
+async function buildEventDetail(ctx: QueryCtx, event: Doc<"events">) {
+  let imageUrl = null;
+  if (event.image) {
+    imageUrl = await ctx.storage.getUrl(event.image);
+  }
+
+  const computedStatus = computeEventStatus(event.startDate, event.endDate);
+
+  const linkedImports = await ctx.db
+    .query("thirdPartyImports")
+    .withIndex("by_event", (q) => q.eq("eventId", event._id))
+    .collect();
+
+  let linkedScrimSeries: {
+    _id: Id<"scrimSeries">;
+    name: string;
+    slug?: string;
+    bestN: number;
+    isActive: boolean;
+  } | null = null;
+
+  if (event.linkedScrimSeriesId) {
+    const series = await ctx.db.get(event.linkedScrimSeriesId);
+    if (series) {
+      linkedScrimSeries = {
+        _id: series._id,
+        name: series.name,
+        slug: series.slug,
+        bestN: series.bestN,
+        isActive: series.isActive,
+      };
+    }
+  }
+
+  return {
+    ...event,
+    status: computedStatus,
+    imageUrl,
+    standardCount: event.standardLeaderboards?.length || 0,
+    linkedImportCount: linkedImports.length,
+    leaderboardUrlCount: collectEventLeaderboardUrls(event, {
+      includeStandardLobby2: true,
+    }).length,
+    linkedScrimSeries,
+  };
 }
 
 // Admin event list — lightweight rows; workflow uses per-event indexed import reads.
@@ -378,6 +426,7 @@ export const getPublicEvents = query({
     return events.map((event) => ({
       _id: event._id,
       name: event.name,
+      slug: event.slug,
       type: event.type,
       mode: event.mode,
       startDate: event.startDate,
@@ -451,53 +500,43 @@ export const getEvent = query({
     if (!event) {
       return null;
     }
-    
-    // Get image URL if exists
-    let imageUrl = null;
-    if (event.image) {
-      imageUrl = await ctx.storage.getUrl(event.image);
+
+    return await buildEventDetail(ctx, event);
+  },
+});
+
+// Get single event by URL slug (public)
+export const getEventBySlug = query({
+  args: { slug: v.string() },
+  handler: async (ctx, args) => {
+    const event = await ctx.db
+      .query("events")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .first();
+    if (!event) {
+      return null;
     }
-    
-    // Compute status based on dates
-    const computedStatus = computeEventStatus(event.startDate, event.endDate);
 
-    const linkedImports = await ctx.db
-      .query("thirdPartyImports")
-      .withIndex("by_event", (q) => q.eq("eventId", args.eventId))
-      .collect();
+    return await buildEventDetail(ctx, event);
+  },
+});
 
-    let linkedScrimSeries: {
-      _id: Id<"scrimSeries">;
-      name: string;
-      slug?: string;
-      bestN: number;
-      isActive: boolean;
-    } | null = null;
+// Backfill slugs for existing events (one-time migration)
+export const backfillEventSlugs = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const events = await ctx.db.query("events").order("asc").collect();
+    let updated = 0;
 
-    if (event.linkedScrimSeriesId) {
-      const series = await ctx.db.get(event.linkedScrimSeriesId);
-      if (series) {
-        linkedScrimSeries = {
-          _id: series._id,
-          name: series.name,
-          slug: series.slug,
-          bestN: series.bestN,
-          isActive: series.isActive,
-        };
+    for (const event of events) {
+      const slug = await generateUniqueEventSlug(ctx, event.name, event._id);
+      if (event.slug !== slug) {
+        await ctx.db.patch(event._id, { slug });
+        updated++;
       }
     }
-    
-    return {
-      ...event,
-      status: computedStatus, // Override with computed status
-      imageUrl,
-      standardCount: event.standardLeaderboards?.length || 0,
-      linkedImportCount: linkedImports.length,
-      leaderboardUrlCount: collectEventLeaderboardUrls(event, {
-        includeStandardLobby2: true,
-      }).length,
-      linkedScrimSeries,
-    };
+
+    return { total: events.length, updated };
   },
 });
 
@@ -568,8 +607,11 @@ export const createEvent = mutation({
 
     const eventType = normalizeEventType(args.type);
 
+    const slug = await generateUniqueEventSlug(ctx, args.name);
+
     const eventId = await ctx.db.insert("events", {
       name: args.name,
+      slug,
       type: eventType,
       mode: args.mode,
       startDate: args.startDate,
@@ -717,7 +759,10 @@ export const updateEvent = mutation({
     const updates: Record<string, unknown> = {};
     const effectiveTypeEarly = args.type ?? event.type;
     
-    if (args.name !== undefined) updates.name = args.name;
+    if (args.name !== undefined) {
+      updates.name = args.name;
+      updates.slug = await generateUniqueEventSlug(ctx, args.name, args.eventId);
+    }
     if (args.type !== undefined) {
       updates.type = normalizeEventType(args.type);
     } else if (event.type === "minicup") {

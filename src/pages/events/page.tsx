@@ -21,6 +21,7 @@ import {
   isScrimLikeEventType,
   matchesPublicEventTypeFilter,
 } from "@/lib/event-types.ts";
+import { eventPublicPath } from "@/lib/event-path.ts";
 
 function EventCardImage({ eventId, name }: { eventId: Id<"events">; name: string }) {
   const imageUrl = useQuery(api.events.management.getEventImageUrl, { eventId });
@@ -88,7 +89,7 @@ export default function EventsPage() {
   const showdownCount = statusFilteredEvents.filter(e => e.type === "showdown").length;
   
   const EventCard = ({ event }: { event: typeof allEvents[0] }) => (
-    <Link to={`/events/${event._id}`}>
+    <Link to={eventPublicPath(event)}>
       <Card className="hover:border-primary transition-colors cursor-pointer">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3">
