@@ -15,7 +15,7 @@ export async function downloadScrimSeriesLeaderboardImage(
 ): Promise<void> {
   const dataUrl = await toPng(element, {
     backgroundColor: "#ffffff",
-    pixelRatio: 2,
+    pixelRatio: 3,
     cacheBust: true,
   });
 

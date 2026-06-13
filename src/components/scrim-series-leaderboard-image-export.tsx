@@ -18,6 +18,14 @@ function rankLabel(rank: number): string {
   return String(rank);
 }
 
+const cellStyle = { padding: "10px 14px" } as const;
+const headerCellStyle = {
+  ...cellStyle,
+  fontSize: "15px",
+  fontWeight: 600,
+  color: "#4b5563",
+} as const;
+
 const ScrimSeriesLeaderboardImageExport = forwardRef<
   HTMLDivElement,
   ScrimSeriesLeaderboardImageExportProps
@@ -32,32 +40,40 @@ const ScrimSeriesLeaderboardImageExport = forwardRef<
   return (
     <div
       ref={ref}
-      className="w-[920px] bg-white p-6 text-gray-900"
-      style={{ fontFamily: "system-ui, sans-serif" }}
+      className="bg-white text-gray-900"
+      style={{
+        width: 1080,
+        padding: 32,
+        fontFamily: "system-ui, -apple-system, Segoe UI, sans-serif",
+        WebkitFontSmoothing: "antialiased",
+        MozOsxFontSmoothing: "grayscale",
+      }}
     >
-      <div className="mb-4 space-y-1">
-        <h1 className="text-xl font-semibold">{seriesName}</h1>
-        <p className="text-sm text-gray-600">
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 32, fontWeight: 700, lineHeight: 1.2, margin: 0 }}>
+          {seriesName}
+        </h1>
+        <p style={{ fontSize: 18, color: "#4b5563", marginTop: 8, marginBottom: 0 }}>
           Best {bestN} of {totalGames} games · {participationThreshold}% min participation · −
           {penaltyAmount} pts per penalty
         </p>
-        <p className="text-xs text-gray-500">{playersLabel}</p>
+        <p style={{ fontSize: 16, color: "#6b7280", marginTop: 6, marginBottom: 0 }}>
+          {playersLabel}
+        </p>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-gray-200">
-        <table className="w-full text-sm">
+      <div style={{ overflow: "hidden", borderRadius: 12, border: "1px solid #e5e7eb" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 w-10">#</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Player</th>
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 w-24">Games</th>
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 w-24">
+            <tr style={{ borderBottom: "1px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
+              <th style={{ ...headerCellStyle, textAlign: "left", width: 56 }}>#</th>
+              <th style={{ ...headerCellStyle, textAlign: "left" }}>Player</th>
+              <th style={{ ...headerCellStyle, textAlign: "center", width: 120 }}>Games</th>
+              <th style={{ ...headerCellStyle, textAlign: "center", width: 120 }}>
                 Best {bestN}
               </th>
-              <th className="px-3 py-2 text-center text-xs font-medium text-gray-600 w-24">
-                Penalties
-              </th>
-              <th className="px-3 py-2 text-center text-xs font-semibold text-gray-900 w-20">
+              <th style={{ ...headerCellStyle, textAlign: "center", width: 120 }}>Penalties</th>
+              <th style={{ ...headerCellStyle, textAlign: "center", width: 96, color: "#111827" }}>
                 Final
               </th>
             </tr>
@@ -71,26 +87,75 @@ const ScrimSeriesLeaderboardImageExport = forwardRef<
                   : 0;
 
               return (
-                <tr key={entry.playerId} className="border-b border-gray-200 last:border-b-0">
-                  <td className="px-3 py-2 font-mono text-sm text-gray-700">{rankLabel(rank)}</td>
-                  <td className="px-3 py-2">
-                    <div className="font-medium text-gray-900">{entry.playerName}</div>
+                <tr
+                  key={entry.playerId}
+                  style={{
+                    borderBottom:
+                      index === entries.length - 1 ? "none" : "1px solid #e5e7eb",
+                  }}
+                >
+                  <td
+                    style={{
+                      ...cellStyle,
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 16,
+                      color: "#374151",
+                    }}
+                  >
+                    {rankLabel(rank)}
                   </td>
-                  <td className="px-3 py-2 text-center font-mono text-xs text-gray-700">
-                    <div>
+                  <td style={{ ...cellStyle, fontSize: 17, fontWeight: 600, color: "#111827" }}>
+                    {entry.playerName}
+                  </td>
+                  <td style={{ ...cellStyle, textAlign: "center" }}>
+                    <div
+                      style={{
+                        fontFamily: "ui-monospace, monospace",
+                        fontSize: 16,
+                        color: "#374151",
+                      }}
+                    >
                       {entry.gamesPlayed}/{entry.totalGames}
                     </div>
-                    <div className="text-[11px] text-gray-500">{participationPct}%</div>
+                    <div style={{ fontSize: 14, color: "#6b7280", marginTop: 2 }}>
+                      {participationPct}%
+                    </div>
                   </td>
-                  <td className="px-3 py-2 text-center font-mono font-medium text-gray-900">
+                  <td
+                    style={{
+                      ...cellStyle,
+                      textAlign: "center",
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 17,
+                      fontWeight: 600,
+                      color: "#111827",
+                    }}
+                  >
                     {entry.bestNTotal}
                   </td>
-                  <td className="px-3 py-2 text-center font-mono text-xs text-gray-700">
+                  <td
+                    style={{
+                      ...cellStyle,
+                      textAlign: "center",
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 16,
+                      color: "#374151",
+                    }}
+                  >
                     {entry.penaltyCount > 0
                       ? `−${entry.penaltyCount * penaltyAmount} (${entry.penaltyCount})`
                       : "0"}
                   </td>
-                  <td className="px-3 py-2 text-center font-mono text-sm font-bold text-gray-900">
+                  <td
+                    style={{
+                      ...cellStyle,
+                      textAlign: "center",
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color: "#111827",
+                    }}
+                  >
                     {entry.finalTotal}
                   </td>
                 </tr>
