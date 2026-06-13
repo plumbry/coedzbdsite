@@ -201,8 +201,8 @@ export default function EventDetail() {
       <div className="space-y-4">
       
       {/* Event Info */}
-      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 mb-6">
-        <Card className="gap-1 py-3 shadow-none">
+      <div className="flex flex-wrap gap-3 mb-6">
+        <Card className="w-fit max-w-full gap-1 py-3 shadow-none">
           <CardHeader className="px-3 pb-0">
             <CardTitle className="text-xs font-medium text-muted-foreground">Event Type</CardTitle>
           </CardHeader>
@@ -228,7 +228,7 @@ export default function EventDetail() {
           </CardContent>
         </Card>
         
-        <Card className="gap-1 py-3 shadow-none">
+        <Card className="w-fit max-w-full gap-1 py-3 shadow-none">
           <CardHeader className="px-3 pb-0">
             <CardTitle className="text-xs font-medium text-muted-foreground">Game Mode</CardTitle>
           </CardHeader>
@@ -240,7 +240,7 @@ export default function EventDetail() {
           </CardContent>
         </Card>
         
-        <Card className="gap-1 py-3 shadow-none">
+        <Card className="w-fit max-w-full gap-1 py-3 shadow-none">
           <CardHeader className="px-3 pb-0">
             <CardTitle className="text-xs font-medium text-muted-foreground">Date Range</CardTitle>
           </CardHeader>
@@ -251,7 +251,7 @@ export default function EventDetail() {
         </Card>
 
         {event.type === "scrim-series" && event.seriesDurationWeeks && (
-          <Card className="gap-1 py-3 shadow-none">
+          <Card className="w-fit max-w-full gap-1 py-3 shadow-none">
             <CardHeader className="px-3 pb-0">
               <CardTitle className="text-xs font-medium text-muted-foreground">Series Duration</CardTitle>
             </CardHeader>
@@ -262,7 +262,7 @@ export default function EventDetail() {
         )}
 
         {event.type === "showdown" && (
-          <Card className="gap-1 py-3 shadow-none">
+          <Card className="w-fit max-w-full gap-1 py-3 shadow-none">
             <CardHeader className="px-3 pb-0">
               <CardTitle className="text-xs font-medium text-muted-foreground">Format</CardTitle>
             </CardHeader>
