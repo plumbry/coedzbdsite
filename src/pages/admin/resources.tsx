@@ -4,17 +4,18 @@ import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import PunishmentMatrixContent from "./_components/punishment-matrix-content.tsx";
 import BotCommandsReference from "./_components/bot-commands-reference.tsx";
 
-const VALID_TABS = ["punishment-matrix", "commands"] as const;
+const VALID_TABS = ["commands", "punishment-matrix"] as const;
+const DEFAULT_TAB = "commands";
 
 export default function ResourcesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get("tab") ?? "punishment-matrix";
+  const tabParam = searchParams.get("tab") ?? DEFAULT_TAB;
   const activeTab = VALID_TABS.includes(tabParam as (typeof VALID_TABS)[number])
     ? tabParam
-    : "punishment-matrix";
+    : DEFAULT_TAB;
 
   const handleTabChange = (value: string) => {
-    setSearchParams(value === "punishment-matrix" ? {} : { tab: value }, { replace: true });
+    setSearchParams(value === DEFAULT_TAB ? {} : { tab: value }, { replace: true });
   };
 
   return (
@@ -24,8 +25,8 @@ export default function ResourcesPage() {
     >
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList>
-          <TabsTrigger value="punishment-matrix">Punishment Matrix</TabsTrigger>
           <TabsTrigger value="commands">Commands</TabsTrigger>
+          <TabsTrigger value="punishment-matrix">Punishment Matrix</TabsTrigger>
         </TabsList>
 
         <TabsContent value="punishment-matrix" className="space-y-4 mt-4">
