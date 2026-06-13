@@ -70,7 +70,6 @@ const ScrimSeriesLeaderboardImageExport = forwardRef<
                   <td className="px-3 py-2 font-mono text-sm text-gray-700">{rankLabel(rank)}</td>
                   <td className="px-3 py-2">
                     <div className="font-medium text-gray-900">{entry.playerName}</div>
-                    <div className="truncate font-mono text-[11px] text-gray-500">{entry.epicId}</div>
                   </td>
                   <td className="px-3 py-2 text-center font-mono text-xs text-gray-700">
                     <div>

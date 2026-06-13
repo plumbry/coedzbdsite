@@ -197,9 +197,6 @@ export default function ScrimSeriesLeaderboardTable({
                 <th className="sticky left-[40px] z-10 bg-muted/50 px-3 py-3 text-left font-semibold text-muted-foreground min-w-[140px]">
                   Player
                 </th>
-                <th className="px-3 py-3 text-left font-semibold text-muted-foreground min-w-[120px]">
-                  Epic ID
-                </th>
                 {showDetails && gameColumns.map((col) => (
                   <th
                     key={col.label}
@@ -250,12 +247,6 @@ export default function ScrimSeriesLeaderboardTable({
 
                     <td className="sticky left-[40px] z-10 bg-card px-3 py-2.5">
                       <div className="font-medium text-foreground">{entry.playerName}</div>
-                    </td>
-
-                    <td className="px-3 py-2.5">
-                      <div className="text-muted-foreground text-xs font-mono truncate max-w-[160px]">
-                        {entry.epicId}
-                      </div>
                     </td>
 
                     {showDetails && gameColumns.map((col) => {
