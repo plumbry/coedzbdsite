@@ -105,6 +105,8 @@ export default function EventDetail() {
     publicLeaderboardLinks.push({ url: trimmed, label });
   };
 
+  const isScrimSeries = event.type === "scrim-series";
+
   if (event.type === "mini-season") {
     event.qualifierLobby1Leaderboards?.forEach((url, i) =>
       addLeaderboardLink(url, `Qualifier Lobby 1${event.qualifierLobby1Leaderboards!.length > 1 ? ` (${i + 1})` : ""}`),
@@ -117,7 +119,10 @@ export default function EventDetail() {
     );
   } else {
     event.standardLeaderboards?.forEach((url, i) =>
-      addLeaderboardLink(url, `Leaderboard ${i + 1}`),
+      addLeaderboardLink(
+        url,
+        isScrimSeries ? `Session ${i + 1}` : `Leaderboard ${i + 1}`,
+      ),
     );
     event.standardLeaderboardsLobby2?.forEach((url, i) =>
       addLeaderboardLink(url, `Lobby 2 — ${i + 1}`),
@@ -149,7 +154,7 @@ export default function EventDetail() {
       seenTournaments.add(log.tournamentId);
       addLeaderboardLink(
         `https://yunite.xyz/leaderboard/${log.tournamentId}`,
-        `Yunite — Session ${log.sessionNumber}`,
+        isScrimSeries ? `Session ${log.sessionNumber}` : `Yunite — Session ${log.sessionNumber}`,
       );
     }
   }
