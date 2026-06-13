@@ -11,6 +11,7 @@ export function sanitizeLeaderboardExportFilename(seriesName: string): string {
 export async function downloadScrimSeriesLeaderboardImage(
   element: HTMLElement,
   seriesName: string,
+  playerLimit?: number,
 ): Promise<void> {
   const dataUrl = await toPng(element, {
     backgroundColor: "#ffffff",
@@ -19,9 +20,10 @@ export async function downloadScrimSeriesLeaderboardImage(
   });
 
   const slug = sanitizeLeaderboardExportFilename(seriesName);
+  const limitSuffix = playerLimit ? `-top-${playerLimit}` : "";
   const link = document.createElement("a");
   link.href = dataUrl;
-  link.download = `${slug}-leaderboard.png`;
+  link.download = `${slug}-leaderboard${limitSuffix}.png`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

@@ -8,6 +8,7 @@ interface ScrimSeriesLeaderboardImageExportProps {
   penaltyAmount: number;
   totalGames: number;
   entries: ScrimSeriesLeaderboardEntry[];
+  playerLimit?: number;
 }
 
 function rankLabel(rank: number): string {
@@ -21,9 +22,13 @@ const ScrimSeriesLeaderboardImageExport = forwardRef<
   HTMLDivElement,
   ScrimSeriesLeaderboardImageExportProps
 >(function ScrimSeriesLeaderboardImageExport(
-  { seriesName, bestN, participationThreshold, penaltyAmount, totalGames, entries },
+  { seriesName, bestN, participationThreshold, penaltyAmount, totalGames, entries, playerLimit },
   ref,
 ) {
+  const playersLabel = playerLimit
+    ? `Top ${playerLimit} · ${entries.length} players shown`
+    : `${entries.length} players shown`;
+
   return (
     <div
       ref={ref}
@@ -36,7 +41,7 @@ const ScrimSeriesLeaderboardImageExport = forwardRef<
           Best {bestN} of {totalGames} games · {participationThreshold}% min participation · −
           {penaltyAmount} pts per penalty
         </p>
-        <p className="text-xs text-gray-500">{entries.length} players shown</p>
+        <p className="text-xs text-gray-500">{playersLabel}</p>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-gray-200">
