@@ -669,6 +669,7 @@ export const addPenalty = mutation({
     playerId: v.id("scrimSeriesPlayers"),
     reason: v.string(),
     amount: v.optional(v.number()),
+    sessionNumber: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -690,6 +691,7 @@ export const addPenalty = mutation({
       reason: args.reason,
       amount,
       excluded: false,
+      ...(args.sessionNumber !== undefined ? { sessionNumber: args.sessionNumber } : {}),
     });
   },
 });
@@ -746,6 +748,7 @@ export const addPenaltyWithDedup = mutation({
     reason: v.string(),
     amount: v.number(),
     dedupKey: v.string(),
+    sessionNumber: v.number(),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -759,6 +762,7 @@ export const addPenaltyWithDedup = mutation({
       reason: args.reason,
       amount: args.amount,
       excluded: false,
+      sessionNumber: args.sessionNumber,
       dedupKey: args.dedupKey,
     });
   },

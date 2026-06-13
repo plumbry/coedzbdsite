@@ -293,6 +293,7 @@ export const importYuniteScores = action({
             reason: correction.reason || "Yunite correction",
             amount,
             dedupKey,
+            sessionNumber: args.sessionNumber,
           });
 
           newDedupKeys.add(dedupKey);

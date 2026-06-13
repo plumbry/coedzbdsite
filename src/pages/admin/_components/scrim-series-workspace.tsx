@@ -12,7 +12,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings, Users, Trophy, AlertTriangle, X, Upload, History, Loader2, ExternalLink, Copy, FileUp, Download } from "lucide-react";
+import { Plus, Trash2, Settings, Users, Trophy, AlertTriangle, X, Upload, History, Loader2, ExternalLink, Copy, FileUp, Download, ChevronsUpDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.tsx";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command.tsx";
+import { cn } from "@/lib/utils.ts";
 import { Link } from "react-router-dom";
 import {
   parseScrimSeriesGameCsv,
@@ -571,6 +581,93 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   );
 }
 
+type ScrimSeriesRosterPlayer = {
+  _id: Id<"scrimSeriesPlayers">;
+  playerName: string;
+  epicId: string;
+};
+
+function CsvPlayerLinkSelect({
+  value,
+  onValueChange,
+  players,
+  disabled,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  players: ScrimSeriesRosterPlayer[];
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const linkedPlayer =
+    value !== CSV_LINK_NEW && value !== CSV_LINK_PENDING
+      ? players.find((p) => p._id === value)
+      : null;
+
+  const displayLabel =
+    value === CSV_LINK_NEW
+      ? "Add as new player"
+      : linkedPlayer
+        ? `${linkedPlayer.playerName} (${linkedPlayer.epicId})`
+        : "Select a player…";
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className={cn(
+            "h-8 w-full justify-between font-normal",
+            value === CSV_LINK_PENDING && "text-muted-foreground",
+          )}
+        >
+          <span className="truncate">{displayLabel}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="z-[100] w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search by name or Epic ID…" />
+          <CommandList>
+            <CommandEmpty>No matching player.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="add as new player"
+                onSelect={() => {
+                  onValueChange(CSV_LINK_NEW);
+                  setOpen(false);
+                }}
+              >
+                Add as new player
+              </CommandItem>
+              {players.map((player) => (
+                <CommandItem
+                  key={player._id}
+                  value={`${player.playerName} ${player.epicId}`}
+                  onSelect={() => {
+                    onValueChange(player._id);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="truncate">
+                    {player.playerName}{" "}
+                    <span className="text-muted-foreground">({player.epicId})</span>
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ─── Imports Panel (Yunite + CSV) ────────────────────────────────────────────
 
 function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
@@ -1013,26 +1110,12 @@ function ImportsPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
                           </td>
                           <td className="py-2 px-2 text-center font-medium">{row.score}</td>
                           <td className="py-2 px-3">
-                            <Select
+                            <CsvPlayerLinkSelect
                               value={selectValue}
                               onValueChange={(v) => setCsvRowLink(row.rowIndex, v)}
+                              players={players}
                               disabled={csvImporting}
-                            >
-                              <SelectTrigger className="h-8">
-                                <SelectValue placeholder="Select player" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value={CSV_LINK_PENDING} disabled>
-                                  Select a player…
-                                </SelectItem>
-                                <SelectItem value={CSV_LINK_NEW}>Add as new player</SelectItem>
-                                {players.map((player) => (
-                                  <SelectItem key={player._id} value={player._id}>
-                                    {`${player.playerName} (${player.epicId})`}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            />
                             {linkedPlayer && (
                               <p className="text-xs text-muted-foreground mt-1 truncate">
                                 Epic: {linkedPlayer.epicId}
@@ -1315,6 +1398,21 @@ function ScoreEntryGrid({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
 
 // ─── Penalty Management ──────────────────────────────────────────────────────
 
+function getPenaltySessionNumber(p: {
+  sessionNumber?: number;
+  dedupKey?: string;
+}): number | null {
+  if (p.sessionNumber != null) return p.sessionNumber;
+  if (p.dedupKey) {
+    const sessionPart = p.dedupKey.split("|")[1];
+    if (sessionPart) {
+      const parsed = Number.parseInt(sessionPart, 10);
+      if (!Number.isNaN(parsed)) return parsed;
+    }
+  }
+  return null;
+}
+
 function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const players = useQuery(api.scrimSeries.queries.getPlayers, { seriesId });
   const penalties = useQuery(api.scrimSeries.queries.getPenalties, { seriesId });
@@ -1322,7 +1420,7 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const updatePenalty = useMutation(api.scrimSeries.mutations.updatePenalty);
   const removePenalty = useMutation(api.scrimSeries.mutations.removePenalty);
 
-  const [sortBy, setSortBy] = useState<"player" | "reason">("player");
+  const [sortBy, setSortBy] = useState<"player" | "reason" | "session">("player");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [filterReason, setFilterReason] = useState<string>("all");
 
@@ -1345,7 +1443,7 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const getPlayerName = (id: Id<"scrimSeriesPlayers">) =>
     players.find((p) => p._id === id)?.playerName ?? "Unknown";
 
-  const handleSort = (col: "player" | "reason") => {
+  const handleSort = (col: "player" | "reason" | "session") => {
     if (sortBy === col) {
       setSortDir(sortDir === "asc" ? "desc" : "asc");
     } else {
@@ -1360,6 +1458,10 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
       let cmp = 0;
       if (sortBy === "player") {
         cmp = getPlayerName(a.playerId).localeCompare(getPlayerName(b.playerId));
+      } else if (sortBy === "session") {
+        const sessionA = getPenaltySessionNumber(a) ?? Number.MAX_SAFE_INTEGER;
+        const sessionB = getPenaltySessionNumber(b) ?? Number.MAX_SAFE_INTEGER;
+        cmp = sessionA - sessionB;
       } else {
         cmp = (a.reason || "").localeCompare(b.reason || "");
       }
@@ -1407,6 +1509,12 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
                     Player {sortBy === "player" ? (sortDir === "asc" ? "↑" : "↓") : ""}
                   </th>
                   <th
+                    className="text-left py-2 pr-4 font-medium text-muted-foreground cursor-pointer select-none w-16"
+                    onClick={() => handleSort("session")}
+                  >
+                    Session {sortBy === "session" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                  </th>
+                  <th
                     className="text-left py-2 pr-4 font-medium text-muted-foreground cursor-pointer select-none"
                     onClick={() => handleSort("reason")}
                   >
@@ -1417,9 +1525,18 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
                 </tr>
               </thead>
               <tbody>
-                {sortedPenalties.map((p) => (
+                {sortedPenalties.map((p) => {
+                  const sessionNumber = getPenaltySessionNumber(p);
+                  return (
                   <tr key={p._id} className={`border-b border-muted/30 hover:bg-muted/20 ${p.excluded ? "opacity-50 line-through" : ""}`}>
                     <td className="py-1.5 pr-4 font-medium truncate max-w-[150px]">{getPlayerName(p.playerId)}</td>
+                    <td className="py-1.5 pr-4">
+                      {sessionNumber != null ? (
+                        <Badge variant="secondary" className="text-xs">S{sessionNumber}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </td>
                     <td className="py-1.5 pr-4 text-muted-foreground truncate max-w-[200px]">{p.reason}</td>
                     <td className="py-1.5 px-2 text-center">
                       <Badge variant="secondary" className="text-xs">-{p.amount}</Badge>
@@ -1443,7 +1560,8 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
                       </Button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

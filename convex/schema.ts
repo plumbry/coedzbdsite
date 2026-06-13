@@ -1578,6 +1578,7 @@ export default defineSchema({
     reason: v.string(),
     amount: v.number(), // Deduction amount (usually same as series penaltyAmount)
     excluded: v.boolean(), // If true, penalty is excluded from final calculation
+    sessionNumber: v.optional(v.number()), // 1-based session (S1, S2, …); set on Yunite import
     dedupKey: v.optional(v.string()), // Dedup key for Yunite-sourced penalties: {tournamentId}|{session}|{correctionId}|{epicId}
   }).index("by_series", ["seriesId"])
     .index("by_player", ["playerId"])
