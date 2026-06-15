@@ -8,9 +8,7 @@ import { isYuniteImport } from "./lib/importSource";
 import { buildZbdPerformanceStats } from "./lib/stats/zbdPerformanceStats";
 import {
   getPlayerDisplayStatsEligibility,
-  getPlayerStatsCacheRow,
 } from "./lib/stats/playerStatsCacheEligibility";
-import type { ZbdPerformanceStats } from "./lib/stats/zbdPerformanceStats";
 
 async function partitionThirdPartyResultsByImport(
   ctx: QueryCtx,
@@ -319,29 +317,6 @@ export const comprehensiveStatsForPlayerInternal = internalQuery({
   },
 });
 
-function mapCacheRowToZbdStats(
-  cacheRow: NonNullable<Awaited<ReturnType<typeof getPlayerStatsCacheRow>>>,
-): ZbdPerformanceStats {
-  return {
-    totalGames: cacheRow.eventCount,
-    eventsPlayed: cacheRow.eventCount,
-    totalMatches: 0,
-    matchWins: 0,
-    winRate: cacheRow.winRate,
-    winCount: 0,
-    averagePlacement: cacheRow.averagePlacement,
-    averageKD: cacheRow.averageKills,
-    killsPerMatch: cacheRow.averageKills,
-    deathsPerMatch: 0,
-    averageKd: cacheRow.averageKills,
-    totalEliminations: cacheRow.totalKills,
-    top3Finishes: Math.round((cacheRow.top3Rate / 100) * cacheRow.eventCount),
-    averageScore: cacheRow.averageScore,
-    manualEventsCount: 0,
-    yuniteTournamentRows: cacheRow.eventCount,
-  };
-}
-
 export const getPlayerZBDPerformanceBundle = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
@@ -367,16 +342,12 @@ export const getPlayerZBDPerformanceBundle = query({
       };
     }
 
-    const cacheRow = await getPlayerStatsCacheRow(ctx, args.playerId);
-    if (!cacheRow) {
-      return {
-        stats: null,
-        eligibility,
-        events,
-      };
-    }
-
-    const stats = mapCacheRowToZbdStats(cacheRow);
+    const { stats } = await buildZbdPerformanceStats(
+      ctx,
+      args.playerId,
+      eventResults,
+      yuniteResults,
+    );
 
     return {
       stats: {
