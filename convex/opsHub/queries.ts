@@ -41,11 +41,22 @@ export const listTicketReplyTemplates = query({
   },
 });
 
-export const listResponsibilities = query({
+export const listStaffProfiles = query({
   args: { viewerToken: viewerTokenArg },
   handler: async (ctx, args) => {
     await requireOpsHubReadAccess(ctx, args.viewerToken);
-    return await ctx.db.query("opsHubResponsibilities").order("desc").collect();
+    return await ctx.db.query("opsHubStaffProfiles").order("desc").collect();
+  },
+});
+
+export const listResponsibilityCatalog = query({
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx, args) => {
+    await requireOpsHubReadAccess(ctx, args.viewerToken);
+    const entries = await ctx.db.query("opsHubResponsibilityCatalog").collect();
+    return entries.sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
+    );
   },
 });
 

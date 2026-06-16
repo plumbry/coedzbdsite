@@ -20,22 +20,37 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
     commands: [
       {
         name: "gamecall",
-        description: "Start a game call with code, region, role ping, and optional countdown.",
+        description: "Start a game call.",
         usage: "/gamecall code:<code> region:<region> role:<role> minutes:<minutes>",
       },
       {
         name: "calledit",
-        description: "Edit the currently active game call.",
-        usage: "/calledit action:<action> code:<code>",
+        description: "Edit the active game call.",
+        usage: "/calledit action:<override|stop> code:<code>",
       },
       {
         name: "roletagged",
-        description: "Assign a role to tagged users from signup messages.",
-        usage: "/roletagged role:<role> mode:<team size> reload:<bool> two_lobbies:<bool>",
+        description: "Give roles to tagged users from signups.",
+        usage: "/roletagged role:<role> mode:<team size> reload:<bool> two_lobbies:<bool> duo_solo_pairing:<bool>",
+      },
+      {
+        name: "roleuntagged",
+        description: "Give a role to every @mentioned user in this channel (no team checks).",
+        usage: "/roleuntagged role:<role>",
+      },
+      {
+        name: "checkrules",
+        description: "Check rules acknowledgement for signups in this channel.",
+        usage: "/checkrules mode:<team size> reload:<bool> two_lobbies:<bool>",
+      },
+      {
+        name: "teamnames",
+        description: "List Discord usernames for all signups in this channel (tagged or plain names).",
+        usage: "/teamnames mode:<team size> file:<bool>",
       },
       {
         name: "unreg",
-        description: "Unregister a team by signup number and optionally remove roles or notify teammates.",
+        description: "Unregister a valid sign-up by team number.",
         usage: "/unreg team_number:<n> role:<role> notify:<bool> players:<list>",
       },
       {
@@ -45,12 +60,12 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
       },
       {
         name: "scrimremind",
-        description: "Post a scrim signup reminder tied to a server scheduled event.",
+        description: "Post a scrim signup reminder from a server scheduled event.",
         usage: "/scrimremind event:<event> mode:<mode> category:<category> schedule:<when> ping_everyone:<bool>",
       },
       {
         name: "spin",
-        description: "Import scrim signups from Discord into a website spin event.",
+        description: "Import scrim signups into a website spin event.",
         usage: "/spin code:<event code>",
       },
       {
@@ -66,12 +81,17 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
         description: "Post or edit a bans-only message without full rules text.",
         subcommands: [
           { name: "post", description: "Post a banned-items message in the current channel." },
-          { name: "edit", description: "Edit an existing bans message in this channel." },
+          { name: "edit", description: "Edit the ban list where bans were posted (this channel)." },
         ],
       },
       {
         name: "dropmap",
-        description: "Post the dropmap closure message for an event.",
+        description: "Post dropmap closure message.",
+      },
+      {
+        name: "dropmapcheck",
+        description: "Check which signup teams have at least one member who typed in dropmap.",
+        usage: "/dropmapcheck signup_channel:<channel>",
       },
     ],
   },
@@ -96,15 +116,20 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
       },
       {
         name: "checkbannedplayers",
-        description: "Check whether signed-up players have the Event Ban role.",
+        description: "Check if signed up players have the Event Ban role.",
       },
       {
         name: "fixbans",
-        description: "Repair event ban messages from the Google Sheet.",
+        description: "Repair event ban messages from the sheet.",
+      },
+      {
+        name: "ticket",
+        description: "Open an In Game Report ticket via Ticket Tool (run from a staff channel).",
+        usage: "/ticket user:<user> reason:<reason>",
       },
       {
         name: "report",
-        description: "Send instructions for submitting a rule-break report.",
+        description: "Send instructions for submitting a rule break report.",
       },
       {
         name: "verify",
@@ -131,7 +156,7 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
       },
       {
         name: "purge",
-        description: "Delete messages in the current channel (requires typing CONFIRM).",
+        description: "Delete messages in this channel (Discord-safe).",
         usage: "/purge confirm:CONFIRM",
       },
     ],
@@ -148,7 +173,7 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
       },
       {
         name: "vodreport",
-        description: "Check Twitch VOD compliance for an event window.",
+        description: "Check Twitch VOD compliance for event.",
         usage: "/vodreport date:<YYYY-MM-DD> start:<HH:MM UTC> end:<HH:MM UTC>",
       },
       {
@@ -162,7 +187,7 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
       },
       {
         name: "teamstreamcheck",
-        description: "Check accepted teams for missing stream links.",
+        description: "Check accepted teams for missing streams.",
         usage: "/teamstreamcheck gamemode:<mode>",
       },
     ],
@@ -184,7 +209,7 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
       },
       {
         name: "roleverifycheck",
-        description: "List New Members who also have the Yunite Verified role.",
+        description: "Check which New Members also have the Yunite Verified role.",
       },
       {
         name: "syncgirlrole",
@@ -192,7 +217,7 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
       },
       {
         name: "applyunverifiedfemalerole",
-        description: "Backfill the pending female role from the Mod Log Gender Sheet.",
+        description: "Manual backfill: pending female role from Mod Log Gender Sheet (gender 50).",
         usage: "/applyunverifiedfemalerole dry_run:<bool>",
       },
       {
@@ -216,6 +241,11 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
         usage: "Run in a category channel; confirm via button prompt.",
       },
       {
+        name: "say",
+        description: "Post a message as the bot (confirmation is only visible to you).",
+        usage: "/say channel:<channel> members:<@mentions or IDs> tag_only:<bool>",
+      },
+      {
         name: "export",
         description: "Export messages from a channel to a downloadable file.",
         usage: "/export channel:<channel> limit:<n> format:<format>",
@@ -237,7 +267,7 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
     commands: [
       {
         name: "submit",
-        description: "Submit match results from Yunite into the website.",
+        description: "Submit match results from Yunite.",
         usage: "/submit id:<yunite tournament id> session:<1-12>",
       },
       {

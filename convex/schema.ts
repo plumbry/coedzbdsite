@@ -1621,7 +1621,7 @@ export default defineSchema({
   opsHubSponsorLogs: defineTable({
     sponsorName: v.string(),
     amount: v.number(),
-    dateReceived: v.string(),
+    dateReceived: v.optional(v.string()),
     intendedEvent: v.optional(v.string()),
     paymentSource: v.optional(v.string()),
     notes: v.optional(v.string()),
@@ -1720,11 +1720,20 @@ export default defineSchema({
     ),
   }).index("by_category", ["category"]),
 
-  opsHubResponsibilities: defineTable({
+  opsHubResponsibilityCatalog: defineTable({
+    label: v.string(),
+    color: v.string(),
+    createdAt: v.number(),
+  }).index("by_label", ["label"]),
+
+  opsHubStaffProfiles: defineTable({
     person: v.string(),
-    areaOwned: v.string(),
-    backupPerson: v.optional(v.string()),
-    notes: v.optional(v.string()),
+    responsibilities: v.array(
+      v.object({
+        label: v.string(),
+        color: v.string(),
+      }),
+    ),
     createdAt: v.number(),
     updatedAt: v.number(),
     createdBy: v.optional(v.string()),

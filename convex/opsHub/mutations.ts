@@ -1,5 +1,6 @@
 import { mutation } from "../_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
+import { resolveResponsibilityLabels } from "./responsibilityCatalog";
 import {
   auditFields,
   requireOpsHubWriteAccess,
@@ -40,7 +41,7 @@ export const createSponsorLog = mutation({
     viewerToken: viewerTokenArg,
     sponsorName: v.string(),
     amount: v.number(),
-    dateReceived: v.string(),
+    dateReceived: v.optional(v.string()),
     intendedEvent: v.optional(v.string()),
     paymentSource: v.optional(v.string()),
     notes: v.optional(v.string()),
@@ -63,7 +64,7 @@ export const updateSponsorLog = mutation({
     id: v.id("opsHubSponsorLogs"),
     sponsorName: v.string(),
     amount: v.number(),
-    dateReceived: v.string(),
+    dateReceived: v.optional(v.string()),
     intendedEvent: v.optional(v.string()),
     paymentSource: v.optional(v.string()),
     notes: v.optional(v.string()),
@@ -283,48 +284,71 @@ export const deleteTicketReplyTemplate = mutation({
   },
 });
 
-// ─── Responsibilities ───────────────────────────────────────────────────────
+// ─── Staff profiles & responsibilities ──────────────────────────────────────
 
-export const createResponsibility = mutation({
+export const createStaffProfile = mutation({
   args: {
     viewerToken: viewerTokenArg,
     person: v.string(),
-    areaOwned: v.string(),
-    backupPerson: v.optional(v.string()),
-    notes: v.optional(v.string()),
+    responsibilityLabels: v.array(v.string()),
   },
   handler: async (ctx, args) => {
     const access = await requireOpsHubWriteAccess(ctx);
     const now = Date.now();
-    const { viewerToken: _, ...fields } = args;
-    return await ctx.db.insert("opsHubResponsibilities", {
-      ...fields,
+    const person = args.person.trim();
+    if (!person) {
+      throw new ConvexError({
+        message: "Person name is required",
+        code: "INVALID_ARGUMENT",
+      });
+    }
+
+    const responsibilities = await resolveResponsibilityLabels(
+      ctx,
+      args.responsibilityLabels,
+    );
+
+    return await ctx.db.insert("opsHubStaffProfiles", {
+      person,
+      responsibilities,
       ...auditFields(access, now),
     });
   },
 });
 
-export const updateResponsibility = mutation({
+export const updateStaffProfile = mutation({
   args: {
     viewerToken: viewerTokenArg,
-    id: v.id("opsHubResponsibilities"),
+    id: v.id("opsHubStaffProfiles"),
     person: v.string(),
-    areaOwned: v.string(),
-    backupPerson: v.optional(v.string()),
-    notes: v.optional(v.string()),
+    responsibilityLabels: v.array(v.string()),
   },
   handler: async (ctx, args) => {
     const access = await requireOpsHubWriteAccess(ctx);
-    const { id, viewerToken: _, ...fields } = args;
+    const person = args.person.trim();
+    if (!person) {
+      throw new ConvexError({
+        message: "Person name is required",
+        code: "INVALID_ARGUMENT",
+      });
+    }
+
+    const responsibilities = await resolveResponsibilityLabels(
+      ctx,
+      args.responsibilityLabels,
+    );
+
+    const { id, viewerToken: _, ..._rest } = args;
     await ctx.db.patch(id, {
-      ...fields,
+      person,
+      responsibilities,
       ...updateAuditFields(access, Date.now()),
     });
   },
 });
 
-export const deleteResponsibility = mutation({
-  args: { viewerToken: viewerTokenArg, id: v.id("opsHubResponsibilities") },
+export const deleteStaffProfile = mutation({
+  args: { viewerToken: viewerTokenArg, id: v.id("opsHubStaffProfiles") },
   handler: async (ctx, args) => {
     await requireOpsHubWriteAccess(ctx);
     await ctx.db.delete(args.id);

@@ -1,9 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Search, Terminal } from "lucide-react";
 import { BOT_COMMAND_CATEGORIES, type BotCommand, type BotCommandCategory } from "../_data/bot-commands.ts";
+
+const ALL_CATEGORY_IDS = BOT_COMMAND_CATEGORIES.map((category) => category.id);
 
 function commandMatchesQuery(command: BotCommand, query: string) {
   const haystack = [
@@ -61,11 +69,20 @@ function CommandRow({ command }: { command: BotCommand }) {
 
 export default function BotCommandsReference() {
   const [search, setSearch] = useState("");
+  const [openSections, setOpenSections] = useState<string[]>(ALL_CATEGORY_IDS);
+
+  const query = search.trim().toLowerCase();
 
   const filteredCategories = useMemo(
-    () => filterCategories(BOT_COMMAND_CATEGORIES, search.trim().toLowerCase()),
-    [search],
+    () => filterCategories(BOT_COMMAND_CATEGORIES, query),
+    [query],
   );
+
+  useEffect(() => {
+    if (query) {
+      setOpenSections(filteredCategories.map((category) => category.id));
+    }
+  }, [query, filteredCategories]);
 
   const totalCommands = useMemo(
     () => BOT_COMMAND_CATEGORIES.reduce((sum, category) => sum + category.commands.length, 0),
@@ -104,19 +121,37 @@ export default function BotCommandsReference() {
           </CardContent>
         </Card>
       ) : (
-        filteredCategories.map((category) => (
-          <Card key={category.id}>
-            <CardHeader>
-              <CardTitle className="text-base">{category.label}</CardTitle>
-              <CardDescription>{category.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {category.commands.map((command) => (
-                <CommandRow key={command.name} command={command} />
-              ))}
-            </CardContent>
-          </Card>
-        ))
+        <Accordion
+          type="multiple"
+          value={openSections}
+          onValueChange={setOpenSections}
+          className="space-y-4"
+        >
+          {filteredCategories.map((category) => (
+            <AccordionItem
+              key={category.id}
+              value={category.id}
+              className="rounded-lg border bg-card px-4 last:border-b"
+            >
+              <AccordionTrigger className="hover:no-underline">
+                <div className="space-y-1 text-left">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-base font-semibold">{category.label}</span>
+                    <Badge variant="secondary" className="text-xs font-normal">
+                      {category.commands.length} command{category.commands.length !== 1 ? "s" : ""}
+                    </Badge>
+                  </div>
+                  <p className="text-sm font-normal text-muted-foreground">{category.description}</p>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="space-y-3">
+                {category.commands.map((command) => (
+                  <CommandRow key={command.name} command={command} />
+                ))}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       )}
     </div>
   );

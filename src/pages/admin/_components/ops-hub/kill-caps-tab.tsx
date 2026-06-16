@@ -22,10 +22,33 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog.tsx";
 
+const MODE_OPTIONS = [
+  { value: "Reload", label: "Reload" },
+  { value: "ZB BR", label: "ZB BR" },
+];
+
+const TEAM_SIZE_OPTIONS = [
+  { value: "Duos", label: "Duos" },
+  { value: "Trios", label: "Trios" },
+  { value: "Squads", label: "Squads" },
+];
+
 const FIELDS: OpsFormField[] = [
-  { key: "mode", label: "Mode", type: "text", required: true },
+  {
+    key: "mode",
+    label: "Mode",
+    type: "select",
+    required: true,
+    options: MODE_OPTIONS,
+  },
+  {
+    key: "teamSizeTier",
+    label: "Team Size",
+    type: "select",
+    required: true,
+    options: TEAM_SIZE_OPTIONS,
+  },
   { key: "lobbyType", label: "Lobby type", type: "text", required: true },
-  { key: "teamSizeTier", label: "Team size / tier combo", type: "text", required: true },
   { key: "killCap", label: "Kill cap", type: "number", required: true },
   { key: "notes", label: "Notes", type: "textarea" },
 ];
@@ -55,16 +78,16 @@ export default function KillCapsTab({ viewerToken, canEdit = false }: OpsHubTabP
   };
 
   const handleSave = async () => {
-    if (!values.mode.trim() || !values.lobbyType.trim() || !values.teamSizeTier.trim()) {
-      toast.error("Mode, lobby type, and team size/tier are required");
+    if (!values.mode || !values.teamSizeTier || !values.lobbyType.trim()) {
+      toast.error("Mode, team size, and lobby type are required");
       return;
     }
     setSaving(true);
     try {
       const payload = {
-        mode: values.mode.trim(),
+        mode: values.mode,
         lobbyType: values.lobbyType.trim(),
-        teamSizeTier: values.teamSizeTier.trim(),
+        teamSizeTier: values.teamSizeTier,
         killCap: Number(values.killCap) || 0,
         notes: values.notes.trim() || undefined,
       };
@@ -122,7 +145,7 @@ export default function KillCapsTab({ viewerToken, canEdit = false }: OpsHubTabP
           },
           {
             key: "tier",
-            header: "Team / tier",
+            header: "Team Size",
             searchValue: (r) => r.teamSizeTier,
             render: (r) => r.teamSizeTier,
           },

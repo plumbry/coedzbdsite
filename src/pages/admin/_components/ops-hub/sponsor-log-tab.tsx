@@ -33,7 +33,7 @@ import {
 const FIELDS: OpsFormField[] = [
   { key: "sponsorName", label: "Sponsor name", type: "text", required: true },
   { key: "amount", label: "Amount", type: "number", required: true },
-  { key: "dateReceived", label: "Date received", type: "date", required: true },
+  { key: "dateReceived", label: "Date received", type: "date" },
   { key: "intendedEvent", label: "Intended event", type: "text" },
   { key: "paymentSource", label: "Payment source / PayPal", type: "text" },
   { key: "notes", label: "Notes", type: "textarea" },
@@ -81,8 +81,8 @@ export default function SponsorLogTab({ viewerToken, canEdit = false }: OpsHubTa
   };
 
   const handleSave = async () => {
-    if (!values.sponsorName.trim() || !values.dateReceived) {
-      toast.error("Sponsor name and date are required");
+    if (!values.sponsorName.trim()) {
+      toast.error("Sponsor name is required");
       return;
     }
     setSaving(true);
@@ -90,7 +90,7 @@ export default function SponsorLogTab({ viewerToken, canEdit = false }: OpsHubTa
       const payload = {
         sponsorName: values.sponsorName.trim(),
         amount: Number(values.amount) || 0,
-        dateReceived: values.dateReceived,
+        dateReceived: values.dateReceived.trim() || undefined,
         intendedEvent: values.intendedEvent.trim() || undefined,
         paymentSource: values.paymentSource.trim() || undefined,
         notes: values.notes.trim() || undefined,
@@ -174,7 +174,7 @@ export default function SponsorLogTab({ viewerToken, canEdit = false }: OpsHubTa
           {
             key: "date",
             header: "Received",
-            render: (r) => r.dateReceived,
+            render: (r) => r.dateReceived ?? "—",
           },
           {
             key: "event",

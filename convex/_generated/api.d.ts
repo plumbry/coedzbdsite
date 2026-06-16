@@ -111,6 +111,7 @@ import type * as lib_stats_computeContributionScore from "../lib/stats/computeCo
 import type * as lib_stats_computeInternalPlayerStats from "../lib/stats/computeInternalPlayerStats.js";
 import type * as lib_stats_evaluationStatus from "../lib/stats/evaluationStatus.js";
 import type * as lib_stats_filterYuniteResults from "../lib/stats/filterYuniteResults.js";
+import type * as lib_stats_gameMode from "../lib/stats/gameMode.js";
 import type * as lib_stats_holisticScore from "../lib/stats/holisticScore.js";
 import type * as lib_stats_importRecordCache from "../lib/stats/importRecordCache.js";
 import type * as lib_stats_listEligiblePlayers from "../lib/stats/listEligiblePlayers.js";
@@ -137,6 +138,7 @@ import type * as migrations_stripWipSchemaFields from "../migrations/stripWipSch
 import type * as opsHub_access from "../opsHub/access.js";
 import type * as opsHub_mutations from "../opsHub/mutations.js";
 import type * as opsHub_queries from "../opsHub/queries.js";
+import type * as opsHub_responsibilityCatalog from "../opsHub/responsibilityCatalog.js";
 import type * as playerAlts from "../playerAlts.js";
 import type * as playerEarnings from "../playerEarnings.js";
 import type * as playerStats from "../playerStats.js";
@@ -305,6 +307,7 @@ declare const fullApi: ApiFromModules<{
   "lib/stats/computeInternalPlayerStats": typeof lib_stats_computeInternalPlayerStats;
   "lib/stats/evaluationStatus": typeof lib_stats_evaluationStatus;
   "lib/stats/filterYuniteResults": typeof lib_stats_filterYuniteResults;
+  "lib/stats/gameMode": typeof lib_stats_gameMode;
   "lib/stats/holisticScore": typeof lib_stats_holisticScore;
   "lib/stats/importRecordCache": typeof lib_stats_importRecordCache;
   "lib/stats/listEligiblePlayers": typeof lib_stats_listEligiblePlayers;
@@ -331,6 +334,7 @@ declare const fullApi: ApiFromModules<{
   "opsHub/access": typeof opsHub_access;
   "opsHub/mutations": typeof opsHub_mutations;
   "opsHub/queries": typeof opsHub_queries;
+  "opsHub/responsibilityCatalog": typeof opsHub_responsibilityCatalog;
   playerAlts: typeof playerAlts;
   playerEarnings: typeof playerEarnings;
   playerStats: typeof playerStats;
