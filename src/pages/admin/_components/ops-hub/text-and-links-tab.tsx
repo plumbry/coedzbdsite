@@ -126,7 +126,7 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
 
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<Doc<"opsHubResourceLinks"> | null>(null);
-  const [linkValues, setLinkValues] = useState(() => ({
+  const [linkValues, setLinkValues] = useState<Record<string, string>>(() => ({
     ...emptyFormValues(LINK_FIELDS),
     linkType: "spreadsheet",
   }));
