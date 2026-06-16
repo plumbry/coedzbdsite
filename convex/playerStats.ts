@@ -113,9 +113,11 @@ async function formatPlayerAllEvents(
   const formattedEventResults = await Promise.all(
     eventResults.map(async (event) => {
       let isNoMoneyEvent = false;
+      let mode: string | null = null;
       if (event.eventId) {
         const linkedEvent = await ctx.db.get(event.eventId);
         isNoMoneyEvent = linkedEvent?.isNoMoneyEvent ?? false;
+        mode = linkedEvent?.mode ?? null;
       }
 
       return {
@@ -131,6 +133,7 @@ async function formatPlayerAllEvents(
         yuniteLeaderboardUrl: event.yuniteLeaderboardUrl,
         teammateName: undefined,
         isNoMoneyEvent,
+        mode,
       };
     }),
   );
@@ -146,6 +149,7 @@ async function formatPlayerAllEvents(
   type EventInfo = {
     name?: string;
     type?: string;
+    mode?: string;
     excludeLowestScore?: boolean;
     isNoMoneyEvent?: boolean;
     startDate?: string;
@@ -170,6 +174,7 @@ async function formatPlayerAllEvents(
         ? {
             name: linkedEvent.name as string | undefined,
             type: linkedEvent.type as string | undefined,
+            mode: linkedEvent.mode as string | undefined,
             excludeLowestScore: linkedEvent.excludeLowestScore as boolean | undefined,
             isNoMoneyEvent: linkedEvent.isNoMoneyEvent as boolean | undefined,
             startDate: linkedEvent.startDate as string | undefined,
@@ -214,6 +219,7 @@ async function formatPlayerAllEvents(
 
       let groupEventName: string | undefined;
       let eventType: string | null = null;
+      let mode: string | null = null;
       let excludeLowestScore: boolean | undefined;
       let isNoMoneyEvent = false;
       let linkedEventStartDate: string | undefined;
@@ -222,6 +228,7 @@ async function formatPlayerAllEvents(
         if (linkedEvent) {
           groupEventName = linkedEvent.name;
           eventType = linkedEvent.type || null;
+          mode = linkedEvent.mode ?? null;
           excludeLowestScore = linkedEvent.excludeLowestScore;
           isNoMoneyEvent = linkedEvent.isNoMoneyEvent ?? false;
           linkedEventStartDate = linkedEvent.startDate;
@@ -267,6 +274,7 @@ async function formatPlayerAllEvents(
         yuniteLeaderboardUrl: undefined,
         teammateName: teammateNames.length > 0 ? teammateNames.join(", ") : undefined,
         eventType,
+        mode,
         excludeLowestScore,
         isNoMoneyEvent,
       };
@@ -342,7 +350,7 @@ export const getPlayerZBDPerformanceBundle = query({
       };
     }
 
-    const { stats } = await buildZbdPerformanceStats(
+    const { stats, statsByMode } = await buildZbdPerformanceStats(
       ctx,
       args.playerId,
       eventResults,
@@ -353,6 +361,10 @@ export const getPlayerZBDPerformanceBundle = query({
       stats: {
         ...stats,
         totalRecordedEvents: stats.eventsPlayed,
+      },
+      statsByMode: {
+        br: statsByMode.br,
+        reload: statsByMode.reload,
       },
       eligibility,
       events,

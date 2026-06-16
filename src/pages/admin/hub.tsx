@@ -16,6 +16,7 @@ import {
   Ban,
   CalendarDays,
   ScrollText,
+  BookOpen,
   KeyRound,
   Dices,
   Database,
@@ -229,9 +230,10 @@ export default function AdminHubPage() {
         },
         {
           title: "Resources",
-          description: "Punishment matrix and Discord bot command reference.",
+          description:
+            "Bot commands, punishment matrix, sponsor logs, rules, and live ops data.",
           href: "/admin/resources",
-          icon: ScrollText,
+          icon: BookOpen,
         },
         {
           title: "Spin Page",

@@ -32,6 +32,11 @@ export type ZbdPerformanceStats = {
   yuniteTournamentRows: number;
 };
 
+export type ZbdPerformanceStatsByMode = {
+  br: ZbdPerformanceStats;
+  reload: ZbdPerformanceStats;
+};
+
 export const EMPTY_INTERNAL_PLAYER_STATS: InternalPlayerStats = {
   eventsPlayed: 0,
   totalMatches: 0,

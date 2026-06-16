@@ -129,14 +129,13 @@ export function shouldSkipStep(
     case "match_players": {
       const matched = imp.playersMatched ?? 0;
       const unmatched = imp.playersUnmatched ?? 0;
-      return matched + unmatched > 0 && unmatched === 0;
+      return matched + unmatched > 0;
     }
     case "link_event":
       return imp.eventId != null;
     case "validate_results":
       return (
         imp.eventId != null &&
-        imp.playersUnmatched === 0 &&
         imp.totalPlayers > 0 &&
         (!isYuniteSource(imp.source) || imp.matchDataSynced === true) &&
         (imp.pipelineStatus === "Results Generated" || imp.pipelineStatus === "Finalized")
@@ -175,9 +174,7 @@ export function postStepStatus(
     case "populate_team_members":
       return "Results Generated";
     case "match_players":
-      return imp.playersUnmatched > 0
-        ? "Player Matching Required"
-        : "Players Matched";
+      return "Players Matched";
     case "link_event":
       return imp.eventId ? "Linked To Event" : "Event Link Required";
     case "validate_results":

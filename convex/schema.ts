@@ -1615,4 +1615,173 @@ export default defineSchema({
     ),
     importedAt: v.string(), // ISO 8601 UTC
   }).index("by_series", ["seriesId"]),
+
+  // ─── ZBD Operations Hub ─────────────────────────────────────────────────────
+
+  opsHubSponsorLogs: defineTable({
+    sponsorName: v.string(),
+    amount: v.number(),
+    dateReceived: v.string(),
+    intendedEvent: v.optional(v.string()),
+    paymentSource: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    status: v.union(
+      v.literal("unused"),
+      v.literal("assigned"),
+      v.literal("paid_out"),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  })
+    .index("by_status", ["status"])
+    .index("by_date_received", ["dateReceived"]),
+
+  opsHubEventRules: defineTable({
+    name: v.string(),
+    ruleType: v.union(
+      v.literal("rule_set"),
+      v.literal("event_override"),
+      v.literal("prize"),
+      v.literal("lobby"),
+      v.literal("drop_spot"),
+    ),
+    eventName: v.optional(v.string()),
+    content: v.string(),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  }).index("by_rule_type", ["ruleType"]),
+
+  opsHubKillCaps: defineTable({
+    mode: v.string(),
+    lobbyType: v.string(),
+    teamSizeTier: v.string(),
+    killCap: v.number(),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  }).index("by_mode", ["mode"]),
+
+  opsHubModDetails: defineTable({
+    modName: v.string(),
+    discordId: v.optional(v.string()),
+    payPalDetails: v.optional(v.string()),
+    responsibilities: v.optional(v.string()),
+    availabilityNotes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  }).index("by_mod_name", ["modName"]),
+
+  opsHubTicketReplyTemplates: defineTable({
+    category: v.string(),
+    situation: v.string(),
+    responseText: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  }).index("by_category", ["category"]),
+
+  opsHubResponsibilities: defineTable({
+    person: v.string(),
+    areaOwned: v.string(),
+    backupPerson: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  }).index("by_person", ["person"]),
+
+  opsHubTodos: defineTable({
+    task: v.string(),
+    owner: v.optional(v.string()),
+    priority: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+    ),
+    dueDate: v.optional(v.string()),
+    status: v.union(
+      v.literal("open"),
+      v.literal("in_progress"),
+      v.literal("done"),
+    ),
+    linkedEvent: v.optional(v.string()),
+    linkedTicket: v.optional(v.string()),
+    linkedPlayer: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  })
+    .index("by_status", ["status"])
+    .index("by_due_date", ["dueDate"]),
+
+  opsHubVodEvidencePolicy: defineTable({
+    streamingRequirements: v.optional(v.string()),
+    futureUploadRequirements: v.optional(v.string()),
+    evidenceRetentionRules: v.optional(v.string()),
+    adminNotes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  }),
 });

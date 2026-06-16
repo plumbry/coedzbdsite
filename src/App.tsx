@@ -98,6 +98,7 @@ export default function App() {
             <Route path="punishment-matrix" element={<Navigate to="/admin/resources?tab=punishment-matrix" replace />} />
             <Route path="scrim-series" element={<ScrimSeriesAdminPage />} />
             <Route path="spin-moderation" element={<SpinModerationPage />} />
+            <Route path="ops" element={<Navigate to="/admin/resources?tab=sponsors" replace />} />
           </Route>
 
           <Route path="/events" element={<EventsPage />} />

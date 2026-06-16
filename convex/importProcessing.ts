@@ -460,14 +460,6 @@ async function validateImportResults(
     return { valid: false, reason: "Yunite match data has not been synced yet." };
   }
 
-  if (importRecord.playersUnmatched > 0) {
-    return {
-      valid: false,
-      reason: `${importRecord.playersUnmatched} players could not be matched. Review unmatched players.`,
-      code: "unmatched_players" as const,
-    };
-  }
-
   if (!importRecord.eventId) {
     return {
       valid: false,
@@ -1201,17 +1193,6 @@ export const processImportBatch = internalMutation({
           playersUnmatched: counts.playersUnmatched,
         });
 
-        if (counts.playersUnmatched > 0) {
-          await finalizeImportJob(ctx, {
-            jobId: args.jobId,
-            status: "waiting",
-            pipelineStatus: "Player Matching Required",
-            errorMessage: `${counts.playersUnmatched} players could not be matched. Review unmatched players, then run Process Import again.`,
-            errorCode: "unmatched_players",
-          });
-          return { waiting: true, reason: "unmatched_players" as const };
-        }
-
         await completePipelineStepAndContinue(ctx, args.jobId, step);
         return { completedStep: step };
       }
@@ -1257,9 +1238,7 @@ export const processImportBatch = internalMutation({
       case "validate_results": {
         const validation = await validateImportResults(ctx, imp);
         if (!validation.valid) {
-          const isWaiting =
-            validation.code === "unmatched_players" ||
-            validation.code === "event_link_missing";
+          const isWaiting = validation.code === "event_link_missing";
           await maybeWriteJobProgress(ctx, {
             jobId: args.jobId,
             importId: job.importId,
@@ -1275,9 +1254,7 @@ export const processImportBatch = internalMutation({
             pipelineStatus:
               validation.code === "event_link_missing"
                 ? "Event Link Required"
-                : validation.code === "unmatched_players"
-                  ? "Player Matching Required"
-                  : "Failed",
+                : "Failed",
             errorMessage: validation.reason,
             errorCode: validation.code ?? "validation_failed",
           });

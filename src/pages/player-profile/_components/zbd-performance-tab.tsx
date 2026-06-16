@@ -13,6 +13,7 @@ import { Trophy, Plus, Calendar, Target, Crosshair, TrendingUp, ExternalLink, Ac
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import ExpandedPerformanceDialog from "./expanded-performance-dialog.tsx";
+import type { ZbdPerformanceStats } from "@/lib/stats/types.ts";
 
 interface ZBDPerformanceTabProps {
   playerId: Id<"players">;
@@ -37,8 +38,131 @@ interface EventResult {
   leaderboardUrl?: string;
   teammateName?: string;
   eventType?: string | null;
+  mode?: string | null;
   excludeLowestScore?: boolean;
   isNoMoneyEvent?: boolean;
+}
+
+function PerformanceStatsCards({ stats }: { stats: ZbdPerformanceStats }) {
+  const totalDeaths = Math.round(stats.deathsPerMatch * stats.totalMatches);
+
+  return (
+    <div className="grid gap-2 md:grid-cols-4 lg:grid-cols-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
+          <CardTitle className="text-[10px] font-medium">Events Played</CardTitle>
+          <Calendar className="h-3 w-3 text-muted-foreground" />
+        </CardHeader>
+        <CardContent className="py-1 pb-2">
+          <div className="text-base font-bold">{stats.totalGames}</div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
+          <CardTitle className="text-[10px] font-medium">Win Rate</CardTitle>
+          <Trophy className="h-3 w-3 text-muted-foreground" />
+        </CardHeader>
+        <CardContent className="py-1 pb-2">
+          <div className="text-base font-bold">{stats.winRate}%</div>
+          <p className="text-[10px] text-muted-foreground">
+            {stats.winCount} {stats.winCount === 1 ? "win" : "wins"}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
+          <CardTitle className="text-[10px] font-medium">Avg Place</CardTitle>
+          <Target className="h-3 w-3 text-muted-foreground" />
+        </CardHeader>
+        <CardContent className="py-1 pb-2">
+          <div className="text-base font-bold">{stats.averagePlacement}</div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
+          <CardTitle className="text-[10px] font-medium">Avg Kills per Match</CardTitle>
+          <TrendingUp className="h-3 w-3 text-muted-foreground" />
+        </CardHeader>
+        <CardContent className="py-1 pb-2">
+          <div className="text-base font-bold">{stats.averageKD}</div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
+          <CardTitle className="text-[10px] font-medium">Total Elims</CardTitle>
+          <Crosshair className="h-3 w-3 text-muted-foreground" />
+        </CardHeader>
+        <CardContent className="py-1 pb-2">
+          <div className="text-base font-bold">{stats.totalEliminations}</div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
+          <CardTitle className="text-[10px] font-medium">Avg Points per Event</CardTitle>
+          <Activity className="h-3 w-3 text-muted-foreground" />
+        </CardHeader>
+        <CardContent className="py-1 pb-2">
+          <div className="text-base font-bold">{stats.averageScore}</div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
+          <CardTitle className="text-[10px] font-medium">Top 3</CardTitle>
+          <Medal className="h-3 w-3 text-muted-foreground" />
+        </CardHeader>
+        <CardContent className="py-1 pb-2">
+          <div className="text-base font-bold">{stats.top3Finishes}</div>
+        </CardContent>
+      </Card>
+
+      {stats.totalMatches > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
+            <CardTitle className="text-[10px] font-medium">Deaths per Match</CardTitle>
+            <TrendingDown className="h-3 w-3 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="py-1 pb-2">
+            <div className="text-base font-bold">{stats.deathsPerMatch}</div>
+            <p className="text-[10px] text-muted-foreground">
+              {totalDeaths} total in {stats.totalMatches} match{stats.totalMatches !== 1 ? "es" : ""}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function ModeStatsSection({
+  title,
+  stats,
+}: {
+  title: string;
+  stats: ZbdPerformanceStats;
+}) {
+  if (stats.eventsPlayed === 0 && stats.totalMatches === 0) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <div className="rounded-lg border border-dashed bg-muted/20 p-4">
+          <p className="text-sm text-muted-foreground">No linked {title} events recorded.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <PerformanceStatsCards stats={stats} />
+    </div>
+  );
 }
 
 function EventResultsGrouped({ events }: { events: EventResult[] }) {
@@ -228,7 +352,6 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
   const bundle = useQuery(api.playerStats.getPlayerZBDPerformanceBundle, { playerId });
   const duoPerf = useQuery(api.playerStats.getPlayerDuoPerformance, { playerId });
   const cs = useQuery(api.calculateContributionScore.getPlayerCS, { playerId });
-  const matchStats = useQuery(api.playerStats.getPlayerMatchStats, { playerId });
   const { isAdmin, isModeratorOrAdmin } = useUserRole();
   const [hideNoMoney, setHideNoMoney] = useState(false);
   const [showTop5Only, setShowTop5Only] = useState(false);
@@ -246,9 +369,9 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
 
   const eligibility = bundle.eligibility;
   const allEvents = bundle.events ?? [];
-  const stats = bundle.stats;
+  const statsByMode = bundle.statsByMode;
 
-  if (!stats) {
+  if (!statsByMode) {
     const eventCount = eligibility?.eventCount ?? 0;
     const required = eligibility?.requiredDisplayEvents ?? 3;
     return (
@@ -351,95 +474,10 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
         </p>
       </div>
       
-      {/* Stats Cards */}
-      <div className="grid gap-2 md:grid-cols-4 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
-            <CardTitle className="text-[10px] font-medium">Events Played</CardTitle>
-            <Calendar className="h-3 w-3 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="py-1 pb-2">
-            <div className="text-base font-bold">{stats.totalGames}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
-            <CardTitle className="text-[10px] font-medium">Win Rate</CardTitle>
-            <Trophy className="h-3 w-3 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="py-1 pb-2">
-            <div className="text-base font-bold">{stats.winRate}%</div>
-            <p className="text-[10px] text-muted-foreground">
-              {stats.winCount} {stats.winCount === 1 ? "win" : "wins"}
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
-            <CardTitle className="text-[10px] font-medium">Avg Place</CardTitle>
-            <Target className="h-3 w-3 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="py-1 pb-2">
-            <div className="text-base font-bold">{stats.averagePlacement}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
-            <CardTitle className="text-[10px] font-medium">Avg Kills per Match</CardTitle>
-            <TrendingUp className="h-3 w-3 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="py-1 pb-2">
-            <div className="text-base font-bold">{stats.averageKD}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
-            <CardTitle className="text-[10px] font-medium">Total Elims</CardTitle>
-            <Crosshair className="h-3 w-3 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="py-1 pb-2">
-            <div className="text-base font-bold">{stats.totalEliminations}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
-            <CardTitle className="text-[10px] font-medium">Avg Points per Event</CardTitle>
-            <Activity className="h-3 w-3 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="py-1 pb-2">
-            <div className="text-base font-bold">{stats.averageScore}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
-            <CardTitle className="text-[10px] font-medium">Top 3</CardTitle>
-            <Medal className="h-3 w-3 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="py-1 pb-2">
-            <div className="text-base font-bold">{stats.top3Finishes}</div>
-          </CardContent>
-        </Card>
-        
-        {matchStats && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-3">
-              <CardTitle className="text-[10px] font-medium">Deaths per Match</CardTitle>
-              <TrendingDown className="h-3 w-3 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="py-1 pb-2">
-              <div className="text-base font-bold">{matchStats.deathsPerMatch}</div>
-              <p className="text-[10px] text-muted-foreground">
-                {Math.round(matchStats.deathsPerMatch * matchStats.totalMatches)} total in {matchStats.totalMatches} match{matchStats.totalMatches !== 1 ? "es" : ""}
-              </p>
-            </CardContent>
-          </Card>
-        )}
+      {/* Stats Cards — split by game mode */}
+      <div className="space-y-6">
+        <ModeStatsSection title="BR (ZB Main Map)" stats={statsByMode.br} />
+        <ModeStatsSection title="Reload" stats={statsByMode.reload} />
       </div>
       
       {/* Duo Performance Analysis - Admin/Mod Only */}
