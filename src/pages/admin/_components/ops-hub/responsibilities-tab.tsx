@@ -33,6 +33,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog.tsx";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion.tsx";
 import { Plus, Pencil, Trash2, X, Search } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
@@ -193,6 +199,62 @@ function ResponsibilityRoleToggle({
   );
 }
 
+type StaffProfile = Doc<"opsHubStaffProfiles"> & { teamRole: TeamRole };
+
+function StaffProfileCard({
+  profile,
+  canEdit,
+  onEdit,
+  onDelete,
+}: {
+  profile: StaffProfile;
+  canEdit: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const profileTags = profile.responsibilities.map(normalizeTag);
+  const mainTags = profileTags.filter((t) => t.role === "main");
+  const backupTags = profileTags.filter((t) => t.role === "backup");
+
+  return (
+    <Card className="gap-0 py-0">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2">
+        <CardTitle className="text-sm font-semibold leading-tight">{profile.person}</CardTitle>
+        {canEdit && (
+          <div className="flex shrink-0 -mr-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 cursor-pointer"
+              onClick={onEdit}
+            >
+              <Pencil className="h-3 w-3" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-destructive cursor-pointer"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </CardHeader>
+      <CardContent className="px-3 pb-2.5 pt-0">
+        {mainTags.length === 0 && backupTags.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">No responsibilities</p>
+        ) : (
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            <ResponsibilityGroup title="Main" tags={mainTags} compact />
+            <ResponsibilityGroup title="Back Up" tags={backupTags} compact />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: OpsHubTabProps) {
   const profiles = useQuery(api.opsHub.queries.listStaffProfiles, opsQueryArgs(viewerToken));
   const catalog = useQuery(
@@ -214,6 +276,11 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
   }, [canEdit, viewerToken, repairColors]);
 
   const [search, setSearch] = useState("");
+  const [openSections, setOpenSections] = useState<TeamRole[]>([
+    "admin",
+    "mod",
+    "event_mod",
+  ]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Doc<"opsHubStaffProfiles"> | null>(null);
   const [person, setPerson] = useState("");
@@ -252,6 +319,33 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
         p.responsibilities.some((r) => r.label.toLowerCase().includes(q)),
     );
   }, [profiles, search]);
+
+  const profilesByRole = useMemo(() => {
+    const grouped: Record<TeamRole, StaffProfile[]> = {
+      admin: [],
+      mod: [],
+      event_mod: [],
+    };
+    if (!filteredProfiles) return grouped;
+    for (const profile of filteredProfiles) {
+      const role = profile.teamRole ?? "mod";
+      grouped[role].push(profile as StaffProfile);
+    }
+    for (const role of TEAM_ROLE_OPTIONS) {
+      grouped[role.value].sort((a, b) => a.person.localeCompare(b.person));
+    }
+    return grouped;
+  }, [filteredProfiles]);
+
+  useEffect(() => {
+    const q = search.trim();
+    if (!q) return;
+    setOpenSections(
+      TEAM_ROLE_OPTIONS.map((section) => section.value).filter(
+        (role) => profilesByRole[role].length > 0,
+      ),
+    );
+  }, [search, profilesByRole]);
 
   const suggestions = useMemo(() => {
     if (!catalog) return [];
@@ -400,60 +494,51 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
           {search ? "No matches." : "No profiles yet."}
         </p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-          {filteredProfiles?.map((profile) => {
-            const profileTags = profile.responsibilities.map(normalizeTag);
-            const mainTags = profileTags.filter((t) => t.role === "main");
-            const backupTags = profileTags.filter((t) => t.role === "backup");
+        <Accordion
+          type="multiple"
+          value={openSections}
+          onValueChange={(value) => setOpenSections(value as TeamRole[])}
+          className="space-y-2"
+        >
+          {TEAM_ROLE_OPTIONS.map((section) => {
+            const sectionProfiles = profilesByRole[section.value];
+            if (search.trim() && sectionProfiles.length === 0) return null;
+
             return (
-              <Card key={profile._id} className="gap-0 py-0">
-                <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2">
-                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                    <CardTitle className="text-sm font-semibold leading-tight">
-                      {profile.person}
-                    </CardTitle>
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] px-1.5 py-0 font-normal h-5 shrink-0"
-                    >
-                      {teamRoleLabel(profile.teamRole ?? "mod")}
+              <AccordionItem
+                key={section.value}
+                value={section.value}
+                className="rounded-lg border bg-card px-3 last:border-b"
+              >
+                <AccordionTrigger className="hover:no-underline py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{section.label}</span>
+                    <Badge variant="secondary" className="text-xs font-normal">
+                      {sectionProfiles.length}
                     </Badge>
                   </div>
-                  {canEdit && (
-                    <div className="flex shrink-0 -mr-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 cursor-pointer"
-                        onClick={() => openEdit(profile)}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-destructive cursor-pointer"
-                        onClick={() => setDeleteTarget(profile)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  )}
-                </CardHeader>
-                <CardContent className="px-3 pb-2.5 pt-0">
-                  {mainTags.length === 0 && backupTags.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground">No responsibilities</p>
+                </AccordionTrigger>
+                <AccordionContent className="pb-3">
+                  {sectionProfiles.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-1">No profiles yet.</p>
                   ) : (
-                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                      <ResponsibilityGroup title="Main" tags={mainTags} compact />
-                      <ResponsibilityGroup title="Back Up" tags={backupTags} compact />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                      {sectionProfiles.map((profile) => (
+                        <StaffProfileCard
+                          key={profile._id}
+                          profile={profile}
+                          canEdit={canEdit}
+                          onEdit={() => openEdit(profile)}
+                          onDelete={() => setDeleteTarget(profile)}
+                        />
+                      ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </AccordionContent>
+              </AccordionItem>
             );
           })}
-        </div>
+        </Accordion>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
