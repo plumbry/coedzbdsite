@@ -66,13 +66,18 @@ function normalizeTag(tag: {
 function ResponsibilityBadge({
   tag,
   onRemove,
+  compact = false,
 }: {
   tag: ResponsibilityTag;
   onRemove?: () => void;
+  compact?: boolean;
 }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium"
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-full border font-medium",
+        compact ? "px-1.5 py-0 text-[11px] leading-4" : "gap-1 px-2.5 py-0.5 text-xs",
+      )}
       style={{
         borderColor: tag.color,
         backgroundColor: `${tag.color}18`,
@@ -99,12 +104,36 @@ function ResponsibilityGroup({
   tags,
   canEdit,
   onRemove,
+  compact = false,
 }: {
   title: string;
   tags: ResponsibilityTag[];
   canEdit?: boolean;
   onRemove?: (tag: ResponsibilityTag) => void;
+  compact?: boolean;
 }) {
+  if (compact && tags.length === 0) return null;
+
+  if (compact) {
+    return (
+      <div className="min-w-0">
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
+          {title}
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {tags.map((tag) => (
+            <ResponsibilityBadge
+              key={`${tag.role}-${tag.label}`}
+              tag={tag}
+              compact
+              onRemove={canEdit && onRemove ? () => onRemove(tag) : undefined}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -371,48 +400,55 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
           {search ? "No matches." : "No profiles yet."}
         </p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
           {filteredProfiles?.map((profile) => {
             const profileTags = profile.responsibilities.map(normalizeTag);
+            const mainTags = profileTags.filter((t) => t.role === "main");
+            const backupTags = profileTags.filter((t) => t.role === "backup");
             return (
-              <Card key={profile._id}>
-                <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
-                  <div className="space-y-1 min-w-0">
-                    <CardTitle className="text-base">{profile.person}</CardTitle>
-                    <Badge variant="secondary" className="text-xs font-normal">
+              <Card key={profile._id} className="gap-0 py-0">
+                <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                    <CardTitle className="text-sm font-semibold leading-tight">
+                      {profile.person}
+                    </CardTitle>
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0 font-normal h-5 shrink-0"
+                    >
                       {teamRoleLabel(profile.teamRole ?? "mod")}
                     </Badge>
                   </div>
                   {canEdit && (
-                    <div className="flex gap-1 shrink-0">
+                    <div className="flex shrink-0 -mr-1">
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-8 w-8 cursor-pointer"
+                        className="h-7 w-7 cursor-pointer"
                         onClick={() => openEdit(profile)}
                       >
-                        <Pencil className="h-3.5 w-3.5" />
+                        <Pencil className="h-3 w-3" />
                       </Button>
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-8 w-8 text-destructive cursor-pointer"
+                        className="h-7 w-7 text-destructive cursor-pointer"
                         onClick={() => setDeleteTarget(profile)}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   )}
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <ResponsibilityGroup
-                    title="Main"
-                    tags={profileTags.filter((t) => t.role === "main")}
-                  />
-                  <ResponsibilityGroup
-                    title="Back Up"
-                    tags={profileTags.filter((t) => t.role === "backup")}
-                  />
+                <CardContent className="px-3 pb-2.5 pt-0">
+                  {mainTags.length === 0 && backupTags.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground">No responsibilities</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                      <ResponsibilityGroup title="Main" tags={mainTags} compact />
+                      <ResponsibilityGroup title="Back Up" tags={backupTags} compact />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
