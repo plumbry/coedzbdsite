@@ -8,6 +8,14 @@ import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import {
   Dialog,
   DialogContent,
@@ -27,12 +35,33 @@ import {
 } from "@/components/ui/alert-dialog.tsx";
 import { Plus, Pencil, Trash2, X, Search } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils.ts";
 import {
   collectUsedResponsibilityColors,
   pickUniqueResponsibilityColor,
 } from "@/lib/responsibility-colors.ts";
 
-type ResponsibilityTag = { label: string; color: string };
+type ResponsibilityRole = "main" | "backup";
+type TeamRole = "admin" | "mod" | "event_mod";
+type ResponsibilityTag = { label: string; color: string; role: ResponsibilityRole };
+
+const TEAM_ROLE_OPTIONS: { value: TeamRole; label: string }[] = [
+  { value: "admin", label: "Admin" },
+  { value: "mod", label: "Mod" },
+  { value: "event_mod", label: "Event Mod" },
+];
+
+function teamRoleLabel(role: TeamRole) {
+  return TEAM_ROLE_OPTIONS.find((o) => o.value === role)?.label ?? role;
+}
+
+function normalizeTag(tag: {
+  label: string;
+  color: string;
+  role?: ResponsibilityRole;
+}): ResponsibilityTag {
+  return { ...tag, role: tag.role ?? "main" };
+}
 
 function ResponsibilityBadge({
   tag,
@@ -65,6 +94,76 @@ function ResponsibilityBadge({
   );
 }
 
+function ResponsibilityGroup({
+  title,
+  tags,
+  canEdit,
+  onRemove,
+}: {
+  title: string;
+  tags: ResponsibilityTag[];
+  canEdit?: boolean;
+  onRemove?: (tag: ResponsibilityTag) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        {title}
+      </p>
+      {tags.length === 0 ? (
+        <p className="text-xs text-muted-foreground">None</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <ResponsibilityBadge
+              key={`${tag.role}-${tag.label}`}
+              tag={tag}
+              onRemove={canEdit && onRemove ? () => onRemove(tag) : undefined}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResponsibilityRoleToggle({
+  value,
+  onChange,
+}: {
+  value: ResponsibilityRole;
+  onChange: (role: ResponsibilityRole) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-md border p-0.5">
+      <button
+        type="button"
+        className={cn(
+          "px-3 py-1 text-xs rounded-sm cursor-pointer transition-colors",
+          value === "main"
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+        onClick={() => onChange("main")}
+      >
+        Main
+      </button>
+      <button
+        type="button"
+        className={cn(
+          "px-3 py-1 text-xs rounded-sm cursor-pointer transition-colors",
+          value === "backup"
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+        onClick={() => onChange("backup")}
+      >
+        Back Up
+      </button>
+    </div>
+  );
+}
+
 export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: OpsHubTabProps) {
   const profiles = useQuery(api.opsHub.queries.listStaffProfiles, opsQueryArgs(viewerToken));
   const catalog = useQuery(
@@ -89,8 +188,10 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Doc<"opsHubStaffProfiles"> | null>(null);
   const [person, setPerson] = useState("");
+  const [teamRole, setTeamRole] = useState<TeamRole>("mod");
   const [tags, setTags] = useState<ResponsibilityTag[]>([]);
   const [draftLabel, setDraftLabel] = useState("");
+  const [draftRole, setDraftRole] = useState<ResponsibilityRole>("main");
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Doc<"opsHubStaffProfiles"> | null>(
     null,
@@ -102,6 +203,15 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
     return map;
   }, [catalog]);
 
+  const mainTags = useMemo(
+    () => tags.filter((t) => t.role === "main"),
+    [tags],
+  );
+  const backupTags = useMemo(
+    () => tags.filter((t) => t.role === "backup"),
+    [tags],
+  );
+
   const filteredProfiles = useMemo(() => {
     if (!profiles) return undefined;
     const q = search.trim().toLowerCase();
@@ -109,6 +219,7 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
     return profiles.filter(
       (p) =>
         p.person.toLowerCase().includes(q) ||
+        teamRoleLabel(p.teamRole ?? "mod").toLowerCase().includes(q) ||
         p.responsibilities.some((r) => r.label.toLowerCase().includes(q)),
     );
   }, [profiles, search]);
@@ -126,20 +237,30 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
   const openCreate = () => {
     setEditing(null);
     setPerson("");
+    setTeamRole("mod");
     setTags([]);
     setDraftLabel("");
+    setDraftRole("main");
     setDialogOpen(true);
   };
 
   const openEdit = (profile: Doc<"opsHubStaffProfiles">) => {
     setEditing(profile);
     setPerson(profile.person);
-    setTags([...profile.responsibilities]);
+    setTeamRole(profile.teamRole ?? "mod");
+    setTags(profile.responsibilities.map(normalizeTag));
     setDraftLabel("");
+    setDraftRole("main");
     setDialogOpen(true);
   };
 
-  const addTag = (label: string) => {
+  const removeTag = (tag: ResponsibilityTag) => {
+    setTags((prev) =>
+      prev.filter((t) => t.label.toLowerCase() !== tag.label.toLowerCase()),
+    );
+  };
+
+  const addTag = (label: string, role: ResponsibilityRole = draftRole) => {
     const trimmed = label.trim();
     if (!trimmed) return;
     const key = trimmed.toLowerCase();
@@ -154,7 +275,7 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
         collectUsedResponsibilityColors(catalog, tags),
         trimmed,
       );
-    setTags((prev) => [...prev, { label: trimmed, color }]);
+    setTags((prev) => [...prev, { label: trimmed, color, role }]);
     setDraftLabel("");
   };
 
@@ -165,13 +286,17 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
     }
     setSaving(true);
     try {
-      const labels = tags.map((t) => t.label);
+      const responsibilities = tags.map((t) => ({
+        label: t.label,
+        role: t.role,
+      }));
       if (editing) {
         await updateProfile(
           opsMutationArgs(viewerToken, {
             id: editing._id,
             person: person.trim(),
-            responsibilityLabels: labels,
+            teamRole,
+            responsibilities,
           }),
         );
         toast.success("Profile updated");
@@ -179,7 +304,8 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
         await createProfile(
           opsMutationArgs(viewerToken, {
             person: person.trim(),
-            responsibilityLabels: labels,
+            teamRole,
+            responsibilities,
           }),
         );
         toast.success("Profile created");
@@ -218,7 +344,8 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
         <div>
           <h3 className="text-sm font-semibold">Staff Profiles</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            One profile per mod/admin with colour-coded responsibilities.
+            Ops reference only — team roles and responsibilities are not tied to site login
+            permissions.
           </p>
         </div>
         {canEdit && (
@@ -245,44 +372,51 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
         </p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {filteredProfiles?.map((profile) => (
-            <Card key={profile._id}>
-              <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
-                <CardTitle className="text-base">{profile.person}</CardTitle>
-                {canEdit && (
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 cursor-pointer"
-                      onClick={() => openEdit(profile)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-destructive cursor-pointer"
-                      onClick={() => setDeleteTarget(profile)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+          {filteredProfiles?.map((profile) => {
+            const profileTags = profile.responsibilities.map(normalizeTag);
+            return (
+              <Card key={profile._id}>
+                <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
+                  <div className="space-y-1 min-w-0">
+                    <CardTitle className="text-base">{profile.person}</CardTitle>
+                    <Badge variant="secondary" className="text-xs font-normal">
+                      {teamRoleLabel(profile.teamRole ?? "mod")}
+                    </Badge>
                   </div>
-                )}
-              </CardHeader>
-              <CardContent>
-                {profile.responsibilities.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No responsibilities assigned.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {profile.responsibilities.map((tag) => (
-                      <ResponsibilityBadge key={tag.label} tag={tag} />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  {canEdit && (
+                    <div className="flex gap-1 shrink-0">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 cursor-pointer"
+                        onClick={() => openEdit(profile)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-destructive cursor-pointer"
+                        onClick={() => setDeleteTarget(profile)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <ResponsibilityGroup
+                    title="Main"
+                    tags={profileTags.filter((t) => t.role === "main")}
+                  />
+                  <ResponsibilityGroup
+                    title="Back Up"
+                    tags={profileTags.filter((t) => t.role === "backup")}
+                  />
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -298,12 +432,41 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
                 id="staff-profile-person"
                 value={person}
                 onChange={(e) => setPerson(e.target.value)}
-                placeholder="Mod or admin name"
+                placeholder="Name"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Responsibilities</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="staff-profile-team-role">Role</Label>
+              <Select
+                value={teamRole}
+                onValueChange={(v) => setTeamRole(v as TeamRole)}
+                disabled={!canEdit}
+              >
+                <SelectTrigger id="staff-profile-team-role" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TEAM_ROLE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                For ops planning only. Does not change website account permissions.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Label>Responsibilities</Label>
+                {canEdit && (
+                  <ResponsibilityRoleToggle value={draftRole} onChange={setDraftRole} />
+                )}
+              </div>
+
               {canEdit && (
                 <div className="space-y-2">
                   <div className="flex gap-2">
@@ -337,35 +500,28 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
                           className="cursor-pointer"
                           onClick={() => addTag(s.label)}
                         >
-                          <ResponsibilityBadge tag={{ label: s.label, color: s.color }} />
+                          <ResponsibilityBadge
+                            tag={{ label: s.label, color: s.color, role: draftRole }}
+                          />
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
               )}
-              <div className="flex flex-wrap gap-1.5 min-h-[2rem] pt-1">
-                {tags.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No responsibilities yet.</p>
-                ) : (
-                  tags.map((tag) => (
-                    <ResponsibilityBadge
-                      key={tag.label}
-                      tag={tag}
-                      onRemove={
-                        canEdit
-                          ? () =>
-                              setTags((prev) =>
-                                prev.filter(
-                                  (t) => t.label.toLowerCase() !== tag.label.toLowerCase(),
-                                ),
-                              )
-                          : undefined
-                      }
-                    />
-                  ))
-                )}
-              </div>
+
+              <ResponsibilityGroup
+                title="Main"
+                tags={mainTags}
+                canEdit={canEdit}
+                onRemove={removeTag}
+              />
+              <ResponsibilityGroup
+                title="Back Up"
+                tags={backupTags}
+                canEdit={canEdit}
+                onRemove={removeTag}
+              />
             </div>
           </div>
           {canEdit && (

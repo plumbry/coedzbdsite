@@ -54,9 +54,11 @@ export const listStaffProfiles = query({
     );
     return profiles.map((profile) => ({
       ...profile,
+      teamRole: profile.teamRole ?? "mod",
       responsibilities: profile.responsibilities.map((r) => ({
         label: r.label,
         color: colorByLabel.get(r.label.toLowerCase()) ?? r.color,
+        role: r.role ?? "main",
       })),
     }));
   },

@@ -127,22 +127,46 @@ export async function getOrCreateCatalogEntry(
   return { label: trimmed, color };
 }
 
-export async function resolveResponsibilityLabels(
+export type ResponsibilityRole = "main" | "backup";
+
+export type ProfileResponsibility = {
+  label: string;
+  color: string;
+  role: ResponsibilityRole;
+};
+
+export type ProfileResponsibilityInput = {
+  label: string;
+  role: ResponsibilityRole;
+};
+
+export function normalizeResponsibilityRole(
+  role: ResponsibilityRole | undefined,
+): ResponsibilityRole {
+  return role ?? "main";
+}
+
+export async function resolveProfileResponsibilities(
   ctx: MutationCtx,
-  labels: string[],
-): Promise<Array<{ label: string; color: string }>> {
+  items: ProfileResponsibilityInput[],
+): Promise<ProfileResponsibility[]> {
   await ensureUniqueCatalogColors(ctx);
 
   const seen = new Set<string>();
-  const resolved: Array<{ label: string; color: string }> = [];
+  const resolved: ProfileResponsibility[] = [];
 
-  for (const raw of labels) {
-    const trimmed = raw.trim();
+  for (const item of items) {
+    const trimmed = item.label.trim();
     if (!trimmed) continue;
     const key = trimmed.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    resolved.push(await getOrCreateCatalogEntry(ctx, trimmed));
+    const entry = await getOrCreateCatalogEntry(ctx, trimmed);
+    resolved.push({
+      label: entry.label,
+      color: entry.color,
+      role: normalizeResponsibilityRole(item.role),
+    });
   }
 
   return resolved;

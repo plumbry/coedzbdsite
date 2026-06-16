@@ -1728,10 +1728,16 @@ export default defineSchema({
 
   opsHubStaffProfiles: defineTable({
     person: v.string(),
+    teamRole: v.optional(
+      v.union(v.literal("admin"), v.literal("mod"), v.literal("event_mod")),
+    ),
     responsibilities: v.array(
       v.object({
         label: v.string(),
         color: v.string(),
+        role: v.optional(
+          v.union(v.literal("main"), v.literal("backup")),
+        ),
       }),
     ),
     createdAt: v.number(),
@@ -1744,7 +1750,8 @@ export default defineSchema({
     updatedAccessMethod: v.optional(
       v.union(v.literal("admin"), v.literal("password")),
     ),
-  }).index("by_person", ["person"]),
+  }).index("by_person", ["person"])
+    .index("by_team_role", ["teamRole"]),
 
   opsHubTodos: defineTable({
     task: v.string(),

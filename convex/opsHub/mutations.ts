@@ -1,6 +1,26 @@
 import { mutation } from "../_generated/server";
 import { v, ConvexError } from "convex/values";
-import { resolveResponsibilityLabels, ensureUniqueCatalogColors } from "./responsibilityCatalog";
+import {
+  resolveProfileResponsibilities,
+  ensureUniqueCatalogColors,
+  normalizeResponsibilityRole,
+} from "./responsibilityCatalog";
+
+const responsibilityRoleValidator = v.union(
+  v.literal("main"),
+  v.literal("backup"),
+);
+
+const profileResponsibilityInputValidator = v.object({
+  label: v.string(),
+  role: responsibilityRoleValidator,
+});
+
+const teamRoleValidator = v.union(
+  v.literal("admin"),
+  v.literal("mod"),
+  v.literal("event_mod"),
+);
 import {
   auditFields,
   requireOpsHubWriteAccess,
@@ -290,7 +310,8 @@ export const createStaffProfile = mutation({
   args: {
     viewerToken: viewerTokenArg,
     person: v.string(),
-    responsibilityLabels: v.array(v.string()),
+    teamRole: teamRoleValidator,
+    responsibilities: v.array(profileResponsibilityInputValidator),
   },
   handler: async (ctx, args) => {
     const access = await requireOpsHubWriteAccess(ctx);
@@ -303,13 +324,14 @@ export const createStaffProfile = mutation({
       });
     }
 
-    const responsibilities = await resolveResponsibilityLabels(
+    const responsibilities = await resolveProfileResponsibilities(
       ctx,
-      args.responsibilityLabels,
+      args.responsibilities,
     );
 
     return await ctx.db.insert("opsHubStaffProfiles", {
       person,
+      teamRole: args.teamRole,
       responsibilities,
       ...auditFields(access, now),
     });
@@ -321,7 +343,8 @@ export const updateStaffProfile = mutation({
     viewerToken: viewerTokenArg,
     id: v.id("opsHubStaffProfiles"),
     person: v.string(),
-    responsibilityLabels: v.array(v.string()),
+    teamRole: teamRoleValidator,
+    responsibilities: v.array(profileResponsibilityInputValidator),
   },
   handler: async (ctx, args) => {
     const access = await requireOpsHubWriteAccess(ctx);
@@ -333,14 +356,15 @@ export const updateStaffProfile = mutation({
       });
     }
 
-    const responsibilities = await resolveResponsibilityLabels(
+    const responsibilities = await resolveProfileResponsibilities(
       ctx,
-      args.responsibilityLabels,
+      args.responsibilities,
     );
 
     const { id, viewerToken: _, ..._rest } = args;
     await ctx.db.patch(id, {
       person,
+      teamRole: args.teamRole,
       responsibilities,
       ...updateAuditFields(access, Date.now()),
     });
@@ -362,9 +386,12 @@ export const repairResponsibilityColors = mutation({
     await ensureUniqueCatalogColors(ctx);
     const profiles = await ctx.db.query("opsHubStaffProfiles").collect();
     for (const profile of profiles) {
-      const responsibilities = await resolveResponsibilityLabels(
+      const responsibilities = await resolveProfileResponsibilities(
         ctx,
-        profile.responsibilities.map((r) => r.label),
+        profile.responsibilities.map((r) => ({
+          label: r.label,
+          role: normalizeResponsibilityRole(r.role),
+        })),
       );
       await ctx.db.patch(profile._id, { responsibilities });
     }
