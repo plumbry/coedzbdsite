@@ -1,6 +1,6 @@
 import { mutation } from "../_generated/server";
 import { v, ConvexError } from "convex/values";
-import { resolveResponsibilityLabels } from "./responsibilityCatalog";
+import { resolveResponsibilityLabels, ensureUniqueCatalogColors } from "./responsibilityCatalog";
 import {
   auditFields,
   requireOpsHubWriteAccess,
@@ -352,6 +352,22 @@ export const deleteStaffProfile = mutation({
   handler: async (ctx, args) => {
     await requireOpsHubWriteAccess(ctx);
     await ctx.db.delete(args.id);
+  },
+});
+
+export const repairResponsibilityColors = mutation({
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx) => {
+    await requireOpsHubWriteAccess(ctx);
+    await ensureUniqueCatalogColors(ctx);
+    const profiles = await ctx.db.query("opsHubStaffProfiles").collect();
+    for (const profile of profiles) {
+      const responsibilities = await resolveResponsibilityLabels(
+        ctx,
+        profile.responsibilities.map((r) => r.label),
+      );
+      await ctx.db.patch(profile._id, { responsibilities });
+    }
   },
 });
 

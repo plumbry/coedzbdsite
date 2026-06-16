@@ -5,8 +5,8 @@ import KillCapsTab from "./kill-caps-tab.tsx";
 export default function RulesKillCapsTab(props: OpsHubTabProps) {
   return (
     <div className="space-y-10">
-      <EventRulesTab {...props} />
       <KillCapsTab {...props} />
+      <EventRulesTab {...props} />
     </div>
   );
 }

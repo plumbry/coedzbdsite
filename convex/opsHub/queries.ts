@@ -45,7 +45,20 @@ export const listStaffProfiles = query({
   args: { viewerToken: viewerTokenArg },
   handler: async (ctx, args) => {
     await requireOpsHubReadAccess(ctx, args.viewerToken);
-    return await ctx.db.query("opsHubStaffProfiles").order("desc").collect();
+    const [profiles, catalog] = await Promise.all([
+      ctx.db.query("opsHubStaffProfiles").order("desc").collect(),
+      ctx.db.query("opsHubResponsibilityCatalog").collect(),
+    ]);
+    const colorByLabel = new Map(
+      catalog.map((entry) => [entry.label.toLowerCase(), entry.color]),
+    );
+    return profiles.map((profile) => ({
+      ...profile,
+      responsibilities: profile.responsibilities.map((r) => ({
+        label: r.label,
+        color: colorByLabel.get(r.label.toLowerCase()) ?? r.color,
+      })),
+    }));
   },
 });
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.js";
@@ -27,6 +27,10 @@ import {
 } from "@/components/ui/alert-dialog.tsx";
 import { Plus, Pencil, Trash2, X, Search } from "lucide-react";
 import { toast } from "sonner";
+import {
+  collectUsedResponsibilityColors,
+  pickUniqueResponsibilityColor,
+} from "@/lib/responsibility-colors.ts";
 
 type ResponsibilityTag = { label: string; color: string };
 
@@ -70,6 +74,16 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
   const createProfile = useMutation(api.opsHub.mutations.createStaffProfile);
   const updateProfile = useMutation(api.opsHub.mutations.updateStaffProfile);
   const removeProfile = useMutation(api.opsHub.mutations.deleteStaffProfile);
+  const repairColors = useMutation(api.opsHub.mutations.repairResponsibilityColors);
+  const repairedColors = useRef(false);
+
+  useEffect(() => {
+    if (!canEdit || repairedColors.current) return;
+    repairedColors.current = true;
+    repairColors(opsMutationArgs(viewerToken, {})).catch(() => {
+      repairedColors.current = false;
+    });
+  }, [canEdit, viewerToken, repairColors]);
 
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -133,9 +147,13 @@ export default function ResponsibilitiesTab({ viewerToken, canEdit = false }: Op
       setDraftLabel("");
       return;
     }
+    const existingColor = catalogColorByLabel.get(key);
     const color =
-      catalogColorByLabel.get(key) ??
-      `#${((tags.length * 2654435761) >>> 0).toString(16).slice(0, 6).padStart(6, "0")}`;
+      existingColor ??
+      pickUniqueResponsibilityColor(
+        collectUsedResponsibilityColors(catalog, tags),
+        trimmed,
+      );
     setTags((prev) => [...prev, { label: trimmed, color }]);
     setDraftLabel("");
   };

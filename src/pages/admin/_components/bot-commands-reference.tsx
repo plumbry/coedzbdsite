@@ -11,8 +11,6 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Search, Terminal } from "lucide-react";
 import { BOT_COMMAND_CATEGORIES, type BotCommand, type BotCommandCategory } from "../_data/bot-commands.ts";
 
-const ALL_CATEGORY_IDS = BOT_COMMAND_CATEGORIES.map((category) => category.id);
-
 function commandMatchesQuery(command: BotCommand, query: string) {
   const haystack = [
     command.name,
@@ -69,7 +67,7 @@ function CommandRow({ command }: { command: BotCommand }) {
 
 export default function BotCommandsReference() {
   const [search, setSearch] = useState("");
-  const [openSections, setOpenSections] = useState<string[]>(ALL_CATEGORY_IDS);
+  const [openSections, setOpenSections] = useState<string[]>([]);
 
   const query = search.trim().toLowerCase();
 
