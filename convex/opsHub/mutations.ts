@@ -304,6 +304,92 @@ export const deleteTicketReplyTemplate = mutation({
   },
 });
 
+// ─── Resource links ─────────────────────────────────────────────────────────
+
+const resourceLinkTypeValidator = v.union(
+  v.literal("spreadsheet"),
+  v.literal("form"),
+  v.literal("doc"),
+  v.literal("other"),
+);
+
+function normalizeResourceUrl(url: string) {
+  const trimmed = url.trim();
+  if (!/^https?:\/\//i.test(trimmed)) {
+    throw new ConvexError({
+      message: "URL must start with http:// or https://",
+      code: "INVALID_ARGUMENT",
+    });
+  }
+  return trimmed;
+}
+
+export const createResourceLink = mutation({
+  args: {
+    viewerToken: viewerTokenArg,
+    title: v.string(),
+    url: v.string(),
+    linkType: resourceLinkTypeValidator,
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const access = await requireOpsHubWriteAccess(ctx);
+    const title = args.title.trim();
+    if (!title) {
+      throw new ConvexError({
+        message: "Title is required",
+        code: "INVALID_ARGUMENT",
+      });
+    }
+    const now = Date.now();
+    const { viewerToken: _, description, ...rest } = args;
+    return await ctx.db.insert("opsHubResourceLinks", {
+      title,
+      url: normalizeResourceUrl(rest.url),
+      linkType: rest.linkType,
+      description: description?.trim() || undefined,
+      ...auditFields(access, now),
+    });
+  },
+});
+
+export const updateResourceLink = mutation({
+  args: {
+    viewerToken: viewerTokenArg,
+    id: v.id("opsHubResourceLinks"),
+    title: v.string(),
+    url: v.string(),
+    linkType: resourceLinkTypeValidator,
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const access = await requireOpsHubWriteAccess(ctx);
+    const title = args.title.trim();
+    if (!title) {
+      throw new ConvexError({
+        message: "Title is required",
+        code: "INVALID_ARGUMENT",
+      });
+    }
+    const { id, viewerToken: _, description, ...rest } = args;
+    await ctx.db.patch(id, {
+      title,
+      url: normalizeResourceUrl(rest.url),
+      linkType: rest.linkType,
+      description: description?.trim() || undefined,
+      ...updateAuditFields(access, Date.now()),
+    });
+  },
+});
+
+export const deleteResourceLink = mutation({
+  args: { viewerToken: viewerTokenArg, id: v.id("opsHubResourceLinks") },
+  handler: async (ctx, args) => {
+    await requireOpsHubWriteAccess(ctx);
+    await ctx.db.delete(args.id);
+  },
+});
+
 // ─── Staff profiles & responsibilities ──────────────────────────────────────
 
 export const createStaffProfile = mutation({

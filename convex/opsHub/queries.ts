@@ -41,6 +41,17 @@ export const listTicketReplyTemplates = query({
   },
 });
 
+export const listResourceLinks = query({
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx, args) => {
+    await requireOpsHubReadAccess(ctx, args.viewerToken);
+    const links = await ctx.db.query("opsHubResourceLinks").collect();
+    return links.sort((a, b) =>
+      a.title.localeCompare(b.title, undefined, { sensitivity: "base" }),
+    );
+  },
+});
+
 export const listStaffProfiles = query({
   args: { viewerToken: viewerTokenArg },
   handler: async (ctx, args) => {

@@ -1720,6 +1720,28 @@ export default defineSchema({
     ),
   }).index("by_category", ["category"]),
 
+  opsHubResourceLinks: defineTable({
+    title: v.string(),
+    url: v.string(),
+    linkType: v.union(
+      v.literal("spreadsheet"),
+      v.literal("form"),
+      v.literal("doc"),
+      v.literal("other"),
+    ),
+    description: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  }).index("by_link_type", ["linkType"]),
+
   opsHubResponsibilityCatalog: defineTable({
     label: v.string(),
     color: v.string(),

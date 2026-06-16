@@ -8,7 +8,7 @@ import BotCommandsReference from "./bot-commands-reference.tsx";
 import SponsorLogTab from "./ops-hub/sponsor-log-tab.tsx";
 import RulesKillCapsTab from "./ops-hub/rules-kill-caps-tab.tsx";
 import ModDetailsTab from "./ops-hub/mod-details-tab.tsx";
-import TicketRepliesTab from "./ops-hub/ticket-replies-tab.tsx";
+import TextAndLinksTab from "./ops-hub/text-and-links-tab.tsx";
 import ResponsibilitiesTab from "./ops-hub/responsibilities-tab.tsx";
 import TodosTab from "./ops-hub/todos-tab.tsx";
 import VodPolicyTab from "./ops-hub/vod-policy-tab.tsx";
@@ -121,7 +121,7 @@ export default function ResourcesHubTabs({
               Rules & Kill Caps
             </TabsTrigger>
             <TabsTrigger value="tickets" className="cursor-pointer">
-              Ticket Replies
+              Text & Links
             </TabsTrigger>
             <TabsTrigger value="vods" className="cursor-pointer">
               VODs
@@ -151,7 +151,7 @@ export default function ResourcesHubTabs({
           <RulesKillCapsTab viewerToken={viewerToken} canEdit={canEdit} />
         </TabsContent>
         <TabsContent value="tickets" className="mt-4">
-          <TicketRepliesTab viewerToken={viewerToken} canEdit={canEdit} />
+          <TextAndLinksTab viewerToken={viewerToken} canEdit={canEdit} />
         </TabsContent>
         <TabsContent value="vods" className="mt-4">
           <VodPolicyTab viewerToken={viewerToken} canEdit={canEdit} />
