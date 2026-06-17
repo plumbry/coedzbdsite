@@ -293,42 +293,24 @@ async function formatPlayerAllEvents(
 
 async function computePlayerKillDiscrepancySummary(
   ctx: QueryCtx,
-  playerId: Id<"players">,
   yuniteResults: Doc<"thirdPartyResults">[],
 ) {
   const importIds = new Set(yuniteResults.map((result) => result.importId as string));
   let affectedImportCount = 0;
+  let affectedMatchCount = 0;
   for (const importId of importIds) {
     const importRecord = await ctx.db.get(importId as Id<"thirdPartyImports">);
-    if ((importRecord?.killDiscrepancyTeamCount ?? 0) > 0) {
+    const discrepancyCount = importRecord?.killDiscrepancyTeamCount ?? 0;
+    if (discrepancyCount > 0) {
       affectedImportCount += 1;
+      affectedMatchCount += discrepancyCount;
     }
-  }
-
-  let affectedMatchCount = 0;
-  let cursor: string | null = null;
-  while (true) {
-    const page = await ctx.db
-      .query("matchPlayerStats")
-      .withIndex("by_player", (q) => q.eq("playerId", playerId))
-      .paginate({ numItems: 500, cursor });
-
-    for (const match of page.page) {
-      if ((match.teamKillDiscrepancy ?? 0) !== 0) {
-        affectedMatchCount += 1;
-      }
-    }
-
-    if (page.isDone) {
-      break;
-    }
-    cursor = page.continueCursor;
   }
 
   return {
     affectedImportCount,
     affectedMatchCount,
-    hasKillDiscrepancies: affectedImportCount > 0 || affectedMatchCount > 0,
+    hasKillDiscrepancies: affectedImportCount > 0,
   };
 }
 
@@ -387,7 +369,6 @@ export const getPlayerZBDPerformanceBundle = query({
     );
     const killDiscrepancySummary = await computePlayerKillDiscrepancySummary(
       ctx,
-      args.playerId,
       yuniteResults,
     );
 
