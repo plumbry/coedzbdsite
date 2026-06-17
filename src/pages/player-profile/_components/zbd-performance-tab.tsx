@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible.tsx";
-import { Trophy, Plus, Calendar, Target, Crosshair, TrendingUp, ExternalLink, Activity, ChevronDown, Medal, Users, TrendingDown, Minus, Zap, Maximize2 } from "lucide-react";
+import { Trophy, Plus, Calendar, Target, Crosshair, TrendingUp, ExternalLink, Activity, ChevronDown, Medal, Users, TrendingDown, Minus, Zap, Maximize2, AlertTriangle } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import ExpandedPerformanceDialog from "./expanded-performance-dialog.tsx";
@@ -41,6 +41,7 @@ interface EventResult {
   mode?: string | null;
   excludeLowestScore?: boolean;
   isNoMoneyEvent?: boolean;
+  hasKillDiscrepancy?: boolean;
 }
 
 function PerformanceStatsCards({ stats }: { stats: ZbdPerformanceStats }) {
@@ -244,6 +245,11 @@ function EventResultsGrouped({ events }: { events: EventResult[] }) {
                               Best 3
                             </Badge>
                           )}
+                          {groupEvents.some((event) => event.hasKillDiscrepancy) && (
+                            <Badge variant="destructive" className="text-xs">
+                              Kill discrepancy
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -320,6 +326,13 @@ function EventResultsGrouped({ events }: { events: EventResult[] }) {
                             <TableCell className="text-sm text-right font-bold">
                               {event.eventScore || 0}
                             </TableCell>
+                            <TableCell className="text-sm">
+                              {event.hasKillDiscrepancy && (
+                                <Badge variant="destructive" className="text-[10px]">
+                                  Kill Δ
+                                </Badge>
+                              )}
+                            </TableCell>
                             <TableCell>
                               {((isManual && event.yuniteLeaderboardUrl) || (!isManual && event.leaderboardUrl)) && (
                                 <a
@@ -370,6 +383,7 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
   const eligibility = bundle.eligibility;
   const allEvents = bundle.events ?? [];
   const statsByMode = bundle.statsByMode;
+  const killDiscrepancySummary = bundle.killDiscrepancySummary;
 
   if (!statsByMode) {
     const eventCount = eligibility?.eventCount ?? 0;
@@ -468,10 +482,28 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
   return (
     <div className="space-y-4">
       {/* Data Disclaimer */}
-      <div className="rounded-lg border border-muted bg-muted/30 p-3">
+      <div className="rounded-lg border border-muted bg-muted/30 p-3 space-y-2">
         <p className="text-xs text-muted-foreground">
           <span className="font-semibold">Note:</span> ZBD event records come from Yunite imports and manually added events. Kill data may have minor discrepancies due to Yunite API limitations.
         </p>
+        {killDiscrepancySummary?.hasKillDiscrepancies && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-200">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <p>
+              Kill discrepancies flagged in{" "}
+              {killDiscrepancySummary.affectedImportCount}{" "}
+              {killDiscrepancySummary.affectedImportCount === 1 ? "import" : "imports"}
+              {killDiscrepancySummary.affectedMatchCount > 0 && (
+                <>
+                  {" "}
+                  ({killDiscrepancySummary.affectedMatchCount}{" "}
+                  {killDiscrepancySummary.affectedMatchCount === 1 ? "match" : "matches"})
+                </>
+              )}
+              . Yunite API team kill totals did not match the sum of kill-feed entries. Review flagged events below or use Admin → Yunite tournament view to adjust.
+            </p>
+          </div>
+        )}
       </div>
       
       {/* Stats Cards — split by game mode */}

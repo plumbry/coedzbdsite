@@ -1188,12 +1188,14 @@ async function applyImportMatchDataSynced(
     importId: Id<"thirdPartyImports">;
     matchDataSynced: boolean;
     totalMatchKills?: number;
+    killDiscrepancyTeamCount?: number;
   },
 ) {
   const updates: {
     matchDataSynced: boolean;
     matchDataSyncedAt?: number;
     totalMatchKills?: number;
+    killDiscrepancyTeamCount?: number;
   } = {
     matchDataSynced: args.matchDataSynced,
   };
@@ -1206,6 +1208,10 @@ async function applyImportMatchDataSynced(
     updates.totalMatchKills = args.totalMatchKills;
   }
 
+  if (args.killDiscrepancyTeamCount !== undefined) {
+    updates.killDiscrepancyTeamCount = args.killDiscrepancyTeamCount;
+  }
+
   await ctx.db.patch(args.importId, updates);
   await refreshEventCacheForImport(ctx, args.importId);
 }
@@ -1215,6 +1221,7 @@ export const updateImportMatchDataSyncedInternal = internalMutation({
     importId: v.id("thirdPartyImports"),
     matchDataSynced: v.boolean(),
     totalMatchKills: v.optional(v.number()),
+    killDiscrepancyTeamCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await applyImportMatchDataSynced(ctx, args);
@@ -1242,6 +1249,7 @@ export const resetMatchDataSyncFlag = mutation({
     
     await ctx.db.patch(args.importId, {
       matchDataSynced: false,
+      killDiscrepancyTeamCount: undefined,
     });
   },
 });

@@ -95,6 +95,7 @@ export default function OperationsAttentionPanel({
   unmatchedPlayers,
   unlinkedImports,
   unsyncedYuniteImports,
+  importsWithKillDiscrepancies,
   unsyncedEventCount,
   showImports,
   showEvents,
@@ -105,6 +106,7 @@ export default function OperationsAttentionPanel({
   unmatchedPlayers: number;
   unlinkedImports: number;
   unsyncedYuniteImports: number;
+  importsWithKillDiscrepancies: number;
   unsyncedEventCount: number;
   showImports: boolean;
   showEvents: boolean;
@@ -117,6 +119,9 @@ export default function OperationsAttentionPanel({
   );
   const unsyncedImportItems = importActionItems.filter(
     (item) => item.reasonCode === "unsynced_yunite",
+  );
+  const killDiscrepancyItems = importActionItems.filter(
+    (item) => item.reasonCode === "kill_discrepancy",
   );
   const unsyncedEventItems = eventActionItems.filter(
     (item) => item.reasonCode === "match_sync_pending",
@@ -156,6 +161,13 @@ export default function OperationsAttentionPanel({
         description: "Yunite imports missing match-level sync.",
         href: "/admin/uploads",
         items: unsyncedImportItems,
+      },
+      {
+        title: "Kill discrepancies",
+        count: importsWithKillDiscrepancies,
+        description: "API team kills do not match kill-feed totals.",
+        href: "/admin/uploads",
+        items: killDiscrepancyItems,
       },
     );
   }

@@ -365,6 +365,17 @@ export default function AdminHubPage() {
                         : "good"
                     }
                   />
+                  <OperationsCard
+                    title="Kill discrepancies"
+                    value={importSummary?.importsWithKillDiscrepancies ?? "..."}
+                    description="Yunite API team kills ≠ kill-feed sum; review in Uploads."
+                    href="/admin/uploads"
+                    tone={
+                      importSummary && importSummary.importsWithKillDiscrepancies > 0
+                        ? "attention"
+                        : "good"
+                    }
+                  />
                 </>
               )}
               {isModeratorOrAdmin && eventSummary && eventSummary.withUnsyncedYuniteData > 0 && (

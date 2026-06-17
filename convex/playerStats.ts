@@ -145,6 +145,7 @@ async function formatPlayerAllEvents(
     eventDate?: string;
     leaderboardId?: string;
     isYunite: boolean;
+    killDiscrepancyTeamCount?: number;
   };
   type EventInfo = {
     name?: string;
@@ -165,6 +166,7 @@ async function formatPlayerAllEvents(
           eventDate: importData.eventDate as string | undefined,
           leaderboardId: importData.leaderboardId as string | undefined,
           isYunite: isYuniteImport(importData),
+          killDiscrepancyTeamCount: importData.killDiscrepancyTeamCount,
         }
       : null;
     importCache.set(importId as string, info);
@@ -277,6 +279,7 @@ async function formatPlayerAllEvents(
         mode,
         excludeLowestScore,
         isNoMoneyEvent,
+        hasKillDiscrepancy: (importData?.killDiscrepancyTeamCount ?? 0) > 0,
       };
     }),
   );
@@ -286,6 +289,47 @@ async function formatPlayerAllEvents(
     const dateB = b.eventDate ? new Date(b.eventDate).getTime() : 0;
     return dateB - dateA;
   });
+}
+
+async function computePlayerKillDiscrepancySummary(
+  ctx: QueryCtx,
+  playerId: Id<"players">,
+  yuniteResults: Doc<"thirdPartyResults">[],
+) {
+  const importIds = new Set(yuniteResults.map((result) => result.importId as string));
+  let affectedImportCount = 0;
+  for (const importId of importIds) {
+    const importRecord = await ctx.db.get(importId as Id<"thirdPartyImports">);
+    if ((importRecord?.killDiscrepancyTeamCount ?? 0) > 0) {
+      affectedImportCount += 1;
+    }
+  }
+
+  let affectedMatchCount = 0;
+  let cursor: string | null = null;
+  while (true) {
+    const page = await ctx.db
+      .query("matchPlayerStats")
+      .withIndex("by_player", (q) => q.eq("playerId", playerId))
+      .paginate({ numItems: 500, cursor });
+
+    for (const match of page.page) {
+      if ((match.teamKillDiscrepancy ?? 0) !== 0) {
+        affectedMatchCount += 1;
+      }
+    }
+
+    if (page.isDone) {
+      break;
+    }
+    cursor = page.continueCursor;
+  }
+
+  return {
+    affectedImportCount,
+    affectedMatchCount,
+    hasKillDiscrepancies: affectedImportCount > 0 || affectedMatchCount > 0,
+  };
 }
 
 /** ZBD performance: manual event results + Yunite imports (not third-party CSV). */
@@ -341,12 +385,18 @@ export const getPlayerZBDPerformanceBundle = query({
       eventResults,
       yuniteResults,
     );
+    const killDiscrepancySummary = await computePlayerKillDiscrepancySummary(
+      ctx,
+      args.playerId,
+      yuniteResults,
+    );
 
     if (!eligibility.statsEligible) {
       return {
         stats: null,
         eligibility,
         events,
+        killDiscrepancySummary,
       };
     }
 
@@ -368,6 +418,7 @@ export const getPlayerZBDPerformanceBundle = query({
       },
       eligibility,
       events,
+      killDiscrepancySummary,
     };
   },
 });

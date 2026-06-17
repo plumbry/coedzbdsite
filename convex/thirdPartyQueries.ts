@@ -134,6 +134,9 @@ export const getImportOperationsSummary = query({
           importRecord.importMethod === "api") &&
         importRecord.matchDataSynced !== true,
     );
+    const importsWithKillDiscrepancies = imports.filter(
+      (importRecord) => (importRecord.killDiscrepancyTeamCount ?? 0) > 0,
+    );
     const unlinkedImports = imports.filter((importRecord) => !importRecord.eventId);
 
     const needsReviewImports = imports.filter(
@@ -143,7 +146,8 @@ export const getImportOperationsSummary = query({
         ((importRecord.source === "Yunite" ||
           importRecord.source === "Yunite API" ||
           importRecord.importMethod === "api") &&
-          importRecord.matchDataSynced !== true),
+          importRecord.matchDataSynced !== true) ||
+        (importRecord.killDiscrepancyTeamCount ?? 0) > 0,
     );
 
     const actionItems = needsReviewImports
@@ -158,6 +162,7 @@ export const getImportOperationsSummary = query({
         0,
       ),
       unsyncedYuniteImports: unsyncedYuniteImports.length,
+      importsWithKillDiscrepancies: importsWithKillDiscrepancies.length,
       unlinkedImports: unlinkedImports.length,
       recentNeedsReview: needsReviewImports.slice(0, 8).map((importRecord) => ({
         _id: importRecord._id,

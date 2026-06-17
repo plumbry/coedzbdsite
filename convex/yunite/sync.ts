@@ -442,6 +442,7 @@ type PendingMatchPlayerStats = {
   knocks: number;
   deaths: number;
   teamTotalKills: number;
+  teamKillDiscrepancy?: number;
   deathTime?: number;
   duoDeathTime?: number;
   killsAfterDuoDeath?: number;
@@ -537,6 +538,7 @@ export const syncTournamentMatchDataInternal = internalAction({
       
       // Track total match kills (sum of all team kills across all matches)
       let totalMatchKills = 0;
+      let killDiscrepancyTeamCount = 0;
 
       // Fetch each match's leaderboard
       for (let i = 0; i < matches.length; i++) {
@@ -611,6 +613,24 @@ export const syncTournamentMatchDataInternal = internalAction({
           // Accumulate total match kills across all teams and matches
           totalMatchKills += teamKillsFromMatch;
           
+          const sumOfPlayerKills = players.reduce((sum, teamPlayer) => {
+            if (!teamPlayer.discordId) {
+              return sum;
+            }
+            const playerKillFeed = killFeeds[teamPlayer.discordId] || [];
+            return (
+              sum +
+              playerKillFeed.filter((kill: { finish: boolean }) => kill.finish === true).length
+            );
+          }, 0);
+          const teamKillDiscrepancy = teamKillsFromMatch - sumOfPlayerKills;
+          if (teamKillDiscrepancy !== 0) {
+            killDiscrepancyTeamCount += 1;
+            console.log(
+              `    ⚠️ Team kill discrepancy: API=${teamKillsFromMatch}, kill-feed sum=${sumOfPlayerKills} (Δ${teamKillDiscrepancy})`,
+            );
+          }
+
           // Log detailed info about this team
           console.log(`  🎮 Match ${i + 1}, Placement ${placement}, Team Total Kills: ${teamKillsFromMatch}`);
           console.log(`    Players in team:`, players.map((p: { discordId: string }) => p.discordId));
@@ -706,6 +726,8 @@ export const syncTournamentMatchDataInternal = internalAction({
               knocks,
               deaths: deathCount,
               teamTotalKills: teamKillsFromMatch,
+              teamKillDiscrepancy:
+                teamKillDiscrepancy !== 0 ? teamKillDiscrepancy : undefined,
               deathTime,
               duoDeathTime,
               killsAfterDuoDeath:
@@ -809,12 +831,18 @@ export const syncTournamentMatchDataInternal = internalAction({
         `✅ Updated ${updated} player records with match data (${resultUpdatesSkipped} skipped unchanged)`,
       );
       console.log(`📊 Total match kills across all matches: ${totalMatchKills}`);
+      if (killDiscrepancyTeamCount > 0) {
+        console.log(
+          `⚠️ Kill discrepancies detected in ${killDiscrepancyTeamCount} team-match row(s)`,
+        );
+      }
       
       // Mark import as having match data synced and store total match kills
       await ctx.runMutation(internal.thirdPartyMutations.updateImportMatchDataSyncedInternal, {
         importId: args.importId,
         matchDataSynced: true,
         totalMatchKills,
+        killDiscrepancyTeamCount,
       });
 
       const affectedPlayerIds = [...matchStatsAffectedPlayerIds];

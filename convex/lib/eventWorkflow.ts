@@ -43,11 +43,12 @@ export type AdminActionItem = {
     | "import_players"
     | "import_link"
     | "import_sync"
+    | "import_quality"
     | "event_results";
   recordId: string;
   recordLabel: string;
   reason: string;
-  reasonCode: SetupReasonCode | "unlinked_import" | "unsynced_yunite";
+  reasonCode: SetupReasonCode | "unlinked_import" | "unsynced_yunite" | "kill_discrepancy";
   actionLabel: string;
   href: string;
 };
@@ -291,6 +292,7 @@ export function buildImportActionItems(
     source: string;
     importMethod?: string;
     matchDataSynced?: boolean;
+    killDiscrepancyTeamCount?: number;
   },
 ): AdminActionItem[] {
   const items: AdminActionItem[] = [];
@@ -333,6 +335,21 @@ export function buildImportActionItems(
       reason: "Match data unsynced",
       reasonCode: "unsynced_yunite",
       actionLabel: "Retry Sync",
+      href: `/admin/yunite/${importRecord._id}`,
+    });
+  }
+
+  if ((importRecord.killDiscrepancyTeamCount ?? 0) > 0) {
+    items.push({
+      id: `import-${importRecord._id}-kill-discrepancy`,
+      category: "import_quality",
+      recordId: importRecord._id,
+      recordLabel: importLabel,
+      reason: `${importRecord.killDiscrepancyTeamCount} team-match kill discrepanc${
+        importRecord.killDiscrepancyTeamCount === 1 ? "y" : "ies"
+      } (API team kills ≠ kill-feed sum)`,
+      reasonCode: "kill_discrepancy",
+      actionLabel: "Review Kills",
       href: `/admin/yunite/${importRecord._id}`,
     });
   }

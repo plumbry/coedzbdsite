@@ -336,6 +336,8 @@ export default defineSchema({
     matchDataSynced: v.optional(v.boolean()), // True if match data has been fetched and aggregated
     matchDataSyncedAt: v.optional(v.number()), // Timestamp when match data was last synced
     totalMatchKills: v.optional(v.number()), // Sum of all team kills across all matches (from match-level data)
+    /** Team-match rows where API team kills ≠ sum of kill-feed player kills. */
+    killDiscrepancyTeamCount: v.optional(v.number()),
     dataFullyCached: v.optional(v.boolean()), // True if all data (leaderboard + matches) is fully cached
     /** Explicit Process Import pipeline status (Phase 3C). */
     pipelineStatus: v.optional(v.string()),
@@ -710,6 +712,8 @@ export default defineSchema({
     knocks: v.number(), // Player's knocks (DBNOs without finish)
     deaths: v.number(), // Number of times player was eliminated in this match (0 only if placement=1, otherwise ≥1; assumes 1 death if kill feed data missing)
     teamTotalKills: v.number(), // Team's total kills in this match
+    /** API team kills minus sum of kill-feed player kills (non-zero = Yunite data gap). */
+    teamKillDiscrepancy: v.optional(v.number()),
     deathTime: v.optional(v.number()), // Time of death (seconds since match start), null if survived
     // Duo-specific stats (only if duo was in this match)
     duoDeathTime: v.optional(v.number()), // Time when duo died (null if duo survived)

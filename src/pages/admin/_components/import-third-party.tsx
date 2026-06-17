@@ -1811,6 +1811,12 @@ export default function ImportThirdParty() {
                             >
                               {imp.pipelineStatus ?? "Not processed"}
                             </Badge>
+                            {(imp.killDiscrepancyTeamCount ?? 0) > 0 && (
+                              <Badge variant="destructive" className="w-fit text-[10px]">
+                                {imp.killDiscrepancyTeamCount} kill discrepanc
+                                {imp.killDiscrepancyTeamCount === 1 ? "y" : "ies"}
+                              </Badge>
+                            )}
                             {processingImportId === imp._id &&
                               importProcessingState?.job?.status === "running" && (
                                 <div className="flex flex-col gap-1">
