@@ -16,6 +16,15 @@ import {
   yuniteFetchOrThrow,
   yuniteResponseJson,
 } from "../lib/yuniteRateLimit";
+import {
+  calculateEliminationsFromEvents,
+  collectMatchKillFeedEvents,
+  countKnocksInFeed,
+  getPlayerKillFeedEntries,
+  sumTeamPlayerEliminations,
+  type KillFeedEvent,
+  type RawKillFeedEntry,
+} from "./killFeedStats";
 
 interface YuniteTournament {
   id: string;
@@ -538,7 +547,7 @@ export const syncTournamentMatchDataInternal = internalAction({
       
       // Track total match kills (sum of all team kills across all matches)
       let totalMatchKills = 0;
-      let killDiscrepancyTeamCount = 0;
+      let totalKillDiscrepancy = 0;
 
       // Fetch each match's leaderboard
       for (let i = 0; i < matches.length; i++) {
@@ -600,11 +609,19 @@ export const syncTournamentMatchDataInternal = internalAction({
         
         console.log(`  💀 Death counts in match ${i + 1}:`, Object.fromEntries(playerDeathCounts));
 
+        const matchKillFeedEvents: KillFeedEvent[] = [];
+        for (const entry of matchData) {
+          const players = entry.team?.players || [];
+          const killFeeds = (entry.killFeeds || {}) as Record<string, RawKillFeedEntry[]>;
+          matchKillFeedEvents.push(...collectMatchKillFeedEvents(players, killFeeds));
+        }
+        const matchEliminations = calculateEliminationsFromEvents(matchKillFeedEvents);
+
         // SECOND PASS: Process team stats
         for (const entry of matchData) {
           // Get the list of players in this team
           const players = entry.team?.players || [];
-          const killFeeds = entry.killFeeds || {};
+          const killFeeds = (entry.killFeeds || {}) as Record<string, RawKillFeedEntry[]>;
           const deathLocations = entry.deathLocations || {};
           const teamKillsFromMatch = entry.kills || 0;
           const placement = entry.placement;
@@ -613,21 +630,12 @@ export const syncTournamentMatchDataInternal = internalAction({
           // Accumulate total match kills across all teams and matches
           totalMatchKills += teamKillsFromMatch;
           
-          const sumOfPlayerKills = players.reduce((sum, teamPlayer) => {
-            if (!teamPlayer.discordId) {
-              return sum;
-            }
-            const playerKillFeed = killFeeds[teamPlayer.discordId] || [];
-            return (
-              sum +
-              playerKillFeed.filter((kill: { finish: boolean }) => kill.finish === true).length
-            );
-          }, 0);
+          const sumOfPlayerKills = sumTeamPlayerEliminations(players, matchEliminations);
           const teamKillDiscrepancy = teamKillsFromMatch - sumOfPlayerKills;
           if (teamKillDiscrepancy !== 0) {
-            killDiscrepancyTeamCount += 1;
+            totalKillDiscrepancy += Math.abs(teamKillDiscrepancy);
             console.log(
-              `    ⚠️ Team kill discrepancy: API=${teamKillsFromMatch}, kill-feed sum=${sumOfPlayerKills} (Δ${teamKillDiscrepancy})`,
+              `    ⚠️ Team kill discrepancy: API=${teamKillsFromMatch}, verified=${sumOfPlayerKills} (Δ${teamKillDiscrepancy})`,
             );
           }
 
@@ -640,16 +648,15 @@ export const syncTournamentMatchDataInternal = internalAction({
           for (const player of players) {
             if (!player.discordId) continue;
             
-            // Count ONLY finishes from this player's killfeed (exclude knocks/DBNOs)
-            const playerKillFeed = killFeeds[player.discordId] || [];
+            const playerKillFeed = getPlayerKillFeedEntries(killFeeds, player.discordId);
             
             // Log the raw killfeed for this player
             if (playerKillFeed.length > 0) {
               console.log(`    📊 Raw killFeed for ${player.discordId}:`, JSON.stringify(playerKillFeed));
             }
             
-            const eliminations = playerKillFeed.filter((kill: { finish: boolean }) => kill.finish === true).length;
-            const knocks = playerKillFeed.filter((kill: { knock: boolean; finish: boolean }) => kill.knock === true && kill.finish !== true).length;
+            const eliminations = matchEliminations[player.discordId] || 0;
+            const knocks = countKnocksInFeed(playerKillFeed);
             
             // Get player death count from kill feed analysis (not just deathLocation)
             let deathCount = playerDeathCounts.get(player.discordId) || 0;
@@ -703,8 +710,9 @@ export const syncTournamentMatchDataInternal = internalAction({
                 if (duoDeathTime !== undefined) {
                   const safeDuoDeathTime = duoDeathTime;
                   killsAfterDuoDeath = playerKillFeed.filter(
-                    (k: { finish: boolean; time: number }) =>
-                      k.finish && k.time > safeDuoDeathTime,
+                    (k) =>
+                      k.finish === true &&
+                      (k.time ?? 0) > safeDuoDeathTime,
                   ).length;
 
                   if (deathTime !== undefined && deathTime > safeDuoDeathTime) {
@@ -831,9 +839,9 @@ export const syncTournamentMatchDataInternal = internalAction({
         `✅ Updated ${updated} player records with match data (${resultUpdatesSkipped} skipped unchanged)`,
       );
       console.log(`📊 Total match kills across all matches: ${totalMatchKills}`);
-      if (killDiscrepancyTeamCount > 0) {
+      if (totalKillDiscrepancy > 0) {
         console.log(
-          `⚠️ Kill discrepancies detected in ${killDiscrepancyTeamCount} team-match row(s)`,
+          `⚠️ Total kill discrepancy across import: ${totalKillDiscrepancy}`,
         );
       }
       
@@ -842,7 +850,7 @@ export const syncTournamentMatchDataInternal = internalAction({
         importId: args.importId,
         matchDataSynced: true,
         totalMatchKills,
-        killDiscrepancyTeamCount,
+        totalKillDiscrepancy,
       });
 
       const affectedPlayerIds = [...matchStatsAffectedPlayerIds];

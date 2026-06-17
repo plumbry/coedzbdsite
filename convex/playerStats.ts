@@ -145,7 +145,7 @@ async function formatPlayerAllEvents(
     eventDate?: string;
     leaderboardId?: string;
     isYunite: boolean;
-    killDiscrepancyTeamCount?: number;
+    totalKillDiscrepancy?: number;
   };
   type EventInfo = {
     name?: string;
@@ -166,7 +166,7 @@ async function formatPlayerAllEvents(
           eventDate: importData.eventDate as string | undefined,
           leaderboardId: importData.leaderboardId as string | undefined,
           isYunite: isYuniteImport(importData),
-          killDiscrepancyTeamCount: importData.killDiscrepancyTeamCount,
+          totalKillDiscrepancy: importData.totalKillDiscrepancy,
         }
       : null;
     importCache.set(importId as string, info);
@@ -279,7 +279,7 @@ async function formatPlayerAllEvents(
         mode,
         excludeLowestScore,
         isNoMoneyEvent,
-        hasKillDiscrepancy: (importData?.killDiscrepancyTeamCount ?? 0) > 0,
+        hasKillDiscrepancy: (importData?.totalKillDiscrepancy ?? 0) > 0,
       };
     }),
   );
@@ -297,19 +297,19 @@ async function computePlayerKillDiscrepancySummary(
 ) {
   const importIds = new Set(yuniteResults.map((result) => result.importId as string));
   let affectedImportCount = 0;
-  let affectedMatchCount = 0;
+  let totalKillDiscrepancy = 0;
   for (const importId of importIds) {
     const importRecord = await ctx.db.get(importId as Id<"thirdPartyImports">);
-    const discrepancyCount = importRecord?.killDiscrepancyTeamCount ?? 0;
-    if (discrepancyCount > 0) {
+    const discrepancy = importRecord?.totalKillDiscrepancy ?? 0;
+    if (discrepancy > 0) {
       affectedImportCount += 1;
-      affectedMatchCount += discrepancyCount;
+      totalKillDiscrepancy += discrepancy;
     }
   }
 
   return {
     affectedImportCount,
-    affectedMatchCount,
+    totalKillDiscrepancy,
     hasKillDiscrepancies: affectedImportCount > 0,
   };
 }

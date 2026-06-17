@@ -292,7 +292,7 @@ export function buildImportActionItems(
     source: string;
     importMethod?: string;
     matchDataSynced?: boolean;
-    killDiscrepancyTeamCount?: number;
+    totalKillDiscrepancy?: number;
   },
 ): AdminActionItem[] {
   const items: AdminActionItem[] = [];
@@ -339,15 +339,15 @@ export function buildImportActionItems(
     });
   }
 
-  if ((importRecord.killDiscrepancyTeamCount ?? 0) > 0) {
+  if ((importRecord.totalKillDiscrepancy ?? 0) > 0) {
     items.push({
       id: `import-${importRecord._id}-kill-discrepancy`,
       category: "import_quality",
       recordId: importRecord._id,
       recordLabel: importLabel,
-      reason: `${importRecord.killDiscrepancyTeamCount} team-match kill discrepanc${
-        importRecord.killDiscrepancyTeamCount === 1 ? "y" : "ies"
-      } (API team kills ≠ kill-feed sum)`,
+      reason: `${importRecord.totalKillDiscrepancy} total kill discrepanc${
+        importRecord.totalKillDiscrepancy === 1 ? "y" : "ies"
+      } (API team kills ≠ verified kill-feed kills)`,
       reasonCode: "kill_discrepancy",
       actionLabel: "Review Kills",
       href: `/admin/yunite/${importRecord._id}`,

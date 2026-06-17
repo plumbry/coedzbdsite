@@ -185,6 +185,7 @@ import type * as yunite_debug from "../yunite/debug.js";
 import type * as yunite_eliminationOverrides from "../yunite/eliminationOverrides.js";
 import type * as yunite_fixPlacements from "../yunite/fixPlacements.js";
 import type * as yunite_fixPlacementsHelpers from "../yunite/fixPlacementsHelpers.js";
+import type * as yunite_killFeedStats from "../yunite/killFeedStats.js";
 import type * as yunite_lookupEpicRegistration from "../yunite/lookupEpicRegistration.js";
 import type * as yunite_lookupPlatform from "../yunite/lookupPlatform.js";
 import type * as yunite_matchData from "../yunite/matchData.js";
@@ -381,6 +382,7 @@ declare const fullApi: ApiFromModules<{
   "yunite/eliminationOverrides": typeof yunite_eliminationOverrides;
   "yunite/fixPlacements": typeof yunite_fixPlacements;
   "yunite/fixPlacementsHelpers": typeof yunite_fixPlacementsHelpers;
+  "yunite/killFeedStats": typeof yunite_killFeedStats;
   "yunite/lookupEpicRegistration": typeof yunite_lookupEpicRegistration;
   "yunite/lookupPlatform": typeof yunite_lookupPlatform;
   "yunite/matchData": typeof yunite_matchData;

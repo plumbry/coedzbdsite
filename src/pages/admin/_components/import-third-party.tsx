@@ -1811,10 +1811,10 @@ export default function ImportThirdParty() {
                             >
                               {imp.pipelineStatus ?? "Not processed"}
                             </Badge>
-                            {(imp.killDiscrepancyTeamCount ?? 0) > 0 && (
+                            {(imp.totalKillDiscrepancy ?? 0) > 0 && (
                               <Badge variant="destructive" className="w-fit text-[10px]">
-                                {imp.killDiscrepancyTeamCount} kill discrepanc
-                                {imp.killDiscrepancyTeamCount === 1 ? "y" : "ies"}
+                                {imp.totalKillDiscrepancy} kill discrepanc
+                                {imp.totalKillDiscrepancy === 1 ? "y" : "ies"}
                               </Badge>
                             )}
                             {processingImportId === imp._id &&

@@ -368,7 +368,7 @@ export default function AdminHubPage() {
                   <OperationsCard
                     title="Kill discrepancies"
                     value={importSummary?.importsWithKillDiscrepancies ?? "..."}
-                    description="Yunite API team kills ≠ kill-feed sum; review in Uploads."
+                    description="Yunite API team kills ≠ verified kill-feed kills; review in Uploads."
                     href="/admin/uploads"
                     tone={
                       importSummary && importSummary.importsWithKillDiscrepancies > 0

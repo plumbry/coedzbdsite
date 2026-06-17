@@ -493,14 +493,17 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
               Kill discrepancies flagged in{" "}
               {killDiscrepancySummary.affectedImportCount}{" "}
               {killDiscrepancySummary.affectedImportCount === 1 ? "import" : "imports"}
-              {killDiscrepancySummary.affectedMatchCount > 0 && (
+              {killDiscrepancySummary.totalKillDiscrepancy > 0 && (
                 <>
                   {" "}
-                  ({killDiscrepancySummary.affectedMatchCount}{" "}
-                  {killDiscrepancySummary.affectedMatchCount === 1 ? "match" : "matches"})
+                  ({killDiscrepancySummary.totalKillDiscrepancy} total kill{" "}
+                  {killDiscrepancySummary.totalKillDiscrepancy === 1
+                    ? "discrepancy"
+                    : "discrepancies"}
+                  )
                 </>
               )}
-              . Yunite API team kill totals did not match the sum of kill-feed entries. Review flagged events below or use Admin → Yunite tournament view to adjust.
+              . Yunite API team kill totals did not match verified kill-feed eliminations. Review flagged events below or use Admin → Yunite tournament view to adjust.
             </p>
           </div>
         )}

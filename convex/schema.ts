@@ -336,8 +336,8 @@ export default defineSchema({
     matchDataSynced: v.optional(v.boolean()), // True if match data has been fetched and aggregated
     matchDataSyncedAt: v.optional(v.number()), // Timestamp when match data was last synced
     totalMatchKills: v.optional(v.number()), // Sum of all team kills across all matches (from match-level data)
-    /** Team-match rows where API team kills ≠ sum of kill-feed player kills. */
-    killDiscrepancyTeamCount: v.optional(v.number()),
+    /** Total kills out of alignment (sum of |API team kills − verified kill-feed kills|). */
+    totalKillDiscrepancy: v.optional(v.number()),
     dataFullyCached: v.optional(v.boolean()), // True if all data (leaderboard + matches) is fully cached
     /** Explicit Process Import pipeline status (Phase 3C). */
     pipelineStatus: v.optional(v.string()),

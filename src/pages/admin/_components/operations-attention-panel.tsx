@@ -165,7 +165,7 @@ export default function OperationsAttentionPanel({
       {
         title: "Kill discrepancies",
         count: importsWithKillDiscrepancies,
-        description: "API team kills do not match kill-feed totals.",
+        description: "API team kills do not match verified kill-feed eliminations.",
         href: "/admin/uploads",
         items: killDiscrepancyItems,
       },
