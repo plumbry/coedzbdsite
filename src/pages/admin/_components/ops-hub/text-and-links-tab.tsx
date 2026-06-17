@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.js";
 import { opsMutationArgs, opsQueryArgs, type OpsHubTabProps } from "./types.ts";
 import { Button } from "@/components/ui/button.tsx";
+import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -49,7 +50,14 @@ import {
 const TEMPLATE_FIELDS: OpsFormField[] = [
   { key: "category", label: "Category", type: "text", required: true },
   { key: "situation", label: "Situation", type: "text", required: true },
-  { key: "responseText", label: "Response text", type: "textarea", required: true },
+  {
+    key: "responseText",
+    label: "Response text",
+    type: "textarea",
+    required: true,
+    placeholder:
+      "Use tokens like {{subject}}, {{punishment}}, {{reason}}. Example: {{subject}} received {{punishment}} for {{reason}}.",
+  },
 ];
 
 type ResourceLinkType = "spreadsheet" | "form" | "doc" | "other";
@@ -73,6 +81,85 @@ const LINK_FIELDS: OpsFormField[] = [
   },
   { key: "description", label: "Description", type: "textarea" },
 ];
+
+const AUDIENCE_OPTIONS = [
+  { value: "single", label: "Single Player" },
+  { value: "team", label: "Team" },
+] as const;
+
+type AudienceType = (typeof AUDIENCE_OPTIONS)[number]["value"];
+
+const PUNISHMENT_OPTIONS = [
+  "Warning",
+  "Minor Ban",
+  "Medium Ban",
+  "Major Ban",
+  "Permanent Ban",
+] as const;
+
+const PRONOUNS_BY_AUDIENCE: Record<
+  AudienceType,
+  {
+    subject: string;
+    object: string;
+    possessiveAdjective: string;
+    possessivePronoun: string;
+    reflexive: string;
+    verbIs: string;
+    verbHas: string;
+    audienceLabel: string;
+  }
+> = {
+  single: {
+    subject: "they",
+    object: "them",
+    possessiveAdjective: "their",
+    possessivePronoun: "theirs",
+    reflexive: "themself",
+    verbIs: "is",
+    verbHas: "has",
+    audienceLabel: "player",
+  },
+  team: {
+    subject: "they",
+    object: "them",
+    possessiveAdjective: "their",
+    possessivePronoun: "theirs",
+    reflexive: "themselves",
+    verbIs: "are",
+    verbHas: "have",
+    audienceLabel: "team",
+  },
+};
+
+const RESERVED_TEMPLATE_TOKENS = new Set([
+  "audience",
+  "audience_label",
+  "punishment",
+  "subject",
+  "object",
+  "possessive_adjective",
+  "possessive_pronoun",
+  "reflexive",
+  "verb_is",
+  "verb_has",
+]);
+
+function extractTemplateTokens(text: string): string[] {
+  const matches = text.matchAll(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g);
+  const unique = new Set<string>();
+  for (const match of matches) {
+    unique.add(match[1].toLowerCase());
+  }
+  return [...unique];
+}
+
+function tokenLabel(token: string) {
+  return token
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 function linkTypeLabel(type: ResourceLinkType) {
   return LINK_TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type;
@@ -114,6 +201,9 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
   const [category, setCategory] = useState<string>("");
   const [situation, setSituation] = useState<string>("");
   const [outputText, setOutputText] = useState("");
+  const [audienceType, setAudienceType] = useState<AudienceType>("single");
+  const [punishment, setPunishment] = useState("");
+  const [tokenValues, setTokenValues] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
 
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
@@ -156,24 +246,63 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
     );
   }, [templates, category, situation]);
 
+  const templateTokens = useMemo(
+    () => extractTemplateTokens(selectedTemplate?.responseText ?? ""),
+    [selectedTemplate],
+  );
+
+  const customTokens = useMemo(
+    () => templateTokens.filter((token) => !RESERVED_TEMPLATE_TOKENS.has(token)),
+    [templateTokens],
+  );
+
+  const renderedTemplate = useMemo(() => {
+    if (!selectedTemplate) return "";
+    const pronouns = PRONOUNS_BY_AUDIENCE[audienceType];
+    const replacements: Record<string, string> = {
+      audience: audienceType,
+      audience_label: pronouns.audienceLabel,
+      punishment,
+      subject: pronouns.subject,
+      object: pronouns.object,
+      possessive_adjective: pronouns.possessiveAdjective,
+      possessive_pronoun: pronouns.possessivePronoun,
+      reflexive: pronouns.reflexive,
+      verb_is: pronouns.verbIs,
+      verb_has: pronouns.verbHas,
+      ...tokenValues,
+    };
+    return selectedTemplate.responseText.replace(
+      /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g,
+      (_raw, key: string) => replacements[key.toLowerCase()] ?? "",
+    );
+  }, [selectedTemplate, audienceType, punishment, tokenValues]);
+
+  useEffect(() => {
+    setOutputText(renderedTemplate);
+  }, [renderedTemplate]);
+
   const loadTemplate = (template: Doc<"opsHubTicketReplyTemplates">) => {
     setCategory(template.category);
     setSituation(template.situation);
-    setOutputText(template.responseText);
+    setAudienceType("single");
+    setPunishment("");
+    setTokenValues({});
   };
 
   const handleCategoryChange = (value: string) => {
     setCategory(value);
     setSituation("");
-    setOutputText("");
+    setAudienceType("single");
+    setPunishment("");
+    setTokenValues({});
   };
 
   const handleSituationChange = (value: string) => {
     setSituation(value);
-    const match = templates?.find(
-      (t) => t.category === category && t.situation === value,
-    );
-    setOutputText(match?.responseText ?? "");
+    setAudienceType("single");
+    setPunishment("");
+    setTokenValues({});
   };
 
   const handleCopy = async () => {
@@ -392,6 +521,68 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
                 placeholder="Select a template or create a new one…"
               />
             </div>
+
+            {selectedTemplate && (
+              <div className="space-y-3 border rounded-md p-3">
+                <p className="text-xs font-medium">Template options</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Audience</Label>
+                    <Select
+                      value={audienceType}
+                      onValueChange={(value) => setAudienceType(value as AudienceType)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AUDIENCE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Punishment</Label>
+                    <Select value={punishment} onValueChange={setPunishment}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select punishment…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PUNISHMENT_OPTIONS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {customTokens.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {customTokens.map((token) => (
+                      <div key={token} className="space-y-1.5">
+                        <Label>{tokenLabel(token)}</Label>
+                        <Input
+                          value={tokenValues[token] ?? ""}
+                          onChange={(e) =>
+                            setTokenValues((prev) => ({ ...prev, [token]: e.target.value }))
+                          }
+                          placeholder={`Fill {{${token}}}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Available built-in tokens: {"{{subject}}"}, {"{{object}}"},{" "}
+                  {"{{possessive_adjective}}"}, {"{{reflexive}}"}, {"{{verb_is}}"},{" "}
+                  {"{{verb_has}}"}, {"{{punishment}}"}.
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-2">
               <Button
