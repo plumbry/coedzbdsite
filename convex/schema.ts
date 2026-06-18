@@ -1694,6 +1694,8 @@ export default defineSchema({
     modName: v.string(),
     discordId: v.optional(v.string()),
     payPalDetails: v.optional(v.string()),
+    cashAppDetails: v.optional(v.string()),
+    bankDetails: v.optional(v.string()),
     responsibilities: v.optional(v.string()),
     availabilityNotes: v.optional(v.string()),
     createdAt: v.number(),

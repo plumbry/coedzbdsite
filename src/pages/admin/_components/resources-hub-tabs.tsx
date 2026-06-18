@@ -7,7 +7,6 @@ import PunishmentMatrixContent from "./punishment-matrix-content.tsx";
 import BotCommandsReference from "./bot-commands-reference.tsx";
 import SponsorLogTab from "./ops-hub/sponsor-log-tab.tsx";
 import RulesKillCapsTab from "./ops-hub/rules-kill-caps-tab.tsx";
-import ModDetailsTab from "./ops-hub/mod-details-tab.tsx";
 import TextAndLinksTab from "./ops-hub/text-and-links-tab.tsx";
 import ResponsibilitiesTab from "./ops-hub/responsibilities-tab.tsx";
 import TodosTab from "./ops-hub/todos-tab.tsx";
@@ -17,7 +16,6 @@ const VALID_TABS = [
   "commands",
   "responsibilities",
   "todos",
-  "mods",
   "sponsors",
   "rules-kill-caps",
   "tickets",
@@ -30,6 +28,7 @@ const DEFAULT_TAB = "commands";
 const LEGACY_TAB_ALIASES: Record<string, (typeof VALID_TABS)[number]> = {
   rules: "rules-kill-caps",
   "kill-caps": "rules-kill-caps",
+  mods: "tickets",
   vod: "vods",
 };
 
@@ -111,9 +110,6 @@ export default function ResourcesHubTabs({
             <TabsTrigger value="todos" className="cursor-pointer">
               To-Do
             </TabsTrigger>
-            <TabsTrigger value="mods" className="cursor-pointer">
-              Mod Details
-            </TabsTrigger>
             <TabsTrigger value="sponsors" className="cursor-pointer">
               Sponsor Log
             </TabsTrigger>
@@ -121,7 +117,7 @@ export default function ResourcesHubTabs({
               Rules & Kill Caps
             </TabsTrigger>
             <TabsTrigger value="tickets" className="cursor-pointer">
-              Text & Links
+              Useful Info
             </TabsTrigger>
             <TabsTrigger value="vods" className="cursor-pointer">
               VODs
@@ -140,9 +136,6 @@ export default function ResourcesHubTabs({
         </TabsContent>
         <TabsContent value="todos" className="mt-4">
           <TodosTab viewerToken={viewerToken} canEdit={canEdit} />
-        </TabsContent>
-        <TabsContent value="mods" className="mt-4">
-          <ModDetailsTab viewerToken={viewerToken} canEdit={canEdit} />
         </TabsContent>
         <TabsContent value="sponsors" className="mt-4">
           <SponsorLogTab viewerToken={viewerToken} canEdit={canEdit} />

@@ -82,6 +82,13 @@ const LINK_FIELDS: OpsFormField[] = [
   { key: "description", label: "Description", type: "textarea" },
 ];
 
+const MOD_PAYMENT_FIELDS: OpsFormField[] = [
+  { key: "modName", label: "Mod name", type: "text", required: true },
+  { key: "payPalDetails", label: "PayPal details", type: "text" },
+  { key: "cashAppDetails", label: "Cash App details", type: "text" },
+  { key: "bankDetails", label: "Bank details", type: "textarea" },
+];
+
 const AUDIENCE_OPTIONS = [
   { value: "single", label: "Single Player" },
   { value: "team", label: "Team" },
@@ -191,12 +198,16 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
     opsQueryArgs(viewerToken),
   );
   const links = useQuery(api.opsHub.queries.listResourceLinks, opsQueryArgs(viewerToken));
+  const modPayments = useQuery(api.opsHub.queries.listModDetails, opsQueryArgs(viewerToken));
   const createTemplate = useMutation(api.opsHub.mutations.createTicketReplyTemplate);
   const updateTemplate = useMutation(api.opsHub.mutations.updateTicketReplyTemplate);
   const removeTemplate = useMutation(api.opsHub.mutations.deleteTicketReplyTemplate);
   const createLink = useMutation(api.opsHub.mutations.createResourceLink);
   const updateLink = useMutation(api.opsHub.mutations.updateResourceLink);
   const removeLink = useMutation(api.opsHub.mutations.deleteResourceLink);
+  const createModPayment = useMutation(api.opsHub.mutations.createModDetail);
+  const updateModPayment = useMutation(api.opsHub.mutations.updateModDetail);
+  const removeModPayment = useMutation(api.opsHub.mutations.deleteModDetail);
 
   const [category, setCategory] = useState<string>("");
   const [situation, setSituation] = useState<string>("");
@@ -223,6 +234,16 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
   const [savingLink, setSavingLink] = useState(false);
   const [deleteLinkTarget, setDeleteLinkTarget] =
     useState<Doc<"opsHubResourceLinks"> | null>(null);
+
+  const [modPaymentDialogOpen, setModPaymentDialogOpen] = useState(false);
+  const [editingModPayment, setEditingModPayment] =
+    useState<Doc<"opsHubModDetails"> | null>(null);
+  const [modPaymentValues, setModPaymentValues] = useState(() =>
+    emptyFormValues(MOD_PAYMENT_FIELDS),
+  );
+  const [savingModPayment, setSavingModPayment] = useState(false);
+  const [deleteModPaymentTarget, setDeleteModPaymentTarget] =
+    useState<Doc<"opsHubModDetails"> | null>(null);
 
   const categories = useMemo(() => {
     if (!templates) return [];
@@ -448,7 +469,65 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
     }
   };
 
-  if (templates === undefined || links === undefined) {
+  const openCreateModPayment = () => {
+    setEditingModPayment(null);
+    setModPaymentValues(emptyFormValues(MOD_PAYMENT_FIELDS));
+    setModPaymentDialogOpen(true);
+  };
+
+  const openEditModPayment = (row: Doc<"opsHubModDetails">) => {
+    setEditingModPayment(row);
+    setModPaymentValues(rowToFormValues(row, MOD_PAYMENT_FIELDS));
+    setModPaymentDialogOpen(true);
+  };
+
+  const handleSaveModPayment = async () => {
+    if (!modPaymentValues.modName.trim()) {
+      toast.error("Mod name is required");
+      return;
+    }
+    setSavingModPayment(true);
+    try {
+      const payload = {
+        modName: modPaymentValues.modName.trim(),
+        payPalDetails: modPaymentValues.payPalDetails.trim() || undefined,
+        cashAppDetails: modPaymentValues.cashAppDetails.trim() || undefined,
+        bankDetails: modPaymentValues.bankDetails.trim() || undefined,
+      };
+      if (editingModPayment) {
+        await updateModPayment(
+          opsMutationArgs(viewerToken, { id: editingModPayment._id, ...payload }),
+        );
+        toast.success("Payment details updated");
+      } else {
+        await createModPayment(opsMutationArgs(viewerToken, payload));
+        toast.success("Payment details added");
+      }
+      setModPaymentDialogOpen(false);
+    } catch {
+      toast.error("Failed to save payment details");
+    } finally {
+      setSavingModPayment(false);
+    }
+  };
+
+  const handleDeleteModPayment = async () => {
+    if (!deleteModPaymentTarget) return;
+    try {
+      await removeModPayment(
+        opsMutationArgs(viewerToken, {
+          id: deleteModPaymentTarget._id as Id<"opsHubModDetails">,
+        }),
+      );
+      toast.success("Payment details deleted");
+    } catch {
+      toast.error("Failed to delete payment details");
+    } finally {
+      setDeleteModPaymentTarget(null);
+    }
+  };
+
+  if (templates === undefined || links === undefined || modPayments === undefined) {
     return <Skeleton className="h-64 w-full" />;
   }
 
@@ -641,6 +720,100 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
       <section className="space-y-4 border-t pt-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <h3 className="text-sm font-semibold">Mod payment details</h3>
+            <p className="text-xs text-muted-foreground">
+              PayPal, Cash App, or bank details for staff payouts.
+            </p>
+          </div>
+          {canEdit && (
+            <Button
+              size="sm"
+              className="cursor-pointer shrink-0"
+              onClick={openCreateModPayment}
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add payment details
+            </Button>
+          )}
+        </div>
+
+        {modPayments.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center border rounded-md">
+            No payment details yet.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {[...modPayments]
+              .sort((a, b) =>
+                a.modName.localeCompare(b.modName, undefined, { sensitivity: "base" }),
+              )
+              .map((row) => (
+                <Card key={row._id} className="gap-0 py-0">
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2">
+                    <CardTitle className="text-sm font-semibold leading-tight">
+                      {row.modName}
+                    </CardTitle>
+                    {canEdit && (
+                      <div className="flex shrink-0 -mr-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 cursor-pointer"
+                          onClick={() => openEditModPayment(row)}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive cursor-pointer"
+                          onClick={() => setDeleteModPaymentTarget(row)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </CardHeader>
+                  <CardContent className="px-3 pb-3 pt-0">
+                    <div className="space-y-1.5 text-xs">
+                      {row.payPalDetails && (
+                        <div>
+                          <span className="font-medium">PayPal: </span>
+                          <span className="text-muted-foreground break-words">
+                            {row.payPalDetails}
+                          </span>
+                        </div>
+                      )}
+                      {row.cashAppDetails && (
+                        <div>
+                          <span className="font-medium">Cash App: </span>
+                          <span className="text-muted-foreground break-words">
+                            {row.cashAppDetails}
+                          </span>
+                        </div>
+                      )}
+                      {row.bankDetails && (
+                        <div>
+                          <p className="font-medium">Bank:</p>
+                          <p className="text-muted-foreground whitespace-pre-wrap break-words">
+                            {row.bankDetails}
+                          </p>
+                        </div>
+                      )}
+                      {!row.payPalDetails && !row.cashAppDetails && !row.bankDetails && (
+                        <p className="text-muted-foreground">No payment details saved.</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4 border-t pt-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
             <h3 className="text-sm font-semibold">Quick links</h3>
             <p className="text-xs text-muted-foreground">
               Spreadsheets, Google Forms, docs, and other frequently used resources.
@@ -738,6 +911,18 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
         submitLabel="Save link"
       />
 
+      <OpsFormDialog
+        open={modPaymentDialogOpen}
+        onOpenChange={setModPaymentDialogOpen}
+        title={editingModPayment ? "Edit payment details" : "Add payment details"}
+        fields={MOD_PAYMENT_FIELDS}
+        values={modPaymentValues}
+        onChange={(k, v) => setModPaymentValues((prev) => ({ ...prev, [k]: v }))}
+        onSubmit={handleSaveModPayment}
+        isSubmitting={savingModPayment}
+        submitLabel="Save payment details"
+      />
+
       <AlertDialog
         open={!!deleteTemplateTarget}
         onOpenChange={() => setDeleteTemplateTarget(null)}
@@ -767,6 +952,26 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
           <AlertDialogFooter>
             <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
             <AlertDialogAction className="cursor-pointer" onClick={handleDeleteLink}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!deleteModPaymentTarget}
+        onOpenChange={() => setDeleteModPaymentTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete payment details?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteModPaymentTarget?.modName}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="cursor-pointer" onClick={handleDeleteModPayment}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
