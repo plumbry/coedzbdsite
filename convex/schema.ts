@@ -338,6 +338,8 @@ export default defineSchema({
     totalMatchKills: v.optional(v.number()), // Sum of all team kills across all matches (from match-level data)
     /** Total kills out of alignment (sum of |API team kills − verified kill-feed kills|). */
     totalKillDiscrepancy: v.optional(v.number()),
+    /** Number of teams with a verified kill-feed discrepancy. */
+    killDiscrepancyTeamCount: v.optional(v.number()),
     dataFullyCached: v.optional(v.boolean()), // True if all data (leaderboard + matches) is fully cached
     /** Explicit Process Import pipeline status (Phase 3C). */
     pipelineStatus: v.optional(v.string()),
