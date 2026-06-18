@@ -536,7 +536,177 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
       <section className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-sm font-semibold">Ticket reply templates</h3>
+            <h3 className="text-sm font-semibold">Quick Links</h3>
+            <p className="text-xs text-muted-foreground">
+              Spreadsheets, Google Forms, docs, and other frequently used resources.
+            </p>
+          </div>
+          {canEdit && (
+            <Button size="sm" className="cursor-pointer shrink-0" onClick={openCreateLink}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add link
+            </Button>
+          )}
+        </div>
+
+        {links.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center border rounded-md">
+            No links yet.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {links.map((link) => (
+              <Card key={link._id} className="gap-0 py-0">
+                <CardContent className="p-3">
+                  <div className="flex items-start gap-2">
+                    <LinkTypeIcon type={link.linkType} className="mt-0.5 text-muted-foreground" />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium leading-tight hover:underline inline-flex items-center gap-1 min-w-0"
+                        >
+                          <span className="truncate">{link.title}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        </a>
+                        {canEdit && (
+                          <div className="flex shrink-0 -mr-1 -mt-0.5">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 cursor-pointer"
+                              onClick={() => openEditLink(link)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-destructive cursor-pointer"
+                              onClick={() => setDeleteLinkTarget(link)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      <Badge variant="outline" className="text-[10px] font-normal h-5 px-1.5">
+                        {linkTypeLabel(link.linkType)}
+                      </Badge>
+                      {link.description && (
+                        <p className="text-[11px] text-muted-foreground line-clamp-2">
+                          {link.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4 border-t pt-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">Mod Payment Details</h3>
+            <p className="text-xs text-muted-foreground">
+              PayPal, Cash App, or bank details for staff payouts.
+            </p>
+          </div>
+          {canEdit && (
+            <Button
+              size="sm"
+              className="cursor-pointer shrink-0"
+              onClick={openCreateModPayment}
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add payment details
+            </Button>
+          )}
+        </div>
+
+        {modPayments.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center border rounded-md">
+            No payment details yet.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {[...modPayments]
+              .sort((a, b) =>
+                a.modName.localeCompare(b.modName, undefined, { sensitivity: "base" }),
+              )
+              .map((row) => (
+                <Card key={row._id} className="gap-0 py-0">
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2">
+                    <CardTitle className="text-sm font-semibold leading-tight">
+                      {row.modName}
+                    </CardTitle>
+                    {canEdit && (
+                      <div className="flex shrink-0 -mr-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 cursor-pointer"
+                          onClick={() => openEditModPayment(row)}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive cursor-pointer"
+                          onClick={() => setDeleteModPaymentTarget(row)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </CardHeader>
+                  <CardContent className="px-3 pb-3 pt-0">
+                    <div className="space-y-1.5 text-xs">
+                      {row.payPalDetails && (
+                        <div>
+                          <span className="font-medium">PayPal: </span>
+                          <span className="text-muted-foreground break-words">
+                            {row.payPalDetails}
+                          </span>
+                        </div>
+                      )}
+                      {row.cashAppDetails && (
+                        <div>
+                          <span className="font-medium">Cash App: </span>
+                          <span className="text-muted-foreground break-words">
+                            {row.cashAppDetails}
+                          </span>
+                        </div>
+                      )}
+                      {row.bankDetails && (
+                        <div>
+                          <p className="font-medium">Bank:</p>
+                          <p className="text-muted-foreground whitespace-pre-wrap break-words">
+                            {row.bankDetails}
+                          </p>
+                        </div>
+                      )}
+                      {!row.payPalDetails && !row.cashAppDetails && !row.bankDetails && (
+                        <p className="text-muted-foreground">No payment details saved.</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4 border-t pt-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">Ticket Reply Templates</h3>
             <p className="text-xs text-muted-foreground">
               Pick a category and situation, edit the response, then copy to clipboard.
             </p>
@@ -712,176 +882,6 @@ export default function TextAndLinksTab({ viewerToken, canEdit = false }: OpsHub
                 <span className="font-medium">{t.category}</span>
                 <span className="text-muted-foreground"> · {t.situation}</span>
               </button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-4 border-t pt-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-sm font-semibold">Mod payment details</h3>
-            <p className="text-xs text-muted-foreground">
-              PayPal, Cash App, or bank details for staff payouts.
-            </p>
-          </div>
-          {canEdit && (
-            <Button
-              size="sm"
-              className="cursor-pointer shrink-0"
-              onClick={openCreateModPayment}
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Add payment details
-            </Button>
-          )}
-        </div>
-
-        {modPayments.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center border rounded-md">
-            No payment details yet.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {[...modPayments]
-              .sort((a, b) =>
-                a.modName.localeCompare(b.modName, undefined, { sensitivity: "base" }),
-              )
-              .map((row) => (
-                <Card key={row._id} className="gap-0 py-0">
-                  <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 py-2">
-                    <CardTitle className="text-sm font-semibold leading-tight">
-                      {row.modName}
-                    </CardTitle>
-                    {canEdit && (
-                      <div className="flex shrink-0 -mr-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 cursor-pointer"
-                          onClick={() => openEditModPayment(row)}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-destructive cursor-pointer"
-                          onClick={() => setDeleteModPaymentTarget(row)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </CardHeader>
-                  <CardContent className="px-3 pb-3 pt-0">
-                    <div className="space-y-1.5 text-xs">
-                      {row.payPalDetails && (
-                        <div>
-                          <span className="font-medium">PayPal: </span>
-                          <span className="text-muted-foreground break-words">
-                            {row.payPalDetails}
-                          </span>
-                        </div>
-                      )}
-                      {row.cashAppDetails && (
-                        <div>
-                          <span className="font-medium">Cash App: </span>
-                          <span className="text-muted-foreground break-words">
-                            {row.cashAppDetails}
-                          </span>
-                        </div>
-                      )}
-                      {row.bankDetails && (
-                        <div>
-                          <p className="font-medium">Bank:</p>
-                          <p className="text-muted-foreground whitespace-pre-wrap break-words">
-                            {row.bankDetails}
-                          </p>
-                        </div>
-                      )}
-                      {!row.payPalDetails && !row.cashAppDetails && !row.bankDetails && (
-                        <p className="text-muted-foreground">No payment details saved.</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-4 border-t pt-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-sm font-semibold">Quick links</h3>
-            <p className="text-xs text-muted-foreground">
-              Spreadsheets, Google Forms, docs, and other frequently used resources.
-            </p>
-          </div>
-          {canEdit && (
-            <Button size="sm" className="cursor-pointer shrink-0" onClick={openCreateLink}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              Add link
-            </Button>
-          )}
-        </div>
-
-        {links.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center border rounded-md">
-            No links yet.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {links.map((link) => (
-              <Card key={link._id} className="gap-0 py-0">
-                <CardContent className="p-3">
-                  <div className="flex items-start gap-2">
-                    <LinkTypeIcon type={link.linkType} className="mt-0.5 text-muted-foreground" />
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <a
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium leading-tight hover:underline inline-flex items-center gap-1 min-w-0"
-                        >
-                          <span className="truncate">{link.title}</span>
-                          <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        </a>
-                        {canEdit && (
-                          <div className="flex shrink-0 -mr-1 -mt-0.5">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 cursor-pointer"
-                              onClick={() => openEditLink(link)}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-destructive cursor-pointer"
-                              onClick={() => setDeleteLinkTarget(link)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                      <Badge variant="outline" className="text-[10px] font-normal h-5 px-1.5">
-                        {linkTypeLabel(link.linkType)}
-                      </Badge>
-                      {link.description && (
-                        <p className="text-[11px] text-muted-foreground line-clamp-2">
-                          {link.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             ))}
           </div>
         )}
