@@ -1,10 +1,11 @@
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import { useAuth, useClerk } from "@clerk/react";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { AdminMain, type PageShellMaxWidth } from "@/components/page-shell.tsx";
 import PageHeader, { type PageHeaderProps } from "@/components/page-header.tsx";
 import AuthGate from "@/components/auth-gate.tsx";
-import RoleGate from "@/components/role-gate.tsx";
+import { useAuth as useAppAuth } from "@/hooks/use-auth.ts";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 
 interface AdminPageLayoutProps {
@@ -22,6 +23,35 @@ interface AdminPageLayoutProps {
   children: React.ReactNode;
 }
 
+function SwitchAccountButton() {
+  const { signOut } = useClerk();
+
+  return (
+    <Button
+      onClick={() => {
+        void signOut({ redirectUrl: "/admin/summer-slam" });
+      }}
+    >
+      Sign out / switch account
+    </Button>
+  );
+}
+
+function DirectAdminSignInButton() {
+  const { signinRedirect, isLoading } = useAppAuth();
+
+  return (
+    <Button
+      disabled={isLoading}
+      onClick={() => {
+        void signinRedirect();
+      }}
+    >
+      Sign in with Discord
+    </Button>
+  );
+}
+
 function AdminAuthorizedContent({
   title,
   description,
@@ -36,11 +66,38 @@ function AdminAuthorizedContent({
   children,
 }: Omit<AdminPageLayoutProps, "authTitle">) {
   const { isAdmin, isModeratorOrAdmin, hasEventBanAccess, isLoading } = useUserRole();
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
-  if (isLoading) {
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingTimedOut(false);
+      return;
+    }
+    const timeout = window.setTimeout(() => setLoadingTimedOut(true), 30000);
+    return () => window.clearTimeout(timeout);
+  }, [isLoading]);
+
+  if (isLoading && !loadingTimedOut) {
     return (
       <AdminMain maxWidth={maxWidth} showSiteHeader={showSiteHeader} showSidebar={showSidebar}>
         <Skeleton className="h-64 w-full" />
+      </AdminMain>
+    );
+  }
+
+  if (isLoading && loadingTimedOut) {
+    return (
+      <AdminMain maxWidth={maxWidth} showSiteHeader={showSiteHeader} showSidebar={showSidebar}>
+        <div className="flex min-h-[40vh] flex-col items-center justify-center space-y-4 text-center">
+          <h1 className="text-xl font-bold">Still Connecting to Admin Services</h1>
+          <p className="max-w-md text-sm text-muted-foreground">
+            You are signed in, but the backend has not returned your admin role yet. Refresh the page once; if this keeps happening, the Clerk to Convex auth handshake needs checking.
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button onClick={() => window.location.reload()}>Refresh page</Button>
+            <SwitchAccountButton />
+          </div>
+        </div>
       </AdminMain>
     );
   }
@@ -60,7 +117,13 @@ function AdminAuthorizedContent({
 
     return (
       <AdminMain maxWidth={maxWidth} showSiteHeader={showSiteHeader} showSidebar={showSidebar}>
-        <RoleGate allowed={false} description={descriptionText} showBackButton={false} />
+        <div className="flex min-h-[40vh] flex-col items-center justify-center space-y-4 text-center">
+          <h1 className="text-xl font-bold">Access Denied</h1>
+          <p className="max-w-md text-sm text-muted-foreground">
+            {descriptionText} Sign out and switch accounts if you expected access.
+          </p>
+          <SwitchAccountButton />
+        </div>
       </AdminMain>
     );
   }
@@ -89,38 +152,40 @@ export default function AdminPageLayout({
   header,
   children,
 }: AdminPageLayoutProps) {
+  const { isLoaded, isSignedIn } = useAuth();
+
+  if (!isLoaded) {
+    return (
+      <div className="flex flex-1 w-full items-center justify-center px-4 py-12">
+        <Skeleton className="h-48 w-full max-w-sm" />
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="flex flex-1 w-full items-center justify-center px-4 py-12">
+        <AuthGate title={authTitle}>
+          <DirectAdminSignInButton />
+        </AuthGate>
+      </div>
+    );
+  }
+
   return (
-    <>
-      <Unauthenticated>
-        <div className="flex flex-1 w-full items-center justify-center px-4 py-12">
-          <AuthGate title={authTitle}>
-            <SignInButton />
-          </AuthGate>
-        </div>
-      </Unauthenticated>
-
-      <AuthLoading>
-        <div className="flex flex-1 w-full items-center justify-center px-4 py-12">
-          <Skeleton className="h-48 w-full max-w-sm" />
-        </div>
-      </AuthLoading>
-
-      <Authenticated>
-        <AdminAuthorizedContent
-          title={title}
-          description={description}
-          maxWidth={maxWidth}
-          showSiteHeader={showSiteHeader}
-          showSidebar={showSidebar}
-          skipHeader={skipHeader}
-          requireAdmin={requireAdmin}
-          requireModerator={requireModerator}
-          requireEventBanAccess={requireEventBanAccess}
-          header={header}
-        >
-          {children}
-        </AdminAuthorizedContent>
-      </Authenticated>
-    </>
+    <AdminAuthorizedContent
+      title={title}
+      description={description}
+      maxWidth={maxWidth}
+      showSiteHeader={showSiteHeader}
+      showSidebar={showSidebar}
+      skipHeader={skipHeader}
+      requireAdmin={requireAdmin}
+      requireModerator={requireModerator}
+      requireEventBanAccess={requireEventBanAccess}
+      header={header}
+    >
+      {children}
+    </AdminAuthorizedContent>
   );
 }

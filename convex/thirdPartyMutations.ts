@@ -160,6 +160,12 @@ export const saveImport = internalMutation({
         { playerIds: [...affectedPlayerIds] },
       );
     }
+
+    if (matchedEventId) {
+      await ctx.scheduler.runAfter(0, internal.seasonal.recalculatePlayerForImport, {
+        importId,
+      });
+    }
     
     // Log to audit
     await ctx.db.insert("auditLogs", {
@@ -1214,6 +1220,9 @@ async function applyImportMatchDataSynced(
 
   await ctx.db.patch(args.importId, updates);
   await refreshEventCacheForImport(ctx, args.importId);
+  await ctx.scheduler.runAfter(0, internal.seasonal.recalculatePlayerForImport, {
+    importId: args.importId,
+  });
 }
 
 export const updateImportMatchDataSyncedInternal = internalMutation({

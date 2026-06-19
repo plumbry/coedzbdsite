@@ -17,6 +17,7 @@ import DiscordMembersPage from "./pages/admin/discord-members.tsx";
 import UnmatchedPlayers from "./pages/admin/_components/unmatched-players.tsx";
 import YuniteTournamentDetails from "./pages/admin/yunite-tournament.tsx";
 import EventsManagerPage from "./pages/admin/events-manager.tsx";
+import SummerSlamAdminPage from "./pages/admin/summer-slam.tsx";
 import EventResultsPage from "./pages/admin/event-results.tsx";
 import UploadsPage from "./pages/admin/uploads.tsx";
 import SupportAdminPage from "./pages/admin/support.tsx";
@@ -39,6 +40,9 @@ import ScrimsLandingPage from "./pages/scrims/page.tsx";
 import ScrimEventPage from "./pages/scrims/event-page.tsx";
 import ScrimSeriesLandingPage from "./pages/scrim-series/page.tsx";
 import ScrimSeriesLeaderboardPage from "./pages/scrim-series/leaderboard.tsx";
+import SummerSlamLandingPage from "./pages/summer-slam/page.tsx";
+import SummerSlamPassportPage from "./pages/summer-slam/passport.tsx";
+import SummerSlamPassportDemoPage from "./pages/summer-slam/passport-demo.tsx";
 import TierRestrictionsPage from "./pages/tier-restrictions/page.tsx";
 import SsoCallbackPage from "./pages/auth/sso-callback.tsx";
 
@@ -75,6 +79,7 @@ export default function App() {
             <Route path="yunite/:importId" element={<YuniteTournamentDetails />} />
             <Route path="yunite-debug" element={<Navigate to="/admin/uploads?tab=debug" replace />} />
             <Route path="events-manager" element={<EventsManagerPage />} />
+            <Route path="summer-slam" element={<SummerSlamAdminPage />} />
             <Route path="event-results" element={<EventResultsPage />} />
             <Route path="uploads" element={<UploadsPage />} />
             <Route path="support" element={<SupportAdminPage />} />
@@ -107,6 +112,9 @@ export default function App() {
           <Route path="/spin" element={<ScrimsLandingPage />} />
           <Route path="/scrim-series" element={<ScrimSeriesLandingPage />} />
           <Route path="/scrim-series/:slug" element={<ScrimSeriesLeaderboardPage />} />
+          <Route path="/summer-slam" element={<SummerSlamLandingPage />} />
+          <Route path="/summer-slam/passport/demo" element={<SummerSlamPassportDemoPage />} />
+          <Route path="/summer-slam/passport" element={<SummerSlamPassportPage />} />
           <Route path="/spin/:eventId" element={<ScrimEventPage />} />
           <Route path="/tier-restrictions" element={<TierRestrictionsPage />} />
           <Route path="/sso-callback" element={<SsoCallbackPage />} />

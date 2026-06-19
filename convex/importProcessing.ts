@@ -331,6 +331,9 @@ async function finalizeImportJob(ctx: MutationCtx, args: FinalizeJobArgs) {
     await ctx.scheduler.runAfter(0, internal.importProcessing.refreshEventCacheForImportJob, {
       importId: job.importId,
     });
+    await ctx.scheduler.runAfter(0, internal.seasonal.recalculatePlayerForImport, {
+      importId: job.importId,
+    });
   }
 
   if (args.status === "completed" || args.status === "failed" || args.status === "waiting") {

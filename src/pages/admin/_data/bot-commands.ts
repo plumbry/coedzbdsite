@@ -31,7 +31,7 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
       {
         name: "roletagged",
         description: "Give roles to tagged users from signups.",
-        usage: "/roletagged role:<role> mode:<team size> reload:<bool> two_lobbies:<bool> duo_solo_pairing:<bool>",
+        usage: "/roletagged role:<role> mode:<team size> reload:<bool> two_lobbies:<bool> max_signups:<n>",
       },
       {
         name: "roleuntagged",
@@ -54,6 +54,11 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
         usage: "/unreg team_number:<n> role:<role> notify:<bool> players:<list>",
       },
       {
+        name: "disqualify",
+        description: "Disqualify selected player(s) from a valid sign-up.",
+        usage: "/disqualify team_number:<n> role:<role> players:<mentions or IDs> reason:<reason>",
+      },
+      {
         name: "lfg",
         description: "Collate today's LFG posts, skipping members who already have the signup role.",
         usage: "/lfg signup_role:<role> post:<bool>",
@@ -62,6 +67,15 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
         name: "scrimremind",
         description: "Post a scrim signup reminder from a server scheduled event.",
         usage: "/scrimremind event:<event> mode:<mode> category:<category> schedule:<when> ping_everyone:<bool>",
+      },
+      {
+        name: "scrimdashboard",
+        description: "Manage the permanent scrim operations dashboard.",
+        subcommands: [
+          { name: "setup", description: "Create or repair the permanent dashboard message." },
+          { name: "set", description: "Set the active scrim category and role." },
+          { name: "refresh", description: "Refresh channel resolution and dashboard message." },
+        ],
       },
       {
         name: "spin",
@@ -206,6 +220,21 @@ export const BOT_COMMAND_CATEGORIES: BotCommandCategory[] = [
         name: "roleclear",
         description: "Remove a role from every member who currently has it.",
         usage: "/roleclear role:<role>",
+      },
+      {
+        name: "voicecheck",
+        description: "Check whether all non-bot members with a role are in a voice channel.",
+        usage: "/voicecheck role:<role>",
+      },
+      {
+        name: "reactforrole",
+        description: "Create or remove react-for-role messages.",
+        subcommands: [
+          { name: "create", description: "Post a message with emoji reactions that grant roles." },
+          { name: "remove", description: "Stop tracking a react-for-role message." },
+          { name: "edit", description: "Edit an existing react-for-role message." },
+          { name: "adopt", description: "Attach react-role storage to an existing message." },
+        ],
       },
       {
         name: "roleverifycheck",

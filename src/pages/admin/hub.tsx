@@ -277,6 +277,12 @@ export default function AdminHubPage() {
           href: "/admin/features",
           icon: Zap,
         },
+        {
+          title: "Summer Slam Passport",
+          description: "Configure seasonal quests, reviews, progress, and prize wheel exports.",
+          href: "/admin/summer-slam",
+          icon: Trophy,
+        },
       ],
     },
     {

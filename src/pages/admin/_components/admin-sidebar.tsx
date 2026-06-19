@@ -351,6 +351,7 @@ export default function AdminSidebar() {
     if (isAdmin) {
       const adminItems: NavItem[] = [];
       adminItems.push({ path: "/admin/features", label: "Features", icon: Zap });
+      adminItems.push({ path: "/admin/summer-slam", label: "Summer Slam", icon: Trophy });
       if (isModeratorOrAdmin) {
         adminItems.push({ path: "/admin/support", label: "Support", icon: MessageSquare });
       }

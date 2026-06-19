@@ -273,6 +273,8 @@ export default function EventManager() {
   const [soloPlacementEarningsTopN, setSoloPlacementEarningsTopN] = useState<number | undefined>(undefined);
   const [isNoMoneyEvent, setIsNoMoneyEvent] = useState<boolean>(false);
   const [smdTeamSize, setSmdTeamSize] = useState<"duo" | "trio">("duo");
+  const [isSummerSlam, setIsSummerSlam] = useState<boolean>(false);
+  const [summerSlamTeamFormat, setSummerSlamTeamFormat] = useState<"duos" | "trios" | "squads">("trios");
   const [bestNGames, setBestNGames] = useState<number | undefined>(undefined);
   const [seriesDurationWeeks, setSeriesDurationWeeks] = useState<3 | 6>(3);
   const [showdownBestWeeks, setShowdownBestWeeks] = useState<number>(2);
@@ -329,11 +331,17 @@ export default function EventManager() {
     resolveImageUrls: false,
     includeWorkflow: true,
   });
+  const summerSlamTags = useQuery(
+    api.seasonal.getEventTags,
+    isAdmin ? { slug: "summer-slam" } : "skip",
+  );
   const scrimSeriesOptions = useQuery(api.scrimSeries.queries.listSeries);
   const createEvent = useMutation(api.events.management.createEvent);
   const updateEvent = useMutation(api.events.management.updateEvent);
   const deleteEvent = useMutation(api.events.management.deleteEvent);
   const generateUploadUrl = useMutation(api.events.management.generateUploadUrl);
+  const ensureSummerSlamCampaign = useMutation(api.seasonal.ensureSummerSlamCampaign);
+  const setCampaignEvent = useMutation(api.seasonal.setCampaignEvent);
   const lockTiers = useMutation(api.events.showdown.lockTiers);
   const syncDiscordEvents = useAction(api.discord.eventSync.syncDiscordEvents);
   const createAndLinkSeries = useMutation(api.scrimSeries.mutations.createAndLinkToEvent);
@@ -341,6 +349,16 @@ export default function EventManager() {
   const [isLockingTiers, setIsLockingTiers] = useState(false);
   const [isSyncingDiscord, setIsSyncingDiscord] = useState(false);
   const [markingCompleteId, setMarkingCompleteId] = useState<Id<"events"> | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void ensureSummerSlamCampaign().catch(() => {
+      // Non-blocking; event tagging controls will show errors on save if setup fails.
+    });
+  }, [ensureSummerSlamCampaign, isAdmin]);
+
+  const getSummerSlamTag = (eventId: Id<"events">) =>
+    summerSlamTags?.find((tag) => tag.eventId === eventId);
   
   const openCreateDialog = () => {
     resetForm();
@@ -398,6 +416,9 @@ export default function EventManager() {
     setDuoPlacementEarningsTopN(event.duoPlacementEarningsTopN);
     setSoloPlacementEarningsTopN(event.soloPlacementEarningsTopN);
     setSmdTeamSize(event.smdTeamSize || "duo");
+    const seasonalTag = getSummerSlamTag(event._id);
+    setIsSummerSlam(!!seasonalTag);
+    setSummerSlamTeamFormat(seasonalTag?.teamFormat ?? "trios");
     setBestNGames(event.bestNGames);
     setSeriesDurationWeeks(event.seriesDurationWeeks || 3);
     setShowdownBestWeeks(event.showdownBestWeeks ?? 2);
@@ -472,6 +493,8 @@ export default function EventManager() {
     setSoloPlacementEarningsTopN(undefined);
     setIsNoMoneyEvent(false);
     setSmdTeamSize("duo");
+    setIsSummerSlam(false);
+    setSummerSlamTeamFormat("trios");
     setBestNGames(undefined);
     setSeriesDurationWeeks(3);
     setShowdownBestWeeks(2);
@@ -538,6 +561,7 @@ export default function EventManager() {
     );
 
     try {
+      let savedEventId: Id<"events">;
       if (editingEvent) {
         // Use new image if uploaded, otherwise keep current image
         const imageToUse = uploadedImageId || currentImageId || undefined;
@@ -577,9 +601,10 @@ export default function EventManager() {
                 : linkedScrimSeriesId
               : null,
         });
+        savedEventId = editingEvent;
         toast.success("Event saved successfully.", { id: savingToastId });
       } else {
-        await createEvent({
+        savedEventId = await createEvent({
           name: name.trim(),
           type,
           mode,
@@ -612,6 +637,15 @@ export default function EventManager() {
               : undefined,
         });
         toast.success("Event created successfully.", { id: savingToastId });
+      }
+
+      if (isAdmin) {
+        await setCampaignEvent({
+          slug: "summer-slam",
+          eventId: savedEventId,
+          enabled: isSummerSlam,
+          teamFormat: summerSlamTeamFormat,
+        });
       }
 
       setIsCreateOpen(false);
@@ -820,6 +854,7 @@ export default function EventManager() {
                 const scheduleMeta =
                   SCHEDULE_STATUS_META[event.status] ?? SCHEDULE_STATUS_META.upcoming;
                 const ScheduleIcon = scheduleMeta.icon;
+                const summerSlamTag = getSummerSlamTag(event._id);
                 const workflowStatus = event.workflowStatus as EventWorkflowStatus | undefined;
                 const workflowMeta = workflowStatus
                   ? WORKFLOW_STATUS_META[workflowStatus]
@@ -840,6 +875,11 @@ export default function EventManager() {
                             iconClassName="h-3 w-3"
                             label="Earnings tracking enabled"
                           />
+                        )}
+                        {summerSlamTag && (
+                          <Badge variant="secondary" className="shrink-0 text-[10px] uppercase">
+                            Summer Slam · {summerSlamTag.teamFormat}
+                          </Badge>
                         )}
                       </div>
                     </TableCell>
@@ -1213,6 +1253,45 @@ export default function EventManager() {
                 </p>
               </div>
             </div>
+
+            {isAdmin && (
+              <div className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="summerSlam"
+                    checked={isSummerSlam}
+                    onCheckedChange={(checked) => setIsSummerSlam(checked === true)}
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="summerSlam">Summer Slam campaign event</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Mark this event as eligible for campaign quest progress. This does not change the event type or game mode.
+                    </p>
+                  </div>
+                </div>
+
+                {isSummerSlam && (
+                  <div className="max-w-xs space-y-2">
+                    <Label htmlFor="summerSlamTeamFormat">Campaign team format</Label>
+                    <Select
+                      value={summerSlamTeamFormat}
+                      onValueChange={(value) =>
+                        setSummerSlamTeamFormat(value as "duos" | "trios" | "squads")
+                      }
+                    >
+                      <SelectTrigger id="summerSlamTeamFormat">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="duos">Duos</SelectItem>
+                        <SelectItem value="trios">Trios</SelectItem>
+                        <SelectItem value="squads">Squads</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
             
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">

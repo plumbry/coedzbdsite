@@ -588,6 +588,205 @@ export default defineSchema({
     .index("by_discord_event_id", ["discordEventId"])
     .index("by_linked_scrim_series", ["linkedScrimSeriesId"])
     .index("by_slug", ["slug"]),
+
+  seasonalCampaigns: defineTable({
+    slug: v.string(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    isActive: v.boolean(),
+    startsAt: v.optional(v.number()),
+    endsAt: v.optional(v.number()),
+    stampName: v.string(),
+    littleWheelEntryEveryStamps: v.number(),
+    bigWheelEntryEveryStamps: v.number(),
+    createdBy: v.id("users"),
+    updatedBy: v.optional(v.id("users")),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_active", ["isActive"]),
+
+  seasonalCampaignEvents: defineTable({
+    campaignId: v.id("seasonalCampaigns"),
+    eventId: v.id("events"),
+    teamFormat: v.union(
+      v.literal("duos"),
+      v.literal("trios"),
+      v.literal("squads"),
+    ),
+    createdBy: v.id("users"),
+    updatedBy: v.optional(v.id("users")),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_campaign", ["campaignId"])
+    .index("by_event", ["eventId"])
+    .index("by_campaign_and_event", ["campaignId", "eventId"])
+    .index("by_campaign_and_team_format", ["campaignId", "teamFormat"]),
+
+  seasonalPassports: defineTable({
+    campaignId: v.id("seasonalCampaigns"),
+    playerId: v.id("players"),
+    userId: v.id("users"),
+    createdAt: v.number(),
+    lastViewedAt: v.number(),
+  })
+    .index("by_campaign", ["campaignId"])
+    .index("by_campaign_and_player", ["campaignId", "playerId"])
+    .index("by_user", ["userId"]),
+
+  seasonalQuests: defineTable({
+    campaignId: v.id("seasonalCampaigns"),
+    title: v.string(),
+    category: v.union(
+      v.literal("traveller"),
+      v.literal("competitor"),
+      v.literal("summer_spirit"),
+      v.literal("team_player"),
+      v.literal("community"),
+    ),
+    description: v.string(),
+    evidenceInstructions: v.optional(v.string()),
+    adminHint: v.optional(v.string()),
+    sortOrder: v.number(),
+    isActive: v.boolean(),
+    repeatable: v.boolean(),
+    stampReward: v.number(),
+    completionMethod: v.union(
+      v.literal("auto"),
+      v.literal("manual"),
+      v.literal("admin"),
+    ),
+    qualificationRule: v.optional(
+      v.union(
+        v.object({
+          type: v.literal("play_events"),
+          count: v.number(),
+        }),
+        v.object({
+          type: v.literal("play_team_format"),
+          teamFormat: v.union(
+            v.literal("duos"),
+            v.literal("trios"),
+            v.literal("squads"),
+          ),
+        }),
+        v.object({
+          type: v.literal("play_all_team_formats"),
+        }),
+        v.object({
+          type: v.literal("reach_top"),
+          placement: v.number(),
+          teamFormat: v.optional(
+            v.union(v.literal("duos"), v.literal("trios"), v.literal("squads")),
+          ),
+          eventCount: v.optional(v.number()),
+        }),
+        v.object({
+          type: v.literal("win_game"),
+          teamFormat: v.optional(
+            v.union(v.literal("duos"), v.literal("trios"), v.literal("squads")),
+          ),
+        }),
+      ),
+    ),
+    createdBy: v.id("users"),
+    updatedBy: v.optional(v.id("users")),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_campaign", ["campaignId"])
+    .index("by_campaign_and_active", ["campaignId", "isActive"])
+    .index("by_campaign_and_category", ["campaignId", "category"])
+    .index("by_completion_method", ["completionMethod"]),
+
+  seasonalQuestProgress: defineTable({
+    campaignId: v.id("seasonalCampaigns"),
+    questId: v.id("seasonalQuests"),
+    playerId: v.id("players"),
+    status: v.union(
+      v.literal("not_started"),
+      v.literal("in_progress"),
+      v.literal("pending_review"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("needs_more_evidence"),
+    ),
+    progressCurrent: v.optional(v.number()),
+    progressTarget: v.optional(v.number()),
+    stampReward: v.number(),
+    awardSource: v.optional(
+      v.union(v.literal("auto"), v.literal("manual_review"), v.literal("admin")),
+    ),
+    awardLog: v.optional(v.string()),
+    submissionId: v.optional(v.id("seasonalQuestSubmissions")),
+    approvedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_campaign", ["campaignId"])
+    .index("by_campaign_and_player", ["campaignId", "playerId"])
+    .index("by_quest_and_player", ["questId", "playerId"])
+    .index("by_campaign_and_status", ["campaignId", "status"]),
+
+  seasonalQuestSubmissions: defineTable({
+    campaignId: v.id("seasonalCampaigns"),
+    questId: v.id("seasonalQuests"),
+    playerId: v.id("players"),
+    status: v.union(
+      v.literal("pending_review"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("needs_more_evidence"),
+    ),
+    evidenceTypes: v.array(
+      v.union(
+        v.literal("image"),
+        v.literal("screenshot_link"),
+        v.literal("clip_link"),
+        v.literal("yunite_link"),
+        v.literal("discord_link"),
+        v.literal("social_link"),
+        v.literal("other"),
+        v.literal("notes"),
+      ),
+    ),
+    evidenceUrls: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    submittedAt: v.number(),
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNote: v.optional(v.string()),
+    rejectionReason: v.optional(v.string()),
+  })
+    .index("by_campaign", ["campaignId"])
+    .index("by_campaign_and_status", ["campaignId", "status"])
+    .index("by_player", ["playerId"])
+    .index("by_quest", ["questId"])
+    .index("by_quest_and_player", ["questId", "playerId"]),
+
+  seasonalSubmissionImages: defineTable({
+    submissionId: v.id("seasonalQuestSubmissions"),
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    contentType: v.string(),
+    size: v.number(),
+    uploadedByPlayerId: v.id("players"),
+  })
+    .index("by_submission", ["submissionId"])
+    .index("by_storage", ["storageId"]),
+
+  seasonalQuestAuditLogs: defineTable({
+    campaignId: v.id("seasonalCampaigns"),
+    questId: v.optional(v.id("seasonalQuests")),
+    submissionId: v.optional(v.id("seasonalQuestSubmissions")),
+    playerId: v.optional(v.id("players")),
+    adminId: v.optional(v.id("users")),
+    action: v.string(),
+    note: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_campaign", ["campaignId"])
+    .index("by_submission", ["submissionId"])
+    .index("by_player", ["playerId"])
+    .index("by_action", ["action"]),
   
   // Pre-assigned groups for solos-meets-duos events (duos or trios)
   eventDuoPairs: defineTable({

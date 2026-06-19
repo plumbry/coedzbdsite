@@ -162,6 +162,7 @@ import type * as scrimSeries_mutations from "../scrimSeries/mutations.js";
 import type * as scrimSeries_queries from "../scrimSeries/queries.js";
 import type * as scrims_mutations from "../scrims/mutations.js";
 import type * as scrims_queries from "../scrims/queries.js";
+import type * as seasonal from "../seasonal.js";
 import type * as support from "../support.js";
 import type * as sync from "../sync.js";
 import type * as thirdParty from "../thirdParty.js";
@@ -359,6 +360,7 @@ declare const fullApi: ApiFromModules<{
   "scrimSeries/queries": typeof scrimSeries_queries;
   "scrims/mutations": typeof scrims_mutations;
   "scrims/queries": typeof scrims_queries;
+  seasonal: typeof seasonal;
   support: typeof support;
   sync: typeof sync;
   thirdParty: typeof thirdParty;
