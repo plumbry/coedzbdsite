@@ -3,9 +3,7 @@ import { cn } from "@/lib/utils.ts";
 import { sealStateLabel, type SealMeta, type SealState } from "./passport-seal.ts";
 
 /**
- * Renders an official Summer Slam seal medallion (transparent PNG) with the
- * correct visual treatment for its state. The artwork is always the focus —
- * locked seals are desaturated, active seals keep full colour.
+ * Official Summer Slam seal artwork with premium, consistent state treatment.
  */
 export function PassportSealImage({
   meta,
@@ -31,14 +29,6 @@ export function PassportSealImage({
       className={cn("relative inline-flex shrink-0 items-center justify-center", className)}
       style={{ width: size, height: size }}
     >
-      {earned ? (
-        <span
-          aria-hidden
-          className={cn("absolute inset-1 rounded-full blur-xl", meta.glow)}
-          style={{ backgroundColor: meta.accent, opacity: 0.18 }}
-        />
-      ) : null}
-
       <img
         src={meta.image}
         alt={`${meta.title} — ${sealStateLabel(state)}`}
@@ -47,34 +37,35 @@ export function PassportSealImage({
         loading="lazy"
         draggable={false}
         className={cn(
-          "relative h-full w-full select-none object-contain transition-all duration-500",
-          locked && "opacity-45 grayscale",
-          submitted && "opacity-95",
+          "relative h-full w-full select-none object-contain transition-all duration-300",
+          locked && "opacity-40 saturate-[0.15]",
+          submitted && "opacity-90",
+          earned && "drop-shadow-[0_6px_16px_rgba(0,0,0,0.12)]",
           earned && animateEarned && "motion-safe:animate-[sealPop_0.6s_ease-out]",
         )}
       />
 
       {showBadge && locked ? (
-        <span className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-500 shadow-sm">
-          <Lock className="h-3.5 w-3.5" />
+        <span className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-400 shadow-sm">
+          <Lock className="h-3 w-3" aria-hidden />
         </span>
       ) : null}
 
       {showBadge && earned ? (
         <span
-          className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-emerald-500 text-white shadow-md"
+          className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-teal-600 text-white shadow-sm"
           aria-hidden
         >
-          <Check className="h-4 w-4" strokeWidth={3} />
+          <Check className="h-3.5 w-3.5" strokeWidth={3} />
         </span>
       ) : null}
 
       {showBadge && submitted ? (
         <span
-          className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-amber-400 text-amber-950 shadow-md"
+          className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm"
           aria-hidden
         >
-          <Clock className="h-4 w-4" strokeWidth={2.5} />
+          <Clock className="h-3.5 w-3.5" strokeWidth={2.5} />
         </span>
       ) : null}
     </div>

@@ -9,7 +9,9 @@ import { SignInButton } from "@/components/ui/signin.tsx";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils.ts";
 import { PassportDashboard } from "./_components/passport-dashboard.tsx";
+import { ssCard, ssPageBg, ssSkeleton } from "./_components/passport-dashboard-theme.ts";
 import { PassportEvidenceDialog } from "./_components/passport-evidence-dialog.tsx";
 import {
   CAMPAIGN_SLUG,
@@ -30,12 +32,16 @@ import {
 
 function PassportLoader() {
   return (
-    <PageShell maxWidth="wide" className="bg-[#F7F8FA]">
-      <div className="space-y-5 pt-2">
-        <Skeleton className="h-28 w-full rounded-3xl" />
-        <Skeleton className="h-40 w-full rounded-3xl" />
-        <Skeleton className="h-64 w-full rounded-3xl" />
-        <Skeleton className="h-72 w-full rounded-3xl" />
+    <PageShell maxWidth="wide" className={ssPageBg}>
+      <div className="space-y-8 pt-2 pb-12">
+        <Skeleton className={cn("h-36 w-full", ssSkeleton)} />
+        <Skeleton className={cn("h-52 w-full", ssSkeleton)} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={index} className={cn("h-56 w-full", ssSkeleton)} />
+          ))}
+        </div>
+        <Skeleton className={cn("h-72 w-full", ssSkeleton)} />
       </div>
     </PageShell>
   );
@@ -53,8 +59,8 @@ function PassportUnavailable({
   actionLabel?: string;
 }) {
   return (
-    <PageShell maxWidth="narrow">
-      <Card className="mt-10 border-slate-200 bg-white">
+    <PageShell maxWidth="narrow" className={ssPageBg}>
+      <Card className={cn("mt-10", ssCard, "shadow-none")}>
         <CardHeader>
           <CardTitle>{title}</CardTitle>
           <CardDescription className="space-y-3 text-base leading-relaxed whitespace-pre-wrap">
@@ -75,7 +81,7 @@ function PassportUnavailable({
 
 function LoginPrompt() {
   return (
-    <PageShell maxWidth="narrow">
+    <PageShell maxWidth="narrow" className={ssPageBg}>
       <div className="flex min-h-[50vh] items-center">
         <AuthGate
           title="Sign in with Discord"
@@ -283,7 +289,7 @@ function PassportContent() {
   }
 
   return (
-    <PageShell maxWidth="wide" className="bg-[#F7F8FA]">
+    <PageShell maxWidth="wide" className={ssPageBg}>
       <PassportDashboard
         campaignTitle={passport.campaign.title}
         playerName={passport.player.discordUsername}

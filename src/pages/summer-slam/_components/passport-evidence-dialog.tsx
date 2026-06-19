@@ -63,7 +63,7 @@ function EvidenceFormFields({
     <div className="space-y-4">
       {quest?.evidenceInstructions && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-amber-800">What we need</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">What we need</p>
           <p className="mt-1 text-sm text-amber-950">{quest.evidenceInstructions}</p>
         </div>
       )}

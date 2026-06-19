@@ -119,7 +119,7 @@ function SectionHeading({ children }: { children: ReactNode }) {
 
   return (
 
-    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{children}</p>
+    <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{children}</p>
 
   );
 
@@ -205,7 +205,7 @@ export function PassportQuestDetailContent({
 
             <div className="flex items-start gap-1">
 
-              <h2 className="flex-1 text-lg font-bold leading-tight text-slate-900">{quest.title}</h2>
+              <h2 className="flex-1 text-lg font-semibold leading-tight text-stone-900">{quest.title}</h2>
 
               <PassportAdminHint hint={quest.adminHint} />
 
@@ -261,7 +261,7 @@ export function PassportQuestDetailContent({
 
 
 
-        <div className="border-t border-slate-100" />
+        <div className="border-t border-stone-100" />
 
 
 
@@ -269,7 +269,7 @@ export function PassportQuestDetailContent({
 
           <SectionHeading>What is this?</SectionHeading>
 
-          <p className="text-sm leading-relaxed text-slate-700">{quest.description}</p>
+          <p className="text-sm leading-relaxed text-stone-700">{quest.description}</p>
 
         </section>
 
@@ -279,7 +279,7 @@ export function PassportQuestDetailContent({
 
           <SectionHeading>How to complete</SectionHeading>
 
-          <ul className="list-inside list-disc space-y-1 text-sm text-slate-700">
+          <ul className="list-inside list-disc space-y-1 text-sm text-stone-700">
 
             {howToBullets.map((bullet) => (
 
@@ -299,7 +299,7 @@ export function PassportQuestDetailContent({
 
             <SectionHeading>Evidence required</SectionHeading>
 
-            <p className="text-sm text-slate-700">{typeInfo.detail}</p>
+            <p className="text-sm text-stone-700">{typeInfo.detail}</p>
 
             <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50/50 p-3">
 
@@ -319,9 +319,9 @@ export function PassportQuestDetailContent({
 
             {quest.evidenceInstructions ? (
 
-              <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+              <div className="rounded-lg border border-stone-200 bg-white p-3 text-sm text-stone-700">
 
-                <p className="mb-1 text-xs font-semibold text-slate-500">Specific requirements</p>
+                <p className="mb-1 text-xs font-semibold text-stone-500">Specific requirements</p>
 
                 <p className="whitespace-pre-wrap">{quest.evidenceInstructions}</p>
 
@@ -411,9 +411,9 @@ export function PassportQuestDetailContent({
 
         {nextStep ? (
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
+          <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm text-stone-800">
 
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">What To Do Next</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-stone-500">What To Do Next</p>
 
             <p className="mt-1 font-medium">{nextStep}</p>
 
@@ -425,11 +425,11 @@ export function PassportQuestDetailContent({
 
         {status === "in_progress" && progress?.progressTarget ? (
 
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-stone-600">
 
             Progress:{" "}
 
-            <span className="font-semibold text-slate-900">
+            <span className="font-semibold text-stone-900">
 
               {progress.progressCurrent ?? 0} / {progress.progressTarget}
 
@@ -443,7 +443,7 @@ export function PassportQuestDetailContent({
 
         {status === "approved" && progress?.approvedAt ? (
 
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-stone-500">
 
             Approved {formatDate(progress.approvedAt)}
 
@@ -475,7 +475,7 @@ export function PassportQuestDetailContent({
 
           "flex flex-col gap-2 pt-4 sm:flex-row sm:justify-end",
 
-          isSheet && "sticky bottom-0 border-t border-slate-200 bg-white pb-1",
+          isSheet && "sticky bottom-0 border-t border-stone-200 bg-white pb-1",
 
         )}
 

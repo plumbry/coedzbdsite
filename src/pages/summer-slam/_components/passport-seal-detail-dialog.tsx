@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/drawer.tsx";
 import { useIsMobile } from "@/hooks/use-mobile.ts";
 import { cn } from "@/lib/utils.ts";
+import { ssStatusChip } from "./passport-dashboard-theme.ts";
 import { PassportSealImage } from "./passport-seal-image.tsx";
 import {
   formatSealDate,
@@ -49,19 +50,9 @@ function SealDetailBody({
       <div className="flex items-center gap-4">
         <PassportSealImage meta={meta} state={seal.state} size={96} />
         <div className="min-w-0 space-y-1">
-          <h2 className="text-xl font-black tracking-tight text-slate-900">{meta.title}</h2>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-              seal.state === "earned" && "bg-emerald-100 text-emerald-700",
-              seal.state === "submitted" && "bg-amber-100 text-amber-800",
-              seal.state === "in_progress" && "bg-sky-100 text-sky-700",
-              seal.state === "locked" && "bg-slate-100 text-slate-500",
-            )}
-          >
-            {sealStateLabel(seal.state)}
-          </span>
-          <p className="text-sm text-slate-600">{meta.tagline}</p>
+          <h2 className="text-xl font-semibold tracking-tight text-stone-900">{meta.title}</h2>
+          <span className={ssStatusChip(seal.state)}>{sealStateLabel(seal.state)}</span>
+          <p className="text-sm text-stone-600">{meta.tagline}</p>
         </div>
       </div>
 
