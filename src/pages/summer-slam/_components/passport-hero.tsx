@@ -1,60 +1,87 @@
-import { Calendar, Sparkles } from "lucide-react";
+import { Calendar, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
-import { ssAccentBarClass, ssCard } from "./passport-dashboard-theme.ts";
+import {
+  ssAccentBarClass,
+  ssCard,
+  ssCardPad,
+  ssLabel,
+  ssStatCell,
+} from "./passport-dashboard-theme.ts";
 
 export function PassportHero({
   title,
-  seasonLabel,
   playerName,
   daysRemaining,
+  earnedSeals,
+  totalSeals,
+  percent,
+  currentDestination,
   className,
 }: {
   title: string;
-  seasonLabel: string;
   playerName: string;
   daysRemaining: number | null;
+  earnedSeals: number;
+  totalSeals: number;
+  percent: number;
+  currentDestination: string | null;
   className?: string;
 }) {
   return (
-    <header className={cn("relative overflow-hidden", ssCard, className)}>
+    <header className={cn(ssCard, "overflow-hidden", className)}>
       <div className={ssAccentBarClass} aria-hidden />
-      <div className="px-6 py-6 sm:px-8 sm:py-7">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0 space-y-2">
-            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-teal-700">
-              <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              Seasonal event
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">
-              {title}
-            </h1>
-            <p className="max-w-xl text-sm leading-relaxed text-stone-600">
-              Complete challenges, collect official seals, and earn prize wheel entries throughout
-              the summer season.
-            </p>
-            <p className="text-xs font-medium text-stone-500">{seasonLabel}</p>
+      <div className={cn(ssCardPad, "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between")}>
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-bold text-orange-950 sm:text-lg">{title}</h1>
+          <p className="truncate text-xs text-orange-800/55">{playerName}</p>
+        </div>
+
+        <dl className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-stretch sm:gap-2">
+          <div className={ssStatCell}>
+            <dt className={ssLabel}>Progress</dt>
+            <dd className="text-sm font-bold tabular-nums text-orange-950">
+              {percent}%
+              <span className="ml-1 text-xs font-semibold text-orange-500">
+                ({earnedSeals}/{totalSeals})
+              </span>
+            </dd>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-3">
-            <div className="rounded-xl border border-stone-200/80 bg-stone-50/80 px-4 py-3">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-stone-500">
-                Player
-              </p>
-              <p className="mt-0.5 text-sm font-semibold text-stone-900">{playerName}</p>
-            </div>
-            {daysRemaining != null ? (
-              <div className="rounded-xl border border-orange-200/80 bg-orange-50/60 px-4 py-3">
-                <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-orange-800/80">
-                  <Calendar className="h-3.5 w-3.5" aria-hidden />
-                  Time left
-                </p>
-                <p className="mt-0.5 text-sm font-semibold tabular-nums text-stone-900">
-                  {daysRemaining} day{daysRemaining === 1 ? "" : "s"}
-                </p>
-              </div>
-            ) : null}
+          <div className={ssStatCell}>
+            <dt className={ssLabel}>Seals</dt>
+            <dd className="text-sm font-bold tabular-nums text-teal-800">
+              {earnedSeals}
+              <span className="text-xs font-medium text-teal-600/70"> / {totalSeals}</span>
+            </dd>
           </div>
-        </div>
+
+          {currentDestination ? (
+            <div className={cn(ssStatCell, "col-span-2 sm:col-span-1 sm:max-w-[11rem]")}>
+              <dt className={ssLabel}>Destination</dt>
+              <dd className="flex items-center gap-1 truncate text-sm font-bold text-orange-950">
+                <MapPin className="h-3 w-3 shrink-0 text-orange-500" aria-hidden />
+                <span className="truncate">{currentDestination}</span>
+              </dd>
+            </div>
+          ) : (
+            <div className={cn(ssStatCell, "col-span-2 sm:col-span-1")}>
+              <dt className={ssLabel}>Status</dt>
+              <dd className="text-sm font-bold text-teal-800">Complete</dd>
+            </div>
+          )}
+
+          {daysRemaining != null ? (
+            <div className={ssStatCell}>
+              <dt className={ssLabel}>
+                <Calendar className="mr-0.5 inline h-3 w-3" aria-hidden />
+                Left
+              </dt>
+              <dd className="text-sm font-bold tabular-nums text-orange-950">
+                {daysRemaining}d
+              </dd>
+            </div>
+          ) : null}
+        </dl>
       </div>
     </header>
   );

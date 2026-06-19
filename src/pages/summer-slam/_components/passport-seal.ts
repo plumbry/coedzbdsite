@@ -2,6 +2,7 @@ import {
   getQuestStatus,
   type QuestCategory,
   type QuestEntry,
+  type QuestStatus,
 } from "./passport-types.ts";
 
 /**
@@ -230,6 +231,92 @@ export function sealStateLabel(state: SealState): string {
     default:
       return "Locked";
   }
+}
+
+/**
+ * Player-facing status used for the consistent status badge + tooltips. Unlike
+ * the raw {@link SealState}, this surfaces a "needs_changes" state so players
+ * know when staff have requested clearer evidence.
+ */
+export type SealBadgeStatus =
+  | "earned"
+  | "pending"
+  | "needs_changes"
+  | "in_progress"
+  | "locked";
+
+export function sealBadgeStatus(seal: SealProgress): SealBadgeStatus {
+  if (seal.state === "earned") return "earned";
+  if (seal.state === "submitted") return "pending";
+  if (seal.needsFix > 0) return "needs_changes";
+  if (seal.state === "in_progress") return "in_progress";
+  return "locked";
+}
+
+/**
+ * The next quest a player can act on within a seal: a manual quest that is not
+ * already approved or awaiting review. Quests needing changes are prioritised.
+ */
+export function getActionableEntry(seal: SealProgress | null): QuestEntry | null {
+  if (!seal) return null;
+  const actionable = seal.tasks.filter((task) => {
+    const status = getQuestStatus(task.entry);
+    return (
+      task.entry.quest.completionMethod === "manual" &&
+      status !== "approved" &&
+      status !== "pending_review"
+    );
+  });
+  const needsFix = actionable.find((task) => task.needsFix);
+  return (needsFix ?? actionable[0])?.entry ?? null;
+}
+
+export type SubmissionStatus = "pending" | "approved" | "needs_changes";
+
+export type SealSubmission = {
+  entry: QuestEntry;
+  title: string;
+  status: SubmissionStatus;
+  timestamp: number;
+  note?: string;
+};
+
+/**
+ * Submission history for a seal — every quest that has reached staff review
+ * (pending, approved by a human, or needing changes). Auto-tracked approvals
+ * are excluded since the player never submitted evidence for them.
+ */
+export function buildSealSubmissions(seal: SealProgress): SealSubmission[] {
+  const submissions: SealSubmission[] = [];
+  for (const task of seal.tasks) {
+    const { entry } = task;
+    const status = getQuestStatus(entry) as QuestStatus;
+    const progress = entry.progress;
+    if (status === "pending_review") {
+      submissions.push({
+        entry,
+        title: task.title,
+        status: "pending",
+        timestamp: progress?.updatedAt ?? 0,
+      });
+    } else if (status === "needs_more_evidence" || status === "rejected") {
+      submissions.push({
+        entry,
+        title: task.title,
+        status: "needs_changes",
+        timestamp: progress?.updatedAt ?? 0,
+        note: progress?.awardLog,
+      });
+    } else if (status === "approved" && progress?.awardSource !== "auto") {
+      submissions.push({
+        entry,
+        title: task.title,
+        status: "approved",
+        timestamp: progress?.approvedAt ?? progress?.updatedAt ?? 0,
+      });
+    }
+  }
+  return submissions.sort((a, b) => b.timestamp - a.timestamp);
 }
 
 export function formatSealDate(timestamp?: number): string | null {

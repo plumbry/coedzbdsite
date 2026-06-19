@@ -3,8 +3,9 @@ import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import PageShell from "@/components/page-shell.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils.ts";
 import { PassportDashboard } from "./_components/passport-dashboard.tsx";
-import { ssPageBg } from "./_components/passport-dashboard-theme.ts";
+import { ssCard, ssCardPad, ssPageBg } from "./_components/passport-dashboard-theme.ts";
 import { PassportEvidenceDialog } from "./_components/passport-evidence-dialog.tsx";
 import {
   MOCK_CAMPAIGN,
@@ -50,20 +51,18 @@ export default function SummerSlamPassportDemoPage() {
 
   return (
     <PageShell maxWidth="wide" className={ssPageBg}>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200/80 bg-white/90 px-4 py-3 shadow-sm">
+      <div className={cn("mb-4 flex flex-wrap items-center justify-between gap-2", ssCard, ssCardPad)}>
         <div>
-          <Badge variant="outline" className="mb-1.5 border-stone-300 text-stone-600">
-            Preview environment
+          <Badge variant="outline" className="mb-1 border-orange-300 text-orange-700">
+            Preview
           </Badge>
-          <p className="text-sm text-stone-700">
-            Demo passport for{" "}
-            <span className="font-semibold text-stone-900">{MOCK_PLAYER.discordUsername}</span>{" "}
-            — mock data, no login required.
+          <p className="text-xs text-orange-900/70">
+            Demo for <span className="font-semibold text-orange-950">{MOCK_PLAYER.discordUsername}</span> — mock data
           </p>
         </div>
         <a
           href="/summer-slam/passport"
-          className="text-xs font-medium text-teal-700 hover:text-teal-800 hover:underline"
+          className="text-[11px] font-medium text-teal-700 hover:underline"
         >
           Live passport →
         </a>

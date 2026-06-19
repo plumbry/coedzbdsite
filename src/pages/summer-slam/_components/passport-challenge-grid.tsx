@@ -1,56 +1,48 @@
 import { AlertTriangle, Check, ChevronRight, Clock, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
-import { ssCard, ssSectionDesc, ssSectionTitle, ssStatusChip } from "./passport-dashboard-theme.ts";
+import { PassportSectionHeader } from "./passport-section-header.tsx";
+import {
+  ssCard,
+  ssCardPad,
+  ssStatusChip,
+} from "./passport-dashboard-theme.ts";
+import { getDestination } from "./passport-destinations.ts";
 import { PassportSealImage } from "./passport-seal-image.tsx";
-import { sealStateLabel, type SealProgress, type SealTask } from "./passport-seal.ts";
-import type { QuestEntry } from "./passport-types.ts";
+import { sealBadgeStatus, sealStateLabel, type SealProgress, type SealTask } from "./passport-seal.ts";
+import type { QuestCategory, QuestEntry } from "./passport-types.ts";
 
-function TaskLine({
-  task,
-  onOpen,
-}: {
-  task: SealTask;
-  onOpen: () => void;
-}) {
+function TaskLine({ task, onOpen }: { task: SealTask; onOpen: () => void }) {
   const { done, pending, needsFix, title } = task;
-  const statusText = done
-    ? "Earned"
-    : pending
-      ? "In review"
-      : needsFix
-        ? "Needs fix"
-        : "Open";
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left touch-manipulation hover:bg-stone-50"
+      className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left touch-manipulation hover:bg-orange-50/80"
     >
       <span
         className={cn(
-          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
           done && "border-teal-500 bg-teal-500 text-white",
           pending && "border-amber-300 bg-amber-50 text-amber-700",
           needsFix && "border-orange-300 bg-orange-50 text-orange-700",
-          !done && !pending && !needsFix && "border-stone-300 bg-white",
+          !done && !pending && !needsFix && "border-orange-200 bg-white",
         )}
       >
-        {done ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
-        {pending ? <Clock className="h-3 w-3" /> : null}
-        {needsFix ? <AlertTriangle className="h-3 w-3" /> : null}
+        {done ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}
+        {pending ? <Clock className="h-2.5 w-2.5" /> : null}
+        {needsFix ? <AlertTriangle className="h-2.5 w-2.5" /> : null}
       </span>
       <span
         className={cn(
-          "min-w-0 flex-1 truncate text-sm",
-          done ? "text-stone-400 line-through" : "text-stone-800",
+          "min-w-0 flex-1 truncate text-xs",
+          done ? "text-orange-400 line-through" : "text-orange-950",
         )}
       >
         {title}
       </span>
-      <span className="shrink-0 text-[11px] font-medium text-stone-500">{statusText}</span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-stone-300" />
+      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-orange-300" />
     </button>
   );
 }
@@ -71,51 +63,49 @@ function ChallengeCard({
   onViewSeal: (seal: SealProgress) => void;
 }) {
   const { meta, state, approved, total, percent } = seal;
+  const dest = getDestination(seal.id);
+  const status = sealBadgeStatus(seal);
   const showSubmit =
     actionableEntry &&
     seal.entries.some((entry) => entry.quest._id === actionableEntry.quest._id);
 
   return (
-    <article
-      className={cn(
-        ssCard,
-        "flex flex-col overflow-hidden",
-        isNext && "ring-1 ring-teal-400/40",
-      )}
-    >
+    <article className={cn(ssCard, "overflow-hidden", isNext && "ring-1 ring-orange-400/40")}>
       <div
-        className="flex items-center gap-3 border-b border-stone-100 px-4 py-3 sm:px-5"
-        style={{ backgroundColor: `${meta.tint}88` }}
+        className="flex items-center gap-2 border-b border-orange-100 px-3 py-2"
+        style={{ backgroundColor: `${dest.tint}cc` }}
       >
-        <PassportSealImage meta={meta} state={state} size={48} showBadge={false} />
+        <PassportSealImage meta={meta} state={state} seal={seal} size={36} showBadge={false} />
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold text-stone-900">{meta.title}</h3>
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-xs font-bold text-orange-950">{dest.name}</p>
             {isNext ? (
-              <span className="rounded-md bg-teal-600 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+              <span className="shrink-0 rounded-full bg-orange-500 px-1.5 py-px text-[8px] font-bold uppercase text-white">
                 Focus
               </span>
             ) : null}
           </div>
-          <p className="text-xs text-stone-600">{sealStateLabel(state)}</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+            <span className={ssStatusChip(status)}>{sealStateLabel(state)}</span>
+            {total > 0 ? (
+              <span className="text-[10px] tabular-nums text-orange-700/60">
+                {approved}/{total} · {percent}%
+              </span>
+            ) : null}
+          </div>
         </div>
-        {total > 0 ? (
-          <span className="shrink-0 text-xs font-medium tabular-nums text-stone-600">
-            {approved}/{total}
-          </span>
-        ) : null}
       </div>
 
-      <div className="flex flex-1 flex-col px-4 py-3 sm:px-5">
+      <div className={cn(ssCardPad, "pt-2")}>
         {total > 0 ? (
           <>
-            <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-stone-100">
+            <div className="mb-1.5 h-1 overflow-hidden rounded-full bg-orange-100">
               <div
                 className="h-full rounded-full transition-[width] duration-500"
                 style={{ width: `${percent}%`, backgroundColor: meta.accent }}
               />
             </div>
-            <ul className="space-y-0.5">
+            <ul className="space-y-0">
               {seal.tasks.map((task) => (
                 <li key={task.entry.quest._id}>
                   <TaskLine task={task} onOpen={() => onOpenTask(task.entry)} />
@@ -124,17 +114,26 @@ function ChallengeCard({
             </ul>
           </>
         ) : (
-          <p className="py-4 text-center text-sm text-stone-500">Challenges coming soon.</p>
+          <p className="py-2 text-center text-xs text-orange-800/50">Coming soon</p>
         )}
 
-        <div className="mt-auto flex flex-wrap gap-2 pt-4">
+        <div className="mt-2 flex flex-wrap gap-1.5">
           {showSubmit ? (
-            <Button size="sm" className="min-h-9" onClick={() => onSubmitEvidence(actionableEntry)}>
-              <Upload className="mr-1.5 h-3.5 w-3.5" />
-              Submit evidence
+            <Button
+              size="sm"
+              className="h-8 px-2.5 text-xs"
+              onClick={() => onSubmitEvidence(actionableEntry)}
+            >
+              <Upload className="mr-1 h-3 w-3" />
+              Submit
             </Button>
           ) : null}
-          <Button size="sm" variant="outline" className="min-h-9" onClick={() => onViewSeal(seal)}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 border-orange-200 px-2.5 text-xs"
+            onClick={() => onViewSeal(seal)}
+          >
             Details
           </Button>
         </div>
@@ -152,7 +151,7 @@ export function PassportChallengeGrid({
   onViewSeal,
 }: {
   seals: SealProgress[];
-  nextSealId: string | null;
+  nextSealId: QuestCategory | null;
   actionableEntry: QuestEntry | null;
   onOpenTask: (entry: QuestEntry) => void;
   onSubmitEvidence: (entry: QuestEntry) => void;
@@ -160,14 +159,9 @@ export function PassportChallengeGrid({
 }) {
   return (
     <section aria-label="Challenge details">
-      <div className="mb-4">
-        <h2 className={ssSectionTitle}>Challenge details</h2>
-        <p className={ssSectionDesc}>
-          What to complete in each category, current status, and evidence review state.
-        </p>
-      </div>
+      <PassportSectionHeader title="Challenges" description="Status & tasks by destination" />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {seals.map((seal) => (
           <ChallengeCard
             key={seal.id}

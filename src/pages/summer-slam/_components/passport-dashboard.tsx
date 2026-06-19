@@ -1,35 +1,22 @@
 import { useMemo, useState } from "react";
+import { getDestination } from "./passport-destinations.ts";
 import { PassportHero } from "./passport-hero.tsx";
-import { PassportProgressCard } from "./passport-progress-card.tsx";
-import { PassportSealGrid } from "./passport-seal-grid.tsx";
+import { PassportJourneyRoute } from "./passport-journey-route.tsx";
+import { PassportSpread } from "./passport-spread.tsx";
+import { PassportRewardsPanel } from "./passport-rewards-panel.tsx";
 import { PassportChallengeGrid } from "./passport-challenge-grid.tsx";
 import { PassportEvidenceReviewPanel } from "./passport-evidence-review-panel.tsx";
 import { PassportSealDetailDialog } from "./passport-seal-detail-dialog.tsx";
 import { PassportQuestDetailDialog } from "./passport-quest-detail-dialog.tsx";
+import { ssGridGap, ssStack } from "./passport-dashboard-theme.ts";
 import {
   buildSeals,
+  getActionableEntry,
   summariseSeason,
   type SealProgress,
 } from "./passport-seal.ts";
-import {
-  CATEGORY_PAGES,
-  getQuestStatus,
-  type QuestEntry,
-} from "./passport-types.ts";
-
-function findActionableEntry(seal: SealProgress | null): QuestEntry | null {
-  if (!seal) return null;
-  const actionable = seal.tasks.filter((task) => {
-    const status = getQuestStatus(task.entry);
-    return (
-      task.entry.quest.completionMethod === "manual" &&
-      status !== "approved" &&
-      status !== "pending_review"
-    );
-  });
-  const needsFix = actionable.find((task) => task.needsFix);
-  return (needsFix ?? actionable[0])?.entry ?? null;
-}
+import { CATEGORY_PAGES, getQuestStatus, type QuestEntry } from "./passport-types.ts";
+import { cn } from "@/lib/utils.ts";
 
 function computeWheelTotals(
   quests: QuestEntry[],
@@ -52,7 +39,6 @@ export function PassportDashboard({
   playerName,
   quests,
   campaign,
-  seasonLabel = "Season One · 2026",
   onRequestEvidence,
 }: {
   campaignTitle: string;
@@ -83,7 +69,7 @@ export function PassportDashboard({
   const seals = useMemo(() => buildSeals(questsByCategory), [questsByCategory]);
   const season = useMemo(() => summariseSeason(seals, campaign), [seals, campaign]);
   const nextSeal = season.nextSeal;
-  const actionableEntry = useMemo(() => findActionableEntry(nextSeal), [nextSeal]);
+  const actionableEntry = useMemo(() => getActionableEntry(nextSeal), [nextSeal]);
 
   const littleEvery = campaign?.littleWheelEntryEveryStamps ?? 1;
   const bigEvery = campaign?.bigWheelEntryEveryStamps ?? 5;
@@ -91,6 +77,12 @@ export function PassportDashboard({
     () => computeWheelTotals(quests, littleEvery, bigEvery),
     [quests, littleEvery, bigEvery],
   );
+
+  const currentDestination = nextSeal
+    ? getDestination(nextSeal.id).name
+    : season.isComplete
+      ? "Summer Finale"
+      : null;
 
   const liveSelectedSeal = selectedSeal
     ? (seals.find((seal) => seal.id === selectedSeal.id) ?? selectedSeal)
@@ -108,27 +100,43 @@ export function PassportDashboard({
   };
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className={cn(ssStack, "pb-8")}>
       <PassportHero
         title={campaignTitle}
-        seasonLabel={seasonLabel}
         playerName={playerName}
         daysRemaining={season.daysRemaining}
+        earnedSeals={season.earnedSeals}
+        totalSeals={season.totalSeals}
+        percent={season.percent}
+        currentDestination={currentDestination}
       />
 
-      <PassportProgressCard
-        season={season}
-        approvedStamps={wheelTotals.approvedStamps}
-        littleWheelEntries={wheelTotals.littleWheelEntries}
-        bigWheelEntries={wheelTotals.bigWheelEntries}
-        bigWheelEveryStamps={bigEvery}
-      />
+      <div className={cn("grid xl:grid-cols-[1fr_200px]", ssGridGap)}>
+        <PassportSpread
+          seals={seals}
+          nextSealId={nextSeal?.id ?? null}
+          onSelect={setSelectedSeal}
+        />
+        <div className={cn("hidden flex-col xl:flex", ssStack)}>
+          <PassportJourneyRoute seals={seals} nextSealId={nextSeal?.id ?? null} />
+          <PassportRewardsPanel
+            season={season}
+            littleWheelEntries={wheelTotals.littleWheelEntries}
+            bigWheelEntries={wheelTotals.bigWheelEntries}
+            approvedStamps={wheelTotals.approvedStamps}
+          />
+        </div>
+      </div>
 
-      <PassportSealGrid
-        seals={seals}
-        nextSealId={nextSeal?.id ?? null}
-        onSelect={setSelectedSeal}
-      />
+      <div className={cn("grid sm:grid-cols-2 xl:hidden", ssGridGap)}>
+        <PassportJourneyRoute seals={seals} nextSealId={nextSeal?.id ?? null} />
+        <PassportRewardsPanel
+          season={season}
+          littleWheelEntries={wheelTotals.littleWheelEntries}
+          bigWheelEntries={wheelTotals.bigWheelEntries}
+          approvedStamps={wheelTotals.approvedStamps}
+        />
+      </div>
 
       <PassportChallengeGrid
         seals={seals}

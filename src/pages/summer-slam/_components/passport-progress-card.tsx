@@ -1,8 +1,9 @@
 import { Progress } from "@/components/ui/progress.tsx";
-import { MapPin, Ticket, Trophy } from "lucide-react";
+import { CalendarClock, MapPin, Ticket, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { computeNextBigEntry } from "./passport-types.ts";
 import { ssCard, ssLabel, ssSectionDesc, ssSectionTitle } from "./passport-dashboard-theme.ts";
+import { InfoTooltip } from "./passport-info-tooltip.tsx";
 import type { SeasonSummary } from "./passport-seal.ts";
 
 function Metric({
@@ -40,7 +41,7 @@ export function PassportProgressCard({
   bigWheelEntries: number;
   bigWheelEveryStamps: number;
 }) {
-  const { earnedSeals, totalSeals, percent, nextSeal, isComplete } = season;
+  const { earnedSeals, totalSeals, percent, nextSeal, isComplete, daysRemaining } = season;
   const nextBig = computeNextBigEntry(approvedStamps, bigWheelEveryStamps);
   const stampsToBig = !isComplete && bigWheelEveryStamps > 0 ? nextBig.remaining : 0;
 
@@ -48,7 +49,13 @@ export function PassportProgressCard({
     <section className={cn(ssCard, "p-6 sm:p-7")} aria-label="Season progress">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className={ssSectionTitle}>Passport progress</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className={ssSectionTitle}>Passport progress</h2>
+            <InfoTooltip
+              label="About passport progress"
+              text="Shows how close you are to completing your Summer Slam passport."
+            />
+          </div>
           <p className={ssSectionDesc}>
             {isComplete
               ? "All category seals collected for this season."
@@ -88,14 +95,19 @@ export function PassportProgressCard({
         ) : null}
       </div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        <Metric icon={<Ticket className="h-4 w-4" />} label="Little entries" value={String(littleWheelEntries)} />
-        <Metric icon={<Trophy className="h-4 w-4" />} label="Big entries" value={String(bigWheelEntries)} />
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Metric
           icon={<MapPin className="h-4 w-4" />}
           label="Seals earned"
           value={`${earnedSeals} of ${totalSeals}`}
         />
+        <Metric
+          icon={<CalendarClock className="h-4 w-4" />}
+          label="Days remaining"
+          value={daysRemaining != null ? String(daysRemaining) : "—"}
+        />
+        <Metric icon={<Ticket className="h-4 w-4" />} label="Little entries" value={String(littleWheelEntries)} />
+        <Metric icon={<Trophy className="h-4 w-4" />} label="Big entries" value={String(bigWheelEntries)} />
       </div>
     </section>
   );

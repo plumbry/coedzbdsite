@@ -16,37 +16,23 @@ import {
 import {
   ssAccentBarClass,
   ssCard,
+  ssCardPad,
+  ssGridGap,
   ssMutedSurface,
   ssPageBg,
-  ssSectionDesc,
   ssSectionTitle,
   ssSkeleton,
+  ssStack,
 } from "./_components/passport-dashboard-theme.ts";
 import { PassportPreviewMini } from "./_components/passport-preview-mini.tsx";
 import { CAMPAIGN_SLUG } from "./_components/passport-types.ts";
-import { CheckCircle2, Sparkles, Stamp, Ticket, Trophy } from "lucide-react";
+import { Compass, Sparkles, Stamp, Sun, Trophy } from "lucide-react";
 
 const STEPS = [
-  {
-    icon: CheckCircle2,
-    title: "Complete quests",
-    body: "Play tagged Summer Slam events or finish tracked goals.",
-  },
-  {
-    icon: Stamp,
-    title: "Submit evidence",
-    body: "Manual quests need a link or screenshot — staff review and approve.",
-  },
-  {
-    icon: Ticket,
-    title: "Collect seals",
-    body: "Finish every challenge in a category to earn its official seal.",
-  },
-  {
-    icon: Trophy,
-    title: "Earn entries",
-    body: "Approved stamps convert into Little and Big Prize Wheel entries.",
-  },
+  { icon: Compass, title: "Chart your route", body: "Five destinations, five seals." },
+  { icon: Stamp, title: "Submit evidence", body: "Staff review manual quests." },
+  { icon: Sun, title: "Collect seals", body: "Finish every challenge in a category." },
+  { icon: Trophy, title: "Earn rewards", body: "Prize wheel entries & recognition." },
 ];
 
 export default function SummerSlamLandingPage() {
@@ -62,138 +48,124 @@ export default function SummerSlamLandingPage() {
 
   return (
     <PageShell maxWidth="wide" className={ssPageBg}>
-      <div className="pb-10 pt-2">
-        <div className="grid gap-8 lg:grid-cols-[1fr_340px] lg:items-start">
-          <div className="space-y-6">
-            <header className={cn("relative overflow-hidden", ssCard)}>
+      <div className={cn(ssStack, "pb-6 pt-1")}>
+        <div className={cn("grid lg:grid-cols-[1fr_260px]", ssGridGap, "lg:items-start")}>
+          <div className={ssStack}>
+            <header className={cn("overflow-hidden", ssCard)}>
               <div className={ssAccentBarClass} aria-hidden />
-              <div className="space-y-3 px-6 py-6 sm:px-8 sm:py-7">
+              <div className={ssCardPad}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span
                     className={cn(
-                      "rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider",
+                      "rounded px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider",
                       badge.className,
                     )}
                   >
                     {badge.label}
                   </span>
                   {campaign === undefined ? (
-                    <Skeleton className={cn("h-4 w-40", ssSkeleton)} />
+                    <Skeleton className={cn("h-3 w-32", ssSkeleton)} />
                   ) : (
-                    <span className="text-xs text-stone-500">
+                    <span className="text-[11px] text-orange-800/50">
                       {formatCampaignDateRange(campaign)}
                     </span>
                   )}
+                  <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
+                    <Sparkles className="h-3 w-3" aria-hidden />
+                    Summer Slam
+                  </span>
                 </div>
-                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-teal-700">
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                  Seasonal event
-                </div>
-                <h1 className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">
+                <h1 className="mt-1.5 text-lg font-bold text-orange-950 sm:text-xl">
                   {campaign?.title ?? "Summer Slam Passport"}
                 </h1>
-                <p className="max-w-xl text-sm leading-relaxed text-stone-600 sm:text-base">
+                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-orange-900/60 sm:text-sm">
                   {campaign?.description ??
-                    "Complete seasonal challenges, collect official category seals, and earn prize wheel entries."}
+                    "Collect seals across five destinations and earn prize wheel entries."}
                 </p>
                 {statusMessage ? (
-                  <p className="rounded-xl border border-stone-200/80 bg-stone-50/80 px-4 py-3 text-sm text-stone-700">
+                  <p className="mt-2 rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-xs text-orange-900/70">
                     {statusMessage}
                   </p>
                 ) : null}
               </div>
             </header>
 
-            <section className={cn(ssCard, "p-5 sm:p-6")}>
-              <h2 className={ssSectionTitle}>How it works</h2>
-              <p className={ssSectionDesc}>Four steps from quest to prize wheel entry.</p>
-              <ol className="mt-5 space-y-4">
-                {STEPS.map((step, index) => (
-                  <li key={step.title} className="flex gap-3">
-                    <div
-                      className={cn(
-                        "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-stone-700",
-                        ssMutedSurface,
-                      )}
-                    >
-                      <step.icon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 pt-0.5">
-                      <p className="text-sm font-semibold text-stone-900">
-                        {index + 1}. {step.title}
-                      </p>
-                      <p className="mt-0.5 text-sm leading-relaxed text-stone-600">{step.body}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
+            <div className={cn("grid sm:grid-cols-2", ssGridGap)}>
+              <section className={cn(ssCard, ssCardPad)}>
+                <h2 className={ssSectionTitle}>How it works</h2>
+                <ol className="mt-2 space-y-2">
+                  {STEPS.map((step, index) => (
+                    <li key={step.title} className="flex gap-2">
+                      <div
+                        className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-orange-700",
+                          ssMutedSurface,
+                        )}
+                      >
+                        <step.icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-orange-950">
+                          {index + 1}. {step.title}
+                        </p>
+                        <p className="text-[11px] text-orange-900/55">{step.body}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
 
-            <section className={cn(ssCard, "p-5 sm:p-6")}>
-              <h2 className={ssSectionTitle}>Prize wheel entries</h2>
-              <p className={ssSectionDesc}>Stamps from approved quests unlock wheel entries.</p>
-              <ul className="mt-4 space-y-2 text-sm text-stone-700">
-                <li>
-                  <span className="font-semibold text-stone-900">
-                    {littleEvery} approved stamp{littleEvery === 1 ? "" : "s"}
-                  </span>{" "}
-                  = 1 Little Wheel entry
-                </li>
-                <li>
-                  Every{" "}
-                  <span className="font-semibold text-stone-900">
-                    {bigEvery} approved stamps
-                  </span>{" "}
-                  = 1 Big Wheel entry
-                </li>
-                <li className="text-stone-500">Each player can only win once per wheel.</li>
-              </ul>
-            </section>
+              <section className={cn(ssCard, ssCardPad)}>
+                <h2 className={ssSectionTitle}>Prize wheels</h2>
+                <ul className="mt-2 space-y-1 text-xs text-orange-900/70">
+                  <li>
+                    <span className="font-semibold text-orange-950">{littleEvery} stamp{littleEvery === 1 ? "" : "s"}</span> = 1 Little entry
+                  </li>
+                  <li>
+                    Every <span className="font-semibold text-orange-950">{bigEvery} stamps</span> = 1 Big entry
+                  </li>
+                  <li className="text-orange-800/45">One win per wheel per player.</li>
+                </ul>
+              </section>
+            </div>
 
             <div className="lg:hidden">
               <PassportPreviewMini />
-              <p className="mt-2 text-center text-xs text-stone-500">
-                Sample layout — your passport reflects live progress.
-              </p>
             </div>
 
-            <div className="space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               {!isLoaded || campaign === undefined ? (
-                <Skeleton className={cn("h-12 w-full", ssSkeleton)} />
+                <Skeleton className={cn("h-10 w-full sm:w-48", ssSkeleton)} />
               ) : canEnterPassport ? (
                 isSignedIn ? (
-                  <Button asChild size="lg" className="min-h-12 w-full touch-manipulation sm:w-auto">
-                    <Link to="/summer-slam/passport">Continue to My Passport</Link>
+                  <Button asChild className="min-h-10 touch-manipulation">
+                    <Link to="/summer-slam/passport">My Passport</Link>
                   </Button>
                 ) : (
                   <SignInButton
-                    size="lg"
-                    className="min-h-12 w-full touch-manipulation sm:w-auto"
-                    signInText="Sign in with Discord to Start"
+                    className="min-h-10 touch-manipulation"
+                    signInText="Sign in with Discord"
                     showIcon={false}
                   />
                 )
               ) : (
-                <Button size="lg" disabled className="min-h-12 w-full sm:w-auto">
-                  Passport not available yet
+                <Button disabled className="min-h-10">
+                  Passport unavailable
                 </Button>
               )}
-
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button asChild variant="outline" className="min-h-11 touch-manipulation">
-                  <Link to="/summer-slam/passport/demo">View demo passport</Link>
-                </Button>
-                <Button asChild variant="ghost" className="min-h-11 touch-manipulation">
-                  <Link to="/support">Rules & help</Link>
-                </Button>
-              </div>
+              <Button asChild variant="outline" className="min-h-10 touch-manipulation">
+                <Link to="/summer-slam/passport/demo">Demo passport</Link>
+              </Button>
+              <Button asChild variant="ghost" className="min-h-10 touch-manipulation">
+                <Link to="/support">Rules & help</Link>
+              </Button>
             </div>
           </div>
 
-          <aside className="hidden lg:sticky lg:top-6 lg:block">
+          <aside className="hidden lg:block lg:sticky lg:top-4">
             <PassportPreviewMini />
-            <p className="mt-3 text-center text-xs text-stone-500">
-              Sample layout — your passport reflects live quest progress.
+            <p className="mt-1.5 text-center text-[10px] text-orange-800/45">
+              Live passport tracks real progress
             </p>
           </aside>
         </div>

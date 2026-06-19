@@ -1,34 +1,82 @@
-import { Check, Clock, Lock } from "lucide-react";
+import { AlertTriangle, Check, Clock, Lock } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
-import { sealStateLabel, type SealMeta, type SealState } from "./passport-seal.ts";
+import {
+  sealBadgeStatus,
+  sealStateLabel,
+  type SealMeta,
+  type SealProgress,
+  type SealState,
+} from "./passport-seal.ts";
 
 /**
- * Official Summer Slam seal artwork with premium, consistent state treatment.
+ * Official Summer Slam seal artwork — collectible stamp treatment with state styling.
  */
 export function PassportSealImage({
   meta,
   state,
+  seal,
   size = 96,
   className,
   showBadge = true,
   animateEarned = false,
+  showProgressRing = false,
 }: {
   meta: SealMeta;
   state: SealState;
+  seal?: SealProgress;
   size?: number;
   className?: string;
   showBadge?: boolean;
   animateEarned?: boolean;
+  showProgressRing?: boolean;
 }) {
+  const badgeStatus = seal ? sealBadgeStatus(seal) : null;
   const locked = state === "locked";
   const earned = state === "earned";
   const submitted = state === "submitted";
+  const needsChanges = badgeStatus === "needs_changes";
+  const inProgress = state === "in_progress" && !needsChanges;
+  const percent = seal?.percent ?? 0;
+  const ringSize = size + 12;
+  const strokeWidth = 3;
+  const radius = (ringSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
 
   return (
     <div
       className={cn("relative inline-flex shrink-0 items-center justify-center", className)}
       style={{ width: size, height: size }}
     >
+      {showProgressRing && inProgress && percent > 0 ? (
+        <svg
+          className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90"
+          width={ringSize}
+          height={ringSize}
+          aria-hidden
+        >
+          <circle
+            cx={ringSize / 2}
+            cy={ringSize / 2}
+            r={radius}
+            fill="none"
+            stroke="rgba(249,115,22,0.15)"
+            strokeWidth={strokeWidth}
+          />
+          <circle
+            cx={ringSize / 2}
+            cy={ringSize / 2}
+            r={radius}
+            fill="none"
+            stroke={meta.accent}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * (1 - percent / 100)}
+            className="transition-[stroke-dashoffset] duration-700"
+          />
+        </svg>
+      ) : null}
+
       <img
         src={meta.image}
         alt={`${meta.title} — ${sealStateLabel(state)}`}
@@ -38,34 +86,44 @@ export function PassportSealImage({
         draggable={false}
         className={cn(
           "relative h-full w-full select-none object-contain transition-all duration-300",
-          locked && "opacity-40 saturate-[0.15]",
-          submitted && "opacity-90",
-          earned && "drop-shadow-[0_6px_16px_rgba(0,0,0,0.12)]",
+          locked && "opacity-50 saturate-[0.35] brightness-105",
+          submitted && "opacity-95",
+          inProgress && "drop-shadow-[0_4px_12px_rgba(249,115,22,0.15)]",
+          earned && "drop-shadow-[0_8px_20px_rgba(20,184,166,0.25)]",
           earned && animateEarned && "motion-safe:animate-[sealPop_0.6s_ease-out]",
         )}
       />
 
       {showBadge && locked ? (
-        <span className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-400 shadow-sm">
-          <Lock className="h-3 w-3" aria-hidden />
+        <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-orange-200 bg-white text-orange-300 shadow-sm">
+          <Lock className="h-2.5 w-2.5" aria-hidden />
         </span>
       ) : null}
 
       {showBadge && earned ? (
         <span
-          className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-teal-600 text-white shadow-sm"
+          className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-teal-500 text-white shadow-[0_2px_8px_rgba(20,184,166,0.4)]"
           aria-hidden
         >
-          <Check className="h-3.5 w-3.5" strokeWidth={3} />
+          <Check className="h-3 w-3" strokeWidth={3} />
         </span>
       ) : null}
 
       {showBadge && submitted ? (
         <span
-          className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm"
+          className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm"
           aria-hidden
         >
-          <Clock className="h-3.5 w-3.5" strokeWidth={2.5} />
+          <Clock className="h-3 w-3" strokeWidth={2.5} />
+        </span>
+      ) : null}
+
+      {showBadge && needsChanges ? (
+        <span
+          className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-orange-400 text-white shadow-sm"
+          aria-hidden
+        >
+          <AlertTriangle className="h-2.5 w-2.5" />
         </span>
       ) : null}
     </div>

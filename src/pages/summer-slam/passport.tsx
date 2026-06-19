@@ -33,15 +33,14 @@ import {
 function PassportLoader() {
   return (
     <PageShell maxWidth="wide" className={ssPageBg}>
-      <div className="space-y-8 pt-2 pb-12">
-        <Skeleton className={cn("h-36 w-full", ssSkeleton)} />
-        <Skeleton className={cn("h-52 w-full", ssSkeleton)} />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <Skeleton key={index} className={cn("h-56 w-full", ssSkeleton)} />
+      <div className="space-y-4 pt-1 pb-8">
+        <Skeleton className={cn("h-16 w-full", ssSkeleton)} />
+        <Skeleton className={cn("h-24 w-full", ssSkeleton)} />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Skeleton key={index} className={cn("h-36 w-full", ssSkeleton)} />
           ))}
         </div>
-        <Skeleton className={cn("h-72 w-full", ssSkeleton)} />
       </div>
     </PageShell>
   );
