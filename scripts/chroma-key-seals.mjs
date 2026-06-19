@@ -4,87 +4,96 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dir = path.join(__dirname, "..", "public", "summer-slam", "seals");
+const outDir = path.join(__dirname, "..", "public", "summer-slam", "seals");
+const stashDir = path.join(__dirname, "..", ".seals-src");
+// Read pristine raw originals from .seals-src when available, otherwise process
+// the files in place inside public/summer-slam/seals.
+const srcDir = fs.existsSync(stashDir) ? stashDir : outDir;
 const files = ["traveller", "competitor", "summer_spirit", "team_player", "community"];
 
-// Flood-fill the connected black background from the image borders so that
-// dark details *inside* the seal artwork are never made transparent.
-const BG_THRESHOLD = 36; // max channel value still considered "background black"
-const RAMP_LOW = 16; // boundary feather: fully transparent at/under this
-const RAMP_HIGH = 80; // boundary feather: fully opaque at/over this
+// The seals are circular medallions on a solid black square. We keep the ENTIRE
+// medallion (including its dark coloured interior) and clear only the black
+// OUTSIDE it. The rims are distressed/irregular, so a single-radius circle
+// either leaves a black halo or clips the rim. Instead we trace the medallion's
+// outline per-angle and cut transparency exactly at that boundary.
+const EDGE_T = 42; // brightness that marks real rim artwork vs black background
+const ANGLES = 1440; // angular resolution of the traced outline
+const SMOOTH = 6; // +/- window for circular median smoothing (rejects specks)
+const FEATHER = 1.5; // soft edge in px
 
 for (const name of files) {
-  const file = path.join(dir, `${name}.png`);
-  const { data, info } = await sharp(file)
+  const { data, info } = await sharp(path.join(srcDir, `${name}.png`))
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
 
   const { width, height, channels } = info;
-  const n = width * height;
-  const maxCh = new Uint8Array(n);
-  for (let p = 0; p < n; p++) {
-    const i = p * channels;
-    maxCh[p] = Math.max(data[i], data[i + 1], data[i + 2]);
-  }
+  const cx = (width - 1) / 2;
+  const cy = (height - 1) / 2;
+  const maxR = Math.hypot(cx, cy);
 
-  // BFS flood fill from every border pixel that is dark enough.
-  const bg = new Uint8Array(n); // 1 = background
-  const stack = [];
-  const pushIf = (p) => {
-    if (!bg[p] && maxCh[p] <= BG_THRESHOLD) {
-      bg[p] = 1;
-      stack.push(p);
-    }
+  const maxChAt = (x, y) => {
+    const i = (y * width + x) * channels;
+    return Math.max(data[i], data[i + 1], data[i + 2]);
   };
-  for (let x = 0; x < width; x++) {
-    pushIf(x);
-    pushIf((height - 1) * width + x);
-  }
-  for (let y = 0; y < height; y++) {
-    pushIf(y * width);
-    pushIf(y * width + width - 1);
-  }
-  while (stack.length) {
-    const p = stack.pop();
-    const x = p % width;
-    const y = (p - x) / width;
-    if (x > 0) pushIf(p - 1);
-    if (x < width - 1) pushIf(p + 1);
-    if (y > 0) pushIf(p - width);
-    if (y < height - 1) pushIf(p + width);
-  }
 
-  const isBgNeighbor = (p, x, y) =>
-    (x > 0 && bg[p - 1]) ||
-    (x < width - 1 && bg[p + 1]) ||
-    (y > 0 && bg[p - width]) ||
-    (y < height - 1 && bg[p + width]);
-
-  for (let p = 0; p < n; p++) {
-    const i = p * channels;
-    if (bg[p]) {
-      data[i + 3] = 0;
-      continue;
+  // --- trace the outermost rim radius for each angle ---
+  const rad = new Float64Array(ANGLES);
+  for (let a = 0; a < ANGLES; a++) {
+    const theta = (a / ANGLES) * Math.PI * 2;
+    const dx = Math.cos(theta);
+    const dy = Math.sin(theta);
+    let found = 0;
+    for (let r = Math.floor(maxR); r >= 0; r--) {
+      const x = Math.round(cx + dx * r);
+      const y = Math.round(cy + dy * r);
+      if (x < 0 || y < 0 || x >= width || y >= height) continue;
+      if (maxChAt(x, y) >= EDGE_T) {
+        found = r;
+        break;
+      }
     }
-    const x = p % width;
-    const y = (p - x) / width;
-    if (isBgNeighbor(p, x, y)) {
-      const m = maxCh[p];
-      let a;
-      if (m <= RAMP_LOW) a = 0;
-      else if (m >= RAMP_HIGH) a = data[i + 3];
-      else a = Math.round(((m - RAMP_LOW) / (RAMP_HIGH - RAMP_LOW)) * data[i + 3]);
-      data[i + 3] = a;
+    rad[a] = found;
+  }
+
+  // --- circular median smoothing to reject distress specks / fill gaps ---
+  const smooth = new Float64Array(ANGLES);
+  const win = [];
+  for (let a = 0; a < ANGLES; a++) {
+    win.length = 0;
+    for (let k = -SMOOTH; k <= SMOOTH; k++) {
+      win.push(rad[(a + k + ANGLES) % ANGLES]);
+    }
+    win.sort((p, q) => p - q);
+    smooth[a] = win[win.length >> 1];
+  }
+
+  // --- build alpha from the traced boundary ---
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * channels;
+      const ddx = x - cx;
+      const ddy = y - cy;
+      const d = Math.hypot(ddx, ddy);
+      let theta = Math.atan2(ddy, ddx);
+      if (theta < 0) theta += Math.PI * 2;
+      const boundary = smooth[Math.round((theta / (Math.PI * 2)) * ANGLES) % ANGLES];
+      if (d <= boundary - FEATHER) continue; // inside medallion -> keep opaque
+      if (d >= boundary + FEATHER) {
+        data[i + 3] = 0;
+        continue;
+      }
+      const t = (boundary + FEATHER - d) / (2 * FEATHER);
+      data[i + 3] = Math.round(255 * Math.max(0, Math.min(1, t)));
     }
   }
 
   await sharp(data, { raw: { width, height, channels } })
     .png()
-    .toFile(file + ".tmp.png");
-  fs.renameSync(file + ".tmp.png", file);
+    .toFile(path.join(outDir, `${name}.png.tmp`));
+  fs.renameSync(path.join(outDir, `${name}.png.tmp`), path.join(outDir, `${name}.png`));
 
-  console.log(`keyed ${name} (${width}x${height})`);
+  console.log(`traced ${name} (${width}x${height})`);
 }
 
 console.log("DONE");
