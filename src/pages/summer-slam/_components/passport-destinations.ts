@@ -66,31 +66,8 @@ export const SEASON_REWARDS = [
   {
     id: "passport",
     title: "Full Passport",
-    description: "Collect all five official stamps to complete your summer passport.",
+    description:
+      "Collect all five stamps to complete your passport and receive a certificate and exclusive Discord role.",
     icon: "passport" as const,
-  },
-  {
-    id: "little-wheel",
-    title: "Little Prize Wheel",
-    description: "Every quest you complete earns a Little Wheel ticket.",
-    icon: "ticket" as const,
-  },
-  {
-    id: "big-wheel",
-    title: "Big Prize Wheel",
-    description: "Every 5 quests completed earns a Big Wheel ticket — bigger prizes, one win per player.",
-    icon: "trophy" as const,
-  },
-  {
-    id: "hall-of-fame",
-    title: "Hall of Fame",
-    description: "Complete players are recognised in the seasonal Hall of Fame.",
-    icon: "star" as const,
-  },
-  {
-    id: "community",
-    title: "Community Spotlight",
-    description: "Stand out in Discord and event shout-outs as a season completer.",
-    icon: "users" as const,
   },
 ];

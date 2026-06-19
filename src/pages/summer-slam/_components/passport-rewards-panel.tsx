@@ -1,4 +1,4 @@
-import { Stamp, Star, Ticket, Trophy, Users } from "lucide-react";
+import { HelpCircle, Stamp } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { SEASON_REWARDS } from "./passport-destinations.ts";
 import { ssCard, ssCardPad, ssLabel, ssSectionTitle, ssStatCell } from "./passport-dashboard-theme.ts";
@@ -6,10 +6,6 @@ import type { SeasonSummary } from "./passport-seal.ts";
 
 const REWARD_ICONS = {
   passport: Stamp,
-  ticket: Ticket,
-  trophy: Trophy,
-  star: Star,
-  users: Users,
 } as const;
 
 export function PassportRewardsPanel({
@@ -48,21 +44,14 @@ export function PassportRewardsPanel({
 
       {isComplete ? (
         <p className="mb-2 rounded-lg border border-teal-200/60 bg-teal-50/50 px-2 py-1 text-[11px] font-semibold text-teal-900">
-          Passport complete — Hall of Fame eligible
+          Passport complete — certificate &amp; Discord role unlocked
         </p>
       ) : null}
 
       <ul className="flex flex-wrap gap-1">
         {SEASON_REWARDS.map((reward) => {
           const Icon = REWARD_ICONS[reward.icon];
-          const unlocked =
-            reward.id === "passport"
-              ? isComplete
-              : reward.id === "little-wheel"
-                ? littleWheelEntries > 0
-                : reward.id === "big-wheel"
-                  ? bigWheelEntries > 0
-                  : false;
+          const unlocked = reward.id === "passport" ? isComplete : false;
 
           return (
             <li
@@ -77,6 +66,7 @@ export function PassportRewardsPanel({
             >
               <Icon className="h-3 w-3 shrink-0" aria-hidden />
               {reward.title}
+              <HelpCircle className="h-3 w-3 shrink-0 opacity-60" aria-hidden />
             </li>
           );
         })}

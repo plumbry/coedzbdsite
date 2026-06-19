@@ -20,11 +20,11 @@ export const MOCK_CAMPAIGN = {
 };
 
 /**
- * Sample passport for admin preview — four seals earned, Community in progress
- * as the next destination, covering earned / awaiting-review / needs-fix / to-do.
+ * Sample passport for admin preview — a fresh start: one quest approved, one
+ * awaiting review, and every other quest still to do.
  */
 export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
-  // Traveller — EARNED
+  // Traveller — one approved, one pending, one to-do
   {
     quest: {
       _id: q("mock_traveller_1"),
@@ -40,7 +40,7 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       progressTarget: 1,
       awardSource: "auto",
       awardLog: "Auto-approved: Played 1 campaign event.",
-      approvedAt: day(16),
+      approvedAt: day(2),
     },
   },
   {
@@ -53,12 +53,10 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       stampReward: 1,
     },
     progress: {
-      status: "approved",
+      status: "pending_review",
       progressCurrent: 5,
       progressTarget: 5,
-      awardSource: "auto",
-      awardLog: "Auto-approved: Played 5 campaign events.",
-      approvedAt: day(14),
+      updatedAt: day(1),
     },
   },
   {
@@ -71,16 +69,9 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       adminHint: "Play:\n• Reload\n• OG\n• Zero Build\n\nYou do not need to win.",
       stampReward: 1,
     },
-    progress: {
-      status: "approved",
-      progressCurrent: 3,
-      progressTarget: 3,
-      awardSource: "auto",
-      awardLog: "Auto-approved: Played Duos, Trios and Squads.",
-      approvedAt: day(13),
-    },
+    progress: null,
   },
-  // Competitor — EARNED
+  // Competitor — to do
   {
     quest: {
       _id: q("mock_competitor_1"),
@@ -91,14 +82,7 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       evidenceInstructions: "Submit a Yunite match link or screenshot of your final placement.",
       stampReward: 1,
     },
-    progress: {
-      status: "approved",
-      progressCurrent: 1,
-      progressTarget: 1,
-      awardSource: "manual_review",
-      awardLog: "Approved by Staff.",
-      approvedAt: day(11),
-    },
+    progress: null,
   },
   {
     quest: {
@@ -109,16 +93,9 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       completionMethod: "auto",
       stampReward: 1,
     },
-    progress: {
-      status: "approved",
-      progressCurrent: 1,
-      progressTarget: 1,
-      awardSource: "auto",
-      awardLog: "Auto-approved: Won a game in a campaign trios event.",
-      approvedAt: day(9),
-    },
+    progress: null,
   },
-  // Summer Spirit — EARNED
+  // Summer Spirit — to do
   {
     quest: {
       _id: q("mock_spirit_1"),
@@ -130,14 +107,7 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       adminHint: "Any Summer Slam screenshot counts:\n• wins\n• funny moments\n• team photos",
       stampReward: 1,
     },
-    progress: {
-      status: "approved",
-      progressCurrent: 1,
-      progressTarget: 1,
-      awardSource: "manual_review",
-      awardLog: "Approved by Staff.",
-      approvedAt: day(8),
-    },
+    progress: null,
   },
   {
     quest: {
@@ -149,16 +119,9 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       evidenceInstructions: "Upload your clip to Discord, Medal, YouTube, or Twitch and paste the link.",
       stampReward: 1,
     },
-    progress: {
-      status: "approved",
-      progressCurrent: 1,
-      progressTarget: 1,
-      awardSource: "manual_review",
-      awardLog: "Approved by Staff.",
-      approvedAt: day(6),
-    },
+    progress: null,
   },
-  // Team Player — EARNED
+  // Team Player — to do
   {
     quest: {
       _id: q("mock_team_1"),
@@ -168,14 +131,7 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       completionMethod: "auto",
       stampReward: 1,
     },
-    progress: {
-      status: "approved",
-      progressCurrent: 1,
-      progressTarget: 1,
-      awardSource: "auto",
-      awardLog: "Auto-approved: Played a campaign squads event.",
-      approvedAt: day(7),
-    },
+    progress: null,
   },
   {
     quest: {
@@ -187,16 +143,9 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       evidenceInstructions: "Submit a screenshot or clip link showing your eliminations.",
       stampReward: 1,
     },
-    progress: {
-      status: "approved",
-      progressCurrent: 1,
-      progressTarget: 1,
-      awardSource: "manual_review",
-      awardLog: "Approved by Staff.",
-      approvedAt: day(4),
-    },
+    progress: null,
   },
-  // Community — NEXT DESTINATION (in progress)
+  // Community — to do
   {
     quest: {
       _id: q("mock_community_1"),
@@ -206,14 +155,7 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       completionMethod: "admin",
       stampReward: 1,
     },
-    progress: {
-      status: "approved",
-      progressCurrent: 1,
-      progressTarget: 1,
-      awardSource: "admin",
-      awardLog: "Awarded by Staff.",
-      approvedAt: day(2),
-    },
+    progress: null,
   },
   {
     quest: {
@@ -225,12 +167,7 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       evidenceInstructions: "Upload a screenshot showing you at a community event.",
       stampReward: 1,
     },
-    progress: {
-      status: "pending_review",
-      progressCurrent: 1,
-      progressTarget: 1,
-      updatedAt: day(2),
-    },
+    progress: null,
   },
   {
     quest: {
@@ -242,13 +179,7 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       evidenceInstructions: "Paste a Discord message link or screenshot showing you helping a new player.",
       stampReward: 1,
     },
-    progress: {
-      status: "needs_more_evidence",
-      progressCurrent: 1,
-      progressTarget: 1,
-      awardLog: "Please include a clearer screenshot of the Discord conversation.",
-      updatedAt: day(1),
-    },
+    progress: null,
   },
 ];
 

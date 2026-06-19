@@ -115,24 +115,13 @@ export function PassportDashboard({
         currentDestination={currentDestination}
       />
 
-      <div className={cn("grid xl:grid-cols-[1fr_200px]", ssGridGap)}>
-        <PassportSpread
-          seals={seals}
-          nextSealId={nextSeal?.id ?? null}
-          onSelect={setSelectedSeal}
-        />
-        <div className={cn("hidden flex-col xl:flex", ssStack)}>
-          <PassportJourneyRoute seals={seals} nextSealId={nextSeal?.id ?? null} />
-          <PassportRewardsPanel
-            season={season}
-            littleWheelEntries={wheelTotals.littleWheelEntries}
-            bigWheelEntries={wheelTotals.bigWheelEntries}
-            approvedStamps={wheelTotals.approvedStamps}
-          />
-        </div>
-      </div>
+      <PassportSpread
+        seals={seals}
+        nextSealId={nextSeal?.id ?? null}
+        onSelect={setSelectedSeal}
+      />
 
-      <div className={cn("grid sm:grid-cols-2 xl:hidden", ssGridGap)}>
+      <div className={cn("grid sm:grid-cols-2", ssGridGap)}>
         <PassportJourneyRoute seals={seals} nextSealId={nextSeal?.id ?? null} />
         <PassportRewardsPanel
           season={season}
