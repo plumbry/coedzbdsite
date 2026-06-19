@@ -16,16 +16,21 @@ export const ssInteractiveCard =
   "cursor-pointer transition-[transform,box-shadow,border-color] duration-150 ease-out " +
   "hover:-translate-y-0.5 hover:border-teal-400/60 hover:shadow-[0_8px_20px_rgba(249,115,22,0.12)] " +
   "active:scale-[0.99] motion-reduce:transition-none motion-reduce:hover:translate-y-0";
-export const ssSectionTitle = "text-sm font-bold tracking-tight text-orange-950";
-export const ssSectionDesc = "text-xs text-orange-900/55";
-export const ssLabel = "text-[10px] font-semibold uppercase tracking-wider text-teal-800/70";
+/** Sora display face — reserved for hero, milestone & seasonal headline titles. */
+export const ssDisplayTitle =
+  "font-display font-semibold tracking-[0.02em] text-orange-950";
+/** Outfit section heading — confident but compact, used for dashboard sections. */
+export const ssSectionTitle =
+  "text-lg font-semibold tracking-[0.01em] text-orange-950";
+export const ssSectionDesc = "text-[13px] text-orange-900/55";
+export const ssLabel = "text-[10px] font-medium uppercase tracking-[0.06em] text-teal-800/75";
 export const ssSkeleton = "rounded-xl bg-orange-100/50";
 export const ssStatCell =
   "rounded-lg border border-orange-200/60 bg-orange-50/40 px-2.5 py-1.5 min-w-0";
 
 export function ssStatusChip(status: SealBadgeStatus, extra?: string) {
   return cn(
-    "inline-flex items-center rounded-full px-2 py-px text-[9px] font-semibold uppercase tracking-wide",
+    "inline-flex items-center rounded-full px-2 py-px text-[9px] font-semibold uppercase tracking-[0.05em]",
     status === "earned" && "bg-teal-100 text-teal-800",
     status === "pending" && "bg-amber-100 text-amber-800",
     status === "needs_changes" && "bg-orange-100 text-orange-800",

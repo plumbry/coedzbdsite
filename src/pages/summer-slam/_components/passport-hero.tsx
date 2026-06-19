@@ -1,13 +1,7 @@
 import { Calendar, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { InfoTooltip } from "./passport-info-tooltip.tsx";
-import {
-  ssAccentBarClass,
-  ssCard,
-  ssCardPad,
-  ssLabel,
-  ssStatCell,
-} from "./passport-dashboard-theme.ts";
+import { ssLabel, ssStatCell } from "./passport-dashboard-theme.ts";
 
 export function PassportHero({
   title,
@@ -29,22 +23,21 @@ export function PassportHero({
   className?: string;
 }) {
   return (
-    <header className={cn(ssCard, "overflow-hidden", className)}>
-      <div className={ssAccentBarClass} aria-hidden />
-      <div className={cn(ssCardPad, "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between")}>
-        <div className="min-w-0">
+    <header className={cn("overflow-hidden", className)}>
+      <div className={cn("flex flex-col items-center gap-3 px-1 pb-1 pt-1")}>
+        <div className="flex flex-col items-center text-center">
           <h1 className="sr-only">{title}</h1>
           <img
             src="/summer-slam/passport-header.png"
             alt={title}
             width={747}
             height={329}
-            className="h-14 w-auto sm:h-16"
+            className="h-40 w-auto max-w-full sm:h-52 lg:h-64"
           />
           <p className="mt-1 truncate text-xs text-orange-800/55">{playerName}</p>
         </div>
 
-        <dl className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-stretch sm:gap-2">
+        <dl className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-stretch sm:justify-center sm:gap-2">
           <div className={ssStatCell}>
             <dt className={cn(ssLabel, "flex items-center gap-0.5")}>
               Progress
@@ -63,7 +56,7 @@ export function PassportHero({
           </div>
 
           <div className={ssStatCell}>
-            <dt className={ssLabel}>Seals</dt>
+            <dt className={ssLabel}>Stamps</dt>
             <dd className="text-sm font-bold tabular-nums text-teal-800">
               {earnedSeals}
               <span className="text-xs font-medium text-teal-600/70"> / {totalSeals}</span>

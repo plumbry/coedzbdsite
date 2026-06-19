@@ -13,11 +13,12 @@ const srcFile = srcArg
   ? path.resolve(srcArg)
   : path.join(stashDir, "passport-header.png");
 
-// The logo is a distressed parchment banner on a solid black field. We map the
-// pixel brightness to alpha so the cream artwork stays opaque while the black
-// background drops out, with a soft ramp to preserve the worn/torn edges.
-const LOW = 18; // <= this brightness is treated as pure background -> transparent
-const HIGH = 70; // >= this brightness is treated as solid artwork -> opaque
+// The logo is a distressed parchment banner sitting on a flat background. The
+// background can be near-white OR near-black, but the artwork itself contains
+// both warm cream (close to white) and dark inks (close to black). A naive
+// per-pixel key would punch holes in the artwork (e.g. the white "PASSPORT"
+// lettering). Instead we FLOOD FILL from the image border so only the
+// connected outer background is cleared; interior pixels are always preserved.
 
 const { data, info } = await sharp(srcFile)
   .ensureAlpha()
@@ -25,21 +26,91 @@ const { data, info } = await sharp(srcFile)
   .toBuffer({ resolveWithObject: true });
 
 const { width, height, channels } = info;
+const px = width * height;
 
-for (let i = 0; i < data.length; i += channels) {
-  const max = Math.max(data[i], data[i + 1], data[i + 2]);
-  let alpha;
-  if (max <= LOW) alpha = 0;
-  else if (max >= HIGH) alpha = 255;
-  else alpha = Math.round((255 * (max - LOW)) / (HIGH - LOW));
-  // Keep the original alpha if the image already had cut-outs.
-  data[i + 3] = Math.min(data[i + 3], alpha);
+// Sample the corners to decide whether the background is light or dark.
+const cornerIdx = [
+  0,
+  (width - 1) * channels,
+  (height - 1) * width * channels,
+  ((height - 1) * width + (width - 1)) * channels,
+];
+let cornerLum = 0;
+for (const c of cornerIdx) {
+  cornerLum += (data[c] + data[c + 1] + data[c + 2]) / 3;
+}
+cornerLum /= cornerIdx.length;
+const lightBg = cornerLum > 128;
+
+// A pixel counts as background when it matches the flat colour: very bright &
+// neutral (low saturation) for a white field, or very dark for a black field.
+const WHITE_MIN = 232; // min channel must be this bright
+const WHITE_SAT = 26; // max-min saturation must stay below this (rejects cream)
+const BLACK_MAX = 42; // max channel below this is treated as black
+const isBg = (i) => {
+  const r = data[i],
+    g = data[i + 1],
+    b = data[i + 2];
+  if (lightBg) {
+    const min = Math.min(r, g, b);
+    const max = Math.max(r, g, b);
+    return min >= WHITE_MIN && max - min <= WHITE_SAT;
+  }
+  return Math.max(r, g, b) <= BLACK_MAX;
+};
+
+// --- flood fill from the border (4-connected BFS via an explicit stack) ---
+const bg = new Uint8Array(px);
+const stack = [];
+const pushIf = (x, y) => {
+  if (x < 0 || y < 0 || x >= width || y >= height) return;
+  const p = y * width + x;
+  if (bg[p]) return;
+  if (!isBg(p * channels)) return;
+  bg[p] = 1;
+  stack.push(p);
+};
+for (let x = 0; x < width; x++) {
+  pushIf(x, 0);
+  pushIf(x, height - 1);
+}
+for (let y = 0; y < height; y++) {
+  pushIf(0, y);
+  pushIf(width - 1, y);
+}
+while (stack.length) {
+  const p = stack.pop();
+  const x = p % width;
+  const y = (p - x) / width;
+  pushIf(x + 1, y);
+  pushIf(x - 1, y);
+  pushIf(x, y + 1);
+  pushIf(x, y - 1);
+}
+
+// --- build a soft alpha: 3x3 box blur of the binary mask feathers the edge ---
+for (let y = 0; y < height; y++) {
+  for (let x = 0; x < width; x++) {
+    const p = y * width + x;
+    let solid = 0;
+    let n = 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        n++;
+        if (!bg[ny * width + nx]) solid++;
+      }
+    }
+    const a = Math.round((255 * solid) / n);
+    const i = p * channels;
+    data[i + 3] = Math.min(data[i + 3], a);
+  }
 }
 
 if (!fs.existsSync(stashDir)) fs.mkdirSync(stashDir, { recursive: true });
-if (srcArg && !fs.existsSync(path.join(stashDir, "passport-header.png"))) {
-  fs.copyFileSync(srcFile, path.join(stashDir, "passport-header.png"));
-}
+if (srcArg) fs.copyFileSync(srcFile, path.join(stashDir, "passport-header.png"));
 
 const tmp = path.join(outDir, "passport-header.png.tmp");
 await sharp(data, { raw: { width, height, channels } })
@@ -48,5 +119,7 @@ await sharp(data, { raw: { width, height, channels } })
   .toFile(tmp);
 fs.renameSync(tmp, path.join(outDir, "passport-header.png"));
 
-console.log(`keyed passport header (${width}x${height} -> trimmed)`);
+console.log(
+  `keyed passport header (${width}x${height}, ${lightBg ? "light" : "dark"} bg -> trimmed)`,
+);
 console.log("DONE");

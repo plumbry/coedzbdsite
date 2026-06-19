@@ -17,6 +17,7 @@ import {
   ssAccentBarClass,
   ssCard,
   ssCardPad,
+  ssDisplayTitle,
   ssGridGap,
   ssMutedSurface,
   ssPageBg,
@@ -29,10 +30,10 @@ import { CAMPAIGN_SLUG } from "./_components/passport-types.ts";
 import { Compass, Sparkles, Stamp, Sun, Trophy } from "lucide-react";
 
 const STEPS = [
-  { icon: Compass, title: "Chart your route", body: "Five destinations, five seals." },
+  { icon: Compass, title: "Chart your route", body: "Five destinations, five stamps." },
   { icon: Stamp, title: "Submit evidence", body: "Staff review manual quests." },
-  { icon: Sun, title: "Collect seals", body: "Finish every challenge in a category." },
-  { icon: Trophy, title: "Earn rewards", body: "Prize wheel entries & recognition." },
+  { icon: Sun, title: "Collect stamps", body: "Finish every challenge in a category." },
+  { icon: Trophy, title: "Earn rewards", body: "Prize wheel tickets & recognition." },
 ];
 
 export default function SummerSlamLandingPage() {
@@ -49,6 +50,16 @@ export default function SummerSlamLandingPage() {
   return (
     <PageShell maxWidth="wide" className={ssPageBg}>
       <div className={cn(ssStack, "pb-6 pt-1")}>
+        <div className="flex flex-col items-center pt-2 text-center">
+          <img
+            src="/summer-slam/passport-header.png"
+            alt={campaign?.title ?? "Summer Slam Passport"}
+            width={747}
+            height={329}
+            className="h-44 w-auto max-w-full sm:h-56 lg:h-72"
+          />
+        </div>
+
         <div className={cn("grid lg:grid-cols-[1fr_260px]", ssGridGap, "lg:items-start")}>
           <div className={ssStack}>
             <header className={cn("overflow-hidden", ssCard)}>
@@ -75,19 +86,12 @@ export default function SummerSlamLandingPage() {
                     Summer Slam
                   </span>
                 </div>
-                <h1 className="sr-only">
+                <h1 className={cn(ssDisplayTitle, "mt-1.5 text-xl sm:text-2xl")}>
                   {campaign?.title ?? "Summer Slam Passport"}
                 </h1>
-                <img
-                  src="/summer-slam/passport-header.png"
-                  alt={campaign?.title ?? "Summer Slam Passport"}
-                  width={747}
-                  height={329}
-                  className="mt-2 h-20 w-auto sm:h-24"
-                />
                 <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-orange-900/60 sm:text-sm">
                   {campaign?.description ??
-                    "Collect seals across five destinations and earn prize wheel entries."}
+                    "Collect stamps across five destinations and earn prize wheel tickets."}
                 </p>
                 {statusMessage ? (
                   <p className="mt-2 rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-xs text-orange-900/70">
@@ -99,7 +103,7 @@ export default function SummerSlamLandingPage() {
 
             <div className={cn("grid sm:grid-cols-2", ssGridGap)}>
               <section className={cn(ssCard, ssCardPad)}>
-                <h2 className={ssSectionTitle}>How it works</h2>
+                <h2 className={ssSectionTitle}>How It Works</h2>
                 <ol className="mt-2 space-y-2">
                   {STEPS.map((step, index) => (
                     <li key={step.title} className="flex gap-2">
@@ -123,13 +127,16 @@ export default function SummerSlamLandingPage() {
               </section>
 
               <section className={cn(ssCard, ssCardPad)}>
-                <h2 className={ssSectionTitle}>Prize wheels</h2>
+                <h2 className={ssSectionTitle}>Prize Wheels</h2>
                 <ul className="mt-2 space-y-1 text-xs text-orange-900/70">
                   <li>
-                    <span className="font-semibold text-orange-950">{littleEvery} stamp{littleEvery === 1 ? "" : "s"}</span> = 1 Little entry
+                    <span className="font-semibold text-orange-950">
+                      {littleEvery === 1 ? "Every quest" : `Every ${littleEvery} quests`}
+                    </span>{" "}
+                    = 1 Little Wheel ticket
                   </li>
                   <li>
-                    Every <span className="font-semibold text-orange-950">{bigEvery} stamps</span> = 1 Big entry
+                    Every <span className="font-semibold text-orange-950">{bigEvery} quests</span> = 1 Big Wheel ticket
                   </li>
                   <li className="text-orange-800/45">One win per wheel per player.</li>
                 </ul>

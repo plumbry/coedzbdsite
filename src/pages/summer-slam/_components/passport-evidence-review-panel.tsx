@@ -125,7 +125,7 @@ export function PassportEvidenceReviewPanel({
 
   return (
     <section className={cn(ssCard, ssCardPad)} aria-label="Recent activity">
-      <PassportSectionHeader title="Recent activity" description="Submissions & reviews" />
+      <PassportSectionHeader title="Recent Activity" description="Submissions & reviews" />
 
       {items.length === 0 ? (
         <div className="flex items-center gap-2 rounded-lg border border-dashed border-orange-200 bg-orange-50/40 px-3 py-4 text-xs text-orange-800/60">
@@ -140,7 +140,7 @@ export function PassportEvidenceReviewPanel({
         </ul>
       )}
 
-      <p className="mt-2 text-[10px] text-orange-400/70">Typical review · 24–48h</p>
+      <p className="mt-2 text-[10px] text-orange-400/70">Typical review · 48–72h</p>
     </section>
   );
 }

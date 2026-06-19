@@ -36,7 +36,7 @@ export function PassportPreviewMini({ className }: { className?: string }) {
         <p className={ssLabel}>Preview</p>
         <p className="text-sm font-bold text-orange-950">{MOCK_PLAYER.discordUsername}</p>
         <p className="text-[11px] tabular-nums text-orange-800/55">
-          {season.earnedSeals}/{season.totalSeals} seals · {season.percent}%
+          {season.earnedSeals}/{season.totalSeals} stamps · {season.percent}%
         </p>
       </div>
 

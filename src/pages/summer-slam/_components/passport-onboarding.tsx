@@ -17,19 +17,19 @@ const STEPS: Array<{ icon: LucideIcon; step: string; title: string; body: string
     icon: TrendingUp,
     step: "Step 1",
     title: "Check your overall progress",
-    body: "Passport progress shows how many seals you've earned and how long the season has left.",
+    body: "Passport progress shows how many stamps you've earned and how long the season has left.",
   },
   {
     icon: MousePointerClick,
     step: "Step 2",
-    title: "Click any seal to see requirements",
-    body: "Each seal opens a panel with its challenges, your progress, and submission history.",
+    title: "Click any stamp to see requirements",
+    body: "Each stamp opens a panel with its challenges, your progress, and submission history.",
   },
   {
     icon: Upload,
     step: "Step 3",
-    title: "Submit evidence to earn seals",
-    body: "Once you've completed a challenge, submit proof. Staff review it and award your seal.",
+    title: "Submit evidence to earn stamps",
+    body: "Once you've completed a challenge, submit proof. Staff review it and award your stamp.",
   },
 ];
 
@@ -84,9 +84,11 @@ export function PassportOnboarding({
           <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-teal-500 text-white shadow-sm">
             <Sparkles className="h-5 w-5" aria-hidden />
           </div>
-          <DialogTitle className="text-lg">Welcome to Summer Slam Passport</DialogTitle>
+          <DialogTitle className="font-display text-xl font-semibold tracking-[0.02em]">
+            Welcome to Summer Slam Passport
+          </DialogTitle>
           <DialogDescription>
-            Track your progress, collect seals, and complete seasonal challenges.
+            Track your progress, collect stamps, and complete seasonal challenges.
           </DialogDescription>
         </DialogHeader>
 
@@ -112,7 +114,7 @@ export function PassportOnboarding({
 
         <div className="mt-2 flex items-center gap-2 rounded-xl border border-teal-200/70 bg-teal-50/60 px-3 py-2.5 text-xs text-teal-900">
           <Award className="h-4 w-4 shrink-0" aria-hidden />
-          Earn all five seals to complete your passport and maximise your prize wheel entries.
+          Earn all five stamps to complete your passport and maximise your prize wheel tickets.
         </div>
 
         <Button className="mt-1 min-h-11 w-full touch-manipulation" onClick={dismiss}>

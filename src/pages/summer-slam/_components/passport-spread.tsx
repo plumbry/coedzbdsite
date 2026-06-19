@@ -124,11 +124,11 @@ export function PassportSpread({
   }, [seals]);
 
   return (
-    <section className={cn(className)} aria-label="Seal collection">
+    <section className={cn(className)} aria-label="Stamp collection">
       <PassportSectionHeader
-        title="Seal collection"
-        description="Tap any seal for requirements & progress"
-        info="Collect seals by completing Summer Slam challenges. Click any seal to view requirements and progress."
+        title="Stamp Collection"
+        description="Tap any stamp for requirements & progress"
+        info="Collect stamps by completing Summer Slam challenges. Click any stamp to view requirements and progress."
       />
 
       <div className={cn(ssCard, ssCardPad)}>

@@ -33,7 +33,7 @@ export function PassportRewardsPanel({
 
       <dl className="mb-2 grid grid-cols-3 gap-1.5">
         <div className={ssStatCell}>
-          <dt className={ssLabel}>Stamps</dt>
+          <dt className={ssLabel}>Quests</dt>
           <dd className="text-sm font-bold tabular-nums text-orange-950">{approvedStamps}</dd>
         </div>
         <div className={ssStatCell}>

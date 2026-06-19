@@ -118,8 +118,8 @@ function SealDetailBody({
 
   const progressText = isEarned
     ? earnedDate
-      ? `Seal earned on ${earnedDate}`
-      : "Seal earned"
+      ? `Stamp earned on ${earnedDate}`
+      : "Stamp earned"
     : `${seal.approved} of ${seal.total} requirements completed`;
 
   return (
@@ -130,7 +130,9 @@ function SealDetailBody({
           <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-700">
             {destination.name}
           </p>
-          <h2 className="text-xl font-semibold tracking-tight text-stone-900">{meta.title}</h2>
+          <h2 className="font-display text-xl font-semibold tracking-[0.02em] text-stone-900">
+            {meta.title}
+          </h2>
           <PassportStatusBadge status={badgeStatus} size="md" withTooltip={false} />
           <p className="text-sm text-stone-600">{meta.tagline}</p>
         </div>
@@ -218,17 +220,17 @@ function SealDetailBody({
 
       <section className="space-y-2">
         <h3 className="text-xs font-bold uppercase tracking-wide text-stone-500">
-          Submission history
+          Submission History
         </h3>
         {submissions.length === 0 ? (
           <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-stone-200 bg-stone-50/80 px-4 py-6 text-center">
             <Inbox className="h-5 w-5 text-stone-400" aria-hidden />
             <p className="text-sm font-medium text-stone-700">
-              {notStarted ? "Seal not started" : "No submissions yet"}
+              {notStarted ? "Stamp not started" : "No submissions yet"}
             </p>
             <p className="max-w-xs text-xs text-stone-500">
               {notStarted
-                ? "This seal hasn't been started yet. Complete a challenge above and submit proof to begin earning it."
+                ? "This stamp hasn't been started yet. Complete a challenge above and submit proof to begin earning it."
                 : "Submit evidence for a challenge above and your review status will appear here."}
             </p>
           </div>
@@ -279,9 +281,8 @@ function SealDetailBody({
       <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
         <Stamp className="h-4 w-4 shrink-0 text-stone-500" aria-hidden />
         <span>
-          Reward: <span className="font-bold text-stone-900">{meta.label} seal</span> +{" "}
-          {seal.stampReward} passport stamp{seal.stampReward === 1 ? "" : "s"} toward prize wheel
-          entries.
+          Reward: the <span className="font-bold text-stone-900">{meta.label} stamp</span>. Every
+          quest you complete also earns a Little Wheel ticket (every 5 quests = a Big Wheel ticket).
         </span>
       </div>
 

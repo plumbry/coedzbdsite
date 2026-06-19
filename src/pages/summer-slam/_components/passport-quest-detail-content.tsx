@@ -357,7 +357,7 @@ export function PassportQuestDetailContent({
 
             </p>
 
-            <p className="text-xs font-medium opacity-90">Typical review time: 24–48 hours.</p>
+            <p className="text-xs font-medium opacity-90">Typical review time: 48–72 hours.</p>
 
           </div>
 

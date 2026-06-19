@@ -66,19 +66,19 @@ export const SEASON_REWARDS = [
   {
     id: "passport",
     title: "Full Passport",
-    description: "Collect all five official seals to complete your summer passport.",
+    description: "Collect all five official stamps to complete your summer passport.",
     icon: "passport" as const,
   },
   {
     id: "little-wheel",
     title: "Little Prize Wheel",
-    description: "Every approved stamp earns entries toward the Little Wheel draw.",
+    description: "Every quest you complete earns a Little Wheel ticket.",
     icon: "ticket" as const,
   },
   {
     id: "big-wheel",
     title: "Big Prize Wheel",
-    description: "Stack stamps for Big Wheel entries — bigger prizes, one win per player.",
+    description: "Every 5 quests completed earns a Big Wheel ticket — bigger prizes, one win per player.",
     icon: "trophy" as const,
   },
   {

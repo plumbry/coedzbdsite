@@ -60,7 +60,7 @@ Check your link or images and try again.
 If the problem continues, contact support and include a screenshot.`;
 
 export const EVIDENCE_SUBMITTED_SUCCESS_MESSAGE =
-  "Evidence submitted successfully. Staff will review it — typical review time is 24–48 hours.";
+  "Evidence submitted successfully. Staff will review it — typical review time is 48–72 hours.";
 
 /** @deprecated Use UPLOAD_FAILED_MESSAGE */
 export const VIDEO_UPLOAD_ERROR = UPLOAD_FAILED_MESSAGE;

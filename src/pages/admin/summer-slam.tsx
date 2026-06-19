@@ -323,11 +323,11 @@ export default function SummerSlamAdminPage() {
               </div>
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="space-y-1.5">
-                  <Label>Little Wheel Every X Stamps</Label>
+                  <Label>Little Wheel Ticket Every X Points</Label>
                   <Input type="number" min={1} value={littleWheelEvery} onChange={(event) => setLittleWheelEvery(Number(event.target.value))} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Big Wheel Every X Stamps</Label>
+                  <Label>Big Wheel Ticket Every X Points</Label>
                   <Input type="number" min={1} value={bigWheelEvery} onChange={(event) => setBigWheelEvery(Number(event.target.value))} />
                 </div>
                 <div className="space-y-1.5">
@@ -360,7 +360,7 @@ export default function SummerSlamAdminPage() {
                 <li>Test one linked player Passport at /summer-slam/passport.</li>
                 <li>Test one manual submission, then approve/reject/request more evidence.</li>
                 <li>Run recalculation after imports, quest changes, or event tag changes.</li>
-                <li>Export Little Wheel and Big Wheel entries from Recalculate & Exports.</li>
+                <li>Export Little Wheel and Big Wheel tickets from Recalculate & Exports.</li>
               </ol>
             </CardContent>
           </Card>
@@ -387,7 +387,7 @@ export default function SummerSlamAdminPage() {
           </Card>
           <Card>
             <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Approved Stamps</p>
+              <p className="text-sm text-muted-foreground">Approved Points</p>
               <p className="text-2xl font-bold">{dashboard?.counts.approvedStamps ?? 0}</p>
             </CardContent>
           </Card>
@@ -463,7 +463,7 @@ export default function SummerSlamAdminPage() {
                     <Input type="number" value={sortOrder} onChange={(event) => setSortOrder(Number(event.target.value))} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Stamps</Label>
+                    <Label>Wheel Points</Label>
                     <Input type="number" min={1} value={stampReward} onChange={(event) => setStampReward(Number(event.target.value))} />
                   </div>
                   <div className="space-y-1.5">
@@ -656,9 +656,9 @@ export default function SummerSlamAdminPage() {
                       <TableHead>Player</TableHead>
                       <TableHead>Discord User</TableHead>
                       <TableHead>Created</TableHead>
-                      <TableHead>Approved Stamps</TableHead>
-                      <TableHead>Little Wheel</TableHead>
-                      <TableHead>Big Wheel</TableHead>
+                      <TableHead>Approved Points</TableHead>
+                      <TableHead>Little Tickets</TableHead>
+                      <TableHead>Big Tickets</TableHead>
                       <TableHead>Completed Quests</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -726,16 +726,16 @@ export default function SummerSlamAdminPage() {
                 })))}>
                   <Download className="mr-2 h-4 w-4" /> Manual Submissions
                 </Button>
-                <Button variant="outline" onClick={() => downloadCsv("summer-slam-approved-stamps.csv", (exportData?.approvedStamps ?? []).map((row) => ({
+                <Button variant="outline" onClick={() => downloadCsv("summer-slam-approved-points.csv", (exportData?.approvedStamps ?? []).map((row) => ({
                   progressId: row._id,
                   questId: row.questId,
                   playerId: row.playerId,
-                  stamps: row.stampReward,
+                  points: row.stampReward,
                   approvedAt: row.approvedAt ? new Date(row.approvedAt).toISOString() : "",
                   source: row.awardSource ?? "",
                   log: row.awardLog ?? "",
                 })))}>
-                  <Download className="mr-2 h-4 w-4" /> Approved Stamps
+                  <Download className="mr-2 h-4 w-4" /> Approved Points
                 </Button>
               </CardContent>
             </Card>

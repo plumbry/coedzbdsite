@@ -41,7 +41,7 @@ export const SEAL_BADGE_CONFIG: Record<SealBadgeStatus, BadgeConfig> = {
   },
   in_progress: {
     label: "In Progress",
-    tooltip: "Keep completing challenges in this category to earn the seal.",
+    tooltip: "Keep completing challenges in this category to earn the stamp.",
     icon: Loader2,
     className: "bg-sky-50 text-sky-800 border-sky-200",
     dot: "bg-sky-500",

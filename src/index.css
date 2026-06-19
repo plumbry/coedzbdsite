@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&family=Geist+Mono:wght@100..900&family=Geist:wght@100..900&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Noto+Serif:ital,wght@0,100..900;1,100..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&family=Geist+Mono:wght@100..900&family=Geist:wght@100..900&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Noto+Serif:ital,wght@0,100..900;1,100..900&family=Outfit:wght@300..700&family=Sora:wght@400..700&display=swap");
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -7,7 +7,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: Open Sans, sans-serif;
+  --font-sans: Outfit, ui-sans-serif, system-ui, sans-serif;
+  --font-display: Sora, ui-sans-serif, system-ui, sans-serif;
   --font-mono: Menlo, monospace;
   --font-serif: Georgia, serif;
 
@@ -106,7 +107,8 @@
   --sidebar-border: oklch(0.93 0.01 238.52);
   --sidebar-ring: oklch(0.68 0.16 243.35);
   --destructive-foreground: oklch(1.00 0 0);
-  --font-sans: Open Sans, sans-serif;
+  --font-sans: Outfit, ui-sans-serif, system-ui, sans-serif;
+  --font-display: Sora, ui-sans-serif, system-ui, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
   --shadow-color: rgba(29,161,242,0.15);
@@ -162,7 +164,8 @@
   --sidebar-ring: oklch(0.68 0.16 243.35);
   --destructive-foreground: oklch(1.00 0 0);
   --radius: 0.75rem;
-  --font-sans: Open Sans, sans-serif;
+  --font-sans: Outfit, ui-sans-serif, system-ui, sans-serif;
+  --font-display: Sora, ui-sans-serif, system-ui, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
   --shadow-color: rgba(29,161,242,0.15);

@@ -45,7 +45,7 @@ export const SEAL_META: Record<QuestCategory, SealMeta> = {
   traveller: {
     id: "traveller",
     label: "Traveller",
-    title: "Traveller Seal",
+    title: "Traveller Stamp",
     tagline: "Explore every mode and chart your summer journey.",
     image: "/summer-slam/seals/traveller.png",
     accent: "#0ea5e9",
@@ -56,7 +56,7 @@ export const SEAL_META: Record<QuestCategory, SealMeta> = {
   competitor: {
     id: "competitor",
     label: "Competitor",
-    title: "Competitor Seal",
+    title: "Competitor Stamp",
     tagline: "Climb the leaderboard and claim victory royales.",
     image: "/summer-slam/seals/competitor.png",
     accent: "#f59e0b",
@@ -67,7 +67,7 @@ export const SEAL_META: Record<QuestCategory, SealMeta> = {
   summer_spirit: {
     id: "summer_spirit",
     label: "Summer Spirit",
-    title: "Summer Spirit Seal",
+    title: "Summer Spirit Stamp",
     tagline: "Soak up the season and share the good vibes.",
     image: "/summer-slam/seals/summer_spirit.png",
     accent: "#f97316",
@@ -78,7 +78,7 @@ export const SEAL_META: Record<QuestCategory, SealMeta> = {
   team_player: {
     id: "team_player",
     label: "Team Player",
-    title: "Team Player Seal",
+    title: "Team Player Stamp",
     tagline: "Squad up and win it together.",
     image: "/summer-slam/seals/team_player.png",
     accent: "#22c55e",
@@ -89,7 +89,7 @@ export const SEAL_META: Record<QuestCategory, SealMeta> = {
   community: {
     id: "community",
     label: "Community",
-    title: "Community Seal",
+    title: "Community Stamp",
     tagline: "Lift up the crew and connect the community.",
     image: "/summer-slam/seals/community.png",
     accent: "#d946ef",
