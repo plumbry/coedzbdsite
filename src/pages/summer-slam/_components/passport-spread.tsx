@@ -129,6 +129,7 @@ export function PassportSpread({
         title="Stamp Collection"
         description="Tap any stamp for requirements & progress"
         info="Collect stamps by completing Summer Slam challenges. Click any stamp to view requirements and progress."
+        className="px-1 sm:px-2"
       />
 
       <div className={cn(ssCard, ssCardPad)}>

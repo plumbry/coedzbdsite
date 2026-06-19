@@ -9,7 +9,9 @@ export function PassportHero({
   daysRemaining,
   earnedSeals,
   totalSeals,
-  percent,
+  approvedQuests,
+  totalQuests,
+  questPercent,
   currentDestination,
   className,
 }: {
@@ -18,7 +20,9 @@ export function PassportHero({
   daysRemaining: number | null;
   earnedSeals: number;
   totalSeals: number;
-  percent: number;
+  approvedQuests: number;
+  totalQuests: number;
+  questPercent: number;
   currentDestination: string | null;
   className?: string;
 }) {
@@ -40,23 +44,30 @@ export function PassportHero({
         <dl className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-stretch sm:justify-center sm:gap-2">
           <div className={ssStatCell}>
             <dt className={cn(ssLabel, "flex items-center gap-0.5")}>
-              Progress
+              Quest Progress
               <InfoTooltip
-                label="About passport progress"
-                text="Shows how close you are to completing your Summer Slam passport."
+                label="About quest progress"
+                text="Shows how many Summer Slam quests you've completed so far."
                 className="h-4 w-4"
               />
             </dt>
             <dd className="text-sm font-bold tabular-nums text-orange-950">
-              {percent}%
+              {questPercent}%
               <span className="ml-1 text-xs font-semibold text-orange-500">
-                ({earnedSeals}/{totalSeals})
+                ({approvedQuests}/{totalQuests})
               </span>
             </dd>
           </div>
 
           <div className={ssStatCell}>
-            <dt className={ssLabel}>Stamps</dt>
+            <dt className={cn(ssLabel, "flex items-center gap-0.5")}>
+              Stamp Progress
+              <InfoTooltip
+                label="About stamp progress"
+                text="Each stamp is earned by completing all the quests in its category."
+                className="h-4 w-4"
+              />
+            </dt>
             <dd className="text-sm font-bold tabular-nums text-teal-800">
               {earnedSeals}
               <span className="text-xs font-medium text-teal-600/70"> / {totalSeals}</span>

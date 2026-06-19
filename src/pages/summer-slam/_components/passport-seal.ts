@@ -192,6 +192,9 @@ export type SeasonSummary = {
   totalSeals: number;
   earnedSeals: number;
   percent: number;
+  totalQuests: number;
+  approvedQuests: number;
+  questPercent: number;
   nextSeal: SealProgress | null;
   daysRemaining: number | null;
   isComplete: boolean;
@@ -204,6 +207,8 @@ export function summariseSeason(
 ): SeasonSummary {
   const totalSeals = seals.length;
   const earnedSeals = seals.filter((seal) => seal.state === "earned").length;
+  const totalQuests = seals.reduce((sum, seal) => sum + seal.total, 0);
+  const approvedQuests = seals.reduce((sum, seal) => sum + seal.approved, 0);
   const nextSeal = seals.find((seal) => seal.state !== "earned") ?? null;
   const daysRemaining =
     campaign?.endsAt != null
@@ -214,6 +219,9 @@ export function summariseSeason(
     totalSeals,
     earnedSeals,
     percent: totalSeals > 0 ? Math.round((earnedSeals / totalSeals) * 100) : 0,
+    totalQuests,
+    approvedQuests,
+    questPercent: totalQuests > 0 ? Math.round((approvedQuests / totalQuests) * 100) : 0,
     nextSeal,
     daysRemaining,
     isComplete: totalSeals > 0 && earnedSeals === totalSeals,

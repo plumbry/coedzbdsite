@@ -95,6 +95,18 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
     },
     progress: null,
   },
+  {
+    quest: {
+      _id: q("mock_competitor_3"),
+      title: "Elimination Spree",
+      description: "Get 15 eliminations across Summer Slam events.",
+      category: "competitor",
+      completionMethod: "manual",
+      evidenceInstructions: "Submit a screenshot or clip link showing your eliminations.",
+      stampReward: 1,
+    },
+    progress: null,
+  },
   // Summer Spirit — to do
   {
     quest: {
@@ -121,6 +133,18 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
     },
     progress: null,
   },
+  {
+    quest: {
+      _id: q("mock_spirit_3"),
+      title: "Summer Anthem",
+      description: "Share your hype Summer Slam moment with the community.",
+      category: "summer_spirit",
+      completionMethod: "manual",
+      evidenceInstructions: "Paste a link to your post on X, Instagram, TikTok, or Discord.",
+      stampReward: 1,
+    },
+    progress: null,
+  },
   // Team Player — to do
   {
     quest: {
@@ -141,6 +165,17 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       category: "team_player",
       completionMethod: "manual",
       evidenceInstructions: "Submit a screenshot or clip link showing your eliminations.",
+      stampReward: 1,
+    },
+    progress: null,
+  },
+  {
+    quest: {
+      _id: q("mock_team_3"),
+      title: "Duo Dynamo",
+      description: "Win a Duos Summer Slam event with your partner.",
+      category: "team_player",
+      completionMethod: "auto",
       stampReward: 1,
     },
     progress: null,

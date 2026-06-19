@@ -111,7 +111,9 @@ export function PassportDashboard({
         daysRemaining={season.daysRemaining}
         earnedSeals={season.earnedSeals}
         totalSeals={season.totalSeals}
-        percent={season.percent}
+        approvedQuests={season.approvedQuests}
+        totalQuests={season.totalQuests}
+        questPercent={season.questPercent}
         currentDestination={currentDestination}
       />
 
