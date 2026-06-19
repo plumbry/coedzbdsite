@@ -181,6 +181,14 @@ export const submitApplication = mutation({
     discordUsername: v.string(),
     epicUsername: v.string(),
     existingPlayerId: v.optional(v.id("players")),
+    source: v.optional(
+      v.union(
+        v.literal("TikTok"),
+        v.literal("Twitter"),
+        v.literal("Teammate"),
+        v.literal("Other")
+      )
+    ),
   },
   handler: async (ctx, args): Promise<Id<"applications">> => {
     await requireAdmin(ctx);
@@ -311,6 +319,7 @@ export const submitApplication = mutation({
       discordId,
       fortniteProfileLink,
       status: "pending",
+      source: args.source,
       isPreviouslyApplied,
       isPreviouslyAccepted,
       isFormerMember,

@@ -148,6 +148,11 @@ const TIER_PRESETS: Record<"S" | "A" | "B" | "C", ScoreState> = {
   },
 };
 
+type ApplicationSource = "TikTok" | "Twitter" | "Teammate" | "Other";
+type SourceSelection = "None" | ApplicationSource;
+
+const SOURCE_OPTIONS: SourceSelection[] = ["None", "TikTok", "Twitter", "Teammate", "Other"];
+
 type NewApplicationDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -197,6 +202,7 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
   const [step, setStep] = useState<"info" | "evaluation">("info");
   const [discordUsername, setDiscordUsername] = useState("");
   const [epicUsername, setEpicUsername] = useState("");
+  const [source, setSource] = useState<SourceSelection>("None");
   const [beenMemberBefore, setBeenMemberBefore] = useState(false);
   const [memberSearch, setMemberSearch] = useState("");
   const [linkedPlayerId, setLinkedPlayerId] = useState<Id<"players"> | null>(null);
@@ -251,6 +257,7 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
     setStep("info");
     setDiscordUsername("");
     setEpicUsername("");
+    setSource("None");
     setBeenMemberBefore(false);
     setMemberSearch("");
     setLinkedPlayerId(null);
@@ -288,6 +295,7 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
         discordUsername: discordUsername.trim(),
         epicUsername: epicUsername.trim(),
         existingPlayerId: linkedPlayerId ?? undefined,
+        source: source === "None" ? undefined : source,
       });
 
       // Step 2: Create a player record for evaluation
@@ -405,6 +413,22 @@ export default function NewApplicationDialog({ open, onOpenChange }: NewApplicat
                     </a>
                   </p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="new-source">Source</Label>
+                <Select value={source} onValueChange={(value) => setSource(value as SourceSelection)}>
+                  <SelectTrigger id="new-source">
+                    <SelectValue placeholder="Select source..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SOURCE_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex items-center space-x-2 pt-2 border-t">

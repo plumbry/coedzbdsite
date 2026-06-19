@@ -226,6 +226,15 @@ export default defineSchema({
       v.literal("accepted"),
       v.literal("rejected")
     ),
+    // How the applicant found the community (optional)
+    source: v.optional(
+      v.union(
+        v.literal("TikTok"),
+        v.literal("Twitter"),
+        v.literal("Teammate"),
+        v.literal("Other")
+      )
+    ),
     notes: v.optional(v.string()),
     // Flags for repeat applicants
     isPreviouslyApplied: v.boolean(),
