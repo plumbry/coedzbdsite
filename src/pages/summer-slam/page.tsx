@@ -75,9 +75,16 @@ export default function SummerSlamLandingPage() {
                     Summer Slam
                   </span>
                 </div>
-                <h1 className="mt-1.5 text-lg font-bold text-orange-950 sm:text-xl">
+                <h1 className="sr-only">
                   {campaign?.title ?? "Summer Slam Passport"}
                 </h1>
+                <img
+                  src="/summer-slam/passport-header.png"
+                  alt={campaign?.title ?? "Summer Slam Passport"}
+                  width={747}
+                  height={329}
+                  className="mt-2 h-20 w-auto sm:h-24"
+                />
                 <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-orange-900/60 sm:text-sm">
                   {campaign?.description ??
                     "Collect seals across five destinations and earn prize wheel entries."}

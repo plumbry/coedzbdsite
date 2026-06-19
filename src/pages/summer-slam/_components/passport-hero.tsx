@@ -1,5 +1,6 @@
 import { Calendar, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
+import { InfoTooltip } from "./passport-info-tooltip.tsx";
 import {
   ssAccentBarClass,
   ssCard,
@@ -32,13 +33,27 @@ export function PassportHero({
       <div className={ssAccentBarClass} aria-hidden />
       <div className={cn(ssCardPad, "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between")}>
         <div className="min-w-0">
-          <h1 className="truncate text-base font-bold text-orange-950 sm:text-lg">{title}</h1>
-          <p className="truncate text-xs text-orange-800/55">{playerName}</p>
+          <h1 className="sr-only">{title}</h1>
+          <img
+            src="/summer-slam/passport-header.png"
+            alt={title}
+            width={747}
+            height={329}
+            className="h-14 w-auto sm:h-16"
+          />
+          <p className="mt-1 truncate text-xs text-orange-800/55">{playerName}</p>
         </div>
 
         <dl className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-stretch sm:gap-2">
           <div className={ssStatCell}>
-            <dt className={ssLabel}>Progress</dt>
+            <dt className={cn(ssLabel, "flex items-center gap-0.5")}>
+              Progress
+              <InfoTooltip
+                label="About passport progress"
+                text="Shows how close you are to completing your Summer Slam passport."
+                className="h-4 w-4"
+              />
+            </dt>
             <dd className="text-sm font-bold tabular-nums text-orange-950">
               {percent}%
               <span className="ml-1 text-xs font-semibold text-orange-500">

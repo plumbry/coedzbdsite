@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/drawer.tsx";
 import { useIsMobile } from "@/hooks/use-mobile.ts";
 import { cn } from "@/lib/utils.ts";
+import { getDestination } from "./passport-destinations.ts";
 import { PassportSealImage } from "./passport-seal-image.tsx";
 import { PassportStatusBadge } from "./passport-status-badge.tsx";
 import {
@@ -106,6 +107,7 @@ function SealDetailBody({
   onSubmitEvidence: (entry: QuestEntry) => void;
 }) {
   const { meta } = seal;
+  const destination = getDestination(seal.id);
   const earnedDate = formatSealDate(seal.earnedAt);
   const badgeStatus = sealBadgeStatus(seal);
   const actionableEntry = getActionableEntry(seal);
@@ -123,8 +125,11 @@ function SealDetailBody({
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-4">
-        <PassportSealImage meta={meta} state={seal.state} size={88} />
+        <PassportSealImage meta={meta} state={seal.state} seal={seal} size={88} showProgressRing />
         <div className="min-w-0 space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-700">
+            {destination.name}
+          </p>
           <h2 className="text-xl font-semibold tracking-tight text-stone-900">{meta.title}</h2>
           <PassportStatusBadge status={badgeStatus} size="md" withTooltip={false} />
           <p className="text-sm text-stone-600">{meta.tagline}</p>

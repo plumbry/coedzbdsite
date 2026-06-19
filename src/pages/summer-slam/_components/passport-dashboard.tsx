@@ -4,10 +4,12 @@ import { PassportHero } from "./passport-hero.tsx";
 import { PassportJourneyRoute } from "./passport-journey-route.tsx";
 import { PassportSpread } from "./passport-spread.tsx";
 import { PassportRewardsPanel } from "./passport-rewards-panel.tsx";
+import { PassportNextDestination } from "./passport-next-destination.tsx";
 import { PassportChallengeGrid } from "./passport-challenge-grid.tsx";
 import { PassportEvidenceReviewPanel } from "./passport-evidence-review-panel.tsx";
 import { PassportSealDetailDialog } from "./passport-seal-detail-dialog.tsx";
 import { PassportQuestDetailDialog } from "./passport-quest-detail-dialog.tsx";
+import { PassportOnboarding } from "./passport-onboarding.tsx";
 import { ssGridGap, ssStack } from "./passport-dashboard-theme.ts";
 import {
   buildSeals,
@@ -101,6 +103,8 @@ export function PassportDashboard({
 
   return (
     <div className={cn(ssStack, "pb-8")}>
+      <PassportOnboarding />
+
       <PassportHero
         title={campaignTitle}
         playerName={playerName}
@@ -137,6 +141,14 @@ export function PassportDashboard({
           approvedStamps={wheelTotals.approvedStamps}
         />
       </div>
+
+      <PassportNextDestination
+        seal={nextSeal}
+        actionableEntry={actionableEntry}
+        onOpenTask={handleOpenTask}
+        onSubmitEvidence={handleSubmitFromAnywhere}
+        onViewSeal={setSelectedSeal}
+      />
 
       <PassportChallengeGrid
         seals={seals}
