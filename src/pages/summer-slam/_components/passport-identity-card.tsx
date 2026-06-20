@@ -114,18 +114,21 @@ function CollectionSealIcon({ seal }: { seal: SealProgress }) {
     <img
       src={meta.image}
       alt=""
-      width={72}
-      height={72}
+      width={56}
+      height={56}
       title={meta.label}
       aria-label={`${meta.label}${earned ? ", earned" : ", not yet collected"}`}
       className={cn(
-        "h-14 w-14 shrink-0 object-contain transition-transform duration-300 sm:h-16 sm:w-16 min-[900px]:h-[4.5rem] min-[900px]:w-[4.5rem]",
-        earned ? "scale-105 opacity-100 saturate-110 contrast-110" : "opacity-[0.72] contrast-105",
+        "h-12 w-12 shrink-0 object-contain transition-all duration-200 sm:h-14 sm:w-14",
+        "hover:scale-105 hover:-translate-y-0.5",
+        earned
+          ? "opacity-100 saturate-110 contrast-110"
+          : "opacity-[0.38] saturate-[0.55]",
       )}
       style={{
         filter: earned
-          ? `drop-shadow(0 4px 14px ${meta.accent}66)`
-          : `drop-shadow(0 2px 8px ${meta.accent}44)`,
+          ? `drop-shadow(0 4px 12px ${meta.accent}55)`
+          : `drop-shadow(0 1px 4px ${meta.accent}28)`,
       }}
     />
   );
@@ -134,19 +137,23 @@ function CollectionSealIcon({ seal }: { seal: SealProgress }) {
 function StampCollectionPanel({ seals }: { seals: SealProgress[] }) {
   const earnedCount = seals.filter((seal) => seal.state === "earned").length;
   return (
-    <div className="space-y-3 sm:space-y-3.5">
-      <p className={cn(ssLabel, "text-[10px] font-semibold tracking-[0.1em] text-orange-950/75")}>
-        Stamp Collection
-      </p>
+    <div className="space-y-1.5 sm:ml-[calc(88px+0.75rem)]">
       <div
-        className="flex w-full items-center justify-between gap-3 py-0.5 sm:gap-4 min-[900px]:gap-5"
-        aria-label="Summer Slam stamp collection"
+        className={cn(
+          "inline-flex max-w-full rounded-lg bg-[#FFF6EC]/85 px-3 py-2",
+          "shadow-[0_2px_10px_rgba(120,90,60,0.07),inset_0_1px_0_rgba(255,255,255,0.65)]",
+        )}
       >
-        {seals.map((seal) => (
-          <CollectionSealIcon key={seal.id} seal={seal} />
-        ))}
+        <div
+          className="flex items-center gap-3 sm:gap-4"
+          aria-label="Summer Slam stamp collection"
+        >
+          {seals.map((seal) => (
+            <CollectionSealIcon key={seal.id} seal={seal} />
+          ))}
+        </div>
       </div>
-      <p className="text-sm font-bold tabular-nums tracking-wide text-teal-900">
+      <p className="text-xs font-bold tabular-nums tracking-wide text-teal-900">
         {earnedCount} / {seals.length} Collected
       </p>
     </div>
@@ -194,7 +201,7 @@ export function PassportIdentityCard({
   return (
     <section
       aria-label="Summer Slam passport"
-      className={cn("relative mx-auto w-full max-w-3xl px-1", className)}
+      className={cn("relative mx-auto w-full max-w-2xl px-1", className)}
     >
       <div
         className={cn(
@@ -242,9 +249,9 @@ export function PassportIdentityCard({
           </div>
         </div>
 
-        <div className="relative grid gap-3 p-3.5 sm:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] sm:gap-0 sm:p-4 sm:py-5">
-          <div className="flex min-w-0 flex-col gap-2.5 sm:pr-4">
-            <div className="flex items-center gap-3">
+        <div className="relative grid gap-3 p-3 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] sm:gap-4 sm:p-3.5">
+          <div className="flex min-w-0 flex-col gap-2 sm:pr-1">
+            <div className="flex items-start gap-3">
               {avatar ? (
                 <button
                   type="button"
@@ -278,7 +285,7 @@ export function PassportIdentityCard({
                 </button>
               )}
 
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1 pt-0.5">
                 <p className="font-display text-lg font-semibold uppercase leading-tight tracking-[0.04em] text-orange-950 sm:text-xl">
                   {playerName}
                 </p>
@@ -295,15 +302,13 @@ export function PassportIdentityCard({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border border-orange-200/45 bg-white/35 px-2.5 py-2">
+            <StampCollectionPanel seals={seals} />
+
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg border border-orange-200/45 bg-white/35 px-2.5 py-1.5">
               <MetaField label="Passport No.">
                 <p className="font-mono text-[11px] font-semibold tracking-[0.04em] text-orange-950/80">
                   {passportNo}
                 </p>
-              </MetaField>
-
-              <MetaField label="Current Destination">
-                <p className="text-[11px] font-semibold text-orange-950">{destinationLabel}</p>
               </MetaField>
 
               <MetaField label="Birthplace">
@@ -331,28 +336,11 @@ export function PassportIdentityCard({
                   </SelectContent>
                 </Select>
               </MetaField>
-
-              <MetaField label="Last Stamped">
-                {lastStamped ? (
-                  <div>
-                    <p className="text-[11px] font-semibold leading-tight text-orange-950">
-                      {lastStamped.title}
-                    </p>
-                    {lastStamped.date ? (
-                      <p className="text-[10px] tabular-nums text-orange-800/60">{lastStamped.date}</p>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-orange-800/50">Not yet stamped</p>
-                )}
-              </MetaField>
             </div>
           </div>
 
-          <div className="flex min-w-0 flex-col gap-4 border-t border-dashed border-orange-200/55 pt-4 sm:gap-5 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
-            <StampCollectionPanel seals={seals} />
-
-            <div className="space-y-1.5 border-t border-dashed border-orange-200/35 pt-3.5">
+          <div className="flex min-w-0 flex-col gap-2.5 border-t border-dashed border-orange-200/55 pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+            <div className="space-y-1">
               <div className="flex items-baseline justify-between gap-2">
                 <p className={ssLabel}>Journey Completion</p>
                 <p className="text-xs font-bold tabular-nums text-orange-950/85">{completionPercent}%</p>
@@ -379,7 +367,26 @@ export function PassportIdentityCard({
               </div>
             ) : null}
 
-            <div className="mt-auto space-y-0.5 border-t border-dashed border-orange-200/40 pt-2.5">
+            <MetaField label="Current Destination">
+              <p className="text-[11px] font-semibold text-orange-950">{destinationLabel}</p>
+            </MetaField>
+
+            <MetaField label="Last Stamped">
+              {lastStamped ? (
+                <div>
+                  <p className="text-[11px] font-semibold leading-tight text-orange-950">
+                    {lastStamped.title}
+                  </p>
+                  {lastStamped.date ? (
+                    <p className="text-[10px] tabular-nums text-orange-800/60">{lastStamped.date}</p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-[11px] text-orange-800/50">Not yet stamped</p>
+              )}
+            </MetaField>
+
+            <div className="mt-auto space-y-0.5 border-t border-dashed border-orange-200/40 pt-2">
               <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-orange-800/35">
                 Issuing Authority
               </p>
