@@ -42,11 +42,18 @@ for (const c of cornerIdx) {
 cornerLum /= cornerIdx.length;
 const lightBg = cornerLum > 128;
 
+let cornerMin = 255;
+for (const c of cornerIdx) {
+  cornerMin = Math.min(cornerMin, data[c], data[c + 1], data[c + 2]);
+}
+
 // A pixel counts as background when it matches the flat colour: very bright &
 // neutral (low saturation) for a white field, or very dark for a black field.
-const WHITE_MIN = 232; // min channel must be this bright
-const WHITE_SAT = 26; // max-min saturation must stay below this (rejects cream)
-const BLACK_MAX = 42; // max channel below this is treated as black
+const WHITE_MIN = Math.max(228, cornerMin - 4);
+const WHITE_SAT = 18;
+const BLACK_MAX = 42;
+const INK_MAX = 210;
+const COLOR_SAT_MIN = 24;
 const isBg = (i) => {
   const r = data[i],
     g = data[i + 1],
@@ -88,24 +95,34 @@ while (stack.length) {
   pushIf(x, y - 1);
 }
 
-// --- build a soft alpha: 3x3 box blur of the binary mask feathers the edge ---
+// --- build alpha from the flood mask (hard edge keeps type crisp) ---
 for (let y = 0; y < height; y++) {
   for (let x = 0; x < width; x++) {
     const p = y * width + x;
-    let solid = 0;
-    let n = 0;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-        n++;
-        if (!bg[ny * width + nx]) solid++;
-      }
-    }
-    const a = Math.round((255 * solid) / n);
     const i = p * channels;
-    data[i + 3] = Math.min(data[i + 3], a);
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const min = Math.min(r, g, b);
+    const max = Math.max(r, g, b);
+    const isInk = max <= INK_MAX && min < 185;
+    const isColor = max - min >= COLOR_SAT_MIN && min < 215;
+    data[i + 3] = isInk || isColor || !bg[p] ? 255 : 0;
+  }
+}
+
+// Strip noisy near-white fringe pixels hugging the outer bounding box.
+const FRINGE = 28;
+for (let y = 0; y < height; y++) {
+  for (let x = 0; x < width; x++) {
+    const i = (y * width + x) * channels;
+    if (data[i + 3] === 0) continue;
+    const min = Math.min(data[i], data[i + 1], data[i + 2]);
+    const max = Math.max(data[i], data[i + 1], data[i + 2]);
+    const nearEdge =
+      x < FRINGE || y < FRINGE || x >= width - FRINGE || y >= height - FRINGE;
+    const leftHaze = x < 56 && min >= 210;
+    if ((nearEdge && min >= 228 && max - min <= 24) || leftHaze) data[i + 3] = 0;
   }
 }
 
@@ -114,12 +131,12 @@ if (srcArg) fs.copyFileSync(srcFile, path.join(stashDir, "passport-header.png"))
 
 const tmp = path.join(outDir, "passport-header.png.tmp");
 await sharp(data, { raw: { width, height, channels } })
-  .trim({ threshold: 1 }) // crop away the fully transparent border
-  .png()
+  .trim({ threshold: 1 })
+  .png({ compressionLevel: 6 })
   .toFile(tmp);
 fs.renameSync(tmp, path.join(outDir, "passport-header.png"));
 
 console.log(
-  `keyed passport header (${width}x${height}, ${lightBg ? "light" : "dark"} bg -> trimmed)`,
+  `keyed passport header (${width}x${height}, ${lightBg ? "light" : "dark"} bg, white>=${WHITE_MIN} -> trimmed)`,
 );
 console.log("DONE");
