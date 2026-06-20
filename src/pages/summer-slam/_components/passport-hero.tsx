@@ -35,7 +35,7 @@ export function PassportHero({
             alt={title}
             width={PASSPORT_HEADER.width}
             height={PASSPORT_HEADER.height}
-            className="w-full max-w-[min(100%,624px)] h-auto"
+            className="w-full max-w-[min(100%,568px)] h-auto"
           />
         </div>
 

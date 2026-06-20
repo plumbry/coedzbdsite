@@ -2,7 +2,7 @@
  * Shared Summer Slam artwork — used by landing, live passport, and demo passport.
  * Bump ASSET_VERSION whenever files in /public/summer-slam change.
  */
-export const ASSET_VERSION = "2026-06-20-stamps-v6";
+export const ASSET_VERSION = "2026-06-20-header-v7";
 
 export function summerSlamAsset(path: string): string {
   return `${path}?v=${ASSET_VERSION}`;
@@ -10,8 +10,8 @@ export function summerSlamAsset(path: string): string {
 
 export const PASSPORT_HEADER = {
   src: summerSlamAsset("/summer-slam/passport-header.png"),
-  width: 624,
-  height: 256,
+  width: 568,
+  height: 237,
 } as const;
 
 export const STAMP_IMAGES = {
