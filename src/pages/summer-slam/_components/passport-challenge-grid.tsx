@@ -70,7 +70,7 @@ function ChallengeCard({
     seal.entries.some((entry) => entry.quest._id === actionableEntry.quest._id);
 
   return (
-    <article className={cn(ssCard, "overflow-hidden", isNext && "ring-1 ring-orange-400/40")}>
+    <article className={cn(ssCard, isNext && "ring-1 ring-orange-400/40")}>
       <div
         className="flex items-center gap-2 border-b border-orange-100 px-3 py-2"
         style={{ backgroundColor: `${dest.tint}cc` }}

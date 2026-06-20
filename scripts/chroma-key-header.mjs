@@ -95,48 +95,48 @@ while (stack.length) {
   pushIf(x, y - 1);
 }
 
-// --- build alpha from the flood mask (hard edge keeps type crisp) ---
+// --- build alpha from the flood mask only ---
 for (let y = 0; y < height; y++) {
   for (let x = 0; x < width; x++) {
     const p = y * width + x;
     const i = p * channels;
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    const min = Math.min(r, g, b);
-    const max = Math.max(r, g, b);
-    const isInk = max <= INK_MAX && min < 185;
-    const isColor = max - min >= COLOR_SAT_MIN && min < 215;
-    data[i + 3] = isInk || isColor || !bg[p] ? 255 : 0;
+    data[i + 3] = bg[p] ? 0 : 255;
   }
 }
 
-// Strip noisy near-white fringe pixels hugging the outer bounding box.
-const FRINGE = 28;
+// Crop to content with padding — never trim into the artwork.
+let minX = width;
+let minY = height;
+let maxX = 0;
+let maxY = 0;
 for (let y = 0; y < height; y++) {
   for (let x = 0; x < width; x++) {
     const i = (y * width + x) * channels;
-    if (data[i + 3] === 0) continue;
-    const min = Math.min(data[i], data[i + 1], data[i + 2]);
-    const max = Math.max(data[i], data[i + 1], data[i + 2]);
-    const nearEdge =
-      x < FRINGE || y < FRINGE || x >= width - FRINGE || y >= height - FRINGE;
-    const leftHaze = x < 56 && min >= 210;
-    if ((nearEdge && min >= 228 && max - min <= 24) || leftHaze) data[i + 3] = 0;
+    if (data[i + 3] < 16) continue;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
   }
 }
+
+const PAD = 20;
+const cropLeft = Math.max(0, minX - PAD);
+const cropTop = Math.max(0, minY - PAD);
+const cropWidth = Math.min(width - cropLeft, maxX - minX + PAD * 2);
+const cropHeight = Math.min(height - cropTop, maxY - minY + PAD * 2);
 
 if (!fs.existsSync(stashDir)) fs.mkdirSync(stashDir, { recursive: true });
 if (srcArg) fs.copyFileSync(srcFile, path.join(stashDir, "passport-header.png"));
 
 const tmp = path.join(outDir, "passport-header.png.tmp");
 await sharp(data, { raw: { width, height, channels } })
-  .trim({ threshold: 1 })
+  .extract({ left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight })
   .png({ compressionLevel: 6 })
   .toFile(tmp);
 fs.renameSync(tmp, path.join(outDir, "passport-header.png"));
 
 console.log(
-  `keyed passport header (${width}x${height}, ${lightBg ? "light" : "dark"} bg, white>=${WHITE_MIN} -> trimmed)`,
+  `keyed passport header (${width}x${height} -> ${cropWidth}x${cropHeight}, ${lightBg ? "light" : "dark"} bg, white>=${WHITE_MIN})`,
 );
 console.log("DONE");

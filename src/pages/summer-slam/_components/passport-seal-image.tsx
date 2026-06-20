@@ -85,7 +85,7 @@ export function PassportSealImage({
         loading="lazy"
         draggable={false}
         className={cn(
-          "relative h-full w-full select-none object-contain transition-all duration-300",
+          "relative h-full w-full select-none object-contain p-0.5 transition-all duration-300",
           locked && "opacity-50 saturate-[0.35] brightness-105",
           submitted && "opacity-95",
           inProgress && "drop-shadow-[0_4px_12px_rgba(249,115,22,0.15)]",
