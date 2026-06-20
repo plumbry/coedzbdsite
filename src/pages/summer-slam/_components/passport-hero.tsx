@@ -1,11 +1,11 @@
 import { Calendar, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { InfoTooltip } from "./passport-info-tooltip.tsx";
+import { PASSPORT_HEADER } from "./passport-assets.ts";
 import { ssLabel, ssStatCell } from "./passport-dashboard-theme.ts";
 
 export function PassportHero({
   title,
-  playerName,
   daysRemaining,
   earnedSeals,
   totalSeals,
@@ -16,7 +16,6 @@ export function PassportHero({
   className,
 }: {
   title: string;
-  playerName: string;
   daysRemaining: number | null;
   earnedSeals: number;
   totalSeals: number;
@@ -32,13 +31,12 @@ export function PassportHero({
         <div className="flex flex-col items-center text-center">
           <h1 className="sr-only">{title}</h1>
           <img
-            src="/summer-slam/passport-header.png"
+            src={PASSPORT_HEADER.src}
             alt={title}
-            width={747}
-            height={329}
+            width={PASSPORT_HEADER.width}
+            height={PASSPORT_HEADER.height}
             className="h-40 w-auto max-w-full sm:h-52 lg:h-64"
           />
-          <p className="mt-1 truncate text-xs text-orange-800/55">{playerName}</p>
         </div>
 
         <dl className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-stretch sm:justify-center sm:gap-2">

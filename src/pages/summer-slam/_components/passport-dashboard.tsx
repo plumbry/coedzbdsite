@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { getDestination } from "./passport-destinations.ts";
 import { PassportHero } from "./passport-hero.tsx";
+import { PassportIdentitySection } from "./passport-identity-section.tsx";
 import { PassportJourneyRoute } from "./passport-journey-route.tsx";
 import { PassportSpread } from "./passport-spread.tsx";
 import { PassportRewardsPanel } from "./passport-rewards-panel.tsx";
@@ -18,6 +19,7 @@ import {
   type SealProgress,
 } from "./passport-seal.ts";
 import { CATEGORY_PAGES, getQuestStatus, type QuestEntry } from "./passport-types.ts";
+import type { PassportAvatarId } from "./passport-avatars.ts";
 import { cn } from "@/lib/utils.ts";
 
 function computeWheelTotals(
@@ -39,12 +41,16 @@ function computeWheelTotals(
 export function PassportDashboard({
   campaignTitle,
   playerName,
+  avatarId,
+  onSaveAvatar,
   quests,
   campaign,
   onRequestEvidence,
 }: {
   campaignTitle: string;
   playerName: string;
+  avatarId?: PassportAvatarId | null;
+  onSaveAvatar?: (avatarId: PassportAvatarId) => Promise<void>;
   quests: QuestEntry[];
   campaign: {
     startsAt?: number;
@@ -107,7 +113,6 @@ export function PassportDashboard({
 
       <PassportHero
         title={campaignTitle}
-        playerName={playerName}
         daysRemaining={season.daysRemaining}
         earnedSeals={season.earnedSeals}
         totalSeals={season.totalSeals}
@@ -116,6 +121,17 @@ export function PassportDashboard({
         questPercent={season.questPercent}
         currentDestination={currentDestination}
       />
+
+      {onSaveAvatar ? (
+        <PassportIdentitySection
+          playerName={playerName}
+          avatarId={avatarId}
+          earnedSeals={season.earnedSeals}
+          totalSeals={season.totalSeals}
+          completionPercent={season.questPercent}
+          onSaveAvatar={onSaveAvatar}
+        />
+      ) : null}
 
       <PassportSpread
         seals={seals}

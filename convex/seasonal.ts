@@ -65,6 +65,18 @@ const evidenceTypeValidator = v.union(
   v.literal("notes"),
 );
 
+const passportAvatarIdValidator = v.union(
+  v.literal("sunset"),
+  v.literal("surfboard"),
+  v.literal("ice_cream"),
+  v.literal("tropical_drink"),
+  v.literal("beach_chair"),
+  v.literal("sand_bucket"),
+  v.literal("conch_shell"),
+  v.literal("starfish"),
+  v.literal("clownfish"),
+);
+
 const qualificationRuleValidator = v.union(
   v.object({
     type: v.literal("play_events"),
@@ -538,6 +550,22 @@ export const ensureMyPassport = mutation({
   },
 });
 
+export const setPassportAvatar = mutation({
+  args: {
+    slug: v.optional(v.string()),
+    avatarId: passportAvatarIdValidator,
+  },
+  handler: async (ctx, args) => {
+    const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
+    if (!campaign.isActive) {
+      throw new ConvexError({ message: "Campaign is not active", code: "CAMPAIGN_INACTIVE" });
+    }
+    const { passportId } = await requireCurrentPassport(ctx, campaign);
+    await ctx.db.patch(passportId, { avatarId: args.avatarId });
+    return { avatarId: args.avatarId };
+  },
+});
+
 export const getEventTags = query({
   args: { slug: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -710,6 +738,65 @@ export const saveQuest = mutation({
       });
     }
     return questId;
+  },
+});
+
+export const deleteQuest = mutation({
+  args: {
+    slug: v.optional(v.string()),
+    questId: v.id("seasonalQuests"),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
+
+    const quest = await ctx.db.get(args.questId);
+    if (!quest || quest.campaignId !== campaign._id) {
+      throw new ConvexError({ message: "Quest not found", code: "NOT_FOUND" });
+    }
+
+    // Remove every player's progress for this quest.
+    const progressRows = await ctx.db
+      .query("seasonalQuestProgress")
+      .withIndex("by_quest_and_player", (q) => q.eq("questId", args.questId))
+      .collect();
+    for (const row of progressRows) {
+      await ctx.db.delete(row._id);
+    }
+
+    // Remove submissions plus their uploaded evidence images and stored files.
+    const submissions = await ctx.db
+      .query("seasonalQuestSubmissions")
+      .withIndex("by_quest", (q) => q.eq("questId", args.questId))
+      .collect();
+    for (const submission of submissions) {
+      const images = await ctx.db
+        .query("seasonalSubmissionImages")
+        .withIndex("by_submission", (q) => q.eq("submissionId", submission._id))
+        .collect();
+      for (const image of images) {
+        await ctx.storage.delete(image.storageId);
+        await ctx.db.delete(image._id);
+      }
+      await ctx.db.delete(submission._id);
+    }
+
+    await ctx.db.delete(args.questId);
+
+    await logSeasonalAudit(ctx, {
+      campaignId: campaign._id,
+      adminId: admin._id,
+      action: "quest_deleted",
+      note: quest.title,
+    });
+
+    // Wheel totals and passport aggregates depend on this quest, so refresh.
+    await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
+      campaignId: campaign._id,
+      cursor: null,
+    });
+
+    return { deleted: true };
   },
 });
 

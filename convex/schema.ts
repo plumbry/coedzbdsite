@@ -636,6 +636,20 @@ export default defineSchema({
     campaignId: v.id("seasonalCampaigns"),
     playerId: v.id("players"),
     userId: v.id("users"),
+    /** Summer Slam collectible avatar shown on the passport identity card. */
+    avatarId: v.optional(
+      v.union(
+        v.literal("sunset"),
+        v.literal("surfboard"),
+        v.literal("ice_cream"),
+        v.literal("tropical_drink"),
+        v.literal("beach_chair"),
+        v.literal("sand_bucket"),
+        v.literal("conch_shell"),
+        v.literal("starfish"),
+        v.literal("clownfish"),
+      ),
+    ),
     createdAt: v.number(),
     lastViewedAt: v.number(),
   })

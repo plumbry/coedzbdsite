@@ -34,8 +34,9 @@ function PassportLoader() {
   return (
     <PageShell maxWidth="wide" className={ssPageBg}>
       <div className="space-y-4 pt-1 pb-8">
+        <Skeleton className={cn("mx-auto h-40 w-64 max-w-full", ssSkeleton)} />
+        <Skeleton className={cn("mx-auto h-28 w-48 max-w-full", ssSkeleton)} />
         <Skeleton className={cn("h-16 w-full", ssSkeleton)} />
-        <Skeleton className={cn("h-24 w-full", ssSkeleton)} />
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
             <Skeleton key={index} className={cn("h-36 w-full", ssSkeleton)} />
@@ -105,6 +106,7 @@ function PassportContent() {
   const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
 
   const ensureMyPassport = useMutation(api.seasonal.ensureMyPassport);
+  const setPassportAvatar = useMutation(api.seasonal.setPassportAvatar);
   const generateEvidenceUploadUrl = useMutation(api.seasonal.generateEvidenceUploadUrl);
   const submitEvidence = useMutation(api.seasonal.submitEvidence);
   const passport = useQuery(
@@ -292,6 +294,10 @@ function PassportContent() {
       <PassportDashboard
         campaignTitle={passport.campaign.title}
         playerName={passport.player.discordUsername}
+        avatarId={passport.passport?.avatarId}
+        onSaveAvatar={async (avatarId) => {
+          await setPassportAvatar({ slug: CAMPAIGN_SLUG, avatarId });
+        }}
         quests={quests}
         campaign={passport.campaign}
         onRequestEvidence={(entry) => setEvidenceQuestId(entry.quest._id)}

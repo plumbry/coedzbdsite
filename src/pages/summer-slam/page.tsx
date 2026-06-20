@@ -26,6 +26,7 @@ import {
   ssStack,
 } from "./_components/passport-dashboard-theme.ts";
 import { PassportPreviewMini } from "./_components/passport-preview-mini.tsx";
+import { PASSPORT_HEADER } from "./_components/passport-assets.ts";
 import { CAMPAIGN_SLUG } from "./_components/passport-types.ts";
 import { Compass, Sparkles, Stamp, Sun, Trophy } from "lucide-react";
 
@@ -52,10 +53,10 @@ export default function SummerSlamLandingPage() {
       <div className={cn(ssStack, "pb-6 pt-1")}>
         <div className="flex flex-col items-center pt-2 text-center">
           <img
-            src="/summer-slam/passport-header.png"
+            src={PASSPORT_HEADER.src}
             alt={campaign?.title ?? "Summer Slam Passport"}
-            width={747}
-            height={329}
+            width={PASSPORT_HEADER.width}
+            height={PASSPORT_HEADER.height}
             className="h-44 w-auto max-w-full sm:h-56 lg:h-72"
           />
         </div>

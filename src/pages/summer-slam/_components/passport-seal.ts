@@ -4,14 +4,14 @@ import {
   type QuestEntry,
   type QuestStatus,
 } from "./passport-types.ts";
+import { STAMP_IMAGES } from "./passport-assets.ts";
 
 /**
  * Seal model for the Summer Slam Passport dashboard.
  *
  * Each of the five quest categories maps to one collectible "seal". A seal is
  * earned when every quest in its category is approved. The official seal PNG
- * assets live in /public/summer-slam/seals and are the production artwork —
- * never recreate or replace them.
+ * assets live in /public/summer-slam/seals.
  */
 
 export type SealState = "locked" | "in_progress" | "submitted" | "earned";
@@ -47,10 +47,10 @@ export const SEAL_META: Record<QuestCategory, SealMeta> = {
     label: "Traveller",
     title: "Traveller Stamp",
     tagline: "Explore every mode and chart your summer journey.",
-    image: "/summer-slam/seals/traveller.png",
-    accent: "#0ea5e9",
-    tint: "#e0f2fe",
-    glow: "shadow-[0_10px_40px_-8px_rgba(14,165,233,0.55)]",
+    image: STAMP_IMAGES.traveller,
+    accent: "#3b8fd4",
+    tint: "#e8f3fc",
+    glow: "shadow-[0_10px_40px_-8px_rgba(59,143,212,0.55)]",
     text: "text-sky-600",
   },
   competitor: {
@@ -58,10 +58,10 @@ export const SEAL_META: Record<QuestCategory, SealMeta> = {
     label: "Competitor",
     title: "Competitor Stamp",
     tagline: "Climb the leaderboard and claim victory royales.",
-    image: "/summer-slam/seals/competitor.png",
-    accent: "#f59e0b",
-    tint: "#fef3c7",
-    glow: "shadow-[0_10px_40px_-8px_rgba(245,158,11,0.55)]",
+    image: STAMP_IMAGES.competitor,
+    accent: "#d4a524",
+    tint: "#fef6e0",
+    glow: "shadow-[0_10px_40px_-8px_rgba(212,165,36,0.55)]",
     text: "text-amber-600",
   },
   summer_spirit: {
@@ -69,33 +69,33 @@ export const SEAL_META: Record<QuestCategory, SealMeta> = {
     label: "Summer Spirit",
     title: "Summer Spirit Stamp",
     tagline: "Soak up the season and share the good vibes.",
-    image: "/summer-slam/seals/summer_spirit.png",
-    accent: "#f97316",
-    tint: "#ffedd5",
-    glow: "shadow-[0_10px_40px_-8px_rgba(249,115,22,0.55)]",
-    text: "text-orange-600",
+    image: STAMP_IMAGES.summer_spirit,
+    accent: "#e55a52",
+    tint: "#fde8e6",
+    glow: "shadow-[0_10px_40px_-8px_rgba(229,90,82,0.55)]",
+    text: "text-red-500",
   },
   team_player: {
     id: "team_player",
     label: "Team Player",
     title: "Team Player Stamp",
     tagline: "Squad up and win it together.",
-    image: "/summer-slam/seals/team_player.png",
-    accent: "#22c55e",
-    tint: "#dcfce7",
-    glow: "shadow-[0_10px_40px_-8px_rgba(34,197,94,0.55)]",
-    text: "text-green-600",
+    image: STAMP_IMAGES.team_player,
+    accent: "#2db8a8",
+    tint: "#e0f7f4",
+    glow: "shadow-[0_10px_40px_-8px_rgba(45,184,168,0.55)]",
+    text: "text-teal-600",
   },
   community: {
     id: "community",
     label: "Community",
     title: "Community Stamp",
     tagline: "Lift up the crew and connect the community.",
-    image: "/summer-slam/seals/community.png",
-    accent: "#d946ef",
-    tint: "#fae8ff",
-    glow: "shadow-[0_10px_40px_-8px_rgba(217,70,239,0.55)]",
-    text: "text-fuchsia-600",
+    image: STAMP_IMAGES.community,
+    accent: "#d94878",
+    tint: "#fce8f0",
+    glow: "shadow-[0_10px_40px_-8px_rgba(217,72,120,0.55)]",
+    text: "text-pink-600",
   },
 };
 

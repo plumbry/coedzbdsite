@@ -11,8 +11,18 @@ import { Switch } from "@/components/ui/switch.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog.tsx";
 import { toast } from "sonner";
-import { Download, RefreshCw, Save } from "lucide-react";
+import { Download, RefreshCw, Save, Trash2 } from "lucide-react";
 import {
   ADMIN_CATEGORY_LABELS,
   DEMO_CAMPAIGN,
@@ -30,6 +40,8 @@ type ReviewStatus = "pending_review" | "approved" | "rejected" | "needs_more_evi
 const DEMO_NOTICE = "Demo mode — changes are not saved.";
 
 export default function SummerSlamAdminDemoPage() {
+  const [quests, setQuests] = useState<DemoQuest[]>(DEMO_QUESTS);
+  const [questPendingDelete, setQuestPendingDelete] = useState<DemoQuest | null>(null);
   const [editingQuestId, setEditingQuestId] = useState<string | undefined>();
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<AdminCategory>("traveller");
@@ -89,6 +101,16 @@ export default function SummerSlamAdminDemoPage() {
     setIsActive(quest.isActive);
     setCompletionMethod(quest.completionMethod);
     setStampReward(quest.stampReward);
+  };
+
+  const handleDeleteQuest = () => {
+    if (!questPendingDelete) return;
+    setQuests((prev) => prev.filter((quest) => quest._id !== questPendingDelete._id));
+    if (editingQuestId === questPendingDelete._id) {
+      resetQuestForm();
+    }
+    toast.success("Quest deleted.");
+    setQuestPendingDelete(null);
   };
 
   return (
@@ -312,7 +334,7 @@ export default function SummerSlamAdminDemoPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {DEMO_QUESTS.map((quest) => (
+                    {quests.map((quest) => (
                       <TableRow key={quest._id}>
                         <TableCell className="font-medium">{quest.title}</TableCell>
                         <TableCell>{ADMIN_CATEGORY_LABELS[quest.category]}</TableCell>
@@ -321,7 +343,18 @@ export default function SummerSlamAdminDemoPage() {
                           <Badge variant={quest.isActive ? "default" : "secondary"}>{quest.isActive ? "Active" : "Inactive"}</Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="outline" size="sm" onClick={() => handleEditQuest(quest)}>Edit</Button>
+                          <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleEditQuest(quest)}>Edit</Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setQuestPendingDelete(quest)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete quest</span>
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -477,6 +510,32 @@ export default function SummerSlamAdminDemoPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <AlertDialog open={!!questPendingDelete} onOpenChange={(open) => { if (!open) setQuestPendingDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this quest?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {questPendingDelete ? (
+                <>
+                  This permanently deletes <strong>{questPendingDelete.title}</strong> along with every player's
+                  progress and submissions for it. Wheel tickets and stamp totals will be recalculated. This cannot be undone.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => { event.preventDefault(); handleDeleteQuest(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete quest
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }
