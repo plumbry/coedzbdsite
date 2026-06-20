@@ -15,6 +15,7 @@ export function PassportIdentitySection({
   currentDestination,
   daysRemaining,
   seasonStartsAt,
+  seasonEndsAt,
   onSaveAvatar,
   onSaveBirthplace,
 }: {
@@ -26,6 +27,7 @@ export function PassportIdentitySection({
   currentDestination: string | null;
   daysRemaining: number | null;
   seasonStartsAt?: number;
+  seasonEndsAt?: number;
   onSaveAvatar: (avatarId: PassportAvatarId) => Promise<void>;
   onSaveBirthplace: (birthplaceId: PassportBirthplaceId) => Promise<void>;
 }) {
@@ -67,6 +69,7 @@ export function PassportIdentitySection({
         currentDestination={currentDestination}
         daysRemaining={daysRemaining}
         seasonStartsAt={seasonStartsAt}
+        seasonEndsAt={seasonEndsAt}
         onChangeAvatar={() => setPickerOpen(true)}
         onBirthplaceChange={handleSaveBirthplace}
         isSavingBirthplace={isSavingBirthplace}

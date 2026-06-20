@@ -129,6 +129,7 @@ export function PassportDashboard({
             currentDestination={currentDestination}
             daysRemaining={season.daysRemaining}
             seasonStartsAt={campaign?.startsAt}
+            seasonEndsAt={campaign?.endsAt}
             onSaveAvatar={onSaveAvatar}
             onSaveBirthplace={onSaveBirthplace}
           />

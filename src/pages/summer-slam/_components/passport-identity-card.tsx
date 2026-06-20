@@ -43,6 +43,17 @@ function formatIssueDate(startsAt?: number) {
   );
 }
 
+function formatValidUntil(endsAt?: number) {
+  if (!endsAt) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
+    .format(new Date(endsAt))
+    .toUpperCase();
+}
+
 function getLastStamped(seals: SealProgress[]) {
   const earned = seals
     .filter((seal) => seal.state === "earned" && seal.earnedAt != null)
@@ -103,30 +114,27 @@ function CollectionSealIcon({ seal }: { seal: SealProgress }) {
       title={meta.label}
       aria-label={`${meta.label}${earned ? ", earned" : ", not yet earned"}`}
       className={cn(
-        "relative flex h-[4.25rem] w-[4.25rem] shrink-0 items-center justify-center transition-transform duration-300 sm:h-[4.875rem] sm:w-[4.875rem]",
-        earned && "scale-[1.07]",
+        "relative flex h-10 w-10 shrink-0 items-center justify-center transition-transform duration-300 sm:h-12 sm:w-12",
+        earned && "scale-105",
       )}
     >
-      <span
-        className="flex h-full w-full items-center justify-center rounded-full p-0.5 sm:p-1"
-        style={{
-          backgroundColor: earned ? "transparent" : meta.tint,
-          boxShadow: earned
-            ? `0 6px 18px ${meta.accent}44, 0 0 0 1px ${meta.accent}22`
-            : `inset 0 0 0 2px ${meta.accent}66, 0 2px 8px ${meta.accent}18`,
-        }}
-      >
-        <img
-          src={meta.image}
-          alt=""
-          width={78}
-          height={78}
-          className={cn(
-            "h-full w-full object-contain",
-            earned ? "saturate-110 contrast-105" : "saturate-[0.82] contrast-[1.08] brightness-[1.03]",
-          )}
-        />
-      </span>
+      <img
+        src={meta.image}
+        alt=""
+        width={48}
+        height={48}
+        className={cn(
+          "h-full w-full object-contain",
+          earned
+            ? "saturate-110 contrast-110"
+            : "opacity-55 saturate-[0.72] contrast-[1.06]",
+        )}
+        style={
+          earned
+            ? { filter: `drop-shadow(0 3px 10px ${meta.accent}55)` }
+            : undefined
+        }
+      />
     </span>
   );
 }
@@ -134,8 +142,8 @@ function CollectionSealIcon({ seal }: { seal: SealProgress }) {
 function StampCollectionPanel({ seals }: { seals: SealProgress[] }) {
   const earnedCount = seals.filter((seal) => seal.state === "earned").length;
   return (
-    <div className="rounded-xl border border-orange-200/60 bg-gradient-to-b from-white/75 via-orange-50/35 to-teal-50/25 px-2 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-2">
         <p className={cn(ssLabel, "text-[10px] font-semibold tracking-[0.1em] text-orange-950/75")}>
           Stamp Collection
         </p>
@@ -144,12 +152,14 @@ function StampCollectionPanel({ seals }: { seals: SealProgress[] }) {
         </p>
       </div>
       <div
-        className="flex items-end justify-between gap-0.5 sm:gap-1"
+        className="rounded-lg bg-[#FFF6EC]/75 px-1 py-2 sm:px-1.5"
         aria-label="Summer Slam stamp collection"
       >
-        {seals.map((seal) => (
-          <CollectionSealIcon key={seal.id} seal={seal} />
-        ))}
+        <div className="flex items-center justify-between gap-0.5 sm:gap-1">
+          {seals.map((seal) => (
+            <CollectionSealIcon key={seal.id} seal={seal} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -164,6 +174,7 @@ export function PassportIdentityCard({
   currentDestination,
   daysRemaining,
   seasonStartsAt,
+  seasonEndsAt,
   onChangeAvatar,
   onBirthplaceChange,
   isSavingBirthplace = false,
@@ -177,6 +188,7 @@ export function PassportIdentityCard({
   currentDestination: string | null;
   daysRemaining: number | null;
   seasonStartsAt?: number;
+  seasonEndsAt?: number;
   onChangeAvatar: () => void;
   onBirthplaceChange: (birthplaceId: PassportBirthplaceId) => void;
   isSavingBirthplace?: boolean;
@@ -189,6 +201,7 @@ export function PassportIdentityCard({
   const mrz = buildMrzLines(holderSlug, currentDestination);
   const lastStamped = getLastStamped(seals);
   const destinationLabel = currentDestination ?? "Summer Finale";
+  const validUntil = formatValidUntil(seasonEndsAt);
 
   return (
     <section
@@ -362,15 +375,18 @@ export function PassportIdentityCard({
                   style={{ width: `${completionPercent}%` }}
                 />
               </div>
-              {daysRemaining != null ? (
-                <p className="text-[10px] text-orange-800/55">
-                  <span className="font-semibold uppercase tracking-[0.08em] text-orange-800/45">
-                    Time remaining{" "}
-                  </span>
-                  <span className="font-bold tabular-nums text-orange-950">
-                    {daysRemaining} {daysRemaining === 1 ? "day" : "days"}
-                  </span>
-                </p>
+              {validUntil ? (
+                <div className="space-y-0.5">
+                  <p className={ssLabel}>Valid Until</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-orange-950">
+                    {validUntil}
+                  </p>
+                  {daysRemaining != null ? (
+                    <p className="text-[9px] text-orange-800/45">
+                      {daysRemaining} {daysRemaining === 1 ? "day" : "days"} remaining
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 
