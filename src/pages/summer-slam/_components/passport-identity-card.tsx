@@ -96,29 +96,37 @@ function MetaField({ label, children, className }: { label: string; children: Re
 
 function CollectionSealIcon({ seal }: { seal: SealProgress }) {
   const earned = seal.state === "earned";
+  const { meta } = seal;
+
   return (
     <span
-      title={seal.meta.label}
+      title={meta.label}
+      aria-label={`${meta.label}${earned ? ", earned" : ", not yet earned"}`}
       className={cn(
-        "relative flex h-11 w-11 shrink-0 items-center justify-center sm:h-[3.25rem] sm:w-[3.25rem]",
-        !earned && "opacity-50",
+        "relative flex h-[4.25rem] w-[4.25rem] shrink-0 items-center justify-center transition-transform duration-300 sm:h-[4.875rem] sm:w-[4.875rem]",
+        earned && "scale-[1.07]",
       )}
     >
-      <img
-        src={seal.meta.image}
-        alt=""
-        width={52}
-        height={52}
-        className={cn(
-          "h-full w-full object-contain",
-          earned
-            ? "drop-shadow-[0_2px_6px_rgba(60,50,40,0.22)] saturate-110"
-            : "grayscale contrast-[0.85]",
-        )}
-      />
-      {!earned ? (
-        <span className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-orange-300/45" />
-      ) : null}
+      <span
+        className="flex h-full w-full items-center justify-center rounded-full p-0.5 sm:p-1"
+        style={{
+          backgroundColor: earned ? "transparent" : meta.tint,
+          boxShadow: earned
+            ? `0 6px 18px ${meta.accent}44, 0 0 0 1px ${meta.accent}22`
+            : `inset 0 0 0 2px ${meta.accent}66, 0 2px 8px ${meta.accent}18`,
+        }}
+      >
+        <img
+          src={meta.image}
+          alt=""
+          width={78}
+          height={78}
+          className={cn(
+            "h-full w-full object-contain",
+            earned ? "saturate-110 contrast-105" : "saturate-[0.82] contrast-[1.08] brightness-[1.03]",
+          )}
+        />
+      </span>
     </span>
   );
 }
@@ -126,14 +134,19 @@ function CollectionSealIcon({ seal }: { seal: SealProgress }) {
 function StampCollectionPanel({ seals }: { seals: SealProgress[] }) {
   const earnedCount = seals.filter((seal) => seal.state === "earned").length;
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className={cn(ssLabel, "text-[10px] tracking-[0.08em] text-orange-900/70")}>Stamp Collection</p>
-        <p className="text-[11px] font-bold tabular-nums text-teal-900/90">
+    <div className="rounded-xl border border-orange-200/60 bg-gradient-to-b from-white/75 via-orange-50/35 to-teal-50/25 px-2 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <p className={cn(ssLabel, "text-[10px] font-semibold tracking-[0.1em] text-orange-950/75")}>
+          Stamp Collection
+        </p>
+        <p className="text-xs font-bold tabular-nums text-teal-900">
           {earnedCount} / {seals.length} Collected
         </p>
       </div>
-      <div className="flex items-center justify-between gap-1 sm:justify-start sm:gap-2" aria-hidden>
+      <div
+        className="flex items-end justify-between gap-0.5 sm:gap-1"
+        aria-label="Summer Slam stamp collection"
+      >
         {seals.map((seal) => (
           <CollectionSealIcon key={seal.id} seal={seal} />
         ))}
