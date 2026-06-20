@@ -2,7 +2,7 @@
  * Shared Summer Slam artwork — used by landing, live passport, and demo passport.
  * Bump ASSET_VERSION whenever files in /public/summer-slam change.
  */
-export const ASSET_VERSION = "2026-06-19-v2";
+export const ASSET_VERSION = "2026-06-20-stamps-v3";
 
 export function summerSlamAsset(path: string): string {
   return `${path}?v=${ASSET_VERSION}`;

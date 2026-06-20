@@ -1,4 +1,4 @@
-const CACHE_NAME = "app-v1";
+const CACHE_NAME = "app-v2";
 const urlsToCache = ["/", "/icon/icon-192.png", "/icon/icon-512.png"];
 
 // Install event - cache core assets

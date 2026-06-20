@@ -8,6 +8,7 @@ const outDir = path.join(__dirname, "..", "public", "summer-slam", "seals");
 const stashDir = path.join(__dirname, "..", ".seals-src");
 // Read pristine raw originals from .seals-src when available, otherwise process
 // the files in place inside public/summer-slam/seals.
+// For the flat rubber-stamp sheet artwork, use scripts/split-stamp-sheet.mjs instead.
 const srcDir = fs.existsSync(stashDir) ? stashDir : outDir;
 const files = ["traveller", "competitor", "summer_spirit", "team_player", "community"];
 
