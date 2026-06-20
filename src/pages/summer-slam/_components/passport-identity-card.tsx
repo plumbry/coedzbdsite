@@ -17,6 +17,8 @@ import { formatSealDate, type SealProgress } from "./passport-seal.ts";
 
 const AVATAR_SIZE = 88;
 const ZBD_LOGO_SRC = "/icon/co-ed-zbd-logo.jpg";
+/** Stamp collection row — sized for at-a-glance artwork recognition (80–96px slots). */
+const COLLECTION_SEAL_PX = 96;
 
 function passportHolderSlug(name: string) {
   const slug = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -111,26 +113,35 @@ function CollectionSealIcon({ seal }: { seal: SealProgress }) {
   const { meta } = seal;
 
   return (
-    <img
-      src={meta.image}
-      alt=""
-      width={56}
-      height={56}
-      title={meta.label}
-      aria-label={`${meta.label}${earned ? ", earned" : ", not yet collected"}`}
+    <span
       className={cn(
-        "h-12 w-12 shrink-0 object-contain transition-all duration-200 sm:h-14 sm:w-14",
-        "hover:scale-105 hover:-translate-y-0.5",
+        "relative inline-flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-white sm:h-24 sm:w-24",
+        "ring-1 shadow-[0_1px_4px_rgba(40,30,20,0.12)]",
         earned
-          ? "opacity-100 saturate-110 contrast-110"
-          : "opacity-[0.38] saturate-[0.55]",
+          ? "ring-teal-400/55 shadow-[0_2px_10px_rgba(20,184,166,0.2)]"
+          : "ring-stone-300/80",
       )}
-      style={{
-        filter: earned
-          ? `drop-shadow(0 4px 12px ${meta.accent}55)`
-          : `drop-shadow(0 1px 4px ${meta.accent}28)`,
-      }}
-    />
+    >
+      <img
+        src={meta.image}
+        alt=""
+        width={COLLECTION_SEAL_PX}
+        height={COLLECTION_SEAL_PX}
+        title={meta.label}
+        aria-label={`${meta.label}${earned ? ", earned" : ", not yet collected"}`}
+        className={cn(
+          "h-[72px] w-[72px] shrink-0 object-contain transition-all duration-200 sm:h-[88px] sm:w-[88px]",
+          "hover:scale-105 hover:-translate-y-0.5",
+          earned ? "opacity-100" : "opacity-[0.92]",
+          "saturate-100 contrast-[1.08]",
+        )}
+        style={{
+          filter: earned
+            ? `drop-shadow(0 1px 2px rgba(0,0,0,0.2)) drop-shadow(0 4px 12px ${meta.accent}66)`
+            : `drop-shadow(0 1px 2px rgba(0,0,0,0.28)) drop-shadow(0 2px 6px ${meta.accent}55)`,
+        }}
+      />
+    </span>
   );
 }
 
@@ -140,12 +151,12 @@ function StampCollectionPanel({ seals }: { seals: SealProgress[] }) {
     <div className="space-y-1.5 sm:ml-[calc(88px+0.75rem)]">
       <div
         className={cn(
-          "inline-flex max-w-full rounded-lg bg-[#FFF6EC]/85 px-3 py-2",
-          "shadow-[0_2px_10px_rgba(120,90,60,0.07),inset_0_1px_0_rgba(255,255,255,0.65)]",
+          "inline-flex max-w-full rounded-xl border border-stone-300/70 bg-white px-3 py-2.5",
+          "shadow-[0_2px_14px_rgba(50,35,20,0.11),inset_0_1px_0_rgba(255,255,255,0.9)]",
         )}
       >
         <div
-          className="flex items-center gap-3 sm:gap-4"
+          className="flex items-center gap-2.5 sm:gap-3"
           aria-label="Summer Slam stamp collection"
         >
           {seals.map((seal) => (
