@@ -112,7 +112,7 @@ function CollectionSealIcon({ seal }: { seal: SealProgress }) {
   return (
     <span
       title={meta.label}
-      aria-label={`${meta.label}${earned ? ", earned" : ", not yet earned"}`}
+      aria-label={`${meta.label}${earned ? ", earned" : ", not yet collected"}`}
       className={cn(
         "relative flex h-10 w-10 shrink-0 items-center justify-center transition-transform duration-300 sm:h-12 sm:w-12",
         earned && "scale-105",
@@ -125,15 +125,13 @@ function CollectionSealIcon({ seal }: { seal: SealProgress }) {
         height={48}
         className={cn(
           "h-full w-full object-contain",
-          earned
-            ? "saturate-110 contrast-110"
-            : "opacity-55 saturate-[0.72] contrast-[1.06]",
+          earned ? "opacity-100 saturate-110 contrast-110" : "opacity-[0.72] contrast-105",
         )}
-        style={
-          earned
-            ? { filter: `drop-shadow(0 3px 10px ${meta.accent}55)` }
-            : undefined
-        }
+        style={{
+          filter: earned
+            ? `drop-shadow(0 3px 10px ${meta.accent}66)`
+            : `drop-shadow(0 2px 6px ${meta.accent}44)`,
+        }}
       />
     </span>
   );
@@ -142,7 +140,7 @@ function CollectionSealIcon({ seal }: { seal: SealProgress }) {
 function StampCollectionPanel({ seals }: { seals: SealProgress[] }) {
   const earnedCount = seals.filter((seal) => seal.state === "earned").length;
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-2">
         <p className={cn(ssLabel, "text-[10px] font-semibold tracking-[0.1em] text-orange-950/75")}>
           Stamp Collection
@@ -152,14 +150,12 @@ function StampCollectionPanel({ seals }: { seals: SealProgress[] }) {
         </p>
       </div>
       <div
-        className="rounded-lg bg-[#FFF6EC]/75 px-1 py-2 sm:px-1.5"
+        className="flex items-center justify-between gap-1 sm:gap-1.5"
         aria-label="Summer Slam stamp collection"
       >
-        <div className="flex items-center justify-between gap-0.5 sm:gap-1">
-          {seals.map((seal) => (
-            <CollectionSealIcon key={seal.id} seal={seal} />
-          ))}
-        </div>
+        {seals.map((seal) => (
+          <CollectionSealIcon key={seal.id} seal={seal} />
+        ))}
       </div>
     </div>
   );
