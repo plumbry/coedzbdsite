@@ -2,7 +2,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { PassportAvatarPickerDialog } from "./passport-avatar-picker-dialog.tsx";
 import { PassportIdentityCard } from "./passport-identity-card.tsx";
-import { PassportProgressStats } from "./passport-hero.tsx";
 import type { PassportAvatarId } from "./passport-avatars.ts";
 
 export function PassportIdentitySection({
@@ -11,24 +10,20 @@ export function PassportIdentitySection({
   earnedSeals,
   totalSeals,
   completionPercent,
-  onSaveAvatar,
-  daysRemaining,
-  approvedQuests,
-  totalQuests,
-  questPercent,
   currentDestination,
+  daysRemaining,
+  seasonStartsAt,
+  onSaveAvatar,
 }: {
   playerName: string;
   avatarId: PassportAvatarId | null | undefined;
   earnedSeals: number;
   totalSeals: number;
   completionPercent: number;
-  onSaveAvatar: (avatarId: PassportAvatarId) => Promise<void>;
-  daysRemaining: number | null;
-  approvedQuests: number;
-  totalQuests: number;
-  questPercent: number;
   currentDestination: string | null;
+  daysRemaining: number | null;
+  seasonStartsAt?: number;
+  onSaveAvatar: (avatarId: PassportAvatarId) => Promise<void>;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -46,25 +41,17 @@ export function PassportIdentitySection({
   };
 
   return (
-    <section aria-label="Player profile" className="mx-auto w-full max-w-sm space-y-4 px-2 sm:max-w-md">
+    <>
       <PassportIdentityCard
         playerName={playerName}
         avatarId={avatarId}
         earnedSeals={earnedSeals}
         totalSeals={totalSeals}
         completionPercent={completionPercent}
-        onChangeAvatar={() => setPickerOpen(true)}
-      />
-
-      <PassportProgressStats
-        daysRemaining={daysRemaining}
-        earnedSeals={earnedSeals}
-        totalSeals={totalSeals}
-        approvedQuests={approvedQuests}
-        totalQuests={totalQuests}
-        questPercent={questPercent}
         currentDestination={currentDestination}
-        className="px-0"
+        daysRemaining={daysRemaining}
+        seasonStartsAt={seasonStartsAt}
+        onChangeAvatar={() => setPickerOpen(true)}
       />
 
       <PassportAvatarPickerDialog
@@ -74,6 +61,6 @@ export function PassportIdentitySection({
         onClose={() => setPickerOpen(false)}
         onSave={handleSave}
       />
-    </section>
+    </>
   );
 }

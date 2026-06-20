@@ -121,12 +121,10 @@ export function PassportDashboard({
             earnedSeals={season.earnedSeals}
             totalSeals={season.totalSeals}
             completionPercent={season.questPercent}
-            onSaveAvatar={onSaveAvatar}
-            daysRemaining={season.daysRemaining}
-            approvedQuests={season.approvedQuests}
-            totalQuests={season.totalQuests}
-            questPercent={season.questPercent}
             currentDestination={currentDestination}
+            daysRemaining={season.daysRemaining}
+            seasonStartsAt={campaign?.startsAt}
+            onSaveAvatar={onSaveAvatar}
           />
         ) : (
           <PassportProgressStats

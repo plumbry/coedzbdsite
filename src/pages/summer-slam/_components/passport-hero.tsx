@@ -4,7 +4,7 @@ import { InfoTooltip } from "./passport-info-tooltip.tsx";
 import { PASSPORT_HEADER } from "./passport-assets.ts";
 import { ssLabel, ssStatCell } from "./passport-dashboard-theme.ts";
 
-/** Campaign header artwork only — stats live in PassportProgressStats. */
+/** Campaign header artwork only — fallback stats for views without a passport identity card. */
 export function PassportHero({
   title,
   className,
