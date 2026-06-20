@@ -1,9 +1,19 @@
 import { MapPin } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { Button } from "@/components/ui/button.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import { ssLabel } from "./passport-dashboard-theme.ts";
 import { getPassportAvatar, type PassportAvatarId } from "./passport-avatars.ts";
-
+import {
+  PASSPORT_BIRTHPLACES,
+  type PassportBirthplaceId,
+} from "./passport-birthplaces.ts";
 const ZBD_LOGO_SRC = "/icon/co-ed-zbd-logo.jpg";
 
 function passportHolderSlug(name: string) {
@@ -64,6 +74,7 @@ function StampCollectionRow({ earned, total }: { earned: number; total: number }
 export function PassportIdentityCard({
   playerName,
   avatarId,
+  birthplaceId,
   earnedSeals,
   totalSeals,
   completionPercent,
@@ -71,10 +82,13 @@ export function PassportIdentityCard({
   daysRemaining,
   seasonStartsAt,
   onChangeAvatar,
+  onBirthplaceChange,
+  isSavingBirthplace = false,
   className,
 }: {
   playerName: string;
   avatarId: PassportAvatarId | null | undefined;
+  birthplaceId: PassportBirthplaceId | null | undefined;
   earnedSeals: number;
   totalSeals: number;
   completionPercent: number;
@@ -82,6 +96,8 @@ export function PassportIdentityCard({
   daysRemaining: number | null;
   seasonStartsAt?: number;
   onChangeAvatar: () => void;
+  onBirthplaceChange: (birthplaceId: PassportBirthplaceId) => void;
+  isSavingBirthplace?: boolean;
   className?: string;
 }) {
   const avatar = getPassportAvatar(avatarId);
@@ -113,21 +129,6 @@ export function PassportIdentityCard({
 
         <div
           aria-hidden
-          className="pointer-events-none absolute right-3 top-3 z-10 sm:right-4 sm:top-3.5"
-        >
-          <div className="h-9 w-9 overflow-hidden rounded-full border-2 border-white/95 shadow-[0_1px_8px_rgba(60,50,40,0.16),0_0_0_1px_rgba(180,150,120,0.2)] sm:h-10 sm:w-10">
-            <img
-              src={ZBD_LOGO_SRC}
-              alt=""
-              width={40}
-              height={40}
-              className="h-full w-full object-cover"
-            />
-          </div>
-        </div>
-
-        <div
-          aria-hidden
           className="pointer-events-none absolute -right-1 bottom-10 rotate-[-14deg] select-none text-right opacity-[0.09] sm:bottom-12"
         >
           <p className="font-display text-[11px] font-bold uppercase tracking-[0.22em] text-orange-900">
@@ -138,16 +139,32 @@ export function PassportIdentityCard({
           </p>
         </div>
 
-        <div className="relative border-b border-dashed border-orange-200/70 px-4 py-2.5 pr-14 sm:px-5 sm:pr-16">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-orange-900/45">
-            <span>
-              Passport No. <span className="text-orange-950/70">{passportNo}</span>
-            </span>
-            <span className="text-teal-800/55">Summer Edition</span>
+        <div className="relative border-b border-dashed border-orange-200/70 px-4 py-2.5 sm:px-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-orange-900/45">
+                Passport No.{" "}
+                <span className="text-orange-950/70">{passportNo}</span>
+              </p>
+              <p className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-orange-800/40">
+                Issued {issueDate}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2.5">
+              <p className="text-right text-[9px] font-semibold uppercase tracking-[0.14em] text-teal-800/55">
+                Summer Edition
+              </p>
+              <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border-2 border-white/95 shadow-[0_1px_8px_rgba(60,50,40,0.16),0_0_0_1px_rgba(180,150,120,0.2)] sm:h-10 sm:w-10">
+                <img
+                  src={ZBD_LOGO_SRC}
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            </div>
           </div>
-          <p className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-orange-800/40">
-            Issued {issueDate}
-          </p>
         </div>
 
         <div className="relative flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:gap-6 sm:p-5">
@@ -201,15 +218,39 @@ export function PassportIdentityCard({
               <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.18em] text-orange-800/55">
                 Summer Slam Passport Holder
               </p>
+              <div className="mt-2.5 max-w-xs space-y-1">
+                <p className={ssLabel}>Birthplace</p>
+                <Select
+                  value={birthplaceId ?? undefined}
+                  onValueChange={(value) => onBirthplaceChange(value as PassportBirthplaceId)}
+                  disabled={isSavingBirthplace}
+                >
+                  <SelectTrigger
+                    className={cn(
+                      "h-9 border-orange-200/80 bg-white/90 text-sm font-medium text-orange-950",
+                      "focus:ring-orange-300/40 touch-manipulation",
+                    )}
+                  >
+                    <SelectValue placeholder="Select birthplace" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PASSPORT_BIRTHPLACES.map((place) => (
+                      <SelectItem key={place.id} value={place.id}>
+                        {place.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <StampCollectionRow earned={earnedSeals} total={totalSeals} />
 
               <div className="space-y-1">
                 <p className={ssLabel}>Journey Completion</p>
                 <p className="text-lg font-bold tabular-nums text-orange-950">{completionPercent}%</p>
-                <div className="h-1.5 w-full max-w-[8rem] overflow-hidden rounded-full bg-orange-100/90">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-orange-100/90">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-orange-400 to-teal-500 transition-[width] duration-700"
                     style={{ width: `${completionPercent}%` }}
@@ -217,7 +258,25 @@ export function PassportIdentityCard({
                 </div>
               </div>
 
-              <div className="space-y-1 sm:col-span-2">
+              {daysRemaining != null ? (
+                <div className="space-y-1 sm:text-right">
+                  <p className={ssLabel}>Time Remaining</p>
+                  <p className="text-sm font-bold tabular-nums text-orange-950">
+                    {daysRemaining} {daysRemaining === 1 ? "Day" : "Days"}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-0.5 sm:text-right">
+                  <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-orange-800/35">
+                    Issuing Authority
+                  </p>
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-teal-800/40">
+                    Summer Slam Passport Office
+                  </p>
+                </div>
+              )}
+
+              <div className={cn("space-y-1", daysRemaining != null ? "sm:col-span-2" : "sm:col-span-3")}>
                 <p className={cn(ssLabel, "flex items-center gap-1 text-orange-800/70")}>
                   <MapPin className="h-3 w-3 text-orange-500" aria-hidden />
                   Current Destination
@@ -228,22 +287,15 @@ export function PassportIdentityCard({
               </div>
 
               {daysRemaining != null ? (
-                <div className="space-y-1">
-                  <p className={ssLabel}>Time Remaining</p>
-                  <p className="text-sm font-bold tabular-nums text-orange-950">
-                    {daysRemaining} {daysRemaining === 1 ? "Day" : "Days"}
+                <div className="space-y-0.5 sm:text-right">
+                  <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-orange-800/35">
+                    Issuing Authority
+                  </p>
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-teal-800/40">
+                    Summer Slam Passport Office
                   </p>
                 </div>
               ) : null}
-
-              <div className="space-y-0.5 sm:col-span-2">
-                <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-orange-800/35">
-                  Issuing Authority
-                </p>
-                <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-teal-800/40">
-                  Summer Slam Passport Office
-                </p>
-              </div>
             </div>
           </div>
         </div>

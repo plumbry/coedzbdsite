@@ -107,6 +107,7 @@ function PassportContent() {
 
   const ensureMyPassport = useMutation(api.seasonal.ensureMyPassport);
   const setPassportAvatar = useMutation(api.seasonal.setPassportAvatar);
+  const setPassportBirthplace = useMutation(api.seasonal.setPassportBirthplace);
   const generateEvidenceUploadUrl = useMutation(api.seasonal.generateEvidenceUploadUrl);
   const submitEvidence = useMutation(api.seasonal.submitEvidence);
   const passport = useQuery(
@@ -316,8 +317,12 @@ function PassportContent() {
         campaignTitle={passport.campaign.title}
         playerName={passport.player.discordUsername}
         avatarId={passport.passport?.avatarId}
+        birthplaceId={passport.passport?.birthplaceId}
         onSaveAvatar={async (avatarId) => {
           await setPassportAvatar({ slug: CAMPAIGN_SLUG, avatarId });
+        }}
+        onSaveBirthplace={async (birthplaceId) => {
+          await setPassportBirthplace({ slug: CAMPAIGN_SLUG, birthplaceId });
         }}
         quests={quests}
         campaign={passport.campaign}

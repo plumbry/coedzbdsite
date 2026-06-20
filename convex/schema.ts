@@ -650,6 +650,19 @@ export default defineSchema({
         v.literal("clownfish"),
       ),
     ),
+    birthplaceId: v.optional(
+      v.union(
+        v.literal("paradise_palms"),
+        v.literal("sunny_steps"),
+        v.literal("sweaty_sands"),
+        v.literal("believer_beach"),
+        v.literal("lazy_lagoon"),
+        v.literal("heatwave_harbor"),
+        v.literal("sunken_shores"),
+        v.literal("golden_grove"),
+        v.literal("cluster_coast"),
+      ),
+    ),
     createdAt: v.number(),
     lastViewedAt: v.number(),
   })

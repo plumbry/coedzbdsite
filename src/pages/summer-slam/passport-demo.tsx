@@ -13,6 +13,7 @@ import {
   MOCK_QUEST_ENTRIES,
 } from "./_components/passport-mock-data.ts";
 import type { PassportAvatarId } from "./_components/passport-avatars.ts";
+import type { PassportBirthplaceId } from "./_components/passport-birthplaces.ts";
 import {
   UPLOAD_FAILED_MESSAGE,
   type EvidenceType,
@@ -20,6 +21,7 @@ import {
 
 export default function SummerSlamPassportDemoPage() {
   const [demoAvatarId, setDemoAvatarId] = useState<PassportAvatarId | null>("sunset");
+  const [demoBirthplaceId, setDemoBirthplaceId] = useState<PassportBirthplaceId | null>(null);
   const [evidenceQuestId, setEvidenceQuestId] = useState<Id<"seasonalQuests"> | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [evidenceType, setEvidenceType] = useState<EvidenceType>("screenshot_link");
@@ -74,8 +76,12 @@ export default function SummerSlamPassportDemoPage() {
         campaignTitle={MOCK_CAMPAIGN.title}
         playerName={MOCK_PLAYER.discordUsername}
         avatarId={demoAvatarId}
+        birthplaceId={demoBirthplaceId}
         onSaveAvatar={async (avatarId) => {
           setDemoAvatarId(avatarId);
+        }}
+        onSaveBirthplace={async (birthplaceId) => {
+          setDemoBirthplaceId(birthplaceId);
         }}
         quests={MOCK_QUEST_ENTRIES}
         campaign={MOCK_CAMPAIGN}

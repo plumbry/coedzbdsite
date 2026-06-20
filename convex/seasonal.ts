@@ -79,6 +79,18 @@ const passportAvatarIdValidator = v.union(
   v.literal("clownfish"),
 );
 
+const passportBirthplaceIdValidator = v.union(
+  v.literal("paradise_palms"),
+  v.literal("sunny_steps"),
+  v.literal("sweaty_sands"),
+  v.literal("believer_beach"),
+  v.literal("lazy_lagoon"),
+  v.literal("heatwave_harbor"),
+  v.literal("sunken_shores"),
+  v.literal("golden_grove"),
+  v.literal("cluster_coast"),
+);
+
 const qualificationRuleValidator = v.union(
   v.object({
     type: v.literal("play_events"),
@@ -565,6 +577,22 @@ export const setPassportAvatar = mutation({
     const { passportId } = await requireCurrentPassport(ctx, campaign);
     await ctx.db.patch(passportId, { avatarId: args.avatarId });
     return { avatarId: args.avatarId };
+  },
+});
+
+export const setPassportBirthplace = mutation({
+  args: {
+    slug: v.optional(v.string()),
+    birthplaceId: passportBirthplaceIdValidator,
+  },
+  handler: async (ctx, args) => {
+    const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
+    if (!campaign.isActive) {
+      throw new ConvexError({ message: "Campaign is not active", code: "CAMPAIGN_INACTIVE" });
+    }
+    const { passportId } = await requireCurrentPassport(ctx, campaign);
+    await ctx.db.patch(passportId, { birthplaceId: args.birthplaceId });
+    return { birthplaceId: args.birthplaceId };
   },
 });
 
