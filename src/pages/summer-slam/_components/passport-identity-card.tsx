@@ -1,6 +1,5 @@
-import { MapPin } from "lucide-react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils.ts";
-import { Button } from "@/components/ui/button.tsx";
 import {
   Select,
   SelectContent,
@@ -15,6 +14,8 @@ import {
   type PassportBirthplaceId,
 } from "./passport-birthplaces.ts";
 import { formatSealDate, type SealProgress } from "./passport-seal.ts";
+
+const AVATAR_SIZE = 88;
 
 function passportHolderSlug(name: string) {
   const slug = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -55,12 +56,12 @@ function getLastStamped(seals: SealProgress[]) {
 }
 
 function PassportPerforations() {
-  const marks = Array.from({ length: 7 });
+  const marks = Array.from({ length: 5 });
   return (
     <>
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-8 left-0 top-8 flex w-2 flex-col items-center justify-between py-1"
+        className="pointer-events-none absolute bottom-6 left-0 top-6 flex w-1.5 flex-col items-center justify-between py-0.5"
       >
         {marks.map((_, index) => (
           <span
@@ -71,7 +72,7 @@ function PassportPerforations() {
       </div>
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-8 right-0 top-8 flex w-2 flex-col items-center justify-between py-1"
+        className="pointer-events-none absolute bottom-6 right-0 top-6 flex w-1.5 flex-col items-center justify-between py-0.5"
       >
         {marks.map((_, index) => (
           <span
@@ -84,46 +85,59 @@ function PassportPerforations() {
   );
 }
 
-function MiniSealIcon({ seal }: { seal: SealProgress }) {
+function MetaField({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+  return (
+    <div className={cn("min-w-0", className)}>
+      <p className="text-[8px] font-semibold uppercase tracking-[0.16em] text-orange-800/42">{label}</p>
+      <div className="mt-0.5">{children}</div>
+    </div>
+  );
+}
+
+function CollectionSealIcon({ seal }: { seal: SealProgress }) {
   const earned = seal.state === "earned";
   return (
     <span
       title={seal.meta.label}
       className={cn(
-        "relative flex h-8 w-8 shrink-0 items-center justify-center sm:h-9 sm:w-9",
-        !earned && "opacity-45",
+        "relative flex h-11 w-11 shrink-0 items-center justify-center sm:h-[3.25rem] sm:w-[3.25rem]",
+        !earned && "opacity-50",
       )}
     >
       <img
         src={seal.meta.image}
         alt=""
-        width={36}
-        height={36}
+        width={52}
+        height={52}
         className={cn(
           "h-full w-full object-contain",
-          earned ? "drop-shadow-[0_1px_3px_rgba(60,50,40,0.2)]" : "grayscale contrast-75",
+          earned
+            ? "drop-shadow-[0_2px_6px_rgba(60,50,40,0.22)] saturate-110"
+            : "grayscale contrast-[0.85]",
         )}
       />
       {!earned ? (
-        <span className="pointer-events-none absolute inset-[2px] rounded-full ring-1 ring-orange-300/50" />
+        <span className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-orange-300/45" />
       ) : null}
     </span>
   );
 }
 
-function StampCollectionRow({ seals }: { seals: SealProgress[] }) {
+function StampCollectionPanel({ seals }: { seals: SealProgress[] }) {
   const earnedCount = seals.filter((seal) => seal.state === "earned").length;
   return (
-    <div className="space-y-1">
-      <p className={ssLabel}>Stamp Collection</p>
-      <div className="flex flex-wrap items-center gap-1" aria-hidden>
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className={cn(ssLabel, "text-[10px] tracking-[0.08em] text-orange-900/70")}>Stamp Collection</p>
+        <p className="text-[11px] font-bold tabular-nums text-teal-900/90">
+          {earnedCount} / {seals.length} Collected
+        </p>
+      </div>
+      <div className="flex items-center justify-between gap-1 sm:justify-start sm:gap-2" aria-hidden>
         {seals.map((seal) => (
-          <MiniSealIcon key={seal.id} seal={seal} />
+          <CollectionSealIcon key={seal.id} seal={seal} />
         ))}
       </div>
-      <p className="text-xs font-semibold tabular-nums text-teal-900/85">
-        {earnedCount} / {seals.length} Collected
-      </p>
     </div>
   );
 }
@@ -161,6 +175,7 @@ export function PassportIdentityCard({
   const holderSlug = passportHolderSlug(playerName);
   const mrz = buildMrzLines(holderSlug, currentDestination);
   const lastStamped = getLastStamped(seals);
+  const destinationLabel = currentDestination ?? "Summer Finale";
 
   return (
     <section
@@ -187,7 +202,7 @@ export function PassportIdentityCard({
 
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-1 bottom-10 rotate-[-14deg] select-none text-right opacity-[0.09] sm:bottom-12"
+          className="pointer-events-none absolute -right-1 bottom-8 rotate-[-14deg] select-none text-right opacity-[0.09]"
         >
           <p className="font-display text-[11px] font-bold uppercase tracking-[0.22em] text-orange-900">
             Summer Slam
@@ -197,19 +212,11 @@ export function PassportIdentityCard({
           </p>
         </div>
 
-        <div className="relative border-b border-dashed border-orange-200/70 px-4 py-2.5 sm:px-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-orange-900/40">
-                Passport No.
-              </p>
-              <p className="font-mono text-[11px] font-semibold tracking-[0.06em] text-orange-950/75 sm:text-xs">
-                {passportNo}
-              </p>
-              <p className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-orange-800/40">
-                Issued {issueDate}
-              </p>
-            </div>
+        <div className="relative border-b border-dashed border-orange-200/70 px-3.5 py-2 sm:px-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[9px] uppercase tracking-[0.12em] text-orange-800/40">
+              Issued {issueDate}
+            </p>
             <div className="shrink-0 text-right">
               <p className="text-[8px] font-semibold uppercase tracking-[0.24em] text-orange-800/40">
                 Season 01
@@ -221,91 +228,71 @@ export function PassportIdentityCard({
           </div>
         </div>
 
-        <div className="relative flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:gap-5 sm:p-5">
-          <div className="flex shrink-0 flex-col items-center sm:items-start">
-            {avatar ? (
-              <div className="relative h-[5.25rem] w-[5.25rem] sm:h-[6.25rem] sm:w-[6.25rem]">
-                <img
-                  src={avatar.image}
-                  alt=""
-                  width={100}
-                  height={100}
-                  className="h-full w-full rounded-full object-contain drop-shadow-[0_2px_8px_rgba(60,50,40,0.12)]"
-                />
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={onChangeAvatar}
-                className={cn(
-                  "flex h-[5.25rem] w-[5.25rem] items-center justify-center rounded-full",
-                  "border border-dashed border-orange-300/55 bg-orange-50/30",
-                  "text-center text-[9px] font-medium uppercase leading-tight tracking-wide text-orange-400/80",
-                  "transition-colors hover:border-orange-400/70 hover:bg-orange-50/50",
-                  "sm:h-[6.25rem] sm:w-[6.25rem] touch-manipulation",
-                )}
-              >
-                Select Icon
-              </button>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onChangeAvatar}
-              className={cn(
-                "mt-2.5 h-8 border-orange-200/80 bg-white/80 px-3 text-[11px] font-semibold text-orange-900/80",
-                "hover:border-orange-300 hover:bg-orange-50/80 touch-manipulation",
+        <div className="relative grid gap-3 p-3.5 sm:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] sm:gap-0 sm:p-4">
+          <div className="flex min-w-0 flex-col gap-2.5 sm:pr-4">
+            <div className="flex items-center gap-3">
+              {avatar ? (
+                <button
+                  type="button"
+                  onClick={onChangeAvatar}
+                  className="relative shrink-0 touch-manipulation"
+                  aria-label="Change avatar"
+                >
+                  <img
+                    src={avatar.image}
+                    alt=""
+                    width={AVATAR_SIZE}
+                    height={AVATAR_SIZE}
+                    className="rounded-full object-contain drop-shadow-[0_2px_8px_rgba(60,50,40,0.14)]"
+                    style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}
+                  />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onChangeAvatar}
+                  className={cn(
+                    "flex shrink-0 items-center justify-center rounded-full",
+                    "border border-dashed border-orange-300/55 bg-orange-50/30",
+                    "text-[8px] font-medium uppercase leading-tight tracking-wide text-orange-400/80",
+                    "transition-colors hover:border-orange-400/70 hover:bg-orange-50/50 touch-manipulation",
+                  )}
+                  style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}
+                  aria-label="Select avatar"
+                >
+                  Select
+                </button>
               )}
-            >
-              Change Avatar
-            </Button>
-          </div>
 
-          <div className="min-w-0 flex-1 space-y-3.5">
-            <div>
-              <p className="font-display text-xl font-semibold uppercase tracking-[0.04em] text-orange-950 sm:text-2xl">
-                {playerName}
-              </p>
-              <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.18em] text-orange-800/55">
-                Summer Slam Passport Holder
-              </p>
+              <div className="min-w-0">
+                <p className="font-display text-lg font-semibold uppercase leading-tight tracking-[0.04em] text-orange-950 sm:text-xl">
+                  {playerName}
+                </p>
+                <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-orange-800/55">
+                  Summer Slam Passport Holder
+                </p>
+                <button
+                  type="button"
+                  onClick={onChangeAvatar}
+                  className="mt-1 text-[10px] font-semibold text-teal-800/65 underline-offset-2 hover:text-teal-900 hover:underline touch-manipulation"
+                >
+                  Change avatar
+                </button>
+              </div>
             </div>
 
-            <div className="grid gap-3.5 sm:grid-cols-3 sm:gap-4">
-              <StampCollectionRow seals={seals} />
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border border-orange-200/45 bg-white/35 px-2.5 py-2">
+              <MetaField label="Passport No.">
+                <p className="font-mono text-[11px] font-semibold tracking-[0.04em] text-orange-950/80">
+                  {passportNo}
+                </p>
+              </MetaField>
 
-              <div className="space-y-1">
-                <p className={ssLabel}>Journey Completion</p>
-                <p className="text-lg font-bold tabular-nums text-orange-950">{completionPercent}%</p>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-orange-100/90">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-orange-400 to-teal-500 transition-[width] duration-700"
-                    style={{ width: `${completionPercent}%` }}
-                  />
-                </div>
-              </div>
+              <MetaField label="Current Destination">
+                <p className="text-[11px] font-semibold text-orange-950">{destinationLabel}</p>
+              </MetaField>
 
-              {daysRemaining != null ? (
-                <div className="space-y-1 sm:text-right">
-                  <p className={ssLabel}>Time Remaining</p>
-                  <p className="text-sm font-bold tabular-nums text-orange-950">
-                    {daysRemaining} {daysRemaining === 1 ? "Day" : "Days"}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-0.5 sm:text-right">
-                  <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-orange-800/35">
-                    Issuing Authority
-                  </p>
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-teal-800/40">
-                    Summer Slam Passport Office
-                  </p>
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <p className={ssLabel}>Birthplace</p>
+              <MetaField label="Birthplace">
                 <Select
                   value={birthplaceId ?? undefined}
                   onValueChange={(value) => onBirthplaceChange(value as PassportBirthplaceId)}
@@ -313,11 +300,13 @@ export function PassportIdentityCard({
                 >
                   <SelectTrigger
                     className={cn(
-                      "h-9 border-orange-200/80 bg-white/90 text-sm font-medium text-orange-950",
-                      "focus:ring-orange-300/40 touch-manipulation",
+                      "h-7 w-full border-0 border-b border-dashed border-orange-300/45 bg-transparent px-0",
+                      "text-[11px] font-medium text-orange-950/85 shadow-none rounded-none",
+                      "focus:ring-0 focus:ring-offset-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-40",
+                      "touch-manipulation",
                     )}
                   >
-                    <SelectValue placeholder="Select birthplace" />
+                    <SelectValue placeholder="Select…" />
                   </SelectTrigger>
                   <SelectContent>
                     {PASSPORT_BIRTHPLACES.map((place) => (
@@ -327,51 +316,67 @@ export function PassportIdentityCard({
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </MetaField>
 
-              <div className="space-y-1">
-                <p className={ssLabel}>Last Stamped</p>
+              <MetaField label="Last Stamped">
                 {lastStamped ? (
-                  <>
-                    <p className="text-sm font-semibold text-orange-950">{lastStamped.title}</p>
+                  <div>
+                    <p className="text-[11px] font-semibold leading-tight text-orange-950">
+                      {lastStamped.title}
+                    </p>
                     {lastStamped.date ? (
-                      <p className="text-xs tabular-nums text-orange-800/65">{lastStamped.date}</p>
+                      <p className="text-[10px] tabular-nums text-orange-800/60">{lastStamped.date}</p>
                     ) : null}
-                  </>
+                  </div>
                 ) : (
-                  <p className="text-sm text-orange-800/50">Not yet stamped</p>
+                  <p className="text-[11px] text-orange-800/50">Not yet stamped</p>
                 )}
-              </div>
+              </MetaField>
+            </div>
+          </div>
 
-              <div className="space-y-1 sm:text-right">
-                <p className={cn(ssLabel, "flex items-center gap-1 sm:justify-end text-orange-800/70")}>
-                  <MapPin className="h-3 w-3 text-orange-500" aria-hidden />
-                  Current Destination
-                </p>
-                <p className="font-display text-base font-semibold tracking-[0.02em] text-orange-950 sm:text-lg">
-                  {currentDestination ?? "Summer Finale"}
-                </p>
-              </div>
+          <div className="flex min-w-0 flex-col gap-2.5 border-t border-dashed border-orange-200/55 pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+            <StampCollectionPanel seals={seals} />
 
+            <div className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className={ssLabel}>Journey Completion</p>
+                <p className="text-sm font-bold tabular-nums text-orange-950">{completionPercent}%</p>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-orange-100/90">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-orange-400 to-teal-500 transition-[width] duration-700"
+                  style={{ width: `${completionPercent}%` }}
+                />
+              </div>
               {daysRemaining != null ? (
-                <div className="space-y-0.5 sm:col-span-3 sm:text-right">
-                  <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-orange-800/35">
-                    Issuing Authority
-                  </p>
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-teal-800/40">
-                    Summer Slam Passport Office
-                  </p>
-                </div>
+                <p className="text-[10px] text-orange-800/55">
+                  <span className="font-semibold uppercase tracking-[0.08em] text-orange-800/45">
+                    Time remaining{" "}
+                  </span>
+                  <span className="font-bold tabular-nums text-orange-950">
+                    {daysRemaining} {daysRemaining === 1 ? "day" : "days"}
+                  </span>
+                </p>
               ) : null}
+            </div>
+
+            <div className="mt-auto space-y-0.5 border-t border-dashed border-orange-200/40 pt-2">
+              <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-orange-800/35">
+                Issuing Authority
+              </p>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-teal-800/40">
+                Summer Slam Passport Office
+              </p>
             </div>
           </div>
         </div>
 
         <div
           aria-hidden
-          className="relative border-t border-dashed border-orange-200/55 px-4 py-2 sm:px-5"
+          className="relative border-t border-dashed border-orange-200/55 px-3.5 py-1.5 sm:px-4"
         >
-          <div className="overflow-hidden font-mono text-[7px] font-medium uppercase leading-[1.65] tracking-[0.06em] text-orange-900/22 sm:text-[7.5px]">
+          <div className="overflow-hidden font-mono text-[7px] font-medium uppercase leading-[1.55] tracking-[0.06em] text-orange-900/22">
             <p className="truncate">{mrz.line1}</p>
             <p className="truncate">{mrz.line2}</p>
           </div>
