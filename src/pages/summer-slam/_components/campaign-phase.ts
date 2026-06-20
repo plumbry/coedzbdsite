@@ -30,7 +30,6 @@ export function formatCampaignDateRange(
   campaign: Pick<CampaignPublic, "startsAt" | "endsAt"> | null | undefined,
 ) {
   if (!campaign?.startsAt && !campaign?.endsAt) {
-    // TODO: Set startsAt/endsAt in admin when season dates are confirmed.
     return "Season dates coming soon";
   }
 

@@ -25,12 +25,18 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog.tsx";
 import { toast } from "sonner";
-import { Download, Loader2, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Download, ExternalLink, Loader2, RefreshCw, Save, Trash2 } from "lucide-react";
 import {
   formatHowToCompleteLabel,
   type EvidenceInput,
   type HowToComplete,
 } from "@/pages/summer-slam/_components/passport-quest-meta.ts";
+import { SummerSlamReviewGuidance } from "@/pages/admin/_components/summer-slam-review-guidance.tsx";
+import {
+  SummerSlamReviewSheet,
+  type ReviewQueueRow,
+  type ReviewStatus,
+} from "@/pages/admin/_components/summer-slam-review-sheet.tsx";
 
 const CAMPAIGN_SLUG = "summer-slam";
 
@@ -38,7 +44,20 @@ type Category = "traveller" | "competitor" | "summer_spirit" | "team_player" | "
 type CompletionMethod = "auto" | "manual" | "admin";
 type TeamFormat = "duos" | "trios" | "squads";
 type RuleType = "play_events" | "play_team_format" | "play_all_team_formats" | "reach_top" | "win_game";
-type ReviewStatus = "pending_review" | "approved" | "rejected" | "needs_more_evidence";
+
+function timestampToDatetimeLocal(ts?: number): string {
+  if (!ts) return "";
+  const date = new Date(ts);
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function datetimeLocalToTimestamp(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return new Date(trimmed).getTime();
+}
 
 const categoryLabels: Record<Category, string> = {
   traveller: "Traveller",
@@ -119,10 +138,13 @@ export default function SummerSlamAdminPage() {
   const [useTeamFormat, setUseTeamFormat] = useState(false);
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("pending_review");
   const [filterText, setFilterText] = useState("");
-  const [reviewNote, setReviewNote] = useState("");
+  const [selectedReviewRow, setSelectedReviewRow] = useState<ReviewQueueRow | null>(null);
+  const [isReviewing, setIsReviewing] = useState(false);
   const [campaignTitle, setCampaignTitle] = useState("");
   const [campaignDescription, setCampaignDescription] = useState("");
   const [campaignActive, setCampaignActive] = useState(true);
+  const [campaignStartsAt, setCampaignStartsAt] = useState("");
+  const [campaignEndsAt, setCampaignEndsAt] = useState("");
   const [stampName, setStampName] = useState("Passport Stamp");
   const [littleWheelEvery, setLittleWheelEvery] = useState(1);
   const [bigWheelEvery, setBigWheelEvery] = useState(5);
@@ -159,6 +181,8 @@ export default function SummerSlamAdminPage() {
     setCampaignTitle(dashboard.campaign.title);
     setCampaignDescription(dashboard.campaign.description ?? "");
     setCampaignActive(dashboard.campaign.isActive);
+    setCampaignStartsAt(timestampToDatetimeLocal(dashboard.campaign.startsAt));
+    setCampaignEndsAt(timestampToDatetimeLocal(dashboard.campaign.endsAt));
     setStampName(dashboard.campaign.stampName);
     setLittleWheelEvery(dashboard.campaign.littleWheelEntryEveryStamps);
     setBigWheelEvery(dashboard.campaign.bigWheelEntryEveryStamps);
@@ -281,24 +305,30 @@ export default function SummerSlamAdminPage() {
     }
   };
 
-  const handleReview = async (submissionId: Id<"seasonalQuestSubmissions">, status: ReviewStatus) => {
+  const handleReview = async (
+    submissionId: Id<"seasonalQuestSubmissions">,
+    status: ReviewStatus,
+    reviewNote?: string,
+    rejectionReason?: string,
+  ) => {
+    setIsReviewing(true);
     try {
       await reviewSubmission({
         submissionId,
         status,
-        reviewNote: reviewNote || undefined,
+        reviewNote,
         rejectionReason:
-          status === "rejected"
-            ? reviewNote || "Rejected by admin."
-            : status === "needs_more_evidence"
-              ? reviewNote || undefined
-              : undefined,
+          status === "rejected" || status === "needs_more_evidence"
+            ? rejectionReason ?? reviewNote
+            : undefined,
       });
       toast.success("Submission reviewed.");
-      setReviewNote("");
+      setSelectedReviewRow(null);
     } catch (error) {
       console.error(error);
       toast.error("Could not review submission.");
+    } finally {
+      setIsReviewing(false);
     }
   };
 
@@ -323,6 +353,8 @@ export default function SummerSlamAdminPage() {
         title: campaignTitle,
         description: campaignDescription || undefined,
         isActive: campaignActive,
+        startsAt: datetimeLocalToTimestamp(campaignStartsAt),
+        endsAt: datetimeLocalToTimestamp(campaignEndsAt),
         stampName,
         littleWheelEntryEveryStamps: littleWheelEvery,
         bigWheelEntryEveryStamps: bigWheelEvery,
@@ -366,6 +398,24 @@ export default function SummerSlamAdminPage() {
                 <Label>Description</Label>
                 <Textarea value={campaignDescription} onChange={(event) => setCampaignDescription(event.target.value)} />
               </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Season start</Label>
+                  <Input
+                    type="datetime-local"
+                    value={campaignStartsAt}
+                    onChange={(event) => setCampaignStartsAt(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Season end</Label>
+                  <Input
+                    type="datetime-local"
+                    value={campaignEndsAt}
+                    onChange={(event) => setCampaignEndsAt(event.target.value)}
+                  />
+                </div>
+              </div>
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label>Little Wheel Ticket Every X Points</Label>
@@ -399,7 +449,7 @@ export default function SummerSlamAdminPage() {
             </CardHeader>
             <CardContent>
               <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-                <li>Activate the campaign in Campaign Settings.</li>
+                <li>Activate the campaign and set season start/end dates in Campaign Settings.</li>
                 <li>Tag Summer Slam events in Events Manager and assign Duos, Trios, or Squads.</li>
                 <li>Configure manual and MVP auto quests in the Quests tab.</li>
                 <li>Test one linked player Passport at /summer-slam/passport.</li>
@@ -659,6 +709,7 @@ export default function SummerSlamAdminPage() {
           </TabsContent>
 
           <TabsContent value="review" className="mt-4 space-y-4">
+            <SummerSlamReviewGuidance />
             <div className="flex flex-wrap gap-3">
               <Input className="max-w-sm" placeholder="Filter by player, quest, category, evidence..." value={filterText} onChange={(event) => setFilterText(event.target.value)} />
               <Select value={reviewStatus} onValueChange={(value) => setReviewStatus(value as ReviewStatus)}>
@@ -670,7 +721,6 @@ export default function SummerSlamAdminPage() {
                   <SelectItem value="needs_more_evidence">Needs More Evidence</SelectItem>
                 </SelectContent>
               </Select>
-              <Input className="max-w-md" placeholder="Tell the player what to fix or add (shown on their passport)" value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} />
             </div>
             <Card>
               <CardContent className="p-0">
@@ -679,12 +729,19 @@ export default function SummerSlamAdminPage() {
                     <TableRow>
                       <TableHead>Player</TableHead>
                       <TableHead>Quest</TableHead>
-                      <TableHead>Evidence</TableHead>
-                      <TableHead>Links / Images</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead>Preview</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {filteredReviewQueue.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                          No submissions match this filter.
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
                     {filteredReviewQueue.map((row) => (
                       <TableRow key={row.submission._id}>
                         <TableCell>
@@ -695,27 +752,47 @@ export default function SummerSlamAdminPage() {
                           <div>{row.quest?.title ?? "Unknown quest"}</div>
                           {row.quest && <div className="text-xs text-muted-foreground">{categoryLabels[row.quest.category]}</div>}
                         </TableCell>
-                        <TableCell>{row.submission.evidenceTypes.join(", ")}</TableCell>
-                        <TableCell className="max-w-sm">
-                          <div className="space-y-1 text-xs">
-                            {row.submission.evidenceUrls?.map((url) => (
-                              <a key={url} href={url} target="_blank" rel="noreferrer" className="block truncate text-primary underline">{url}</a>
-                            ))}
-                            {row.images.map((image) => image.url && (
-                              <a key={image._id} href={image.url} target="_blank" rel="noreferrer" className="block truncate text-primary underline">{image.fileName}</a>
-                            ))}
-                            {row.submission.notes && <p className="line-clamp-2 text-muted-foreground">{row.submission.notes}</p>}
+                        <TableCell className="text-xs text-muted-foreground">
+                          {new Date(row.submission.submittedAt).toLocaleString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {row.images[0]?.url ? (
+                              <img
+                                src={row.images[0].url}
+                                alt=""
+                                className="h-10 w-14 rounded border object-cover"
+                              />
+                            ) : null}
+                            <span className="text-xs text-muted-foreground">
+                              {row.submission.evidenceTypes.join(", ")}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell className="space-x-2 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedReviewRow(row as ReviewQueueRow)}
+                          >
+                            <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                            Review
+                          </Button>
                           {row.submission.status === "pending_review" ? (
-                            <>
-                              <Button size="sm" onClick={() => handleReview(row.submission._id, "approved")}>Approve</Button>
-                              <Button size="sm" variant="outline" onClick={() => handleReview(row.submission._id, "needs_more_evidence")}>Needs More</Button>
-                              <Button size="sm" variant="destructive" onClick={() => handleReview(row.submission._id, "rejected")}>Reject</Button>
-                            </>
+                            <Button
+                              size="sm"
+                              onClick={() => handleReview(row.submission._id, "approved")}
+                              disabled={isReviewing}
+                            >
+                              Approve
+                            </Button>
                           ) : (
-                            <Badge variant="secondary">Reviewed</Badge>
+                            <Badge variant="secondary">{row.submission.status.replace(/_/g, " ")}</Badge>
                           )}
                         </TableCell>
                       </TableRow>
@@ -724,6 +801,15 @@ export default function SummerSlamAdminPage() {
                 </Table>
               </CardContent>
             </Card>
+            <SummerSlamReviewSheet
+              row={selectedReviewRow}
+              open={!!selectedReviewRow}
+              onOpenChange={(open) => {
+                if (!open) setSelectedReviewRow(null);
+              }}
+              onReview={handleReview}
+              isReviewing={isReviewing}
+            />
           </TabsContent>
 
           <TabsContent value="passports" className="mt-4">

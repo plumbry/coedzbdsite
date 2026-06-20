@@ -5,6 +5,7 @@ import { PassportIdentityCard } from "./passport-identity-card.tsx";
 import type { PassportAvatarId } from "./passport-avatars.ts";
 import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
 import type { SealProgress } from "./passport-seal.ts";
+import type { QuestCategory } from "./passport-types.ts";
 
 export function PassportIdentitySection({
   playerName,
@@ -13,9 +14,11 @@ export function PassportIdentitySection({
   seals,
   completionPercent,
   currentDestination,
-  daysRemaining,
   seasonStartsAt,
   seasonEndsAt,
+  nextSealId,
+  celebratingSealIds,
+  onSelectSeal,
   onSaveAvatar,
   onSaveBirthplace,
 }: {
@@ -25,9 +28,11 @@ export function PassportIdentitySection({
   seals: SealProgress[];
   completionPercent: number;
   currentDestination: string | null;
-  daysRemaining: number | null;
   seasonStartsAt?: number;
   seasonEndsAt?: number;
+  nextSealId: QuestCategory | null;
+  celebratingSealIds: string[];
+  onSelectSeal: (seal: SealProgress) => void;
   onSaveAvatar: (avatarId: PassportAvatarId) => Promise<void>;
   onSaveBirthplace: (birthplaceId: PassportBirthplaceId) => Promise<void>;
 }) {
@@ -67,9 +72,11 @@ export function PassportIdentitySection({
         seals={seals}
         completionPercent={completionPercent}
         currentDestination={currentDestination}
-        daysRemaining={daysRemaining}
         seasonStartsAt={seasonStartsAt}
         seasonEndsAt={seasonEndsAt}
+        nextSealId={nextSealId}
+        celebratingSealIds={celebratingSealIds}
+        onSelectSeal={onSelectSeal}
         onChangeAvatar={() => setPickerOpen(true)}
         onBirthplaceChange={handleSaveBirthplace}
         isSavingBirthplace={isSavingBirthplace}

@@ -17,6 +17,12 @@ import {
   CAMPAIGN_SLUG,
   CAMPAIGN_NOT_READY_MESSAGE,
   CAMPAIGN_NOT_READY_TITLE,
+  CAMPAIGN_NOT_STARTED_MESSAGE,
+  CAMPAIGN_NOT_STARTED_TITLE,
+  CAMPAIGN_ENDED_MESSAGE,
+  CAMPAIGN_ENDED_TITLE,
+  INACTIVE_CAMPAIGN_MESSAGE,
+  INACTIVE_CAMPAIGN_TITLE,
   EVIDENCE_SUBMITTED_SUCCESS_MESSAGE,
   getPassportErrorTitle,
   mapEnsurePassportError,
@@ -29,6 +35,7 @@ import {
   type EvidenceType,
   type QuestEntry,
 } from "./_components/passport-types.ts";
+import { getCampaignPhase, phaseMessage } from "./_components/campaign-phase.ts";
 
 function PassportLoader() {
   return (
@@ -110,10 +117,16 @@ function PassportContent() {
   const setPassportBirthplace = useMutation(api.seasonal.setPassportBirthplace);
   const generateEvidenceUploadUrl = useMutation(api.seasonal.generateEvidenceUploadUrl);
   const submitEvidence = useMutation(api.seasonal.submitEvidence);
+  const campaign = useQuery(
+    api.seasonal.getCampaign,
+    isConvexAuthenticated ? { slug: CAMPAIGN_SLUG } : "skip",
+  );
   const passport = useQuery(
     api.seasonal.getPassport,
     isConvexAuthenticated ? { slug: CAMPAIGN_SLUG } : "skip",
   );
+
+  const campaignPhase = getCampaignPhase(campaign ?? null);
 
   useEffect(() => {
     if (!isConvexAuthenticated) {
@@ -285,7 +298,27 @@ function PassportContent() {
     );
   }
 
-  if (isEnsuringPassport || passport === undefined) {
+  if (campaign !== undefined && campaignPhase !== "active") {
+    const phaseUnavailable =
+      campaignPhase === "not_started"
+        ? { title: CAMPAIGN_NOT_STARTED_TITLE, description: CAMPAIGN_NOT_STARTED_MESSAGE }
+        : campaignPhase === "ended"
+          ? { title: CAMPAIGN_ENDED_TITLE, description: CAMPAIGN_ENDED_MESSAGE }
+          : campaignPhase === "not_configured"
+            ? { title: CAMPAIGN_NOT_READY_TITLE, description: CAMPAIGN_NOT_READY_MESSAGE }
+            : { title: INACTIVE_CAMPAIGN_TITLE, description: phaseMessage(campaignPhase) ?? INACTIVE_CAMPAIGN_MESSAGE };
+
+    return (
+      <PassportUnavailable
+        title={phaseUnavailable.title}
+        description={phaseUnavailable.description}
+        actionHref="/summer-slam"
+        actionLabel="Back to Summer Slam"
+      />
+    );
+  }
+
+  if (isEnsuringPassport || campaign === undefined || passport === undefined) {
     return <PassportLoader />;
   }
 

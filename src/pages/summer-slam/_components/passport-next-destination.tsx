@@ -1,4 +1,5 @@
 import { AlertTriangle, Check, ChevronRight, Clock, Compass, Upload } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
 import { getDestination } from "./passport-destinations.ts";
@@ -53,25 +54,32 @@ export function PassportNextDestination({
   onOpenTask,
   onSubmitEvidence,
   onViewSeal,
+  certificateDownload,
 }: {
   seal: SealProgress | null;
   actionableEntry: QuestEntry | null;
   onOpenTask: (entry: QuestEntry) => void;
   onSubmitEvidence: (entry: QuestEntry) => void;
   onViewSeal: (seal: SealProgress) => void;
+  certificateDownload?: ReactNode;
 }) {
   if (!seal) {
     return (
       <section className="relative overflow-hidden rounded-2xl border border-teal-300/60 bg-gradient-to-br from-teal-50 via-emerald-50 to-cyan-50 p-6 text-center shadow-[0_8px_32px_rgba(20,184,166,0.12)]">
         <PassportAtmosphere className="opacity-50" />
-        <div className="relative">
-          <h2 className="font-display text-2xl font-semibold tracking-[0.02em] text-teal-900">
-            You&apos;ve reached Summer Finale!
-          </h2>
-          <p className="mt-1 text-sm text-teal-700/80">
-            Every destination visited, every stamp collected. Watch Discord for prize wheel draws and
-            Hall of Fame recognition.
-          </p>
+        <div className="relative space-y-4">
+          <div>
+            <h2 className="font-display text-2xl font-semibold tracking-[0.02em] text-teal-900">
+              You&apos;ve reached Summer Finale!
+            </h2>
+            <p className="mt-1 text-sm text-teal-700/80">
+              Every destination visited, every stamp collected. Watch Discord for prize wheel draws and
+              Hall of Fame recognition.
+            </p>
+          </div>
+          {certificateDownload ? (
+            <div className="flex justify-center">{certificateDownload}</div>
+          ) : null}
         </div>
       </section>
     );

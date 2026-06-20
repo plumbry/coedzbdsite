@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useReducedMotion } from "motion/react";
 import { getDestination } from "./passport-destinations.ts";
 import { PassportHero, PassportProgressStats } from "./passport-hero.tsx";
 import { PassportIdentitySection } from "./passport-identity-section.tsx";
 import { PassportJourneyRoute } from "./passport-journey-route.tsx";
-import { PassportSpread } from "./passport-spread.tsx";
 import { PassportRewardsPanel } from "./passport-rewards-panel.tsx";
 import { PassportNextDestination } from "./passport-next-destination.tsx";
 import { PassportChallengeGrid } from "./passport-challenge-grid.tsx";
@@ -11,7 +11,8 @@ import { PassportEvidenceReviewPanel } from "./passport-evidence-review-panel.ts
 import { PassportSealDetailDialog } from "./passport-seal-detail-dialog.tsx";
 import { PassportQuestDetailDialog } from "./passport-quest-detail-dialog.tsx";
 import { PassportOnboarding } from "./passport-onboarding.tsx";
-import { ssGridGap, ssStack } from "./passport-dashboard-theme.ts";
+import { PassportCertificateDownloadButton } from "./passport-certificate-download-button.tsx";
+import { ssDashboardInset, ssGridGap, ssStack } from "./passport-dashboard-theme.ts";
 import {
   buildSeals,
   getActionableEntry,
@@ -22,6 +23,8 @@ import { CATEGORY_PAGES, getQuestStatus, type QuestEntry } from "./passport-type
 import type { PassportAvatarId } from "./passport-avatars.ts";
 import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
 import { cn } from "@/lib/utils.ts";
+
+const EARNED_SEALS_STORAGE_KEY = "summer-slam-earned-seals";
 
 function computeWheelTotals(
   quests: QuestEntry[],
@@ -68,6 +71,8 @@ export function PassportDashboard({
 }) {
   const [selectedSeal, setSelectedSeal] = useState<SealProgress | null>(null);
   const [detailEntry, setDetailEntry] = useState<QuestEntry | null>(null);
+  const [celebratingSealIds, setCelebratingSealIds] = useState<string[]>([]);
+  const reduceMotion = useReducedMotion();
 
   const questsByCategory = useMemo(() => {
     const groups = new Map<string, QuestEntry[]>();
@@ -82,6 +87,19 @@ export function PassportDashboard({
   const seals = useMemo(() => buildSeals(questsByCategory), [questsByCategory]);
   const season = useMemo(() => summariseSeason(seals, campaign), [seals, campaign]);
   const nextSeal = season.nextSeal;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const earnedIds = seals.filter((seal) => seal.state === "earned").map((seal) => seal.id);
+    const prev = JSON.parse(localStorage.getItem(EARNED_SEALS_STORAGE_KEY) ?? "[]") as string[];
+    const newlyEarned = earnedIds.filter((id) => !prev.includes(id));
+    if (newlyEarned.length === 0) return;
+
+    setCelebratingSealIds(newlyEarned);
+    localStorage.setItem(EARNED_SEALS_STORAGE_KEY, JSON.stringify(earnedIds));
+    const timer = window.setTimeout(() => setCelebratingSealIds([]), 1500);
+    return () => window.clearTimeout(timer);
+  }, [seals, reduceMotion]);
   const actionableEntry = useMemo(() => getActionableEntry(nextSeal), [nextSeal]);
 
   const littleEvery = campaign?.littleWheelEntryEveryStamps ?? 1;
@@ -112,6 +130,18 @@ export function PassportDashboard({
     onRequestEvidence(entry);
   };
 
+  const certificateDownload =
+    season.isComplete && onSaveAvatar && onSaveBirthplace ? (
+      <PassportCertificateDownloadButton
+        playerName={playerName}
+        avatarId={avatarId}
+        birthplaceId={birthplaceId}
+        seals={seals}
+        seasonStartsAt={campaign?.startsAt}
+        seasonEndsAt={campaign?.endsAt}
+      />
+    ) : null;
+
   return (
     <div className={cn(ssStack, "pb-8")}>
       <PassportOnboarding />
@@ -127,9 +157,11 @@ export function PassportDashboard({
             seals={seals}
             completionPercent={season.questPercent}
             currentDestination={currentDestination}
-            daysRemaining={season.daysRemaining}
             seasonStartsAt={campaign?.startsAt}
             seasonEndsAt={campaign?.endsAt}
+            nextSealId={nextSeal?.id ?? null}
+            celebratingSealIds={celebratingSealIds}
+            onSelectSeal={setSelectedSeal}
             onSaveAvatar={onSaveAvatar}
             onSaveBirthplace={onSaveBirthplace}
           />
@@ -146,40 +178,43 @@ export function PassportDashboard({
         )}
       </div>
 
-      <PassportSpread
-        seals={seals}
-        nextSealId={nextSeal?.id ?? null}
-        onSelect={setSelectedSeal}
-      />
+      <div className={cn(ssDashboardInset, ssStack)}>
+        <div className={cn("grid sm:grid-cols-2", ssGridGap)}>
+          <PassportJourneyRoute seals={seals} nextSealId={nextSeal?.id ?? null} />
+          <PassportRewardsPanel
+            season={season}
+            littleWheelEntries={wheelTotals.littleWheelEntries}
+            bigWheelEntries={wheelTotals.bigWheelEntries}
+            approvedStamps={wheelTotals.approvedStamps}
+            playerName={playerName}
+            avatarId={avatarId}
+            birthplaceId={birthplaceId}
+            seals={seals}
+            seasonStartsAt={campaign?.startsAt}
+            seasonEndsAt={campaign?.endsAt}
+          />
+        </div>
 
-      <div className={cn("grid sm:grid-cols-2", ssGridGap)}>
-        <PassportJourneyRoute seals={seals} nextSealId={nextSeal?.id ?? null} />
-        <PassportRewardsPanel
-          season={season}
-          littleWheelEntries={wheelTotals.littleWheelEntries}
-          bigWheelEntries={wheelTotals.bigWheelEntries}
-          approvedStamps={wheelTotals.approvedStamps}
+        <PassportNextDestination
+          seal={nextSeal}
+          actionableEntry={actionableEntry}
+          onOpenTask={handleOpenTask}
+          onSubmitEvidence={handleSubmitFromAnywhere}
+          onViewSeal={setSelectedSeal}
+          certificateDownload={certificateDownload}
         />
+
+        <PassportChallengeGrid
+          seals={seals}
+          nextSealId={nextSeal?.id ?? null}
+          actionableEntry={actionableEntry}
+          onOpenTask={handleOpenTask}
+          onSubmitEvidence={handleSubmitFromAnywhere}
+          onViewSeal={setSelectedSeal}
+        />
+
+        <PassportEvidenceReviewPanel quests={quests} onOpenTask={handleOpenTask} />
       </div>
-
-      <PassportNextDestination
-        seal={nextSeal}
-        actionableEntry={actionableEntry}
-        onOpenTask={handleOpenTask}
-        onSubmitEvidence={handleSubmitFromAnywhere}
-        onViewSeal={setSelectedSeal}
-      />
-
-      <PassportChallengeGrid
-        seals={seals}
-        nextSealId={nextSeal?.id ?? null}
-        actionableEntry={actionableEntry}
-        onOpenTask={handleOpenTask}
-        onSubmitEvidence={handleSubmitFromAnywhere}
-        onViewSeal={setSelectedSeal}
-      />
-
-      <PassportEvidenceReviewPanel quests={quests} onOpenTask={handleOpenTask} />
 
       <PassportSealDetailDialog
         open={!!liveSelectedSeal}

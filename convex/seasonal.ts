@@ -174,6 +174,18 @@ async function requireCampaign(ctx: QueryCtx | MutationCtx, slug: string) {
   return campaign;
 }
 
+function assertCampaignOpen(campaign: Doc<"seasonalCampaigns">, now = Date.now()) {
+  if (campaign.startsAt && now < campaign.startsAt) {
+    throw new ConvexError({ message: "Campaign has not started yet", code: "CAMPAIGN_NOT_STARTED" });
+  }
+  if (campaign.endsAt && now > campaign.endsAt) {
+    throw new ConvexError({ message: "Campaign has ended", code: "CAMPAIGN_ENDED" });
+  }
+  if (!campaign.isActive) {
+    throw new ConvexError({ message: "Campaign is not active", code: "CAMPAIGN_INACTIVE" });
+  }
+}
+
 async function resolveCurrentPlayer(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return { user: null, player: null, discordUserId: null };
@@ -505,6 +517,8 @@ export const updateCampaign = mutation({
     title: v.string(),
     description: v.optional(v.string()),
     isActive: v.boolean(),
+    startsAt: v.optional(v.number()),
+    endsAt: v.optional(v.number()),
     stampName: v.string(),
     littleWheelEntryEveryStamps: v.number(),
     bigWheelEntryEveryStamps: v.number(),
@@ -517,11 +531,16 @@ export const updateCampaign = mutation({
     if (!title || !stampName) {
       throw new ConvexError({ message: "Campaign title and stamp name are required", code: "BAD_REQUEST" });
     }
+    if (args.startsAt != null && args.endsAt != null && args.startsAt >= args.endsAt) {
+      throw new ConvexError({ message: "Season start must be before season end", code: "BAD_REQUEST" });
+    }
 
     await ctx.db.patch(campaign._id, {
       title,
       description: sanitizeText(args.description, 2000),
       isActive: args.isActive,
+      startsAt: args.startsAt,
+      endsAt: args.endsAt,
       stampName,
       littleWheelEntryEveryStamps: requirePositiveInteger(
         args.littleWheelEntryEveryStamps,
@@ -549,9 +568,7 @@ export const ensureMyPassport = mutation({
   args: { slug: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
-    if (!campaign.isActive) {
-      throw new ConvexError({ message: "Campaign is not active", code: "CAMPAIGN_INACTIVE" });
-    }
+    assertCampaignOpen(campaign);
     const { player, passportId } = await requireCurrentPassport(ctx, campaign);
     return {
       passportId,
@@ -941,9 +958,7 @@ export const submitEvidence = mutation({
   },
   handler: async (ctx, args) => {
     const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
-    if (!campaign.isActive) {
-      throw new ConvexError({ message: "Campaign is not active", code: "CAMPAIGN_INACTIVE" });
-    }
+    assertCampaignOpen(campaign);
     const { player } = await requireCurrentPassport(ctx, campaign);
     const quest = await ctx.db.get(args.questId);
     if (!quest || quest.campaignId !== campaign._id || !quest.isActive || quest.completionMethod !== "manual") {

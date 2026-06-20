@@ -28,13 +28,39 @@ import {
 import { PassportPreviewMini } from "./_components/passport-preview-mini.tsx";
 import { PASSPORT_HEADER } from "./_components/passport-assets.ts";
 import { CAMPAIGN_SLUG } from "./_components/passport-types.ts";
-import { Compass, Sparkles, Stamp, Sun, Trophy } from "lucide-react";
+import { Compass, Sparkles, Stamp, Sun, Trophy, Upload, UserCheck } from "lucide-react";
 
 const STEPS = [
-  { icon: Compass, title: "Chart your route", body: "Five destinations, five stamps." },
-  { icon: Stamp, title: "Submit evidence", body: "Staff review manual quests." },
-  { icon: Sun, title: "Collect stamps", body: "Finish every challenge in a category." },
-  { icon: Trophy, title: "Earn rewards", body: "Prize wheel tickets & recognition." },
+  {
+    icon: Compass,
+    title: "Open your passport",
+    body: "Five destination categories, each with quests. Track progress on your passport dashboard.",
+  },
+  {
+    icon: Sun,
+    title: "Complete quests",
+    body: "Auto quests track from tagged ZBD events. Manual quests need proof. Staff-awarded quests are granted by admins.",
+  },
+  {
+    icon: Upload,
+    title: "Submit evidence",
+    body: "For manual quests, upload an image or paste a clip link. Only submit when you meet the quest requirements.",
+  },
+  {
+    icon: UserCheck,
+    title: "Staff review",
+    body: "Admins check evidence against quest instructions. Typical review time is 48–72 hours. Resubmit if staff request more proof.",
+  },
+  {
+    icon: Stamp,
+    title: "Earn seals",
+    body: "When every quest in a destination category is approved, you earn that category seal on your passport.",
+  },
+  {
+    icon: Trophy,
+    title: "Wheel tickets",
+    body: "Approved quests award wheel points. Points convert to Little and Big Wheel tickets at configured thresholds.",
+  },
 ];
 
 export default function SummerSlamLandingPage() {
@@ -57,7 +83,7 @@ export default function SummerSlamLandingPage() {
             alt={campaign?.title ?? "Summer Slam Passport"}
             width={PASSPORT_HEADER.width}
             height={PASSPORT_HEADER.height}
-            className="w-full max-w-[min(100%,1019px)] h-auto"
+            className="w-full max-w-[min(100%,944px)] h-auto"
           />
         </div>
 
@@ -132,14 +158,18 @@ export default function SummerSlamLandingPage() {
                 <ul className="mt-2 space-y-1 text-xs text-orange-900/70">
                   <li>
                     <span className="font-semibold text-orange-950">
-                      {littleEvery === 1 ? "Every quest" : `Every ${littleEvery} quests`}
+                      {littleEvery === 1 ? "Every wheel point" : `Every ${littleEvery} wheel points`}
                     </span>{" "}
                     = 1 Little Wheel ticket
                   </li>
                   <li>
-                    Every <span className="font-semibold text-orange-950">{bigEvery} quests</span> = 1 Big Wheel ticket
+                    Every{" "}
+                    <span className="font-semibold text-orange-950">{bigEvery} wheel points</span> = 1
+                    Big Wheel ticket
                   </li>
-                  <li className="text-orange-800/45">One win per wheel per player.</li>
+                  <li className="text-orange-800/45">
+                    Most quests award 1 wheel point when approved. Tickets are exported for prize draws.
+                  </li>
                 </ul>
               </section>
             </div>

@@ -1,8 +1,11 @@
 import { HelpCircle, Stamp } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { SEASON_REWARDS } from "./passport-destinations.ts";
+import { PassportCertificateDownloadButton } from "./passport-certificate-download-button.tsx";
 import { ssCard, ssCardPad, ssLabel, ssSectionTitle, ssStatCell } from "./passport-dashboard-theme.ts";
-import type { SeasonSummary } from "./passport-seal.ts";
+import type { SealProgress, SeasonSummary } from "./passport-seal.ts";
+import type { PassportAvatarId } from "./passport-avatars.ts";
+import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
 
 const REWARD_ICONS = {
   passport: Stamp,
@@ -13,12 +16,24 @@ export function PassportRewardsPanel({
   littleWheelEntries,
   bigWheelEntries,
   approvedStamps,
+  playerName,
+  avatarId,
+  birthplaceId,
+  seals,
+  seasonStartsAt,
+  seasonEndsAt,
   className,
 }: {
   season: SeasonSummary;
   littleWheelEntries: number;
   bigWheelEntries: number;
   approvedStamps: number;
+  playerName?: string;
+  avatarId?: PassportAvatarId | null;
+  birthplaceId?: PassportBirthplaceId | null;
+  seals?: SealProgress[];
+  seasonStartsAt?: number;
+  seasonEndsAt?: number;
   className?: string;
 }) {
   const { isComplete } = season;
@@ -43,9 +58,23 @@ export function PassportRewardsPanel({
       </dl>
 
       {isComplete ? (
-        <p className="mb-2 rounded-lg border border-teal-200/60 bg-teal-50/50 px-2 py-1 text-[11px] font-semibold text-teal-900">
-          Passport complete — certificate &amp; Discord role unlocked
-        </p>
+        <div className="mb-2 space-y-2">
+          <p className="rounded-lg border border-teal-200/60 bg-teal-50/50 px-2 py-1 text-[11px] font-semibold text-teal-900">
+            Passport complete — certificate &amp; Discord role unlocked
+          </p>
+          {playerName && seals ? (
+            <PassportCertificateDownloadButton
+              playerName={playerName}
+              avatarId={avatarId}
+              birthplaceId={birthplaceId}
+              seals={seals}
+              seasonStartsAt={seasonStartsAt}
+              seasonEndsAt={seasonEndsAt}
+              className="w-full"
+              variant="outline"
+            />
+          ) : null}
+        </div>
       ) : null}
 
       <ul className="flex flex-wrap gap-1">

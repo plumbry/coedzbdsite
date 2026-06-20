@@ -2,16 +2,41 @@
  * Shared Summer Slam artwork — used by landing, live passport, and demo passport.
  * Bump ASSET_VERSION whenever files in /public/summer-slam change.
  */
-export const ASSET_VERSION = "2026-06-20-header-v8";
+export const ASSET_VERSION = "2026-06-20-header-v1";
 
 export function summerSlamAsset(path: string): string {
   return `${path}?v=${ASSET_VERSION}`;
 }
 
+const SEAL_SLUGS = {
+  traveller: "traveller",
+  competitor: "competitor",
+  summer_spirit: "summer_spirit",
+  team_player: "team_player",
+  community: "community",
+} as const;
+
+export type SealSlug = keyof typeof SEAL_SLUGS;
+
+/** Pre-rendered widths in /public/summer-slam/seals (see scripts/export-seal-pngs.mjs). */
+const SEAL_SRC_WIDTHS = [160, 256, 320, 512] as const;
+
+export function sealSrcSet(slug: SealSlug): { src: string; srcSet: string } {
+  const file = SEAL_SLUGS[slug];
+  const srcSet = SEAL_SRC_WIDTHS.map((w) => {
+    const suffix = w === 512 ? "" : `@${w}`;
+    return `${summerSlamAsset(`/summer-slam/seals/${file}${suffix}.png`)} ${w}w`;
+  }).join(", ");
+  return {
+    src: summerSlamAsset(`/summer-slam/seals/${file}@160.png`),
+    srcSet,
+  };
+}
+
 export const PASSPORT_HEADER = {
   src: summerSlamAsset("/summer-slam/passport-header.png"),
-  width: 1019,
-  height: 416,
+  width: 944,
+  height: 375,
 } as const;
 
 export const STAMP_IMAGES = {

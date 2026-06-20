@@ -10,6 +10,8 @@ export const ssCard =
 export const ssCardPad = "p-3 sm:p-4";
 export const ssStack = "space-y-4";
 export const ssGridGap = "gap-4";
+/** Align dashboard sections with the passport card and keep side breathing room. */
+export const ssDashboardInset = "mx-auto w-full max-w-2xl px-3 sm:px-4";
 export const ssCardHover =
   "transition-all duration-200 hover:shadow-[0_8px_20px_rgba(20,184,166,0.1)] hover:border-teal-300/50";
 export const ssInteractiveCard =

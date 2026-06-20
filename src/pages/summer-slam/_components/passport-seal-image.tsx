@@ -7,6 +7,7 @@ import {
   type SealProgress,
   type SealState,
 } from "./passport-seal.ts";
+import { sealSrcSet } from "./passport-assets.ts";
 
 /**
  * Official Summer Slam seal artwork — collectible stamp treatment with state styling.
@@ -44,6 +45,8 @@ export function PassportSealImage({
   const ringSize = size + 12;
   const radius = (ringSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
+  const { src, srcSet } = sealSrcSet(meta.id);
+  const intrinsic = fill ? 256 : size <= 96 ? 160 : size <= 180 ? 256 : 320;
 
   return (
     <div
@@ -107,10 +110,12 @@ export function PassportSealImage({
       ) : null}
 
       <img
-        src={meta.image}
+        src={src}
+        srcSet={srcSet}
         alt={`${meta.title} — ${sealStateLabel(state)}`}
-        width={fill ? undefined : size}
-        height={fill ? undefined : size}
+        width={intrinsic}
+        height={intrinsic}
+        sizes={fill ? "(min-width: 1024px) 140px, (min-width: 640px) 100px, 72px" : `${size}px`}
         loading="lazy"
         draggable={false}
         className={cn(
