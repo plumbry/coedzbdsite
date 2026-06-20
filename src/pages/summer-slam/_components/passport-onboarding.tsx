@@ -23,7 +23,7 @@ const STEPS: Array<{ icon: LucideIcon; step: string; title: string; body: string
     icon: MousePointerClick,
     step: "Step 2",
     title: "Click any stamp to see requirements",
-    body: "Each stamp opens a panel with its challenges, your progress, and submission history.",
+    body: "Each stamp opens a panel with its challenges and your progress.",
   },
   {
     icon: Upload,

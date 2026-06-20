@@ -279,54 +279,6 @@ export function getActionableEntry(seal: SealProgress | null): QuestEntry | null
   return (needsFix ?? actionable[0])?.entry ?? null;
 }
 
-export type SubmissionStatus = "pending" | "approved" | "needs_changes";
-
-export type SealSubmission = {
-  entry: QuestEntry;
-  title: string;
-  status: SubmissionStatus;
-  timestamp: number;
-  note?: string;
-};
-
-/**
- * Submission history for a seal — every quest that has reached staff review
- * (pending, approved by a human, or needing changes). Auto-tracked approvals
- * are excluded since the player never submitted evidence for them.
- */
-export function buildSealSubmissions(seal: SealProgress): SealSubmission[] {
-  const submissions: SealSubmission[] = [];
-  for (const task of seal.tasks) {
-    const { entry } = task;
-    const status = getQuestStatus(entry) as QuestStatus;
-    const progress = entry.progress;
-    if (status === "pending_review") {
-      submissions.push({
-        entry,
-        title: task.title,
-        status: "pending",
-        timestamp: progress?.updatedAt ?? 0,
-      });
-    } else if (status === "needs_more_evidence" || status === "rejected") {
-      submissions.push({
-        entry,
-        title: task.title,
-        status: "needs_changes",
-        timestamp: progress?.updatedAt ?? 0,
-        note: progress?.awardLog,
-      });
-    } else if (status === "approved" && progress?.awardSource !== "auto") {
-      submissions.push({
-        entry,
-        title: task.title,
-        status: "approved",
-        timestamp: progress?.approvedAt ?? progress?.updatedAt ?? 0,
-      });
-    }
-  }
-  return submissions.sort((a, b) => b.timestamp - a.timestamp);
-}
-
 export function formatSealDate(timestamp?: number): string | null {
   if (!timestamp) return null;
   return new Date(timestamp).toLocaleDateString("en-GB", {

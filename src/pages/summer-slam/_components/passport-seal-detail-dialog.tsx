@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
-  Inbox,
   Square,
   Stamp,
   Upload,
@@ -32,26 +31,13 @@ import { ssStampSize } from "./passport-dashboard-theme.ts";
 import { PassportSealImage } from "./passport-seal-image.tsx";
 import { PassportStatusBadge } from "./passport-status-badge.tsx";
 import {
-  buildSealSubmissions,
   formatSealDate,
   getActionableEntry,
   sealBadgeStatus,
   type SealProgress,
-  type SealSubmission,
   type SealTask,
 } from "./passport-seal.ts";
 import { type QuestEntry } from "./passport-types.ts";
-
-function relativeTime(timestamp: number, now = Date.now()): string {
-  if (!timestamp) return "Recently";
-  const diff = Math.max(0, now - timestamp);
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
 
 function ChecklistIcon({ task }: { task: SealTask }) {
   if (task.done) {
@@ -85,19 +71,6 @@ function taskStatusText(task: SealTask) {
   return { label: "Not started", className: "text-stone-500" };
 }
 
-const SUBMISSION_META: Record<
-  SealSubmission["status"],
-  { label: string; className: string; icon: typeof Clock }
-> = {
-  pending: { label: "Pending review", className: "text-amber-700 bg-amber-50 border-amber-200", icon: Clock },
-  approved: { label: "Approved", className: "text-teal-700 bg-teal-50 border-teal-200", icon: CheckCircle2 },
-  needs_changes: {
-    label: "Needs changes",
-    className: "text-orange-700 bg-orange-50 border-orange-200",
-    icon: AlertTriangle,
-  },
-};
-
 function SealDetailBody({
   seal,
   onOpenTask,
@@ -112,10 +85,8 @@ function SealDetailBody({
   const earnedDate = formatSealDate(seal.earnedAt);
   const badgeStatus = sealBadgeStatus(seal);
   const actionableEntry = getActionableEntry(seal);
-  const submissions = buildSealSubmissions(seal);
   const isEarned = seal.state === "earned";
   const isPending = !isEarned && !actionableEntry && seal.state === "submitted";
-  const notStarted = seal.state === "locked" && seal.approved === 0;
 
   const progressText = isEarned
     ? earnedDate
@@ -212,66 +183,6 @@ function SealDetailBody({
                     </span>
                     <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-stone-300" aria-hidden />
                   </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <section className="space-y-2">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-stone-500">
-          Submission History
-        </h3>
-        {submissions.length === 0 ? (
-          <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-stone-200 bg-stone-50/80 px-4 py-6 text-center">
-            <Inbox className="h-5 w-5 text-stone-400" aria-hidden />
-            <p className="text-sm font-medium text-stone-700">
-              {notStarted ? "Stamp not started" : "No submissions yet"}
-            </p>
-            <p className="max-w-xs text-xs text-stone-500">
-              {notStarted
-                ? "This stamp hasn't been started yet. Complete a challenge above and submit proof to begin earning it."
-                : "Submit evidence for a challenge above and your review status will appear here."}
-            </p>
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {submissions.map((submission) => {
-              const info = SUBMISSION_META[submission.status];
-              const Icon = info.icon;
-              return (
-                <li
-                  key={submission.entry.quest._id}
-                  className="rounded-xl border border-stone-200/80 bg-white p-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-stone-900">
-                        {submission.title}
-                      </p>
-                      {submission.timestamp ? (
-                        <p className="mt-0.5 text-xs text-stone-500">
-                          {submission.status === "approved" ? "Approved " : "Updated "}
-                          {relativeTime(submission.timestamp)}
-                        </p>
-                      ) : null}
-                    </div>
-                    <span
-                      className={cn(
-                        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                        info.className,
-                      )}
-                    >
-                      <Icon className="h-3 w-3" aria-hidden />
-                      {info.label}
-                    </span>
-                  </div>
-                  {submission.note ? (
-                    <p className="mt-2 rounded-lg border border-orange-200/80 bg-orange-50/60 p-2 text-xs text-orange-900">
-                      {submission.note}
-                    </p>
-                  ) : null}
                 </li>
               );
             })}
