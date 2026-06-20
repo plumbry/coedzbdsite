@@ -57,7 +57,7 @@ export default function SummerSlamLandingPage() {
             alt={campaign?.title ?? "Summer Slam Passport"}
             width={PASSPORT_HEADER.width}
             height={PASSPORT_HEADER.height}
-            className="w-full max-w-[min(100%,568px)] h-auto"
+            className="w-full max-w-[min(100%,1019px)] h-auto"
           />
         </div>
 
