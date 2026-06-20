@@ -155,7 +155,7 @@ export function PassportQuestDetailContent({
 
   const category = getCategoryPage(quest.category);
 
-  const typeInfo = getQuestTypeInfo(quest.completionMethod);
+  const typeInfo = getQuestTypeInfo(quest.completionMethod, quest.evidenceInput);
 
   const staffFeedback = staffFeedbackCopy(status, progress?.awardLog);
 
@@ -243,7 +243,11 @@ export function PassportQuestDetailContent({
 
             </div>
 
-            <PassportQuestTypeBadge method={quest.completionMethod} showDetail />
+            <PassportQuestTypeBadge
+              method={quest.completionMethod}
+              evidenceInput={quest.evidenceInput}
+              showDetail
+            />
 
           </div>
 

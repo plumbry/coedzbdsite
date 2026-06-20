@@ -36,6 +36,7 @@ import {
 type QuestForDialog = {
   title: string;
   evidenceInstructions?: string;
+  evidenceInput?: "image" | "link";
 };
 
 function EvidenceFormFields({
@@ -59,6 +60,10 @@ function EvidenceFormFields({
   onNotesChange: (notes: string) => void;
   onFilesChange: (files: FileList | null) => void;
 }) {
+  const lockedInput = quest?.evidenceInput;
+  const showImageUpload = !lockedInput || lockedInput === "image";
+  const showLinkInput = !lockedInput || lockedInput === "link";
+
   return (
     <div className="space-y-4">
       {quest?.evidenceInstructions && (
@@ -68,30 +73,32 @@ function EvidenceFormFields({
         </div>
       )}
 
-      <div className="space-y-2">
-        <Label>Evidence Type</Label>
-        <Select
-          value={evidenceType}
-          onValueChange={(value) => onEvidenceTypeChange(value as EvidenceType)}
-        >
-          <SelectTrigger className="min-h-11 touch-manipulation">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="image">Screenshot Upload</SelectItem>
-            <SelectItem value="screenshot_link">Screenshot Link</SelectItem>
-            <SelectItem value="clip_link">Clip Link</SelectItem>
-            <SelectItem value="yunite_link">Yunite Link</SelectItem>
-            <SelectItem value="social_link">Social Media Link</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
-        {evidenceType === "clip_link" && (
-          <p className="text-xs text-muted-foreground">{CLIP_LINK_HELPER}</p>
-        )}
-      </div>
+      {!lockedInput ? (
+        <div className="space-y-2">
+          <Label>Evidence Type</Label>
+          <Select
+            value={evidenceType}
+            onValueChange={(value) => onEvidenceTypeChange(value as EvidenceType)}
+          >
+            <SelectTrigger className="min-h-11 touch-manipulation">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="image">Screenshot Upload</SelectItem>
+              <SelectItem value="screenshot_link">Screenshot Link</SelectItem>
+              <SelectItem value="clip_link">Clip Link</SelectItem>
+              <SelectItem value="yunite_link">Yunite Link</SelectItem>
+              <SelectItem value="social_link">Social Media Link</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+          {evidenceType === "clip_link" && (
+            <p className="text-xs text-muted-foreground">{CLIP_LINK_HELPER}</p>
+          )}
+        </div>
+      ) : null}
 
-      {evidenceType === "image" ? (
+      {showImageUpload && (lockedInput === "image" || evidenceType === "image") ? (
         <div className="space-y-2">
           <Label>Screenshot Upload</Label>
           <Input
@@ -108,7 +115,7 @@ function EvidenceFormFields({
             </p>
           )}
         </div>
-      ) : (
+      ) : showLinkInput ? (
         <div className="space-y-2">
           <Label>Evidence Link</Label>
           <Input
@@ -118,7 +125,7 @@ function EvidenceFormFields({
             className="min-h-11 touch-manipulation"
           />
         </div>
-      )}
+      ) : null}
 
       <div className="space-y-2">
         <Label>Notes (optional)</Label>

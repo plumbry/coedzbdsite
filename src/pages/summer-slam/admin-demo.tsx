@@ -24,6 +24,11 @@ import {
 import { toast } from "sonner";
 import { Download, RefreshCw, Save, Trash2 } from "lucide-react";
 import {
+  formatHowToCompleteLabel,
+  type EvidenceInput,
+  type HowToComplete,
+} from "./_components/passport-quest-meta.ts";
+import {
   ADMIN_CATEGORY_LABELS,
   DEMO_CAMPAIGN,
   DEMO_COUNTS,
@@ -51,6 +56,7 @@ export default function SummerSlamAdminDemoPage() {
   const [sortOrder, setSortOrder] = useState(10);
   const [isActive, setIsActive] = useState(true);
   const [completionMethod, setCompletionMethod] = useState<CompletionMethod>("manual");
+  const [evidenceInput, setEvidenceInput] = useState<EvidenceInput>("link");
   const [stampReward, setStampReward] = useState(1);
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("pending_review");
   const [filterText, setFilterText] = useState("");
@@ -77,6 +83,9 @@ export default function SummerSlamAdminDemoPage() {
     );
   }, [filterText, reviewStatus]);
 
+  const howToComplete: HowToComplete =
+    completionMethod === "manual" ? "submit" : "auto";
+
   const resetQuestForm = () => {
     setEditingQuestId(undefined);
     setTitle("");
@@ -87,6 +96,7 @@ export default function SummerSlamAdminDemoPage() {
     setSortOrder(10);
     setIsActive(true);
     setCompletionMethod("manual");
+    setEvidenceInput("link");
     setStampReward(1);
   };
 
@@ -100,6 +110,7 @@ export default function SummerSlamAdminDemoPage() {
     setSortOrder(quest.sortOrder);
     setIsActive(quest.isActive);
     setCompletionMethod(quest.completionMethod);
+    setEvidenceInput(quest.evidenceInput ?? "link");
     setStampReward(quest.stampReward);
   };
 
@@ -259,17 +270,37 @@ export default function SummerSlamAdminDemoPage() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Completion</Label>
-                    <Select value={completionMethod} onValueChange={(value) => setCompletionMethod(value as CompletionMethod)}>
+                    <Label>How to complete</Label>
+                    <Select
+                      value={howToComplete}
+                      onValueChange={(value) => {
+                        const next = value as HowToComplete;
+                        setCompletionMethod(next === "auto" ? "auto" : "manual");
+                      }}
+                    >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="auto">Auto-detect</SelectItem>
-                        <SelectItem value="manual">Manual evidence</SelectItem>
-                        <SelectItem value="admin">Admin-only award</SelectItem>
+                        <SelectItem value="auto">Auto Complete</SelectItem>
+                        <SelectItem value="submit">Submit</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
+                {howToComplete === "submit" && (
+                  <div className="space-y-1.5">
+                    <Label>Submit as</Label>
+                    <Select
+                      value={evidenceInput}
+                      onValueChange={(value) => setEvidenceInput(value as EvidenceInput)}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="image">Image</SelectItem>
+                        <SelectItem value="link">Link</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <Label>Description</Label>
                   <Textarea value={description} onChange={(event) => setDescription(event.target.value)} />
@@ -338,7 +369,9 @@ export default function SummerSlamAdminDemoPage() {
                       <TableRow key={quest._id}>
                         <TableCell className="font-medium">{quest.title}</TableCell>
                         <TableCell>{ADMIN_CATEGORY_LABELS[quest.category]}</TableCell>
-                        <TableCell>{quest.completionMethod}</TableCell>
+                        <TableCell>
+                          {formatHowToCompleteLabel(quest.completionMethod, quest.evidenceInput)}
+                        </TableCell>
                         <TableCell>
                           <Badge variant={quest.isActive ? "default" : "secondary"}>{quest.isActive ? "Active" : "Inactive"}</Badge>
                         </TableCell>

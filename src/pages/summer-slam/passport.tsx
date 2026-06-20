@@ -154,6 +154,21 @@ function PassportContent() {
   const quests = (passport?.quests ?? []) as QuestEntry[];
   const evidenceQuest = quests.find((entry) => entry.quest._id === evidenceQuestId)?.quest;
 
+  useEffect(() => {
+    if (!evidenceQuest) return;
+    if (evidenceQuest.evidenceInput === "image") {
+      setEvidenceType("image");
+      setEvidenceUrl("");
+      setSelectedFiles([]);
+      return;
+    }
+    if (evidenceQuest.evidenceInput === "link") {
+      setEvidenceType("screenshot_link");
+      setEvidenceUrl("");
+      setSelectedFiles([]);
+    }
+  }, [evidenceQuest?._id, evidenceQuest?.evidenceInput]);
+
   const handleFiles = (files: FileList | null) => {
     const incoming = [...(files ?? [])];
     const video = incoming.find(
@@ -192,18 +207,24 @@ function PassportContent() {
     if (!evidenceQuest) return;
     const trimmedUrl = evidenceUrl.trim();
     const trimmedNotes = notes.trim();
-    if (evidenceType === "image" && selectedFiles.length === 0) {
+    const submissionType =
+      evidenceQuest.evidenceInput === "image"
+        ? "image"
+        : evidenceQuest.evidenceInput === "link"
+          ? "screenshot_link"
+          : evidenceType;
+    if (submissionType === "image" && selectedFiles.length === 0) {
       toast.error("Choose at least one image before submitting.");
       return;
     }
-    if (evidenceType !== "image" && evidenceType !== "other" && !trimmedUrl) {
+    if (submissionType !== "image" && submissionType !== "other" && !trimmedUrl) {
       toast.error("Paste your evidence link before submitting.");
       return;
     }
     setIsSubmitting(true);
     try {
       const images = [];
-      for (const file of evidenceType === "image" ? selectedFiles : []) {
+      for (const file of submissionType === "image" ? selectedFiles : []) {
         const uploadUrl = await generateEvidenceUploadUrl({ slug: CAMPAIGN_SLUG });
         const response = await fetch(uploadUrl, {
           method: "POST",
@@ -220,7 +241,7 @@ function PassportContent() {
       await submitEvidence({
         slug: CAMPAIGN_SLUG,
         questId: evidenceQuest._id,
-        evidenceTypes: [evidenceType, ...(trimmedNotes ? ["notes" as const] : [])],
+        evidenceTypes: [submissionType, ...(trimmedNotes ? ["notes" as const] : [])],
         evidenceUrls: trimmedUrl ? [trimmedUrl] : undefined,
         notes: trimmedNotes || undefined,
         images,

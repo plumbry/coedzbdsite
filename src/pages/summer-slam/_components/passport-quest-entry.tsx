@@ -48,7 +48,11 @@ export function PassportQuestEntry({
             <PassportAdminHint hint={quest.adminHint} className="h-7 w-7" />
           </div>
           <div className="mt-0.5">
-            <PassportQuestTypeBadge method={quest.completionMethod} variant="inline" />
+            <PassportQuestTypeBadge
+              method={quest.completionMethod}
+              evidenceInput={quest.evidenceInput}
+              variant="inline"
+            />
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
@@ -70,7 +74,11 @@ export function PassportQuestEntry({
             <h3 className="flex-1 text-lg font-bold leading-tight text-slate-900">{quest.title}</h3>
             <PassportAdminHint hint={quest.adminHint} />
           </div>
-          <PassportQuestTypeBadge method={quest.completionMethod} variant="inline" />
+          <PassportQuestTypeBadge
+            method={quest.completionMethod}
+            evidenceInput={quest.evidenceInput}
+            variant="inline"
+          />
           <p className="text-sm leading-relaxed text-slate-600">{quest.description}</p>
           {quest.evidenceInstructions && quest.completionMethod === "manual" && (
             <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-700">

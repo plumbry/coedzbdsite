@@ -679,6 +679,10 @@ export default defineSchema({
       v.literal("manual"),
       v.literal("admin"),
     ),
+    /** Required evidence format when completionMethod is manual. */
+    evidenceInput: v.optional(
+      v.union(v.literal("image"), v.literal("link")),
+    ),
     qualificationRule: v.optional(
       v.union(
         v.object({

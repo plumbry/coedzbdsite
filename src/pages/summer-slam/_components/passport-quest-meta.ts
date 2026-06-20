@@ -1,6 +1,8 @@
 import type { QuestEntry } from "./passport-types.ts";
 
 export type QuestCompletionMethod = QuestEntry["quest"]["completionMethod"];
+export type EvidenceInput = NonNullable<QuestEntry["quest"]["evidenceInput"]>;
+export type HowToComplete = "auto" | "submit";
 
 export type QuestTypeInfo = {
   emoji: string;
@@ -11,12 +13,26 @@ export type QuestTypeInfo = {
   detail: string;
 };
 
-export function getQuestTypeInfo(method: QuestCompletionMethod): QuestTypeInfo {
+export function formatHowToCompleteLabel(
+  completionMethod: QuestCompletionMethod,
+  evidenceInput?: EvidenceInput,
+): string {
+  if (completionMethod === "auto") return "Auto Complete";
+  if (completionMethod === "admin") return "Staff Awarded";
+  if (evidenceInput === "image") return "Submit · Image";
+  if (evidenceInput === "link") return "Submit · Link";
+  return "Submit";
+}
+
+export function getQuestTypeInfo(
+  method: QuestCompletionMethod,
+  evidenceInput?: EvidenceInput,
+): QuestTypeInfo {
   switch (method) {
     case "auto":
       return {
         emoji: "🤖",
-        label: "Auto Tracked",
+        label: "Auto Complete",
         shortLabel: "Auto",
         requiresSubmission: false,
         summary: "No submission required.",
@@ -33,12 +49,22 @@ export function getQuestTypeInfo(method: QuestCompletionMethod): QuestTypeInfo {
       };
     default:
       return {
-        emoji: "📎",
-        label: "Requires Submission",
+        emoji: evidenceInput === "image" ? "🖼️" : "🔗",
+        label: evidenceInput === "image" ? "Submit Image" : "Submit Link",
         shortLabel: "Submit",
         requiresSubmission: true,
-        summary: "Evidence must be submitted for staff review.",
-        detail: "Submit proof below. Staff will review it before you earn your stamp.",
+        summary:
+          evidenceInput === "image"
+            ? "Upload an image for staff review."
+            : evidenceInput === "link"
+              ? "Paste a link for staff review."
+              : "Evidence must be submitted for staff review.",
+        detail:
+          evidenceInput === "image"
+            ? "Upload your screenshot or photo below. Staff will review it before you earn your stamp."
+            : evidenceInput === "link"
+              ? "Paste your evidence link below. Staff will review it before you earn your stamp."
+              : "Submit proof below. Staff will review it before you earn your stamp.",
       };
   }
 }

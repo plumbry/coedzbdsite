@@ -187,6 +187,7 @@ export type QuestEntry = {
     description: string;
     category: string;
     completionMethod: "auto" | "manual" | "admin";
+    evidenceInput?: "image" | "link";
     evidenceInstructions?: string;
     adminHint?: string;
     stampReward: number;

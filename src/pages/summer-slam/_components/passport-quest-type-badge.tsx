@@ -1,18 +1,20 @@
 import { cn } from "@/lib/utils.ts";
-import { getQuestTypeInfo, type QuestCompletionMethod } from "./passport-quest-meta.ts";
+import { getQuestTypeInfo, type EvidenceInput, type QuestCompletionMethod } from "./passport-quest-meta.ts";
 
 export function PassportQuestTypeBadge({
   method,
+  evidenceInput,
   variant = "default",
   showDetail = false,
   className,
 }: {
   method: QuestCompletionMethod;
+  evidenceInput?: EvidenceInput;
   variant?: "default" | "compact" | "inline";
   showDetail?: boolean;
   className?: string;
 }) {
-  const info = getQuestTypeInfo(method);
+  const info = getQuestTypeInfo(method, evidenceInput);
 
   if (variant === "compact") {
     return (

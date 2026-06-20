@@ -38,6 +38,8 @@ const completionMethodValidator = v.union(
   v.literal("admin"),
 );
 
+const evidenceInputValidator = v.union(v.literal("image"), v.literal("link"));
+
 const statusValidator = v.union(
   v.literal("not_started"),
   v.literal("in_progress"),
@@ -674,6 +676,7 @@ export const saveQuest = mutation({
     sortOrder: v.number(),
     isActive: v.boolean(),
     completionMethod: completionMethodValidator,
+    evidenceInput: v.optional(evidenceInputValidator),
     qualificationRule: v.optional(qualificationRuleValidator),
     stampReward: v.optional(v.number()),
   },
@@ -686,6 +689,18 @@ export const saveQuest = mutation({
     }
     if (completionMethod !== "auto" && args.qualificationRule) {
       throw new ConvexError({ message: "Only auto quests can have qualification rules", code: "BAD_REQUEST" });
+    }
+    if (completionMethod === "manual" && !args.evidenceInput) {
+      throw new ConvexError({
+        message: "Submit quests require an evidence type (image or link)",
+        code: "BAD_REQUEST",
+      });
+    }
+    if (completionMethod !== "manual" && args.evidenceInput) {
+      throw new ConvexError({
+        message: "Evidence type is only allowed for submit quests",
+        code: "BAD_REQUEST",
+      });
     }
 
     const patch = {
@@ -700,6 +715,7 @@ export const saveQuest = mutation({
       repeatable: false,
       stampReward: requirePositiveInteger(args.stampReward ?? 1, "Stamp reward"),
       completionMethod,
+      evidenceInput: completionMethod === "manual" ? args.evidenceInput : undefined,
       qualificationRule: args.qualificationRule,
       updatedBy: admin._id,
       updatedAt: Date.now(),
@@ -921,9 +937,18 @@ export const submitEvidence = mutation({
     if (images.length > MAX_IMAGES_PER_SUBMISSION) {
       throw new ConvexError({ message: "Maximum 3 images per submission", code: "BAD_REQUEST" });
     }
+    if (quest.evidenceInput === "image" && images.length === 0) {
+      throw new ConvexError({ message: "This quest requires an image upload", code: "BAD_REQUEST" });
+    }
+    if (quest.evidenceInput === "link" && images.length > 0) {
+      throw new ConvexError({ message: "This quest requires a link, not an image upload", code: "BAD_REQUEST" });
+    }
 
     const evidenceUrls = (args.evidenceUrls ?? []).map(validateHttpUrl);
     const notes = sanitizeText(args.notes, 2000);
+    if (quest.evidenceInput === "link" && evidenceUrls.length === 0) {
+      throw new ConvexError({ message: "This quest requires an evidence link", code: "BAD_REQUEST" });
+    }
     if (images.length === 0 && evidenceUrls.length === 0 && !notes) {
       throw new ConvexError({ message: "Add at least one image, link, or note", code: "BAD_REQUEST" });
     }

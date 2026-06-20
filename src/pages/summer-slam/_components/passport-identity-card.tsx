@@ -4,9 +4,25 @@ import { Button } from "@/components/ui/button.tsx";
 import { ssLabel } from "./passport-dashboard-theme.ts";
 import { getPassportAvatar, type PassportAvatarId } from "./passport-avatars.ts";
 
+const ZBD_LOGO_SRC = "/icon/co-ed-zbd-logo.jpg";
+
 function passportHolderSlug(name: string) {
   const slug = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
   return slug.length > 0 ? slug.slice(0, 16) : "HOLDER";
+}
+
+function mrzPad(value: string, length: number) {
+  const clean = value.toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim();
+  const base = clean.slice(0, length);
+  return `${base}${"<".repeat(length)}`.slice(0, length);
+}
+
+function buildMrzLines(holderSlug: string, destination: string | null) {
+  const dest = (destination ?? "Summer Finale").toUpperCase();
+  return {
+    line1: `P<SSP<${mrzPad(holderSlug, 30)}`,
+    line2: `SS2026<SEASON01<${mrzPad(dest, 24)}`,
+  };
 }
 
 function formatIssueDate(startsAt?: number) {
@@ -71,6 +87,8 @@ export function PassportIdentityCard({
   const avatar = getPassportAvatar(avatarId);
   const passportNo = `SS-2026-${passportHolderSlug(playerName)}`;
   const issueDate = formatIssueDate(seasonStartsAt);
+  const holderSlug = passportHolderSlug(playerName);
+  const mrz = buildMrzLines(holderSlug, currentDestination);
 
   return (
     <section
@@ -95,7 +113,22 @@ export function PassportIdentityCard({
 
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-1 bottom-4 rotate-[-14deg] select-none text-right opacity-[0.09]"
+          className="pointer-events-none absolute right-3 top-3 z-10 sm:right-4 sm:top-3.5"
+        >
+          <div className="h-9 w-9 overflow-hidden rounded-full border-2 border-white/95 shadow-[0_1px_8px_rgba(60,50,40,0.16),0_0_0_1px_rgba(180,150,120,0.2)] sm:h-10 sm:w-10">
+            <img
+              src={ZBD_LOGO_SRC}
+              alt=""
+              width={40}
+              height={40}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        </div>
+
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-1 bottom-10 rotate-[-14deg] select-none text-right opacity-[0.09] sm:bottom-12"
         >
           <p className="font-display text-[11px] font-bold uppercase tracking-[0.22em] text-orange-900">
             Summer Slam
@@ -105,7 +138,7 @@ export function PassportIdentityCard({
           </p>
         </div>
 
-        <div className="relative border-b border-dashed border-orange-200/70 px-4 py-2.5 sm:px-5">
+        <div className="relative border-b border-dashed border-orange-200/70 px-4 py-2.5 pr-14 sm:px-5 sm:pr-16">
           <div className="flex flex-wrap items-center justify-between gap-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-orange-900/45">
             <span>
               Passport No. <span className="text-orange-950/70">{passportNo}</span>
@@ -121,7 +154,7 @@ export function PassportIdentityCard({
           <div className="flex shrink-0 flex-col items-center sm:items-start">
             <div
               className={cn(
-                "relative flex h-[5.5rem] w-[4.25rem] items-center justify-center overflow-hidden",
+                "relative flex h-[5.5rem] w-[4.25rem] items-center justify-center",
                 "border-[3px] border-white bg-[#F8F6F2]",
                 "shadow-[0_2px_10px_rgba(60,50,40,0.14),0_0_0_1px_rgba(180,150,120,0.25)]",
                 "sm:h-28 sm:w-[5.5rem]",
@@ -129,13 +162,17 @@ export function PassportIdentityCard({
               )}
             >
               {avatar ? (
-                <img
-                  src={avatar.image}
-                  alt=""
-                  width={88}
-                  height={112}
-                  className="h-full w-full object-cover"
-                />
+                <div className="flex h-full w-full items-center justify-center p-1.5">
+                  <div className="aspect-square w-full max-h-full max-w-full overflow-hidden rounded-full bg-[#F5F3EF] shadow-[inset_0_0_0_1px_rgba(180,150,120,0.12)]">
+                    <img
+                      src={avatar.image}
+                      alt=""
+                      width={88}
+                      height={88}
+                      className="h-full w-full object-contain p-1.5"
+                    />
+                  </div>
+                </div>
               ) : (
                 <span className="px-2 text-center text-[9px] font-medium uppercase leading-tight tracking-wide text-orange-400/80">
                   Passport Photo
@@ -198,7 +235,26 @@ export function PassportIdentityCard({
                   </p>
                 </div>
               ) : null}
+
+              <div className="space-y-0.5 sm:col-span-2">
+                <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-orange-800/35">
+                  Issuing Authority
+                </p>
+                <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-teal-800/40">
+                  Summer Slam Passport Office
+                </p>
+              </div>
             </div>
+          </div>
+        </div>
+
+        <div
+          aria-hidden
+          className="relative border-t border-dashed border-orange-200/55 px-4 py-2 sm:px-5"
+        >
+          <div className="overflow-hidden font-mono text-[7px] font-medium uppercase leading-[1.65] tracking-[0.06em] text-orange-900/22 sm:text-[7.5px]">
+            <p className="truncate">{mrz.line1}</p>
+            <p className="truncate">{mrz.line2}</p>
           </div>
         </div>
       </div>

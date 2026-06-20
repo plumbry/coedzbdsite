@@ -26,6 +26,11 @@ import {
 } from "@/components/ui/alert-dialog.tsx";
 import { toast } from "sonner";
 import { Download, Loader2, RefreshCw, Save, Trash2 } from "lucide-react";
+import {
+  formatHowToCompleteLabel,
+  type EvidenceInput,
+  type HowToComplete,
+} from "@/pages/summer-slam/_components/passport-quest-meta.ts";
 
 const CAMPAIGN_SLUG = "summer-slam";
 
@@ -104,6 +109,7 @@ export default function SummerSlamAdminPage() {
   const [sortOrder, setSortOrder] = useState(10);
   const [isActive, setIsActive] = useState(true);
   const [completionMethod, setCompletionMethod] = useState<CompletionMethod>("manual");
+  const [evidenceInput, setEvidenceInput] = useState<EvidenceInput>("link");
   const [stampReward, setStampReward] = useState(1);
   const [ruleType, setRuleType] = useState<RuleType>("play_events");
   const [threshold, setThreshold] = useState(1);
@@ -174,6 +180,9 @@ export default function SummerSlamAdminPage() {
     });
   }, [filterText, reviewQueue]);
 
+  const howToComplete: HowToComplete =
+    completionMethod === "manual" ? "submit" : "auto";
+
   const resetQuestForm = () => {
     setEditingQuestId(undefined);
     setTitle("");
@@ -184,6 +193,7 @@ export default function SummerSlamAdminPage() {
     setSortOrder(10);
     setIsActive(true);
     setCompletionMethod("manual");
+    setEvidenceInput("link");
     setStampReward(1);
     setRuleType("play_events");
     setThreshold(1);
@@ -203,6 +213,7 @@ export default function SummerSlamAdminPage() {
     setSortOrder(quest.sortOrder);
     setIsActive(quest.isActive);
     setCompletionMethod(quest.completionMethod);
+    setEvidenceInput(quest.evidenceInput ?? "link");
     setStampReward(quest.stampReward);
     const rule = quest.qualificationRule;
     if (!rule) return;
@@ -234,10 +245,11 @@ export default function SummerSlamAdminPage() {
         adminHint: adminHint || undefined,
         sortOrder,
         isActive,
-        completionMethod,
+        completionMethod: howToComplete === "auto" ? "auto" : "manual",
+        evidenceInput: howToComplete === "submit" ? evidenceInput : undefined,
         stampReward,
         qualificationRule:
-          completionMethod === "auto"
+          howToComplete === "auto"
             ? buildRule({ ruleType, threshold, placement, eventCount, teamFormat, useTeamFormat })
             : undefined,
       });
@@ -458,17 +470,42 @@ export default function SummerSlamAdminPage() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Completion</Label>
-                    <Select value={completionMethod} onValueChange={(value) => setCompletionMethod(value as CompletionMethod)}>
+                    <Label>How to complete</Label>
+                    <Select
+                      value={howToComplete}
+                      onValueChange={(value) => {
+                        const next = value as HowToComplete;
+                        setCompletionMethod(next === "auto" ? "auto" : "manual");
+                      }}
+                    >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="auto">Auto-detect</SelectItem>
-                        <SelectItem value="manual">Manual evidence</SelectItem>
-                        <SelectItem value="admin">Admin-only award</SelectItem>
+                        <SelectItem value="auto">Auto Complete</SelectItem>
+                        <SelectItem value="submit">Submit</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
+                {howToComplete === "submit" && (
+                  <div className="space-y-1.5">
+                    <Label>Submit as</Label>
+                    <Select
+                      value={evidenceInput}
+                      onValueChange={(value) => setEvidenceInput(value as EvidenceInput)}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="image">Image</SelectItem>
+                        <SelectItem value="link">Link</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {completionMethod === "admin" && (
+                  <p className="text-sm text-muted-foreground">
+                    This quest is currently staff-awarded. Choose Auto Complete or Submit to change how players complete it.
+                  </p>
+                )}
                 <div className="space-y-1.5">
                   <Label>Description</Label>
                   <Textarea value={description} onChange={(event) => setDescription(event.target.value)} />
@@ -507,7 +544,7 @@ export default function SummerSlamAdminPage() {
                   </div>
                 </div>
 
-                {completionMethod === "auto" && (
+                {howToComplete === "auto" && (
                   <div className="rounded-lg border p-3 space-y-3">
                     <div className="space-y-1.5">
                       <Label>Auto Rule</Label>
@@ -593,7 +630,9 @@ export default function SummerSlamAdminPage() {
                       <TableRow key={quest._id}>
                         <TableCell className="font-medium">{quest.title}</TableCell>
                         <TableCell>{categoryLabels[quest.category]}</TableCell>
-                        <TableCell>{quest.completionMethod}</TableCell>
+                        <TableCell>
+                          {formatHowToCompleteLabel(quest.completionMethod, quest.evidenceInput)}
+                        </TableCell>
                         <TableCell>
                           <Badge variant={quest.isActive ? "default" : "secondary"}>{quest.isActive ? "Active" : "Inactive"}</Badge>
                         </TableCell>

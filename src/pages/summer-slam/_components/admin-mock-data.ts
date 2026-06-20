@@ -1,4 +1,5 @@
 import { MOCK_CAMPAIGN, MOCK_QUEST_ENTRIES } from "./passport-mock-data.ts";
+import type { EvidenceInput } from "./passport-quest-meta.ts";
 
 /**
  * Static mock dataset powering the read-only Summer Slam admin demo at
@@ -29,6 +30,7 @@ export type DemoQuest = {
   evidenceInstructions?: string;
   adminHint?: string;
   completionMethod: "auto" | "manual" | "admin";
+  evidenceInput?: EvidenceInput;
   stampReward: number;
   sortOrder: number;
   isActive: boolean;
@@ -52,6 +54,10 @@ export const DEMO_QUESTS: DemoQuest[] = MOCK_QUEST_ENTRIES.map((entry, index) =>
   evidenceInstructions: entry.quest.evidenceInstructions,
   adminHint: entry.quest.adminHint,
   completionMethod: entry.quest.completionMethod,
+  evidenceInput:
+    entry.quest.completionMethod === "manual"
+      ? ("link" as const)
+      : undefined,
   stampReward: entry.quest.stampReward,
   sortOrder: (index + 1) * 10,
   isActive: true,
