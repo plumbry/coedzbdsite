@@ -1,5 +1,6 @@
 import { Flag } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
+import { ssStampSize } from "./passport-dashboard-theme.ts";
 import { PassportSealImage } from "./passport-seal-image.tsx";
 import {
   sealStateLabel,
@@ -138,7 +139,7 @@ export function PassportJourney({
                 seal={seal}
                 index={index}
                 isNext={seal.id === nextSealId}
-                size={104}
+                size={ssStampSize.journey}
                 onSelect={onSelect}
               />
             </li>
@@ -171,7 +172,7 @@ export function PassportJourney({
                     isNext && "ring-2 ring-sky-400 ring-offset-2 ring-offset-white",
                   )}
                 >
-                  <PassportSealImage meta={seal.meta} state={seal.state} size={72} />
+                  <PassportSealImage meta={seal.meta} state={seal.state} size={ssStampSize.journeyMobile} />
                 </span>
                 <span className="min-w-0 flex-1 space-y-1">
                   <span className="flex items-center gap-2">

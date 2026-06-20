@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { motion } from "motion/react";
 import { CategorySeal } from "./passport-category-seals.tsx";
+import { ssStampSize } from "./passport-dashboard-theme.ts";
 import type { QuestCategory } from "./passport-types.ts";
 
 export function StampDropOverlay({
@@ -42,7 +43,7 @@ export function StampDropOverlay({
           categoryId={categoryId as QuestCategory}
           state="earned"
           slotIndex={1}
-          size={48}
+          size={ssStampSize.animation}
         />
       </motion.div>
     </motion.div>

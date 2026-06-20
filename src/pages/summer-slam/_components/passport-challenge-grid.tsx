@@ -5,6 +5,7 @@ import { PassportSectionHeader } from "./passport-section-header.tsx";
 import {
   ssCard,
   ssCardPad,
+  ssStampSize,
   ssStatusChip,
 } from "./passport-dashboard-theme.ts";
 import { getDestination } from "./passport-destinations.ts";
@@ -75,7 +76,7 @@ function ChallengeCard({
         className="flex items-center gap-2 border-b border-orange-100 px-3 py-2"
         style={{ backgroundColor: `${dest.tint}cc` }}
       >
-        <PassportSealImage meta={meta} state={state} seal={seal} size={36} showBadge={false} />
+        <PassportSealImage meta={meta} state={state} seal={seal} size={ssStampSize.challenge} showBadge={false} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <p className="truncate text-xs font-bold text-orange-950">{dest.name}</p>

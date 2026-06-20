@@ -9,6 +9,7 @@ import {
   ssCard,
   ssCardPad,
   ssInteractiveCard,
+  ssStampSize,
   ssStatusChip,
 } from "./passport-dashboard-theme.ts";
 import { PassportSealImage } from "./passport-seal-image.tsx";
@@ -47,7 +48,7 @@ function SealSlot({
           onClick={() => onSelect(seal)}
           className={cn(
             ssInteractiveCard,
-            "relative flex min-w-0 flex-col items-center rounded-lg border p-2 text-center touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50",
+            "relative flex min-w-0 flex-col items-center rounded-lg border p-1.5 text-center touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50",
             earned
               ? "border-teal-300/60 bg-teal-50/30"
               : isNext
@@ -67,7 +68,7 @@ function SealSlot({
             meta={seal.meta}
             state={seal.state}
             seal={seal}
-            size={56}
+            size={ssStampSize.spread}
             showBadge
             animateEarned={isCelebrating}
             showProgressRing

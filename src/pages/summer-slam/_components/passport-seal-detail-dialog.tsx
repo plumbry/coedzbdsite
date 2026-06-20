@@ -28,6 +28,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile.ts";
 import { cn } from "@/lib/utils.ts";
 import { getDestination } from "./passport-destinations.ts";
+import { ssStampSize } from "./passport-dashboard-theme.ts";
 import { PassportSealImage } from "./passport-seal-image.tsx";
 import { PassportStatusBadge } from "./passport-status-badge.tsx";
 import {
@@ -125,7 +126,7 @@ function SealDetailBody({
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-4">
-        <PassportSealImage meta={meta} state={seal.state} seal={seal} size={88} showProgressRing />
+        <PassportSealImage meta={meta} state={seal.state} seal={seal} size={ssStampSize.detail} showProgressRing />
         <div className="min-w-0 space-y-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-700">
             {destination.name}

@@ -48,3 +48,17 @@ export const ssPassportPage =
 
 export const ssPassportSpine =
   "absolute inset-y-2 left-1/2 hidden w-px -translate-x-1/2 border-l border-dashed border-orange-300/50 lg:block";
+
+/** Stamp image display sizes (px) — keep in sync across passport views. */
+export const ssStampSize = {
+  spread: 64,
+  challenge: 44,
+  detail: 100,
+  hero: 136,
+  mini: 38,
+  animation: 56,
+  default: 108,
+  journey: 120,
+  journeyMobile: 84,
+  category: 46,
+} as const;

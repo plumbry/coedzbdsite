@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
 import { getDestination } from "./passport-destinations.ts";
 import { PassportAtmosphere } from "./passport-atmosphere.tsx";
-import { ssCard, ssLabel } from "./passport-dashboard-theme.ts";
+import { ssCard, ssLabel, ssStampSize } from "./passport-dashboard-theme.ts";
 import { PassportSealImage } from "./passport-seal-image.tsx";
 import type { SealProgress, SealTask } from "./passport-seal.ts";
 import type { QuestEntry } from "./passport-types.ts";
@@ -111,7 +111,7 @@ export function PassportNextDestination({
             className="mx-auto shrink-0 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 sm:mx-0"
             aria-label={`View ${meta.title}`}
           >
-            <PassportSealImage meta={meta} state={state} seal={seal} size={120} showProgressRing />
+            <PassportSealImage meta={meta} state={state} seal={seal} size={ssStampSize.hero} showProgressRing />
           </button>
 
           <div className="min-w-0 flex-1 space-y-3">
