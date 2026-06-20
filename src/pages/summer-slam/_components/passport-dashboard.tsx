@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { getDestination } from "./passport-destinations.ts";
-import { PassportHero } from "./passport-hero.tsx";
+import { PassportHero, PassportProgressStats } from "./passport-hero.tsx";
 import { PassportIdentitySection } from "./passport-identity-section.tsx";
 import { PassportJourneyRoute } from "./passport-journey-route.tsx";
 import { PassportSpread } from "./passport-spread.tsx";
@@ -111,16 +111,7 @@ export function PassportDashboard({
     <div className={cn(ssStack, "pb-8")}>
       <PassportOnboarding />
 
-      <PassportHero
-        title={campaignTitle}
-        daysRemaining={season.daysRemaining}
-        earnedSeals={season.earnedSeals}
-        totalSeals={season.totalSeals}
-        approvedQuests={season.approvedQuests}
-        totalQuests={season.totalQuests}
-        questPercent={season.questPercent}
-        currentDestination={currentDestination}
-      />
+      <PassportHero title={campaignTitle} />
 
       {onSaveAvatar ? (
         <PassportIdentitySection
@@ -132,6 +123,16 @@ export function PassportDashboard({
           onSaveAvatar={onSaveAvatar}
         />
       ) : null}
+
+      <PassportProgressStats
+        daysRemaining={season.daysRemaining}
+        earnedSeals={season.earnedSeals}
+        totalSeals={season.totalSeals}
+        approvedQuests={season.approvedQuests}
+        totalQuests={season.totalQuests}
+        questPercent={season.questPercent}
+        currentDestination={currentDestination}
+      />
 
       <PassportSpread
         seals={seals}
