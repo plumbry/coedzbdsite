@@ -73,7 +73,7 @@ function SealSlot({
             showBadge
             animateEarned={isCelebrating}
             showProgressRing
-            className="w-full"
+            className="w-[85%]"
           />
 
           <p className="mt-0.5 w-full truncate text-[9px] font-bold text-orange-950 sm:text-[10px]">{dest.name}</p>

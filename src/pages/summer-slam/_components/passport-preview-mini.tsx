@@ -57,7 +57,7 @@ export function PassportPreviewMini({ className }: { className?: string }) {
                 index === 4 && "col-start-3 sm:col-start-auto",
               )}
             >
-              <PassportSealImage meta={seal.meta} state={seal.state} seal={seal} fill showBadge={false} className="w-full" />
+              <PassportSealImage meta={seal.meta} state={seal.state} seal={seal} fill showBadge={false} className="w-[85%]" />
               <span className="truncate text-[8px] font-semibold text-orange-800/60">
                 {DESTINATION_ORDER[index]?.name.split(" ")[0]}
               </span>
