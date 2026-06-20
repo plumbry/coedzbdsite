@@ -111,28 +111,35 @@ export function PassportDashboard({
     <div className={cn(ssStack, "pb-8")}>
       <PassportOnboarding />
 
-      <PassportHero title={campaignTitle} />
+      <div className="space-y-5">
+        <PassportHero title={campaignTitle} />
 
-      {onSaveAvatar ? (
-        <PassportIdentitySection
-          playerName={playerName}
-          avatarId={avatarId}
-          earnedSeals={season.earnedSeals}
-          totalSeals={season.totalSeals}
-          completionPercent={season.questPercent}
-          onSaveAvatar={onSaveAvatar}
-        />
-      ) : null}
-
-      <PassportProgressStats
-        daysRemaining={season.daysRemaining}
-        earnedSeals={season.earnedSeals}
-        totalSeals={season.totalSeals}
-        approvedQuests={season.approvedQuests}
-        totalQuests={season.totalQuests}
-        questPercent={season.questPercent}
-        currentDestination={currentDestination}
-      />
+        {onSaveAvatar ? (
+          <PassportIdentitySection
+            playerName={playerName}
+            avatarId={avatarId}
+            earnedSeals={season.earnedSeals}
+            totalSeals={season.totalSeals}
+            completionPercent={season.questPercent}
+            onSaveAvatar={onSaveAvatar}
+            daysRemaining={season.daysRemaining}
+            approvedQuests={season.approvedQuests}
+            totalQuests={season.totalQuests}
+            questPercent={season.questPercent}
+            currentDestination={currentDestination}
+          />
+        ) : (
+          <PassportProgressStats
+            daysRemaining={season.daysRemaining}
+            earnedSeals={season.earnedSeals}
+            totalSeals={season.totalSeals}
+            approvedQuests={season.approvedQuests}
+            totalQuests={season.totalQuests}
+            questPercent={season.questPercent}
+            currentDestination={currentDestination}
+          />
+        )}
+      </div>
 
       <PassportSpread
         seals={seals}

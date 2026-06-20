@@ -13,7 +13,7 @@ export function PassportHero({
   className?: string;
 }) {
   return (
-    <header className={cn("overflow-hidden", className)}>
+    <header className={cn("overflow-hidden pb-1", className)}>
       <div className="flex flex-col items-center px-1 pt-1">
         <h1 className="sr-only">{title}</h1>
         <img
