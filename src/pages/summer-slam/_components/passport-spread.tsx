@@ -7,9 +7,7 @@ import { PassportSectionHeader } from "./passport-section-header.tsx";
 import { SEAL_BADGE_CONFIG } from "./passport-status-badge.tsx";
 import {
   ssCard,
-  ssCardPad,
   ssInteractiveCard,
-  ssStampSize,
   ssStatusChip,
 } from "./passport-dashboard-theme.ts";
 import { PassportSealImage } from "./passport-seal-image.tsx";
@@ -28,11 +26,13 @@ function SealSlot({
   isNext,
   isCelebrating,
   onSelect,
+  className,
 }: {
   seal: SealProgress;
   isNext: boolean;
   isCelebrating: boolean;
   onSelect: (seal: SealProgress) => void;
+  className?: string;
 }) {
   const dest = getDestination(seal.id);
   const status = sealBadgeStatus(seal);
@@ -48,13 +48,14 @@ function SealSlot({
           onClick={() => onSelect(seal)}
           className={cn(
             ssInteractiveCard,
-            "relative flex min-w-0 flex-col items-center rounded-lg border p-1.5 text-center touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50",
+            "relative flex w-full min-w-0 flex-col items-center rounded-lg border px-1 py-1.5 text-center touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50",
             earned
               ? "border-teal-300/60 bg-teal-50/30"
               : isNext
                 ? "border-orange-400/50 bg-orange-50/50 ring-1 ring-orange-300/30"
                 : "border-orange-100/80 bg-white/80",
             isCelebrating && "motion-safe:animate-[stampImpact_0.7s_ease-out]",
+            className,
           )}
           aria-label={`${dest.name} — ${SEAL_BADGE_CONFIG[status].label}. ${statusTooltip} Tap to view requirements and progress.`}
         >
@@ -68,13 +69,14 @@ function SealSlot({
             meta={seal.meta}
             state={seal.state}
             seal={seal}
-            size={ssStampSize.spread}
+            fill
             showBadge
             animateEarned={isCelebrating}
             showProgressRing
+            className="w-full"
           />
 
-          <p className="mt-1 w-full truncate text-[10px] font-bold text-orange-950">{dest.name}</p>
+          <p className="mt-0.5 w-full truncate text-[9px] font-bold text-orange-950 sm:text-[10px]">{dest.name}</p>
           <span className={ssStatusChip(status, "mt-0.5")}>
             {status === "needs_changes"
               ? "Fix"
@@ -87,7 +89,7 @@ function SealSlot({
                     : "Locked"}
           </span>
           {earnedDate ? (
-            <span className="mt-0.5 text-[9px] text-teal-700/70">{earnedDate}</span>
+            <span className="mt-0.5 hidden text-[9px] text-teal-700/70 sm:inline">{earnedDate}</span>
           ) : null}
         </button>
       </TooltipTrigger>
@@ -133,15 +135,19 @@ export function PassportSpread({
         className="px-1 sm:px-2"
       />
 
-      <div className={cn(ssCard, ssCardPad)}>
-        <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
-          {seals.map((seal) => (
+      <div className={cn(ssCard, "p-2 sm:p-4")}>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-2.5">
+          {seals.map((seal, index) => (
             <SealSlot
               key={seal.id}
               seal={seal}
               isNext={seal.id === nextSealId}
               isCelebrating={!reduceMotion && celebrating.includes(seal.id)}
               onSelect={onSelect}
+              className={cn(
+                index === 3 && "col-start-1 sm:col-start-auto",
+                index === 4 && "col-start-3 sm:col-start-auto",
+              )}
             />
           ))}
         </div>

@@ -15,7 +15,8 @@ export function PassportSealImage({
   meta,
   state,
   seal,
-  size = 108,
+  size = 120,
+  fill = false,
   className,
   showBadge = true,
   animateEarned = false,
@@ -25,6 +26,8 @@ export function PassportSealImage({
   state: SealState;
   seal?: SealProgress;
   size?: number;
+  /** When true, stamp fills the parent width (square aspect). */
+  fill?: boolean;
   className?: string;
   showBadge?: boolean;
   animateEarned?: boolean;
@@ -37,17 +40,42 @@ export function PassportSealImage({
   const needsChanges = badgeStatus === "needs_changes";
   const inProgress = state === "in_progress" && !needsChanges;
   const percent = seal?.percent ?? 0;
-  const ringSize = size + 12;
   const strokeWidth = 3;
+  const ringSize = size + 12;
   const radius = (ringSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
   return (
     <div
-      className={cn("relative inline-flex shrink-0 items-center justify-center", className)}
-      style={{ width: size, height: size }}
+      className={cn(
+        "relative inline-flex shrink-0 items-center justify-center",
+        fill && "aspect-square w-full",
+        className,
+      )}
+      style={fill ? undefined : { width: size, height: size }}
     >
       {showProgressRing && inProgress && percent > 0 ? (
+        fill ? (
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full -rotate-90"
+            viewBox="0 0 100 100"
+            aria-hidden
+          >
+            <circle cx={50} cy={50} r={46} fill="none" stroke="rgba(249,115,22,0.15)" strokeWidth={3} />
+            <circle
+              cx={50}
+              cy={50}
+              r={46}
+              fill="none"
+              stroke={meta.accent}
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeDasharray={2 * Math.PI * 46}
+              strokeDashoffset={2 * Math.PI * 46 * (1 - percent / 100)}
+              className="transition-[stroke-dashoffset] duration-700"
+            />
+          </svg>
+        ) : (
         <svg
           className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90"
           width={ringSize}
@@ -75,13 +103,14 @@ export function PassportSealImage({
             className="transition-[stroke-dashoffset] duration-700"
           />
         </svg>
+        )
       ) : null}
 
       <img
         src={meta.image}
         alt={`${meta.title} — ${sealStateLabel(state)}`}
-        width={size}
-        height={size}
+        width={fill ? undefined : size}
+        height={fill ? undefined : size}
         loading="lazy"
         draggable={false}
         className={cn(

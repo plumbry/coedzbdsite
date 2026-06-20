@@ -51,14 +51,13 @@ export const ssPassportSpine =
 
 /** Stamp image display sizes (px) — keep in sync across passport views. */
 export const ssStampSize = {
-  spread: 64,
-  challenge: 44,
-  detail: 100,
-  hero: 136,
-  mini: 38,
-  animation: 56,
-  default: 108,
-  journey: 120,
-  journeyMobile: 84,
-  category: 46,
+  challenge: 56,
+  detail: 120,
+  hero: 180,
+  mini: 42,
+  animation: 64,
+  default: 120,
+  journey: 136,
+  journeyMobile: 96,
+  category: 52,
 } as const;

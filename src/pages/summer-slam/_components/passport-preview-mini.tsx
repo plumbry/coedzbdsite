@@ -5,7 +5,6 @@ import {
   ssAccentBarClass,
   ssCardPad,
   ssLabel,
-  ssStampSize,
 } from "./passport-dashboard-theme.ts";
 import { MOCK_CAMPAIGN, MOCK_PLAYER, MOCK_QUEST_ENTRIES } from "./passport-mock-data.ts";
 import { PassportSealImage } from "./passport-seal-image.tsx";
@@ -48,10 +47,17 @@ export function PassportPreviewMini({ className }: { className?: string }) {
             style={{ width: `${season.percent}%` }}
           />
         </div>
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
           {seals.map((seal, index) => (
-            <div key={seal.id} className="flex flex-col items-center gap-0.5">
-              <PassportSealImage meta={seal.meta} state={seal.state} seal={seal} size={ssStampSize.mini} showBadge={false} />
+            <div
+              key={seal.id}
+              className={cn(
+                "flex flex-col items-center gap-0.5",
+                index === 3 && "col-start-1 sm:col-start-auto",
+                index === 4 && "col-start-3 sm:col-start-auto",
+              )}
+            >
+              <PassportSealImage meta={seal.meta} state={seal.state} seal={seal} fill showBadge={false} className="w-full" />
               <span className="truncate text-[8px] font-semibold text-orange-800/60">
                 {DESTINATION_ORDER[index]?.name.split(" ")[0]}
               </span>

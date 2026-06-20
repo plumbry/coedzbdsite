@@ -104,11 +104,11 @@ export function PassportNextDestination({
           </span>
         </div>
 
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           <button
             type="button"
             onClick={() => onViewSeal(seal)}
-            className="mx-auto shrink-0 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 sm:mx-0"
+            className="mx-auto shrink-0 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 sm:mx-0 sm:self-center"
             aria-label={`View ${meta.title}`}
           >
             <PassportSealImage meta={meta} state={state} seal={seal} size={ssStampSize.hero} showProgressRing />
