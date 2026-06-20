@@ -2,11 +2,11 @@ export const PASSPORT_BIRTHPLACE_IDS = [
   "paradise_palms",
   "sunny_steps",
   "sweaty_sands",
-  "believer_beach",
+  "coral_castle",
   "lazy_lagoon",
   "heatwave_harbor",
   "sunken_shores",
-  "golden_grove",
+  "rave_cave",
   "cluster_coast",
 ] as const;
 
@@ -21,11 +21,11 @@ export const PASSPORT_BIRTHPLACES: PassportBirthplace[] = [
   { id: "paradise_palms", label: "Paradise Palms" },
   { id: "sunny_steps", label: "Sunny Steps" },
   { id: "sweaty_sands", label: "Sweaty Sands" },
-  { id: "believer_beach", label: "Believer Beach" },
+  { id: "coral_castle", label: "Coral Castle" },
   { id: "lazy_lagoon", label: "Lazy Lagoon" },
   { id: "heatwave_harbor", label: "Heatwave Harbor" },
   { id: "sunken_shores", label: "Sunken Shores" },
-  { id: "golden_grove", label: "Golden Grove" },
+  { id: "rave_cave", label: "Rave Cave" },
   { id: "cluster_coast", label: "Cluster Coast" },
 ];
 

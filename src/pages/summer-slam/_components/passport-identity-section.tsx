@@ -4,13 +4,13 @@ import { PassportAvatarPickerDialog } from "./passport-avatar-picker-dialog.tsx"
 import { PassportIdentityCard } from "./passport-identity-card.tsx";
 import type { PassportAvatarId } from "./passport-avatars.ts";
 import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
+import type { SealProgress } from "./passport-seal.ts";
 
 export function PassportIdentitySection({
   playerName,
   avatarId,
   birthplaceId,
-  earnedSeals,
-  totalSeals,
+  seals,
   completionPercent,
   currentDestination,
   daysRemaining,
@@ -21,8 +21,7 @@ export function PassportIdentitySection({
   playerName: string;
   avatarId: PassportAvatarId | null | undefined;
   birthplaceId: PassportBirthplaceId | null | undefined;
-  earnedSeals: number;
-  totalSeals: number;
+  seals: SealProgress[];
   completionPercent: number;
   currentDestination: string | null;
   daysRemaining: number | null;
@@ -63,8 +62,7 @@ export function PassportIdentitySection({
         playerName={playerName}
         avatarId={avatarId}
         birthplaceId={birthplaceId}
-        earnedSeals={earnedSeals}
-        totalSeals={totalSeals}
+        seals={seals}
         completionPercent={completionPercent}
         currentDestination={currentDestination}
         daysRemaining={daysRemaining}

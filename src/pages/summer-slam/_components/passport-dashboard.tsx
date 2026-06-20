@@ -124,8 +124,7 @@ export function PassportDashboard({
             playerName={playerName}
             avatarId={avatarId}
             birthplaceId={birthplaceId}
-            earnedSeals={season.earnedSeals}
-            totalSeals={season.totalSeals}
+            seals={seals}
             completionPercent={season.questPercent}
             currentDestination={currentDestination}
             daysRemaining={season.daysRemaining}
