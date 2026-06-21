@@ -68,13 +68,18 @@ const STEPS = [
 ];
 
 const TAB_TRIGGER_CLASS =
-  "flex flex-1 items-center justify-center rounded-md border border-transparent px-3 py-2 text-center text-xs font-semibold sm:text-sm " +
+  "flex flex-1 items-center justify-center rounded-md border border-transparent px-3 py-2 text-center text-sm font-semibold sm:text-base " +
   "transition-[color,background-color,box-shadow] " +
   "data-[state=inactive]:bg-transparent data-[state=inactive]:text-orange-800/55 " +
   "data-[state=inactive]:hover:bg-orange-100/80 data-[state=inactive]:hover:text-orange-950 " +
   "data-[state=active]:!border-teal-700/30 data-[state=active]:!bg-teal-600 data-[state=active]:!text-white " +
   "data-[state=active]:shadow-sm data-[state=active]:hover:!bg-teal-700 " +
   "focus-visible:ring-teal-400/50";
+
+const GUIDE_TAB_PANEL_CLASS =
+  "col-start-1 row-start-1 mt-0 text-center data-[state=inactive]:pointer-events-none data-[state=inactive]:invisible";
+const GUIDE_STEP_TITLE_CLASS = "text-sm font-semibold text-orange-950";
+const GUIDE_STEP_BODY_CLASS = "text-[13px] text-orange-900/55";
 
 function getPrizeItems(littleEvery: number, bigEvery: number) {
   const fullPassport = SEASON_REWARDS.find((reward) => reward.id === "passport");
@@ -195,16 +200,16 @@ export default function SummerSlamLandingPage() {
                 className={cn(ssCard, ssCardPad, ssPassportStretchPanel)}
                 aria-label="Summer Slam guide"
               >
-                <Tabs defaultValue="how-it-works" className="gap-3">
+                <Tabs defaultValue="how-it-works" className="flex min-h-0 flex-1 flex-col gap-3">
                   {campaign === undefined ? (
                     <Skeleton className={cn("mx-auto h-4 w-full max-w-md", ssSkeleton)} />
                   ) : (
                     <div className="space-y-2 text-center">
-                      <p className="text-xs leading-relaxed text-orange-900/60 sm:text-sm">
+                      <p className="text-sm leading-relaxed text-orange-900/60 sm:text-base">
                         {campaignDescription}
                       </p>
                       {statusMessage ? (
-                        <p className="rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-xs text-orange-900/70">
+                        <p className="rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-sm text-orange-900/70">
                           {statusMessage}
                         </p>
                       ) : null}
@@ -219,57 +224,59 @@ export default function SummerSlamLandingPage() {
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="how-it-works" className="mt-0 text-center">
-                    <ol className="space-y-3">
-                      {STEPS.map((step, index) => (
-                        <li key={step.title} className="flex flex-col items-center gap-1.5">
-                          <div
-                            className={cn(
-                              "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-orange-700",
-                              ssMutedSurface,
-                            )}
-                          >
-                            <step.icon className="h-4 w-4" />
-                          </div>
-                          <div className="min-w-0 max-w-md">
-                            <p className="text-xs font-semibold text-orange-950">
-                              {index + 1}. {step.title}
-                            </p>
-                            <p className="text-[11px] text-orange-900/55">{step.body}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  </TabsContent>
+                  <div className="grid min-h-0 flex-1">
+                    <TabsContent forceMount value="how-it-works" className={GUIDE_TAB_PANEL_CLASS}>
+                      <ol className="space-y-3">
+                        {STEPS.map((step, index) => (
+                          <li key={step.title} className="flex flex-col items-center gap-1.5">
+                            <div
+                              className={cn(
+                                "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-orange-700",
+                                ssMutedSurface,
+                              )}
+                            >
+                              <step.icon className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 max-w-md">
+                              <p className={GUIDE_STEP_TITLE_CLASS}>
+                                {index + 1}. {step.title}
+                              </p>
+                              <p className={GUIDE_STEP_BODY_CLASS}>{step.body}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    </TabsContent>
 
-                  <TabsContent value="prizes" className="mt-0 text-center">
-                    <p className="mx-auto max-w-md text-xs leading-relaxed text-orange-900/60">
-                      Complete quests to earn wheel tickets for prize draws, and finish every stamp
-                      category for the full passport reward.
-                    </p>
-                    <ul className="mt-3 space-y-3">
-                      {prizeItems.map((prize) => (
-                        <li key={prize.title} className="flex flex-col items-center gap-1.5">
-                          <div
-                            className={cn(
-                              "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-orange-700",
-                              ssMutedSurface,
-                            )}
-                          >
-                            <prize.icon className="h-4 w-4" />
-                          </div>
-                          <div className="min-w-0 max-w-md">
-                            <p className="text-xs font-semibold text-orange-950">{prize.title}</p>
-                            <p className="text-[11px] text-orange-900/55">{prize.body}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="mx-auto mt-3 max-w-md text-[11px] text-orange-800/45">
-                      Draw dates and prize details are announced in Discord. Ticket totals are tracked
-                      on your passport.
-                    </p>
-                  </TabsContent>
+                    <TabsContent forceMount value="prizes" className={GUIDE_TAB_PANEL_CLASS}>
+                      <p className={cn("mx-auto max-w-md leading-relaxed", GUIDE_STEP_BODY_CLASS)}>
+                        Complete quests to earn wheel tickets for prize draws, and finish every stamp
+                        category for the full passport reward.
+                      </p>
+                      <ul className="mt-3 space-y-3">
+                        {prizeItems.map((prize) => (
+                          <li key={prize.title} className="flex flex-col items-center gap-1.5">
+                            <div
+                              className={cn(
+                                "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-orange-700",
+                                ssMutedSurface,
+                              )}
+                            >
+                              <prize.icon className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 max-w-md">
+                              <p className={GUIDE_STEP_TITLE_CLASS}>{prize.title}</p>
+                              <p className={GUIDE_STEP_BODY_CLASS}>{prize.body}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className={cn("mx-auto mt-3 max-w-md text-orange-800/45", GUIDE_STEP_BODY_CLASS)}>
+                        Draw dates and prize details are announced in Discord. Ticket totals are tracked
+                        on your passport.
+                      </p>
+                    </TabsContent>
+                  </div>
                 </Tabs>
               </section>
             </div>

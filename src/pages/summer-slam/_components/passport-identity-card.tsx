@@ -112,6 +112,11 @@ function BonusSealButton({
   onSelect: () => void;
 }) {
   const earned = bonusSeal.state === "earned";
+  const showArtwork = bonusUnlocked;
+  const displayState = earned ? "earned" : bonusUnlocked ? "in_progress" : "locked";
+  const stampMeta = showArtwork
+    ? { ...bonusSeal.meta, image: BONUS_STAMP_META.image }
+    : { ...bonusSeal.meta, image: "" };
   const progressLabel = earned
     ? "Done"
     : bonusUnlocked && bonusSeal.total > 0
@@ -141,11 +146,12 @@ function BonusSealButton({
         }
       >
         <PassportSealImage
-          meta={earned ? bonusSeal.meta : { ...bonusSeal.meta, image: "" }}
-          state={earned ? "earned" : "locked"}
-          seal={earned ? bonusSeal : undefined}
+          meta={stampMeta}
+          state={showArtwork ? displayState : "locked"}
+          seal={showArtwork ? bonusSeal : undefined}
           fill
-          showBadge={earned}
+          showBadge={showArtwork}
+          showProgressRing={bonusUnlocked && !earned}
           className={COLLECTION_STAMP_SLOT}
         />
       </button>
