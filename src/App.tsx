@@ -42,6 +42,7 @@ import ScrimSeriesLandingPage from "./pages/scrim-series/page.tsx";
 import ScrimSeriesLeaderboardPage from "./pages/scrim-series/leaderboard.tsx";
 import SummerSlamLandingPage from "./pages/summer-slam/page.tsx";
 import SummerSlamPassportPage from "./pages/summer-slam/passport.tsx";
+import SummerSlamPassportDemoPage from "./pages/summer-slam/passport-demo.tsx";
 import TierRestrictionsPage from "./pages/tier-restrictions/page.tsx";
 import SsoCallbackPage from "./pages/auth/sso-callback.tsx";
 
@@ -112,6 +113,7 @@ export default function App() {
           <Route path="/scrim-series" element={<ScrimSeriesLandingPage />} />
           <Route path="/scrim-series/:slug" element={<ScrimSeriesLeaderboardPage />} />
           <Route path="/summer-slam" element={<SummerSlamLandingPage />} />
+          <Route path="/summer-slam/passport/demo" element={<SummerSlamPassportDemoPage />} />
           <Route path="/summer-slam/passport" element={<SummerSlamPassportPage />} />
           <Route path="/spin/:eventId" element={<ScrimEventPage />} />
           <Route path="/tier-restrictions" element={<TierRestrictionsPage />} />
