@@ -37,7 +37,11 @@ export const PASSPORT_HEADER = {
   src: summerSlamAsset("/summer-slam/passport-header.png"),
   width: 944,
   height: 375,
+  /** Stay at/below native width so desktop layout never upscales the PNG. */
+  displayMaxWidth: 880,
 } as const;
+
+export const PASSPORT_HEADER_IMG_CLASS = "h-auto w-full max-w-[min(100%,880px)]";
 
 export const STAMP_IMAGES = {
   traveller: summerSlamAsset("/summer-slam/seals/traveller.png"),

@@ -1,10 +1,8 @@
-import { CheckCircle2, Clock, Inbox, AlertCircle } from "lucide-react";
+import { AlertCircle, Clock, Inbox } from "lucide-react";
+import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
 import { PassportSectionHeader } from "./passport-section-header.tsx";
-import {
-  ssCard,
-  ssCardPad,
-} from "./passport-dashboard-theme.ts";
+import { ssCard, ssCardPad } from "./passport-dashboard-theme.ts";
 import { getDestination } from "./passport-destinations.ts";
 import {
   getQuestStatus,
@@ -12,10 +10,10 @@ import {
   type QuestEntry,
 } from "./passport-types.ts";
 
-type ReviewItem = {
+type OutstandingItem = {
   entry: QuestEntry;
   category: QuestCategory;
-  kind: "pending" | "needs_fix" | "approved";
+  kind: "pending" | "needs_update";
   timestamp: number;
 };
 
@@ -30,117 +28,138 @@ function relativeTime(timestamp: number, now = Date.now()): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function buildReviewItems(quests: QuestEntry[]): ReviewItem[] {
-  const items: ReviewItem[] = [];
+function buildOutstandingItems(quests: QuestEntry[]): OutstandingItem[] {
+  const items: OutstandingItem[] = [];
   for (const entry of quests) {
     const status = getQuestStatus(entry);
     const category = entry.quest.category as QuestCategory;
-    const updatedAt = entry.progress?.updatedAt ?? entry.progress?.approvedAt ?? 0;
+    const timestamp = entry.progress?.updatedAt ?? 0;
     if (status === "pending_review") {
-      items.push({ entry, category, kind: "pending", timestamp: updatedAt });
+      items.push({ entry, category, kind: "pending", timestamp });
     } else if (status === "rejected" || status === "needs_more_evidence") {
-      items.push({ entry, category, kind: "needs_fix", timestamp: updatedAt });
-    } else if (status === "approved" && entry.progress?.awardSource !== "auto") {
-      items.push({
-        entry,
-        category,
-        kind: "approved",
-        timestamp: entry.progress?.approvedAt ?? updatedAt,
-      });
+      items.push({ entry, category, kind: "needs_update", timestamp });
     }
   }
 
-  const rank = { pending: 0, needs_fix: 1, approved: 2 } as const;
+  const rank = { needs_update: 0, pending: 1 } as const;
   return items
     .sort((a, b) => rank[a.kind] - rank[b.kind] || b.timestamp - a.timestamp)
-    .slice(0, 6);
+    .slice(0, 3);
 }
 
-function TimelineRow({
+function OutstandingRow({
   item,
-  onOpen,
+  onUpdateEvidence,
 }: {
-  item: ReviewItem;
-  onOpen: (entry: QuestEntry) => void;
+  item: OutstandingItem;
+  onUpdateEvidence: (entry: QuestEntry) => void;
 }) {
   const dest = getDestination(item.category);
-  const config =
-    item.kind === "pending"
-      ? {
-          icon: Clock,
-          label: "Review",
-          tone: "text-amber-700 bg-amber-50 border-amber-100",
-          detail: relativeTime(item.timestamp),
-        }
-      : item.kind === "needs_fix"
-        ? {
-            icon: AlertCircle,
-            label: "Update",
-            tone: "text-orange-800 bg-orange-50 border-orange-100",
-            detail: "Needs changes",
-          }
-        : {
-            icon: CheckCircle2,
-            label: "Approved",
-            tone: "text-teal-800 bg-teal-50 border-teal-100",
-            detail: relativeTime(item.timestamp),
-          };
-  const Icon = config.icon;
+  const staffNote = item.entry.progress?.awardLog?.trim();
+  const canUpdate = item.kind === "needs_update";
 
   return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onOpen(item.entry)}
-        className="flex w-full items-center gap-2 rounded-lg border border-orange-100/80 bg-white/90 px-2 py-1.5 text-left touch-manipulation hover:border-teal-200 hover:bg-teal-50/30"
-      >
+    <li className="rounded-lg border border-orange-100/90 bg-white/90 px-2.5 py-2">
+      <div className="flex items-start gap-2">
         <span
           className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-            config.tone,
+            "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+            canUpdate
+              ? "border-red-300 bg-red-50 text-red-600"
+              : "border-amber-300 bg-amber-50 text-amber-700",
           )}
+          aria-hidden
         >
-          <Icon className="h-3 w-3" aria-hidden />
+          {canUpdate ? (
+            <span className="text-[11px] font-bold leading-none">!</span>
+          ) : (
+            <Clock className="h-3 w-3" />
+          )}
         </span>
-        <span className="min-w-0 flex-1 truncate text-xs font-medium text-orange-950">
-          {item.entry.quest.title}
-        </span>
-        <span className="shrink-0 text-[10px] text-orange-700/50">{dest.name.split(" ")[0]}</span>
-        <span className={cn("shrink-0 rounded px-1.5 py-px text-[9px] font-semibold uppercase", config.tone)}>
-          {config.label}
-        </span>
-      </button>
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-medium text-orange-950">{item.entry.quest.title}</p>
+          <p className="text-[10px] text-orange-700/50">
+            {dest.name.split(" ")[0]} · {relativeTime(item.timestamp)}
+          </p>
+          {canUpdate && staffNote ? (
+            <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-red-800/70">{staffNote}</p>
+          ) : null}
+          {!canUpdate ? (
+            <p className="mt-1 text-[10px] text-amber-800/70">Awaiting staff review</p>
+          ) : null}
+        </div>
+
+        {canUpdate ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 touch-manipulation border-red-200 px-2 text-[10px] text-red-800 hover:bg-red-50 hover:text-red-900"
+            onClick={() => onUpdateEvidence(item.entry)}
+          >
+            Update
+          </Button>
+        ) : (
+          <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-800 bg-amber-50 border border-amber-100">
+            Pending
+          </span>
+        )}
+      </div>
     </li>
   );
 }
 
 export function PassportEvidenceReviewPanel({
   quests,
-  onOpenTask,
+  onUpdateEvidence,
+  className,
 }: {
   quests: QuestEntry[];
-  onOpenTask: (entry: QuestEntry) => void;
+  onUpdateEvidence: (entry: QuestEntry) => void;
+  className?: string;
 }) {
-  const items = buildReviewItems(quests);
+  const items = buildOutstandingItems(quests);
 
   return (
-    <section className={cn(ssCard, ssCardPad)} aria-label="Recent activity">
-      <PassportSectionHeader title="Recent Activity" description="Submissions & reviews" />
+    <section
+      className={cn(ssCard, ssCardPad, "flex flex-col lg:min-h-0", className)}
+      aria-label="Recent activity"
+    >
+      <PassportSectionHeader
+        title="Recent Activity"
+        description="Outstanding evidence submissions"
+      />
 
-      {items.length === 0 ? (
-        <div className="flex items-center gap-2 rounded-lg border border-dashed border-orange-200 bg-orange-50/40 px-3 py-4 text-xs text-orange-800/60">
-          <Inbox className="h-4 w-4 shrink-0 text-orange-400" aria-hidden />
-          No submissions yet — complete a challenge to see review status here.
-        </div>
-      ) : (
-        <ul className="space-y-1">
-          {items.map((item) => (
-            <TimelineRow key={item.entry.quest._id} item={item} onOpen={onOpenTask} />
-          ))}
-        </ul>
-      )}
+      <div className="mt-2 flex min-h-0 flex-1 flex-col">
+        {items.length === 0 ? (
+          <div className="flex flex-1 items-center gap-2 rounded-lg border border-dashed border-orange-200 bg-orange-50/40 px-3 py-4 text-xs text-orange-800/60">
+            <Inbox className="h-4 w-4 shrink-0 text-orange-400" aria-hidden />
+            No outstanding submissions — evidence you send for review will appear here.
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {items.map((item) => (
+              <OutstandingRow
+                key={item.entry.quest._id}
+                item={item}
+                onUpdateEvidence={onUpdateEvidence}
+              />
+            ))}
+          </ul>
+        )}
 
-      <p className="mt-2 text-[10px] text-orange-400/70">Typical review · 48–72h</p>
+        <p className="mt-auto pt-3 text-[10px] text-orange-400/70">
+          {items.some((item) => item.kind === "needs_update") ? (
+            <span className="inline-flex items-center gap-1">
+              <AlertCircle className="h-3 w-3 text-red-500" aria-hidden />A red mark means staff
+              returned a quest — update your evidence and resubmit.
+            </span>
+          ) : (
+            "Typical review · 48–72h"
+          )}
+        </p>
+      </div>
     </section>
   );
 }

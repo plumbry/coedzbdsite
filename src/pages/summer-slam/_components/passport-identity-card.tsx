@@ -428,7 +428,7 @@ export function PassportIdentityCard({
           <div
             className={cn(
               "flex flex-col gap-5 lg:min-h-0 lg:flex-1",
-              pageOpen && "pointer-events-none invisible lg:hidden",
+              pageOpen && "pointer-events-none invisible",
             )}
             aria-hidden={pageOpen || undefined}
           >
@@ -603,7 +603,7 @@ export function PassportIdentityCard({
           </div>
 
           {pageOpen ? (
-            <div className="absolute inset-0 flex min-h-0 flex-col overflow-hidden lg:static lg:inset-auto lg:min-h-0 lg:flex-1">
+            <div className="absolute inset-0 flex min-h-0 flex-col overflow-hidden">
               {children}
             </div>
           ) : null}

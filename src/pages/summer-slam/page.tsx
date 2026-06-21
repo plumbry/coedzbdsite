@@ -29,7 +29,7 @@ import {
 } from "./_components/passport-dashboard-theme.ts";
 import { PassportPreviewMini } from "./_components/passport-preview-mini.tsx";
 import { SEASON_REWARDS } from "./_components/passport-destinations.ts";
-import { PASSPORT_HEADER } from "./_components/passport-assets.ts";
+import { PASSPORT_HEADER, PASSPORT_HEADER_IMG_CLASS } from "./_components/passport-assets.ts";
 import { CAMPAIGN_SLUG, getPassportErrorTitle, mapEnsurePassportError } from "./_components/passport-types.ts";
 import { Compass, Gift, Sparkles, Stamp, Sun, Trophy, Upload, UserCheck } from "lucide-react";
 
@@ -158,7 +158,7 @@ export default function SummerSlamLandingPage() {
                 alt={campaign?.title ?? "Summer Slam Passport"}
                 width={PASSPORT_HEADER.width}
                 height={PASSPORT_HEADER.height}
-                className="h-auto w-full max-w-[min(100%,944px)] lg:max-w-none"
+                className={PASSPORT_HEADER_IMG_CLASS}
               />
             </div>
           </header>
@@ -199,45 +199,45 @@ export default function SummerSlamLandingPage() {
               </Button>
             </div>
 
+            <header className={cn("mx-auto w-full max-w-3xl overflow-hidden text-center", ssCard)}>
+              <div className={ssAccentBarClass} aria-hidden />
+              <div className={ssCardPad}>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider",
+                      badge.className,
+                    )}
+                  >
+                    {badge.label}
+                  </span>
+                  {campaign === undefined ? (
+                    <Skeleton className={cn("h-3 w-32", ssSkeleton)} />
+                  ) : campaignDateRange ? (
+                    <span className="text-[11px] text-orange-800/50">{campaignDateRange}</span>
+                  ) : null}
+                  <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
+                    <Sparkles className="h-3 w-3" aria-hidden />
+                    Summer Slam
+                  </span>
+                </div>
+                <h2 className={cn(ssDisplayTitle, "mt-1.5 text-xl sm:text-2xl")}>
+                  {campaign?.title ?? "Summer Slam Passport"}
+                </h2>
+                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-orange-900/60 sm:text-sm">
+                  {campaign?.description ??
+                    "Complete quests during scrims, submit evidence, earn a place on the prize wheel!"}
+                </p>
+                {statusMessage ? (
+                  <p className="mt-2 rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-xs text-orange-900/70">
+                    {statusMessage}
+                  </p>
+                ) : null}
+              </div>
+            </header>
+
             <div className="flex flex-col gap-6 lg:grid lg:items-stretch lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)] lg:gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
             <div className={cn(ssStack, "min-w-0")}>
-              <header className={cn("overflow-hidden", ssCard)}>
-                <div className={ssAccentBarClass} aria-hidden />
-                <div className={ssCardPad}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={cn(
-                        "rounded px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider",
-                        badge.className,
-                      )}
-                    >
-                      {badge.label}
-                    </span>
-                    {campaign === undefined ? (
-                      <Skeleton className={cn("h-3 w-32", ssSkeleton)} />
-                    ) : campaignDateRange ? (
-                      <span className="text-[11px] text-orange-800/50">{campaignDateRange}</span>
-                    ) : null}
-                    <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
-                      <Sparkles className="h-3 w-3" aria-hidden />
-                      Summer Slam
-                    </span>
-                  </div>
-                  <h2 className={cn(ssDisplayTitle, "mt-1.5 text-xl sm:text-2xl")}>
-                    {campaign?.title ?? "Summer Slam Passport"}
-                  </h2>
-                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-orange-900/60 sm:text-sm">
-                    {campaign?.description ??
-                      "Complete quests during scrims, submit evidence, earn a place on the prize wheel!"}
-                  </p>
-                  {statusMessage ? (
-                    <p className="mt-2 rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-xs text-orange-900/70">
-                      {statusMessage}
-                    </p>
-                  ) : null}
-                </div>
-              </header>
-
               <section className={cn(ssCard, ssCardPad)} aria-label="Summer Slam guide">
                 <Tabs defaultValue="how-it-works" className="gap-3">
                   <TabsList className="h-auto w-full justify-stretch rounded-lg border border-orange-200/60 bg-orange-50/50 p-1 text-orange-900">

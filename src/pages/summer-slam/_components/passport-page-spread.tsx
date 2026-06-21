@@ -1,5 +1,4 @@
 import {
-  AlertTriangle,
   ArrowLeft,
   Award,
   Check,
@@ -67,11 +66,12 @@ function ChecklistIcon({ task, compact }: { task: SealTask; compact?: boolean })
     return (
       <span
         className={cn(
-          "flex shrink-0 items-center justify-center rounded-full border border-orange-300 bg-orange-50 text-orange-700",
+          "flex shrink-0 items-center justify-center rounded-full border border-red-400 bg-red-50 text-red-600",
           size,
         )}
+        aria-label="Returned by staff — update evidence"
       >
-        <AlertTriangle className={iconSize} />
+        <span className={cn("font-bold leading-none", compact ? "text-[10px]" : "text-xs")}>!</span>
       </span>
     );
   }
@@ -195,7 +195,12 @@ function QuestListPage({
               <button
                 type="button"
                 onClick={() => onOpenTask(task.entry)}
-                className="flex w-full items-center gap-2 rounded-md border border-orange-100/90 bg-white/70 px-2 py-2 text-left touch-manipulation hover:border-teal-200/80 hover:bg-teal-50/30 lg:gap-1.5 lg:px-1.5 lg:py-1"
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md border bg-white/70 px-2 py-2 text-left touch-manipulation hover:border-teal-200/80 hover:bg-teal-50/30 lg:gap-1.5 lg:px-1.5 lg:py-1",
+                  task.needsFix
+                    ? "border-red-200/90 bg-red-50/20 hover:border-red-300 hover:bg-red-50/40"
+                    : "border-orange-100/90",
+                )}
               >
                 <ChecklistIcon task={task} compact />
                 <span

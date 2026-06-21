@@ -1,16 +1,13 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useReducedMotion } from "motion/react";
-import { ClipboardList } from "lucide-react";
-import { useUserRole } from "@/hooks/use-user-role.ts";
 import { PassportHero } from "./passport-hero.tsx";
 import { PassportIdentitySection } from "./passport-identity-section.tsx";
 import { PassportRewardsPanel } from "./passport-rewards-panel.tsx";
 import { PassportEvidenceReviewPanel } from "./passport-evidence-review-panel.tsx";
 import { PassportOnboarding } from "./passport-onboarding.tsx";
 import { PassportCertificateDownloadButton } from "./passport-certificate-download-button.tsx";
-import { ssCard, ssCardPad, ssStack } from "./passport-dashboard-theme.ts";
+import { ssStack } from "./passport-dashboard-theme.ts";
 import {
   buildSeals,
   summariseSeason,
@@ -69,7 +66,6 @@ export function PassportDashboard({
 }) {
   const [celebratingSealIds, setCelebratingSealIds] = useState<string[]>([]);
   const reduceMotion = useReducedMotion();
-  const { isModeratorOrAdmin } = useUserRole();
 
   const questsByCategory = useMemo(() => {
     const groups = new Map<string, QuestEntry[]>();
@@ -141,10 +137,11 @@ export function PassportDashboard({
             />
           </div>
 
-          <aside className={cn(ssStack, "min-w-0 gap-4")}>
+          <aside className={cn(ssStack, "min-w-0 gap-4 lg:flex lg:min-h-0 lg:flex-col")}>
             {notice}
 
             <PassportRewardsPanel
+              className="shrink-0"
               season={season}
               littleWheelEntries={wheelTotals.littleWheelEntries}
               bigWheelEntries={wheelTotals.bigWheelEntries}
@@ -159,30 +156,10 @@ export function PassportDashboard({
             />
 
             <PassportEvidenceReviewPanel
+              className="lg:min-h-0 lg:flex-1"
               quests={quests}
-              onOpenTask={onRequestEvidence}
+              onUpdateEvidence={onRequestEvidence}
             />
-
-            {isModeratorOrAdmin ? (
-              <section className={cn(ssCard, ssCardPad)} aria-label="Review queue">
-                <div className="mb-2 flex items-center gap-2">
-                  <ClipboardList className="h-4 w-4 text-orange-600/70" aria-hidden />
-                  <h2 className="text-base font-semibold text-orange-950">Review Queue</h2>
-                  <span className="rounded-full bg-orange-100 px-2 py-px text-[10px] font-semibold uppercase text-orange-700">
-                    Staff
-                  </span>
-                </div>
-                <p className="mb-3 text-xs text-orange-900/55">
-                  Review player evidence and approve stamps from the admin panel.
-                </p>
-                <Link
-                  to="/admin/summer-slam"
-                  className="inline-flex min-h-10 items-center rounded-lg border border-orange-200 bg-orange-50/50 px-3 text-sm font-medium text-teal-800 hover:bg-teal-50 touch-manipulation"
-                >
-                  Open review queue →
-                </Link>
-              </section>
-            ) : null}
           </aside>
         </div>
       </div>
