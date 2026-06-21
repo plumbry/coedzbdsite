@@ -23,6 +23,10 @@ import {
   ssDisplayTitle,
   ssMutedSurface,
   ssPageBg,
+  ssPassportGrid,
+  ssPassportMainColumn,
+  ssPassportSidebar,
+  ssPassportStretchPanel,
   ssSectionTitle,
   ssSkeleton,
   ssStack,
@@ -156,9 +160,9 @@ export default function SummerSlamLandingPage() {
           />
 
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <div className="flex flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:justify-center">
               {!isLoaded || campaign === undefined || isPassportStatusLoading ? (
-                <Skeleton className={cn("h-10 w-full sm:w-48", ssSkeleton)} />
+                <Skeleton className={cn("h-10 w-48 max-w-full", ssSkeleton)} />
               ) : canEnterPassport ? (
                 isSignedIn ? (
                   hasPassport ? (
@@ -228,9 +232,12 @@ export default function SummerSlamLandingPage() {
               </div>
             </header>
 
-            <div className="flex flex-col gap-6 lg:grid lg:items-stretch lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)] lg:gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
-            <div className={cn(ssStack, "min-w-0")}>
-              <section className={cn(ssCard, ssCardPad)} aria-label="Summer Slam guide">
+            <div className={ssPassportGrid}>
+            <div className={ssPassportMainColumn}>
+              <section
+                className={cn(ssCard, ssCardPad, ssPassportStretchPanel)}
+                aria-label="Summer Slam guide"
+              >
                 <Tabs defaultValue="how-it-works" className="gap-3">
                   <TabsList className="h-auto w-full justify-stretch rounded-lg border border-orange-200/60 bg-orange-50/50 p-1 text-orange-900">
                     <TabsTrigger value="how-it-works" className={TAB_TRIGGER_CLASS}>
@@ -296,13 +303,13 @@ export default function SummerSlamLandingPage() {
               </section>
             </div>
 
-            <aside className={cn(ssStack, "min-w-0 gap-4")}>
-              <PassportPreviewMini />
-              <p className="text-center text-[10px] text-orange-800/45 lg:text-left">
+            <aside className={ssPassportSidebar}>
+              <PassportPreviewMini className="shrink-0" />
+              <p className="shrink-0 text-center text-[10px] text-orange-800/45 lg:text-left">
                 Your passport updates as you complete quests
               </p>
 
-              <section className={cn(ssCard, ssCardPad)}>
+              <section className={cn(ssCard, ssCardPad, ssPassportStretchPanel)}>
                 <h2 className={ssSectionTitle}>Ticket totals</h2>
                 <p className="mt-1 text-[11px] leading-relaxed text-orange-900/55">
                   How approved quests convert to wheel entries:
