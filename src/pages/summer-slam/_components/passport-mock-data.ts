@@ -218,6 +218,32 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
   },
 ];
 
+function withApprovedProgress(entry: QuestEntry, daysAgo: number): QuestEntry {
+  const awardSource =
+    entry.quest.completionMethod === "auto"
+      ? "auto"
+      : entry.quest.completionMethod === "admin"
+        ? "admin"
+        : "manual_review";
+
+  return {
+    ...entry,
+    progress: {
+      status: "approved",
+      progressCurrent: 1,
+      progressTarget: 1,
+      awardSource,
+      awardLog: "Approved for demo preview.",
+      approvedAt: day(daysAgo),
+    },
+  };
+}
+
+/** All fifteen main quests approved — every seal earned, bonus stamp unlocked. */
+export const MOCK_QUEST_ENTRIES_COMPLETE: QuestEntry[] = MOCK_QUEST_ENTRIES.map((entry, index) =>
+  withApprovedProgress(entry, MOCK_QUEST_ENTRIES.length - index),
+);
+
 export function computeMockTotals(entries: QuestEntry[]) {
   const approvedStamps = entries
     .filter((entry) => entry.progress?.status === "approved")
