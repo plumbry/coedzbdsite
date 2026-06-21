@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { HelpCircle, Stamp } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { SEASON_REWARDS } from "./passport-destinations.ts";
@@ -22,6 +23,7 @@ export function PassportRewardsPanel({
   seals,
   seasonStartsAt,
   seasonEndsAt,
+  certificateDownload,
   className,
 }: {
   season: SeasonSummary;
@@ -34,6 +36,7 @@ export function PassportRewardsPanel({
   seals?: SealProgress[];
   seasonStartsAt?: number;
   seasonEndsAt?: number;
+  certificateDownload?: ReactNode;
   className?: string;
 }) {
   const { isComplete } = season;
@@ -62,18 +65,19 @@ export function PassportRewardsPanel({
           <p className="rounded-lg border border-teal-200/60 bg-teal-50/50 px-2 py-1 text-[11px] font-semibold text-teal-900">
             Passport complete — certificate &amp; Discord role unlocked
           </p>
-          {playerName && seals ? (
-            <PassportCertificateDownloadButton
-              playerName={playerName}
-              avatarId={avatarId}
-              birthplaceId={birthplaceId}
-              seals={seals}
-              seasonStartsAt={seasonStartsAt}
-              seasonEndsAt={seasonEndsAt}
-              className="w-full"
-              variant="outline"
-            />
-          ) : null}
+          {certificateDownload ??
+            (playerName && seals ? (
+              <PassportCertificateDownloadButton
+                playerName={playerName}
+                avatarId={avatarId}
+                birthplaceId={birthplaceId}
+                seals={seals}
+                seasonStartsAt={seasonStartsAt}
+                seasonEndsAt={seasonEndsAt}
+                className="w-full"
+                variant="outline"
+              />
+            ) : null)}
         </div>
       ) : null}
 

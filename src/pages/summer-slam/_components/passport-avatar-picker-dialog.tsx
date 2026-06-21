@@ -27,10 +27,12 @@ import {
 function AvatarGrid({
   previewId,
   savedId,
+  savingId,
   onSelect,
 }: {
   previewId: PassportAvatarId | null;
   savedId: PassportAvatarId | null | undefined;
+  savingId: PassportAvatarId | null;
   onSelect: (id: PassportAvatarId) => void;
 }) {
   return (
@@ -38,11 +40,13 @@ function AvatarGrid({
       {PASSPORT_AVATARS.map((avatar) => {
         const isSelected = previewId === avatar.id;
         const isSaved = savedId === avatar.id;
+        const isSaving = savingId === avatar.id;
         return (
           <li key={avatar.id}>
             <button
               type="button"
               onClick={() => onSelect(avatar.id)}
+              disabled={isSaving}
               aria-pressed={isSelected}
               aria-label={`${avatar.label}${isSaved ? " (current)" : ""}`}
               className={cn(
@@ -50,6 +54,7 @@ function AvatarGrid({
                 "touch-manipulation transition-[transform,box-shadow] duration-150",
                 "hover:scale-[1.04] hover:shadow-[0_6px_16px_rgba(14,165,233,0.15)]",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2",
+                "disabled:pointer-events-none disabled:opacity-70",
                 isSelected && "scale-[1.06] shadow-[0_8px_20px_rgba(14,165,233,0.22)]",
               )}
             >
@@ -70,11 +75,18 @@ function AvatarGrid({
                   height={76}
                   className="h-full w-full object-cover"
                 />
-                {isSelected ? (
+                {isSaving ? (
+                  <span
+                    className="absolute inset-0 flex items-center justify-center rounded-full bg-white/75"
+                    aria-hidden
+                  >
+                    <Loader2 className="h-5 w-5 animate-spin text-sky-600" />
+                  </span>
+                ) : isSaved ? (
                   <span
                     className={cn(
                       "absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center",
-                      "rounded-full bg-sky-500 text-white shadow-sm",
+                      "rounded-full bg-teal-500 text-white shadow-sm",
                     )}
                     aria-hidden
                   >
@@ -108,53 +120,67 @@ export function PassportAvatarPickerDialog({
 }) {
   const isMobile = useIsMobile();
   const [previewId, setPreviewId] = useState<PassportAvatarId | null>(savedAvatarId ?? null);
+  const [savingId, setSavingId] = useState<PassportAvatarId | null>(null);
 
   useEffect(() => {
     if (open) {
       setPreviewId(savedAvatarId ?? null);
+      setSavingId(null);
     }
   }, [open, savedAvatarId]);
 
-  const canSave = previewId != null && previewId !== savedAvatarId;
+  const handleSelect = (id: PassportAvatarId) => {
+    setPreviewId(id);
+    if (id === savedAvatarId || isSaving) return;
 
-  const handleSave = () => {
-    if (!previewId || !canSave) return;
-    void onSave(previewId);
+    setSavingId(id);
+    void Promise.resolve(onSave(id))
+      .catch(() => {
+        setPreviewId(savedAvatarId ?? null);
+      })
+      .finally(() => {
+        setSavingId(null);
+      });
   };
 
   const body = (
     <>
-      <AvatarGrid previewId={previewId} savedId={savedAvatarId} onSelect={setPreviewId} />
+      <AvatarGrid
+        previewId={previewId}
+        savedId={savedAvatarId}
+        savingId={savingId}
+        onSelect={handleSelect}
+      />
       {!savedAvatarId && previewId == null ? (
-        <p className="text-center text-xs text-orange-800/55">Pick a collectible for your passport photo.</p>
-      ) : null}
+        <p className="text-center text-xs text-orange-800/55">
+          Tap an avatar — it saves to your passport right away. You can change it anytime.
+        </p>
+      ) : (
+        <p className="text-center text-xs text-orange-800/55">
+          Tap another avatar to update your passport photo.
+        </p>
+      )}
     </>
   );
 
   const actions = (
-    <>
-      <Button variant="outline" onClick={onClose} disabled={isSaving} className="min-h-11 touch-manipulation">
-        Cancel
-      </Button>
-      <Button
-        onClick={handleSave}
-        disabled={!canSave || isSaving}
-        className="min-h-11 touch-manipulation"
-      >
-        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Save
-      </Button>
-    </>
+    <Button
+      onClick={onClose}
+      disabled={isSaving || savingId != null}
+      className="min-h-11 w-full touch-manipulation sm:w-auto"
+    >
+      Done
+    </Button>
   );
 
   if (isMobile) {
     return (
-      <Drawer open={open} onOpenChange={(next) => !next && !isSaving && onClose()} direction="bottom">
+      <Drawer open={open} onOpenChange={(next) => !next && !isSaving && savingId == null && onClose()} direction="bottom">
         <DrawerContent className="max-h-[92vh] overflow-y-auto px-4 pb-6">
           <DrawerHeader className="px-0 text-left">
             <DrawerTitle className="font-display text-lg text-orange-950">Choose Your Avatar</DrawerTitle>
             <DrawerDescription>
-              Select a Summer Slam collectible for your passport photo.
+              Your selection is saved to your passport automatically.
             </DrawerDescription>
           </DrawerHeader>
           <div className="py-2">{body}</div>
@@ -165,12 +191,12 @@ export function PassportAvatarPickerDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && !isSaving && onClose()}>
+    <Dialog open={open} onOpenChange={(next) => !next && !isSaving && savingId == null && onClose()}>
       <DialogContent size="md" className="max-h-[90vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-lg text-orange-950">Choose Your Avatar</DialogTitle>
           <DialogDescription>
-            Select a Summer Slam collectible for your passport photo.
+            Your selection is saved to your passport automatically.
           </DialogDescription>
         </DialogHeader>
         {body}

@@ -28,9 +28,9 @@ export function getCampaignPhase(
 
 export function formatCampaignDateRange(
   campaign: Pick<CampaignPublic, "startsAt" | "endsAt"> | null | undefined,
-) {
+): string | null {
   if (!campaign?.startsAt && !campaign?.endsAt) {
-    return "Season dates coming soon";
+    return null;
   }
 
   const formatter = new Intl.DateTimeFormat("en-GB", {

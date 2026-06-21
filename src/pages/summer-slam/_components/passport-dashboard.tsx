@@ -1,23 +1,19 @@
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useReducedMotion } from "motion/react";
-import { getDestination } from "./passport-destinations.ts";
-import { PassportHero, PassportProgressStats } from "./passport-hero.tsx";
+import { ClipboardList } from "lucide-react";
+import { useUserRole } from "@/hooks/use-user-role.ts";
+import { PassportHero } from "./passport-hero.tsx";
 import { PassportIdentitySection } from "./passport-identity-section.tsx";
-import { PassportJourneyRoute } from "./passport-journey-route.tsx";
 import { PassportRewardsPanel } from "./passport-rewards-panel.tsx";
-import { PassportNextDestination } from "./passport-next-destination.tsx";
-import { PassportChallengeGrid } from "./passport-challenge-grid.tsx";
 import { PassportEvidenceReviewPanel } from "./passport-evidence-review-panel.tsx";
-import { PassportSealDetailDialog } from "./passport-seal-detail-dialog.tsx";
-import { PassportQuestDetailDialog } from "./passport-quest-detail-dialog.tsx";
 import { PassportOnboarding } from "./passport-onboarding.tsx";
 import { PassportCertificateDownloadButton } from "./passport-certificate-download-button.tsx";
-import { ssDashboardInset, ssGridGap, ssStack } from "./passport-dashboard-theme.ts";
+import { ssCard, ssCardPad, ssStack } from "./passport-dashboard-theme.ts";
 import {
   buildSeals,
-  getActionableEntry,
   summariseSeason,
-  type SealProgress,
 } from "./passport-seal.ts";
 import { CATEGORY_PAGES, getQuestStatus, type QuestEntry } from "./passport-types.ts";
 import type { PassportAvatarId } from "./passport-avatars.ts";
@@ -52,6 +48,7 @@ export function PassportDashboard({
   quests,
   campaign,
   onRequestEvidence,
+  notice,
 }: {
   campaignTitle: string;
   playerName: string;
@@ -68,11 +65,11 @@ export function PassportDashboard({
   } | null | undefined;
   seasonLabel?: string;
   onRequestEvidence: (entry: QuestEntry) => void;
+  notice?: ReactNode;
 }) {
-  const [selectedSeal, setSelectedSeal] = useState<SealProgress | null>(null);
-  const [detailEntry, setDetailEntry] = useState<QuestEntry | null>(null);
   const [celebratingSealIds, setCelebratingSealIds] = useState<string[]>([]);
   const reduceMotion = useReducedMotion();
+  const { isModeratorOrAdmin } = useUserRole();
 
   const questsByCategory = useMemo(() => {
     const groups = new Map<string, QuestEntry[]>();
@@ -86,7 +83,6 @@ export function PassportDashboard({
 
   const seals = useMemo(() => buildSeals(questsByCategory), [questsByCategory]);
   const season = useMemo(() => summariseSeason(seals, campaign), [seals, campaign]);
-  const nextSeal = season.nextSeal;
 
   useEffect(() => {
     if (reduceMotion) return;
@@ -100,7 +96,6 @@ export function PassportDashboard({
     const timer = window.setTimeout(() => setCelebratingSealIds([]), 1500);
     return () => window.clearTimeout(timer);
   }, [seals, reduceMotion]);
-  const actionableEntry = useMemo(() => getActionableEntry(nextSeal), [nextSeal]);
 
   const littleEvery = campaign?.littleWheelEntryEveryStamps ?? 1;
   const bigEvery = campaign?.bigWheelEntryEveryStamps ?? 5;
@@ -108,27 +103,6 @@ export function PassportDashboard({
     () => computeWheelTotals(quests, littleEvery, bigEvery),
     [quests, littleEvery, bigEvery],
   );
-
-  const currentDestination = nextSeal
-    ? getDestination(nextSeal.id).name
-    : season.isComplete
-      ? "Summer Finale"
-      : null;
-
-  const liveSelectedSeal = selectedSeal
-    ? (seals.find((seal) => seal.id === selectedSeal.id) ?? selectedSeal)
-    : null;
-
-  const handleOpenTask = (entry: QuestEntry) => {
-    setSelectedSeal(null);
-    setDetailEntry(entry);
-  };
-
-  const handleSubmitFromAnywhere = (entry: QuestEntry) => {
-    setSelectedSeal(null);
-    setDetailEntry(null);
-    onRequestEvidence(entry);
-  };
 
   const certificateDownload =
     season.isComplete && onSaveAvatar && onSaveBirthplace ? (
@@ -146,92 +120,72 @@ export function PassportDashboard({
     <div className={cn(ssStack, "pb-8")}>
       <PassportOnboarding />
 
-      <div className="space-y-5">
-        <PassportHero title={campaignTitle} />
+      <div className="mx-auto w-full max-w-6xl px-3 sm:px-4">
+        <PassportHero title={campaignTitle} className="mb-4 lg:mb-4" />
 
-        {onSaveAvatar && onSaveBirthplace ? (
-          <PassportIdentitySection
+        <div className="flex flex-col gap-6 lg:grid lg:items-stretch lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)] lg:gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+          <div className="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
+            <PassportIdentitySection
             playerName={playerName}
             avatarId={avatarId}
             birthplaceId={birthplaceId}
             seals={seals}
+            quests={quests}
             completionPercent={season.questPercent}
-            currentDestination={currentDestination}
             seasonStartsAt={campaign?.startsAt}
             seasonEndsAt={campaign?.endsAt}
-            nextSealId={nextSeal?.id ?? null}
             celebratingSealIds={celebratingSealIds}
-            onSelectSeal={setSelectedSeal}
             onSaveAvatar={onSaveAvatar}
             onSaveBirthplace={onSaveBirthplace}
-          />
-        ) : (
-          <PassportProgressStats
-            daysRemaining={season.daysRemaining}
-            earnedSeals={season.earnedSeals}
-            totalSeals={season.totalSeals}
-            approvedQuests={season.approvedQuests}
-            totalQuests={season.totalQuests}
-            questPercent={season.questPercent}
-            currentDestination={currentDestination}
-          />
-        )}
-      </div>
+            onSubmitEvidence={onRequestEvidence}
+            />
+          </div>
 
-      <div className={cn(ssDashboardInset, ssStack)}>
-        <div className={cn("grid sm:grid-cols-2", ssGridGap)}>
-          <PassportJourneyRoute seals={seals} nextSealId={nextSeal?.id ?? null} />
-          <PassportRewardsPanel
-            season={season}
-            littleWheelEntries={wheelTotals.littleWheelEntries}
-            bigWheelEntries={wheelTotals.bigWheelEntries}
-            approvedStamps={wheelTotals.approvedStamps}
-            playerName={playerName}
-            avatarId={avatarId}
-            birthplaceId={birthplaceId}
-            seals={seals}
-            seasonStartsAt={campaign?.startsAt}
-            seasonEndsAt={campaign?.endsAt}
-          />
+          <aside className={cn(ssStack, "min-w-0 gap-4")}>
+            {notice}
+
+            <PassportRewardsPanel
+              season={season}
+              littleWheelEntries={wheelTotals.littleWheelEntries}
+              bigWheelEntries={wheelTotals.bigWheelEntries}
+              approvedStamps={wheelTotals.approvedStamps}
+              playerName={playerName}
+              avatarId={avatarId}
+              birthplaceId={birthplaceId}
+              seals={seals}
+              seasonStartsAt={campaign?.startsAt}
+              seasonEndsAt={campaign?.endsAt}
+              certificateDownload={certificateDownload}
+            />
+
+            <PassportEvidenceReviewPanel
+              quests={quests}
+              onOpenTask={onRequestEvidence}
+            />
+
+            {isModeratorOrAdmin ? (
+              <section className={cn(ssCard, ssCardPad)} aria-label="Review queue">
+                <div className="mb-2 flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-orange-600/70" aria-hidden />
+                  <h2 className="text-base font-semibold text-orange-950">Review Queue</h2>
+                  <span className="rounded-full bg-orange-100 px-2 py-px text-[10px] font-semibold uppercase text-orange-700">
+                    Staff
+                  </span>
+                </div>
+                <p className="mb-3 text-xs text-orange-900/55">
+                  Review player evidence and approve stamps from the admin panel.
+                </p>
+                <Link
+                  to="/admin/summer-slam"
+                  className="inline-flex min-h-10 items-center rounded-lg border border-orange-200 bg-orange-50/50 px-3 text-sm font-medium text-teal-800 hover:bg-teal-50 touch-manipulation"
+                >
+                  Open review queue →
+                </Link>
+              </section>
+            ) : null}
+          </aside>
         </div>
-
-        <PassportNextDestination
-          seal={nextSeal}
-          actionableEntry={actionableEntry}
-          onOpenTask={handleOpenTask}
-          onSubmitEvidence={handleSubmitFromAnywhere}
-          onViewSeal={setSelectedSeal}
-          certificateDownload={certificateDownload}
-        />
-
-        <PassportChallengeGrid
-          seals={seals}
-          nextSealId={nextSeal?.id ?? null}
-          actionableEntry={actionableEntry}
-          onOpenTask={handleOpenTask}
-          onSubmitEvidence={handleSubmitFromAnywhere}
-          onViewSeal={setSelectedSeal}
-        />
-
-        <PassportEvidenceReviewPanel quests={quests} onOpenTask={handleOpenTask} />
       </div>
-
-      <PassportSealDetailDialog
-        open={!!liveSelectedSeal}
-        seal={liveSelectedSeal}
-        onClose={() => setSelectedSeal(null)}
-        onOpenTask={handleOpenTask}
-        onSubmitEvidence={handleSubmitFromAnywhere}
-      />
-
-      <PassportQuestDetailDialog
-        open={!!detailEntry}
-        entry={detailEntry}
-        onClose={() => setDetailEntry(null)}
-        onSubmitEvidence={() => {
-          if (detailEntry) handleSubmitFromAnywhere(detailEntry);
-        }}
-      />
     </div>
   );
 }

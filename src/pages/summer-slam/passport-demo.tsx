@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import PageShell from "@/components/page-shell.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -19,14 +19,48 @@ import {
   type EvidenceType,
 } from "./_components/passport-types.ts";
 
+const DEMO_PROFILE_STORAGE_KEY = "summer-slam-passport-demo-profile";
+
+type DemoProfile = {
+  avatarId: PassportAvatarId | null;
+  birthplaceId: PassportBirthplaceId | null;
+};
+
+function loadDemoProfile(): DemoProfile {
+  if (typeof window === "undefined") {
+    return { avatarId: null, birthplaceId: null };
+  }
+  try {
+    const raw = window.localStorage.getItem(DEMO_PROFILE_STORAGE_KEY);
+    if (!raw) return { avatarId: null, birthplaceId: null };
+    return JSON.parse(raw) as DemoProfile;
+  } catch {
+    return { avatarId: null, birthplaceId: null };
+  }
+}
+
+function saveDemoProfile(profile: DemoProfile) {
+  try {
+    window.localStorage.setItem(DEMO_PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
 export default function SummerSlamPassportDemoPage() {
-  const [demoAvatarId, setDemoAvatarId] = useState<PassportAvatarId | null>("sunset");
-  const [demoBirthplaceId, setDemoBirthplaceId] = useState<PassportBirthplaceId | null>(null);
+  const [demoAvatarId, setDemoAvatarId] = useState<PassportAvatarId | null>(() => loadDemoProfile().avatarId);
+  const [demoBirthplaceId, setDemoBirthplaceId] = useState<PassportBirthplaceId | null>(
+    () => loadDemoProfile().birthplaceId,
+  );
   const [evidenceQuestId, setEvidenceQuestId] = useState<Id<"seasonalQuests"> | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [evidenceType, setEvidenceType] = useState<EvidenceType>("screenshot_link");
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    saveDemoProfile({ avatarId: demoAvatarId, birthplaceId: demoBirthplaceId });
+  }, [demoAvatarId, demoBirthplaceId]);
 
   const evidenceQuest = MOCK_QUEST_ENTRIES.find(
     (entry) => entry.quest._id === evidenceQuestId,
@@ -55,23 +89,6 @@ export default function SummerSlamPassportDemoPage() {
 
   return (
     <PageShell maxWidth="wide" className={ssPageBg}>
-      <div className={cn("mb-4 flex flex-wrap items-center justify-between gap-2", ssCard, ssCardPad)}>
-        <div>
-          <Badge variant="outline" className="mb-1 border-orange-300 text-orange-700">
-            Preview
-          </Badge>
-          <p className="text-xs text-orange-900/70">
-            Demo for <span className="font-semibold text-orange-950">{MOCK_PLAYER.discordUsername}</span> — mock data
-          </p>
-        </div>
-        <a
-          href="/summer-slam/passport"
-          className="text-[11px] font-medium text-teal-700 hover:underline"
-        >
-          Live passport →
-        </a>
-      </div>
-
       <PassportDashboard
         campaignTitle={MOCK_CAMPAIGN.title}
         playerName={MOCK_PLAYER.discordUsername}
@@ -86,6 +103,26 @@ export default function SummerSlamPassportDemoPage() {
         quests={MOCK_QUEST_ENTRIES}
         campaign={MOCK_CAMPAIGN}
         onRequestEvidence={(entry) => setEvidenceQuestId(entry.quest._id)}
+        notice={
+          <div className={cn("flex flex-wrap items-center justify-between gap-2", ssCard, ssCardPad)}>
+            <div>
+              <Badge variant="outline" className="mb-1 border-orange-300 text-orange-700">
+                Preview
+              </Badge>
+              <p className="text-xs text-orange-900/70">
+                Demo for{" "}
+                <span className="font-semibold text-orange-950">{MOCK_PLAYER.discordUsername}</span>{" "}
+                — mock data
+              </p>
+            </div>
+            <a
+              href="/summer-slam/passport"
+              className="text-[11px] font-medium text-teal-700 hover:underline"
+            >
+              Live passport →
+            </a>
+          </div>
+        }
       />
 
       <PassportEvidenceDialog

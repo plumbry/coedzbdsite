@@ -33,7 +33,7 @@ export function PassportPreviewMini({ className }: { className?: string }) {
     >
       <div className={ssAccentBarClass} />
       <div className={cn(ssCardPad, "border-b border-orange-100/80")}>
-        <p className={ssLabel}>Preview</p>
+        <p className={ssLabel}>Sample passport</p>
         <p className="text-sm font-bold text-orange-950">{MOCK_PLAYER.discordUsername}</p>
         <p className="text-[11px] tabular-nums text-orange-800/55">
           {season.earnedSeals}/{season.totalSeals} stamps · {season.percent}%

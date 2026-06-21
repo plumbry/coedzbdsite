@@ -8,6 +8,9 @@ import { getDisplayName, requireAdmin } from "./auth_helpers";
 
 const DEFAULT_CAMPAIGN_SLUG = "summer-slam";
 const DEFAULT_CAMPAIGN_TITLE = "Summer Slam Passport";
+const DEFAULT_CAMPAIGN_DESCRIPTION =
+  "Complete quests during scrims, submit evidence, earn a place on the prize wheel!";
+const LEGACY_CAMPAIGN_DESCRIPTION = "Configurable seasonal quest campaign.";
 const MAX_IMAGES_PER_SUBMISSION = 3;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -486,7 +489,7 @@ export const ensureSummerSlamCampaign = mutation({
     const campaignId = await ctx.db.insert("seasonalCampaigns", {
       slug: DEFAULT_CAMPAIGN_SLUG,
       title: DEFAULT_CAMPAIGN_TITLE,
-      description: "Configurable seasonal quest campaign.",
+      description: DEFAULT_CAMPAIGN_DESCRIPTION,
       isActive: true,
       stampName: "Passport Stamp",
       littleWheelEntryEveryStamps: 1,
@@ -507,7 +510,12 @@ export const ensureSummerSlamCampaign = mutation({
 export const getCampaign = query({
   args: { slug: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    return await getCampaignBySlug(ctx, normalizeSlug(args.slug));
+    const campaign = await getCampaignBySlug(ctx, normalizeSlug(args.slug));
+    if (!campaign) return null;
+    if (campaign.description === LEGACY_CAMPAIGN_DESCRIPTION) {
+      return { ...campaign, description: DEFAULT_CAMPAIGN_DESCRIPTION };
+    }
+    return campaign;
   },
 });
 

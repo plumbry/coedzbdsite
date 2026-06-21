@@ -14,14 +14,14 @@ export function PassportHero({
 }) {
   return (
     <header className={cn("overflow-hidden pb-1", className)}>
-      <div className="flex flex-col items-center px-1 pt-1">
+      <div className="flex flex-col items-center px-1 pt-1 lg:items-start">
         <h1 className="sr-only">{title}</h1>
         <img
           src={PASSPORT_HEADER.src}
           alt={title}
           width={PASSPORT_HEADER.width}
           height={PASSPORT_HEADER.height}
-          className="h-auto w-full max-w-[min(100%,944px)]"
+          className="h-auto w-full max-w-[min(100%,944px)] lg:max-w-none"
         />
       </div>
     </header>

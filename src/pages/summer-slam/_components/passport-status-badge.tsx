@@ -1,6 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, CheckCircle2, Clock, Loader2, Lock } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/utils.ts";
+import { useIsMobile } from "@/hooks/use-mobile.ts";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
 import type { SealBadgeStatus } from "./passport-seal.ts";
 
@@ -68,6 +71,8 @@ export function PassportStatusBadge({
 }) {
   const config = SEAL_BADGE_CONFIG[status];
   const Icon = config.icon;
+  const isMobile = useIsMobile();
+  const [open, setOpen] = useState(false);
 
   const badge = (
     <span
@@ -84,6 +89,20 @@ export function PassportStatusBadge({
   );
 
   if (!withTooltip) return badge;
+
+  if (isMobile) {
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" className="cursor-help focus-visible:outline-none touch-manipulation">
+            {badge}
+            <span className="sr-only">: {config.tooltip}</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="max-w-[14rem] text-xs">{config.tooltip}</PopoverContent>
+      </Popover>
+    );
+  }
 
   return (
     <Tooltip>

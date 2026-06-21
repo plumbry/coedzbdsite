@@ -11,6 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
 import { PassportDashboard } from "./_components/passport-dashboard.tsx";
+import type { PassportAvatarId } from "./_components/passport-avatars.ts";
+import type { PassportBirthplaceId } from "./_components/passport-birthplaces.ts";
 import { ssCard, ssPageBg, ssSkeleton } from "./_components/passport-dashboard-theme.ts";
 import { PassportEvidenceDialog } from "./_components/passport-evidence-dialog.tsx";
 import {
@@ -125,6 +127,19 @@ function PassportContent() {
     api.seasonal.getPassport,
     isConvexAuthenticated ? { slug: CAMPAIGN_SLUG } : "skip",
   );
+
+  const serverAvatarId = passport?.passport?.avatarId ?? null;
+  const serverBirthplaceId = passport?.passport?.birthplaceId ?? null;
+  const [avatarId, setAvatarId] = useState<PassportAvatarId | null>(null);
+  const [birthplaceId, setBirthplaceId] = useState<PassportBirthplaceId | null>(null);
+
+  useEffect(() => {
+    setAvatarId(serverAvatarId);
+  }, [serverAvatarId]);
+
+  useEffect(() => {
+    setBirthplaceId(serverBirthplaceId);
+  }, [serverBirthplaceId]);
 
   const campaignPhase = getCampaignPhase(campaign ?? null);
 
@@ -349,13 +364,27 @@ function PassportContent() {
       <PassportDashboard
         campaignTitle={passport.campaign.title}
         playerName={passport.player.discordUsername}
-        avatarId={passport.passport?.avatarId}
-        birthplaceId={passport.passport?.birthplaceId}
-        onSaveAvatar={async (avatarId) => {
-          await setPassportAvatar({ slug: CAMPAIGN_SLUG, avatarId });
+        avatarId={avatarId}
+        birthplaceId={birthplaceId}
+        onSaveAvatar={async (nextAvatarId) => {
+          const previous = avatarId;
+          setAvatarId(nextAvatarId);
+          try {
+            await setPassportAvatar({ slug: CAMPAIGN_SLUG, avatarId: nextAvatarId });
+          } catch (error) {
+            setAvatarId(previous);
+            throw error;
+          }
         }}
-        onSaveBirthplace={async (birthplaceId) => {
-          await setPassportBirthplace({ slug: CAMPAIGN_SLUG, birthplaceId });
+        onSaveBirthplace={async (nextBirthplaceId) => {
+          const previous = birthplaceId;
+          setBirthplaceId(nextBirthplaceId);
+          try {
+            await setPassportBirthplace({ slug: CAMPAIGN_SLUG, birthplaceId: nextBirthplaceId });
+          } catch (error) {
+            setBirthplaceId(previous);
+            throw error;
+          }
         }}
         quests={quests}
         campaign={passport.campaign}
