@@ -6,9 +6,6 @@ export default function SummerSlamPassportDemoPage() {
     <PassportDemoView
       questEntries={MOCK_QUEST_ENTRIES}
       profileStorageKey="summer-slam-passport-demo-profile"
-      variantLabel="mock data — in progress"
-      alternateDemoHref="/summer-slam/passport/demo/complete"
-      alternateDemoLabel="Complete passport demo →"
     />
   );
 }

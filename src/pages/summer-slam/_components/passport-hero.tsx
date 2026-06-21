@@ -14,7 +14,7 @@ export function PassportHero({
 }) {
   return (
     <header className={cn("overflow-hidden pb-1", className)}>
-      <div className="flex flex-col items-center px-1 pt-1 lg:items-start">
+      <div className="flex flex-col items-center px-1 pt-1">
         <h1 className="sr-only">{title}</h1>
         <img
           src={PASSPORT_HEADER.src}

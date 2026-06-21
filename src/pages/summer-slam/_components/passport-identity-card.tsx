@@ -28,6 +28,12 @@ const AVATAR_PLACEHOLDER_CLASS =
 const ZBD_LOGO_SRC = "/icon/co-ed-zbd-logo.jpg";
 const STAMP_BTN_CLASS =
   "relative mx-auto w-full max-w-[72px] touch-manipulation sm:max-w-[76px] lg:max-w-[96px] xl:max-w-[104px]";
+const STAMP_COLUMN_CLASS =
+  "mx-auto flex w-full max-w-[72px] flex-col items-center gap-0.5 sm:max-w-[76px] lg:max-w-[96px] xl:max-w-[104px]";
+const STAMP_LABEL_CLASS =
+  "w-full text-center text-[8px] font-semibold leading-tight text-orange-900/55 lg:text-[10px]";
+const STAMP_PROGRESS_CLASS =
+  "w-full text-center text-[9px] font-bold tabular-nums text-teal-800/70 lg:text-[11px]";
 
 /** Stamp fills its grid cell, capped at target display size. */
 const COLLECTION_STAMP_SLOT = "aspect-square w-full";
@@ -65,7 +71,7 @@ function CollectionSealButton({
     seal.total > 0 ? `${seal.approved}/${seal.total}` : seal.state === "earned" ? "Done" : "?";
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div className={STAMP_COLUMN_CLASS}>
       <button
         type="button"
         onClick={() => onSelect(seal)}
@@ -90,8 +96,8 @@ function CollectionSealButton({
           className={COLLECTION_STAMP_SLOT}
         />
       </button>
-      <p className="w-full truncate text-center text-[8px] font-semibold text-orange-900/55 lg:text-[10px]">{seal.meta.label}</p>
-      <p className="text-[9px] font-bold tabular-nums text-teal-800/70 lg:text-[11px]">{progressLabel}</p>
+      <p className={cn(STAMP_LABEL_CLASS, "truncate")}>{seal.meta.label}</p>
+      <p className={STAMP_PROGRESS_CLASS}>{progressLabel}</p>
     </div>
   );
 }
@@ -107,7 +113,7 @@ function BonusSealButton({
 
   return (
     <div className="col-span-5 mt-1 flex justify-center sm:col-span-1 sm:mt-0">
-      <div className="flex flex-col items-center gap-0.5">
+      <div className={STAMP_COLUMN_CLASS}>
         <button
           type="button"
           onClick={onSelect}
@@ -137,8 +143,8 @@ function BonusSealButton({
             className={COLLECTION_STAMP_SLOT}
           />
         </button>
-      <p className="text-[8px] font-semibold text-amber-800/70 lg:text-[10px]">{BONUS_STAMP_META.label}</p>
-      <p className="text-[9px] font-bold tabular-nums text-amber-700/60 lg:text-[11px]">Bonus</p>
+        <p className={cn(STAMP_LABEL_CLASS, "text-amber-800/70")}>{BONUS_STAMP_META.label}</p>
+        <p className={cn(STAMP_PROGRESS_CLASS, "text-amber-700/60")}>Bonus</p>
       </div>
     </div>
   );
@@ -263,7 +269,7 @@ function StampCollectionPanel({
         ))}
         <BonusSealButton revealed={bonusUnlocked} onSelect={onSelectBonus} />
       </div>
-      <p className="text-[9px] text-orange-800/45 lg:text-[11px]">Tap a stamp to open its passport page</p>
+      <p className="text-[9px] text-center text-orange-800/45 lg:text-[11px]">Tap a stamp to open its passport page</p>
     </section>
   );
 }

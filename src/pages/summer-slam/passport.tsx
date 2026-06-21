@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import AuthGate from "@/components/auth-gate.tsx";
 import PageShell from "@/components/page-shell.tsx";
 import { SignInButton } from "@/components/ui/signin.tsx";
@@ -10,11 +9,10 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
-import { PassportDashboard } from "./_components/passport-dashboard.tsx";
+import { PassportExperience, type PassportEvidenceSubmitPayload } from "./_components/passport-experience.tsx";
 import type { PassportAvatarId } from "./_components/passport-avatars.ts";
 import type { PassportBirthplaceId } from "./_components/passport-birthplaces.ts";
 import { ssCard, ssPageBg, ssSkeleton } from "./_components/passport-dashboard-theme.ts";
-import { PassportEvidenceDialog } from "./_components/passport-evidence-dialog.tsx";
 import {
   CAMPAIGN_SLUG,
   CAMPAIGN_NOT_READY_MESSAGE,
@@ -34,7 +32,6 @@ import {
   UNLINKED_MESSAGE,
   UNLINKED_TITLE,
   UPLOAD_FAILED_MESSAGE,
-  type EvidenceType,
   type QuestEntry,
 } from "./_components/passport-types.ts";
 import { getCampaignPhase, phaseMessage } from "./_components/campaign-phase.ts";
@@ -104,14 +101,8 @@ function LoginPrompt() {
 }
 
 function PassportContent() {
-  const [evidenceQuestId, setEvidenceQuestId] = useState<Id<"seasonalQuests"> | null>(null);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [evidenceType, setEvidenceType] = useState<EvidenceType>("screenshot_link");
-  const [evidenceUrl, setEvidenceUrl] = useState("");
-  const [notes, setNotes] = useState("");
   const [passportError, setPassportError] = useState<string | null>(null);
   const [isEnsuringPassport, setIsEnsuringPassport] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
 
   const ensureMyPassport = useMutation(api.seasonal.ensureMyPassport);
@@ -181,76 +172,10 @@ function PassportContent() {
   }, [ensureMyPassport, isConvexAuthenticated]);
 
   const quests = (passport?.quests ?? []) as QuestEntry[];
-  const evidenceQuest = quests.find((entry) => entry.quest._id === evidenceQuestId)?.quest;
 
-  useEffect(() => {
-    if (!evidenceQuest) return;
-    if (evidenceQuest.evidenceInput === "image") {
-      setEvidenceType("image");
-      setEvidenceUrl("");
-      setSelectedFiles([]);
-      return;
-    }
-    if (evidenceQuest.evidenceInput === "link") {
-      setEvidenceType("screenshot_link");
-      setEvidenceUrl("");
-      setSelectedFiles([]);
-    }
-  }, [evidenceQuest?._id, evidenceQuest?.evidenceInput]);
-
-  const handleFiles = (files: FileList | null) => {
-    const incoming = [...(files ?? [])];
-    const video = incoming.find(
-      (file) =>
-        file.type.startsWith("video/") || /\.(mp4|mov|avi|webm|mkv|m4v)$/i.test(file.name),
-    );
-    if (video) {
-      toast.error("Upload Failed", { description: UPLOAD_FAILED_MESSAGE });
-      return;
-    }
-    if (incoming.length > 3) {
-      toast.error("Maximum 3 images per submission. Remove one and try again.");
-      return;
-    }
-    const next = incoming.slice(0, 3);
-    const invalid = next.find(
-      (file) => !["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type),
-    );
-    const oversized = next.find((file) => file.size > 5 * 1024 * 1024);
-    if (invalid || oversized) {
-      toast.error("Upload Failed", { description: UPLOAD_FAILED_MESSAGE });
-      return;
-    }
-    setSelectedFiles(next);
-  };
-
-  const resetSubmission = () => {
-    setEvidenceQuestId(null);
-    setSelectedFiles([]);
-    setEvidenceType("screenshot_link");
-    setEvidenceUrl("");
-    setNotes("");
-  };
-
-  const handleSubmitEvidence = async () => {
-    if (!evidenceQuest) return;
-    const trimmedUrl = evidenceUrl.trim();
-    const trimmedNotes = notes.trim();
-    const submissionType =
-      evidenceQuest.evidenceInput === "image"
-        ? "image"
-        : evidenceQuest.evidenceInput === "link"
-          ? "screenshot_link"
-          : evidenceType;
-    if (submissionType === "image" && selectedFiles.length === 0) {
-      toast.error("Choose at least one image before submitting.");
-      return;
-    }
-    if (submissionType !== "image" && submissionType !== "other" && !trimmedUrl) {
-      toast.error("Paste your evidence link before submitting.");
-      return;
-    }
-    setIsSubmitting(true);
+  const handleSubmitEvidence = async (payload: PassportEvidenceSubmitPayload) => {
+    const { questId, evidenceType: submissionType, evidenceUrl: trimmedUrl, notes: trimmedNotes, selectedFiles } =
+      payload;
     try {
       const images = [];
       for (const file of submissionType === "image" ? selectedFiles : []) {
@@ -269,14 +194,13 @@ function PassportContent() {
 
       await submitEvidence({
         slug: CAMPAIGN_SLUG,
-        questId: evidenceQuest._id,
+        questId,
         evidenceTypes: [submissionType, ...(trimmedNotes ? ["notes" as const] : [])],
         evidenceUrls: trimmedUrl ? [trimmedUrl] : undefined,
         notes: trimmedNotes || undefined,
         images,
       });
       toast.success(EVIDENCE_SUBMITTED_SUCCESS_MESSAGE);
-      resetSubmission();
     } catch (error) {
       console.error(error);
       const message = String(
@@ -297,8 +221,7 @@ function PassportContent() {
       } else {
         toast.error("Submission Failed", { description: SUBMISSION_FAILED_MESSAGE });
       }
-    } finally {
-      setIsSubmitting(false);
+      throw error;
     }
   };
 
@@ -360,56 +283,35 @@ function PassportContent() {
   }
 
   return (
-    <PageShell maxWidth="wide" className={ssPageBg}>
-      <PassportDashboard
-        campaignTitle={passport.campaign.title}
-        playerName={passport.player.discordUsername}
-        avatarId={avatarId}
-        birthplaceId={birthplaceId}
-        onSaveAvatar={async (nextAvatarId) => {
-          const previous = avatarId;
-          setAvatarId(nextAvatarId);
-          try {
-            await setPassportAvatar({ slug: CAMPAIGN_SLUG, avatarId: nextAvatarId });
-          } catch (error) {
-            setAvatarId(previous);
-            throw error;
-          }
-        }}
-        onSaveBirthplace={async (nextBirthplaceId) => {
-          const previous = birthplaceId;
-          setBirthplaceId(nextBirthplaceId);
-          try {
-            await setPassportBirthplace({ slug: CAMPAIGN_SLUG, birthplaceId: nextBirthplaceId });
-          } catch (error) {
-            setBirthplaceId(previous);
-            throw error;
-          }
-        }}
-        quests={quests}
-        campaign={passport.campaign}
-        onRequestEvidence={(entry) => setEvidenceQuestId(entry.quest._id)}
-      />
-
-      <PassportEvidenceDialog
-        open={!!evidenceQuestId}
-        quest={evidenceQuest}
-        evidenceType={evidenceType}
-        evidenceUrl={evidenceUrl}
-        notes={notes}
-        selectedFiles={selectedFiles}
-        isSubmitting={isSubmitting}
-        onEvidenceTypeChange={(type) => {
-          setEvidenceType(type);
-          if (type !== "image") setSelectedFiles([]);
-        }}
-        onEvidenceUrlChange={setEvidenceUrl}
-        onNotesChange={setNotes}
-        onFilesChange={handleFiles}
-        onClose={resetSubmission}
-        onSubmit={handleSubmitEvidence}
-      />
-    </PageShell>
+    <PassportExperience
+      campaignTitle={passport.campaign.title}
+      playerName={passport.player.discordUsername}
+      avatarId={avatarId}
+      birthplaceId={birthplaceId}
+      onSaveAvatar={async (nextAvatarId) => {
+        const previous = avatarId;
+        setAvatarId(nextAvatarId);
+        try {
+          await setPassportAvatar({ slug: CAMPAIGN_SLUG, avatarId: nextAvatarId });
+        } catch (error) {
+          setAvatarId(previous);
+          throw error;
+        }
+      }}
+      onSaveBirthplace={async (nextBirthplaceId) => {
+        const previous = birthplaceId;
+        setBirthplaceId(nextBirthplaceId);
+        try {
+          await setPassportBirthplace({ slug: CAMPAIGN_SLUG, birthplaceId: nextBirthplaceId });
+        } catch (error) {
+          setBirthplaceId(previous);
+          throw error;
+        }
+      }}
+      quests={quests}
+      campaign={passport.campaign}
+      onSubmitEvidence={handleSubmitEvidence}
+    />
   );
 }
 

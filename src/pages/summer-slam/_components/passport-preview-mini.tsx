@@ -52,13 +52,13 @@ export function PassportPreviewMini({ className }: { className?: string }) {
             <div
               key={seal.id}
               className={cn(
-                "flex flex-col items-center gap-0.5",
+                "flex w-full flex-col items-center gap-0.5",
                 index === 3 && "col-start-1 sm:col-start-auto",
                 index === 4 && "col-start-3 sm:col-start-auto",
               )}
             >
               <PassportSealImage meta={seal.meta} state={seal.state} seal={seal} fill showBadge={false} className="w-[85%]" />
-              <span className="truncate text-[8px] font-semibold text-orange-800/60">
+              <span className="w-full truncate text-center text-[8px] font-semibold text-orange-800/60">
                 {DESTINATION_ORDER[index]?.name.split(" ")[0]}
               </span>
             </div>

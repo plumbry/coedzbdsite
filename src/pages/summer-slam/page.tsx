@@ -28,8 +28,8 @@ import {
   ssStack,
 } from "./_components/passport-dashboard-theme.ts";
 import { PassportPreviewMini } from "./_components/passport-preview-mini.tsx";
+import { PassportHero } from "./_components/passport-hero.tsx";
 import { SEASON_REWARDS } from "./_components/passport-destinations.ts";
-import { PASSPORT_HEADER, PASSPORT_HEADER_IMG_CLASS } from "./_components/passport-assets.ts";
 import { CAMPAIGN_SLUG, getPassportErrorTitle, mapEnsurePassportError } from "./_components/passport-types.ts";
 import { Compass, Gift, Sparkles, Stamp, Sun, Trophy, Upload, UserCheck } from "lucide-react";
 
@@ -150,18 +150,10 @@ export default function SummerSlamLandingPage() {
     <PageShell maxWidth="wide" className={ssPageBg}>
       <div className={cn(ssStack, "pb-8 pt-1")}>
         <div className="mx-auto w-full max-w-6xl px-3 sm:px-4">
-          <header className="mb-4 overflow-hidden pb-1">
-            <div className="flex flex-col items-center px-1 pt-1 lg:items-start">
-              <h1 className="sr-only">{campaign?.title ?? "Summer Slam Passport"}</h1>
-              <img
-                src={PASSPORT_HEADER.src}
-                alt={campaign?.title ?? "Summer Slam Passport"}
-                width={PASSPORT_HEADER.width}
-                height={PASSPORT_HEADER.height}
-                className={PASSPORT_HEADER_IMG_CLASS}
-              />
-            </div>
-          </header>
+          <PassportHero
+            title={campaign?.title ?? "Summer Slam Passport"}
+            className="mb-4 w-full"
+          />
 
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">

@@ -105,7 +105,14 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       evidenceInstructions: "Submit a screenshot or clip link showing your eliminations.",
       stampReward: 1,
     },
-    progress: null,
+    progress: {
+      status: "needs_more_evidence",
+      progressCurrent: 0,
+      progressTarget: 1,
+      updatedAt: day(0),
+      awardLog:
+        "Please resubmit with a clip link that shows all 15 eliminations from Summer Slam events.",
+    },
   },
   // Summer Spirit — to do
   {
@@ -202,7 +209,12 @@ export const MOCK_QUEST_ENTRIES: QuestEntry[] = [
       evidenceInstructions: "Upload a screenshot showing you at a community event.",
       stampReward: 1,
     },
-    progress: null,
+    progress: {
+      status: "pending_review",
+      progressCurrent: 1,
+      progressTarget: 1,
+      updatedAt: day(0),
+    },
   },
   {
     quest: {
