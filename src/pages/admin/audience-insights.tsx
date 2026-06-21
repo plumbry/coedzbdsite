@@ -616,55 +616,6 @@ function AudienceInsightsContent() {
           segmentClickable={canDrillIntoSegments}
           onSegmentClick={(key) => openSegment("tenure", key)}
         />
-        {!eventsReady ? (
-          <Card className="py-0">
-            <CardHeader className="py-3">
-              <CardTitle className="text-base">Played More Than 5 Events</CardTitle>
-              <CardDescription>
-                {isJobRunning ? "Updating…" : "Refresh stats after Data Cache backfill."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <Skeleton className="h-56 w-full" />
-            </CardContent>
-          </Card>
-        ) : (
-          <DonutCard
-            title="Played More Than 5 Events"
-            description="Uses each member's lifetime events played count."
-            data={chartSegments(insights.events)}
-            total={insights.totalMembers}
-            chartType="events"
-            segmentClickable={canDrillIntoSegments}
-            onSegmentClick={(key) => openSegment("events", key)}
-          />
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {!hasCache ? (
-          <Card className="py-0">
-            <CardHeader className="py-3">
-              <CardTitle className="text-base">
-                Played More Than 3 Scrims in the Last 4 Weeks
-              </CardTitle>
-              <CardDescription>Refresh stats to build the cache.</CardDescription>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <Skeleton className="h-56 w-full" />
-            </CardContent>
-          </Card>
-        ) : (
-          <DonutCard
-            title="Played More Than 3 Scrims in the Last 4 Weeks"
-            description="Each Yunite leaderboard on a scrim event counts separately (one calendar scrim can have many leaderboards), dated within the last 4 weeks."
-            data={chartSegments(insights.recentEvents)}
-            total={insights.totalMembers || 1}
-            chartType="recentEvents"
-            segmentClickable={canDrillIntoSegments}
-            onSegmentClick={(key) => openSegment("recentEvents", key)}
-          />
-        )}
         <DonutCard
           title="Application Source"
           description={
@@ -689,6 +640,55 @@ function AudienceInsightsContent() {
             />
           }
         />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {!eventsReady ? (
+          <Card className="py-0">
+            <CardHeader className="py-3">
+              <CardTitle className="text-base">Played More Than 5 Events</CardTitle>
+              <CardDescription>
+                {isJobRunning ? "Updating…" : "Refresh stats after Data Cache backfill."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pb-4">
+              <Skeleton className="h-56 w-full" />
+            </CardContent>
+          </Card>
+        ) : (
+          <DonutCard
+            title="Played More Than 5 Events"
+            description="Uses each member's lifetime events played count."
+            data={chartSegments(insights.events)}
+            total={insights.totalMembers}
+            chartType="events"
+            segmentClickable={canDrillIntoSegments}
+            onSegmentClick={(key) => openSegment("events", key)}
+          />
+        )}
+        {!hasCache ? (
+          <Card className="py-0">
+            <CardHeader className="py-3">
+              <CardTitle className="text-base">
+                Played More Than 3 Scrims in the Last 4 Weeks
+              </CardTitle>
+              <CardDescription>Refresh stats to build the cache.</CardDescription>
+            </CardHeader>
+            <CardContent className="pb-4">
+              <Skeleton className="h-56 w-full" />
+            </CardContent>
+          </Card>
+        ) : (
+          <DonutCard
+            title="Played More Than 3 Scrims in the Last 4 Weeks"
+            description="Each Yunite leaderboard on a scrim event counts separately (one calendar scrim can have many leaderboards), dated within the last 4 weeks."
+            data={chartSegments(insights.recentEvents)}
+            total={insights.totalMembers || 1}
+            chartType="recentEvents"
+            segmentClickable={canDrillIntoSegments}
+            onSegmentClick={(key) => openSegment("recentEvents", key)}
+          />
+        )}
       </div>
     </div>
   );
