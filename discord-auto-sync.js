@@ -1,10 +1,7 @@
-// discord-auto-sync.js — automatic sync disabled (admin manual sync only).
+// discord-auto-sync.js — syncs members to Convex on join and role updates.
 //
-// Discord member/profile sync is triggered from the website admin panel
-// (Member Management → Discord sync tools). This script no longer posts
-// member updates on join, update, interval, or startup.
-//
-// To run a one-off full guild export for debugging, set MANUAL_FULL_SYNC=1.
+// Full guild sync is admin-triggered from Member Management → Discord sync tools.
+// Set MANUAL_FULL_SYNC=1 for a one-off full guild export.
 
 import 'dotenv/config';
 import { Client, GatewayIntentBits } from 'discord.js';
@@ -20,16 +17,16 @@ if (!DISCORD_TOKEN || !GUILD_ID) {
   process.exit(1);
 }
 
+if (!API_URL || !API_KEY) {
+  console.error('❌ Missing API_URL or API_KEY in .env (required for member sync)');
+  process.exit(1);
+}
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
 });
 
 async function syncMember(member) {
-  if (!API_URL || !API_KEY) {
-    console.warn('API_URL/API_KEY not set — skipping HTTP sync');
-    return false;
-  }
-
   try {
     if (!member.joinedTimestamp) {
       await member.fetch();
@@ -89,7 +86,7 @@ async function syncAllMembers(guild) {
 
 client.once('ready', async () => {
   console.log(`\n🤖 Bot logged in as ${client.user.tag}`);
-  console.log('ℹ️  Automatic Discord sync is disabled. Use website admin sync tools.\n');
+  console.log(`📡 Monitoring guild ${GUILD_ID} for joins and role updates\n`);
 
   if (process.env.MANUAL_FULL_SYNC === '1') {
     try {
@@ -101,6 +98,18 @@ client.once('ready', async () => {
   }
 });
 
+client.on('guildMemberAdd', async (member) => {
+  if (member.guild.id !== GUILD_ID) return;
+  console.log(`\n👋 New member joined: ${member.user.username}`);
+  await syncMember(member);
+});
+
+client.on('guildMemberUpdate', async (_oldMember, newMember) => {
+  if (newMember.guild.id !== GUILD_ID) return;
+  console.log(`\n🔄 Member updated: ${newMember.user.username}`);
+  await syncMember(newMember);
+});
+
 client.on('error', (error) => {
   console.error('❌ Discord client error:', error);
 });
@@ -109,7 +118,7 @@ process.on('unhandledRejection', (error) => {
   console.error('❌ Unhandled promise rejection:', error);
 });
 
-console.log('🚀 Starting Discord bot (manual sync mode)...');
+console.log('🚀 Starting Discord bot...');
 client.login(DISCORD_TOKEN).catch((error) => {
   console.error('❌ Failed to login:', error.message);
   process.exit(1);

@@ -43,19 +43,60 @@ http.route({
   }),
 });
 
-// Retired: Discord member sync is admin-triggered only (Member Management → Discord sync tools).
+// Discord bot webhook: sync a single member on join or role update.
 http.route({
   path: "/api/discord/sync-member",
   method: "POST",
-  handler: httpAction(async () => {
-    return new Response(
-      JSON.stringify({
-        error: "Endpoint retired",
-        message:
-          "Automatic Discord member sync is disabled. Use the admin Discord sync tools in Member Management.",
-      }),
-      { status: 410, headers: { "Content-Type": "application/json" } },
-    );
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    try {
+      const body = await request.json();
+
+      if (!body.id || !body.username) {
+        return new Response(
+          JSON.stringify({ error: "Missing required fields: id and username" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      const result = await ctx.runMutation(internal.discord.upsertDiscordMember, {
+        discordUserId: body.id,
+        discordUsername: body.username,
+        nickname: body.nickname || null,
+        joinedAt: body.joined_at || new Date().toISOString(),
+        roles: body.roles || null,
+      });
+
+      return new Response(JSON.stringify({ success: true, ...result }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Error syncing Discord member:", error);
+      return new Response(
+        JSON.stringify({
+          error: "Internal server error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
   }),
 });
 

@@ -5,6 +5,7 @@ import { action, internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
 import { requireAdminAction } from "../auth_helpers";
+import { normalizeDiscordUsernameForMatch } from "../helpers/discordApplicationSync";
 
 const SYNC_BATCH_SIZE = 25;
 const ADMIN_CACHE_RUN_ID = "admin-cache";
@@ -32,6 +33,8 @@ type SyncResult = {
   added: number;
   updated: number;
   skipped: number;
+  autoAccepted: number;
+  archived?: number;
 };
 
 function formatDiscordUsername(user: DiscordMember["user"]): string {
@@ -147,6 +150,25 @@ function getDiscordConfig() {
   return { discordBotToken, discordGuildId };
 }
 
+function memberMatchesMembershipSyncTargets(
+  member: DiscordMember,
+  discordUserIdSet: Set<string>,
+  pendingDiscordUsernameSet: Set<string>,
+): boolean {
+  if (discordUserIdSet.has(member.user.id)) {
+    return true;
+  }
+
+  const formattedUsername = formatDiscordUsername(member.user);
+  if (pendingDiscordUsernameSet.has(normalizeDiscordUsernameForMatch(formattedUsername))) {
+    return true;
+  }
+
+  return pendingDiscordUsernameSet.has(
+    normalizeDiscordUsernameForMatch(member.user.username),
+  );
+}
+
 async function ensureSyncRun(ctx: ActionCtx): Promise<string> {
   const existing = await ctx.runQuery(internal.discord.getDiscordSyncCacheRun, {});
   if (existing) {
@@ -162,6 +184,7 @@ type SingleMemberSyncResult = {
   discordUserId: string;
   added: number;
   updated: number;
+  autoAccepted: number;
   unchanged: boolean;
 };
 
@@ -186,7 +209,7 @@ export const syncSingleDiscordMember = action({
     const roleNameById = await fetchGuildRoleMap(discordBotToken, discordGuildId);
     const syncRunId = await ensureSyncRun(ctx);
 
-    const result: { added: number; updated: number } = await ctx.runMutation(
+    const result: { added: number; updated: number; autoAccepted: number } = await ctx.runMutation(
       internal.discord.syncDiscordMembersBatch,
       {
         syncRunId,
@@ -199,13 +222,14 @@ export const syncSingleDiscordMember = action({
       discordUserId: args.discordUserId,
       added: result.added,
       updated: result.updated,
+      autoAccepted: result.autoAccepted,
       unchanged: result.added === 0 && result.updated === 0,
     };
   },
 });
 
 /** Full guild member sync — used by the daily cron and archives players who left the server. */
-async function fetchAndSyncAllDiscordMembers(ctx: ActionCtx): Promise<void> {
+async function fetchAndSyncAllDiscordMembers(ctx: ActionCtx): Promise<SyncResult> {
   const { discordBotToken, discordGuildId } = getDiscordConfig();
 
   try {
@@ -219,6 +243,7 @@ async function fetchAndSyncAllDiscordMembers(ctx: ActionCtx): Promise<void> {
 
     let added = 0;
     let updated = 0;
+    let autoAccepted = 0;
     const discordUserIds: string[] = [];
     const syncRunId = crypto.randomUUID();
 
@@ -237,6 +262,7 @@ async function fetchAndSyncAllDiscordMembers(ctx: ActionCtx): Promise<void> {
         });
         added += result.added;
         updated += result.updated;
+        autoAccepted += result.autoAccepted;
 
         await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
           syncType: "discord",
@@ -263,6 +289,16 @@ async function fetchAndSyncAllDiscordMembers(ctx: ActionCtx): Promise<void> {
       recordsUpdated: updated,
       recordsArchived: archiveResult.archived,
     });
+
+    return {
+      success: true,
+      totalMembers: allMembers.length,
+      added,
+      updated,
+      skipped: 0,
+      autoAccepted,
+      archived: archiveResult.archived,
+    };
   } catch (error) {
     await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
       syncType: "discord",
@@ -281,36 +317,63 @@ export const syncDiscordMembersInternal = internalAction({
   },
 });
 
-/** Admin-only: sync Discord profile/roles for all accepted members. */
+/** Admin-only: full guild sync (same as daily cron). */
+export const syncAllGuildMembers = action({
+  args: {},
+  handler: async (ctx): Promise<SyncResult> => {
+    await requireAdminAction(ctx);
+    return await fetchAndSyncAllDiscordMembers(ctx);
+  },
+});
+
+/** Admin-only: sync accepted, former, pending-application, and Discord-tab members. */
 export const syncAcceptedMembers = action({
   args: {},
   handler: async (ctx): Promise<SyncResult> => {
     await requireAdminAction(ctx);
     const { discordBotToken, discordGuildId } = getDiscordConfig();
 
-    const acceptedIds = await ctx.runQuery(internal.discord.listAcceptedDiscordUserIds, {});
-    const acceptedIdSet = new Set(acceptedIds);
+    const targets = await ctx.runQuery(internal.discord.listMembershipSyncDiscordTargets, {});
+    const discordUserIdSet = new Set(targets.discordUserIds);
+    const pendingDiscordUsernameSet = new Set(targets.pendingDiscordUsernames);
 
-    if (acceptedIdSet.size === 0) {
-      return { success: true, totalMembers: 0, added: 0, updated: 0, skipped: 0 };
+    if (discordUserIdSet.size === 0 && pendingDiscordUsernameSet.size === 0) {
+      return {
+        success: true,
+        totalMembers: 0,
+        added: 0,
+        updated: 0,
+        skipped: 0,
+        autoAccepted: 0,
+      };
     }
 
     try {
       await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
         syncType: "discord",
         status: "in_progress",
-        recordsAdded: acceptedIdSet.size,
+        recordsAdded: discordUserIdSet.size + pendingDiscordUsernameSet.size,
         recordsUpdated: 0,
       });
 
       const roleNameById = await fetchGuildRoleMap(discordBotToken, discordGuildId);
       const allMembers = await fetchAllGuildMembers(discordBotToken, discordGuildId);
-      const membersToSync = allMembers.filter((m) => acceptedIdSet.has(m.user.id));
-      const skipped = acceptedIdSet.size - membersToSync.length;
+      const membersToSync = allMembers.filter((member) =>
+        memberMatchesMembershipSyncTargets(
+          member,
+          discordUserIdSet,
+          pendingDiscordUsernameSet,
+        ),
+      );
+      const skipped =
+        discordUserIdSet.size +
+        pendingDiscordUsernameSet.size -
+        membersToSync.length;
 
       const syncRunId = await ensureSyncRun(ctx);
       let added = 0;
       let updated = 0;
+      let autoAccepted = 0;
       let processed = 0;
 
       for (let i = 0; i < membersToSync.length; i += SYNC_BATCH_SIZE) {
@@ -324,12 +387,13 @@ export const syncAcceptedMembers = action({
         });
         added += result.added;
         updated += result.updated;
+        autoAccepted += result.autoAccepted;
         processed += batch.length;
 
         await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
           syncType: "discord",
           status: "in_progress",
-          recordsAdded: acceptedIdSet.size,
+          recordsAdded: membersToSync.length,
           recordsUpdated: processed,
         });
       }
@@ -339,7 +403,7 @@ export const syncAcceptedMembers = action({
         status: "success",
         recordsAdded: added,
         recordsUpdated: updated,
-        recordsArchived: skipped,
+        recordsArchived: Math.max(0, skipped),
       });
 
       return {
@@ -347,7 +411,8 @@ export const syncAcceptedMembers = action({
         totalMembers: membersToSync.length,
         added,
         updated,
-        skipped,
+        skipped: Math.max(0, skipped),
+        autoAccepted,
       };
     } catch (error) {
       await ctx.runMutation(internal.sync.updateSyncStatusInternal, {

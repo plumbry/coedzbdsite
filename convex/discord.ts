@@ -11,6 +11,10 @@ import {
   syncPlayerImportLookupForPlayer,
   upsertPlayerImportLookup,
 } from "./helpers/playerImportLookup";
+import { autoAcceptPendingApplicationForDiscordMember, normalizeDiscordUsernameForMatch } from "./helpers/discordApplicationSync";
+import { findPlayerByDiscordUserId } from "./helpers/playerDiscordAliases";
+import { schedulePublicMemberDirectoryRebuild } from "./helpers/publicMemberDirectory";
+import { scheduleGenderSheetRebuild } from "./helpers/genderSheetSchedule";
 
 type SyncMatchConfidence = "exact" | "username" | "fuzzy" | "manual";
 
@@ -137,6 +141,54 @@ async function resolveExistingPlayerForBatchSync(
     if (fuzzyMatch) {
       return { existingPlayer: fuzzyMatch, matchConfidence: "fuzzy" };
     }
+  }
+
+  return { existingPlayer: null, matchConfidence: null };
+}
+
+/**
+ * Webhook-safe player lookup for `upsertDiscordMember` (Discord bot POST /api/discord/sync-member).
+ * Uses indexed reads only — never scans the full `players` table.
+ */
+async function resolveExistingPlayerForWebhookSync(
+  ctx: MutationCtx,
+  args: {
+    discordUserId: string;
+    discordUsername: string;
+    nickname?: string | null;
+  },
+): Promise<{
+  existingPlayer: Doc<"players"> | null;
+  matchConfidence: SyncMatchConfidence | null;
+}> {
+  const byPrimary = await findPlayerByDiscordUserId(ctx, args.discordUserId);
+  if (byPrimary) {
+    return { existingPlayer: byPrimary, matchConfidence: "exact" };
+  }
+
+  const byDiscordName = await ctx.db
+    .query("players")
+    .withIndex("by_discord_username", (q) =>
+      q.eq("discordUsername", args.discordUsername),
+    )
+    .collect();
+  const placeholderByDiscord = byDiscordName.find((player) =>
+    isDiscordPlaceholderId(player.discordUserId),
+  );
+  if (placeholderByDiscord) {
+    return { existingPlayer: placeholderByDiscord, matchConfidence: "username" };
+  }
+
+  const epicUsername = args.nickname || args.discordUsername;
+  const byEpicName = await ctx.db
+    .query("players")
+    .withIndex("by_epic_username", (q) => q.eq("epicUsername", epicUsername))
+    .collect();
+  const placeholderByEpic = byEpicName.find((player) =>
+    isDiscordPlaceholderId(player.discordUserId),
+  );
+  if (placeholderByEpic) {
+    return { existingPlayer: placeholderByEpic, matchConfidence: "username" };
   }
 
   return { existingPlayer: null, matchConfidence: null };
@@ -829,6 +881,57 @@ export const listAcceptedDiscordUserIds = internalQuery({
   },
 });
 
+/** Discord IDs and pending usernames to include in manual membership sync. */
+export const listMembershipSyncDiscordTargets = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const discordUserIds = new Set<string>();
+    const pendingDiscordUsernames = new Set<string>();
+
+    const players = await ctx.db.query("players").collect();
+    for (const player of players) {
+      const shouldSync =
+        player.currentMembershipStatus === "accepted" ||
+        player.currentMembershipStatus === "former" ||
+        player.status === "discord_member";
+
+      if (!shouldSync) {
+        continue;
+      }
+
+      if (hasRealDiscordUserId(player.discordUserId)) {
+        discordUserIds.add(player.discordUserId);
+      }
+      for (const alternateId of player.alternateDiscordUserIds ?? []) {
+        if (hasRealDiscordUserId(alternateId)) {
+          discordUserIds.add(alternateId);
+        }
+      }
+    }
+
+    const pendingApplications = await ctx.db
+      .query("applications")
+      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .collect();
+
+    for (const application of pendingApplications) {
+      const discordId = application.discordId?.trim();
+      if (discordId) {
+        discordUserIds.add(discordId);
+      } else {
+        pendingDiscordUsernames.add(
+          normalizeDiscordUsernameForMatch(application.discordUsername),
+        );
+      }
+    }
+
+    return {
+      discordUserIds: [...discordUserIds],
+      pendingDiscordUsernames: [...pendingDiscordUsernames],
+    };
+  },
+});
+
 export const getDiscordSyncCacheRun = internalQuery({
   args: {},
   handler: async (ctx) => {
@@ -925,6 +1028,8 @@ export const syncDiscordMembersBatch = internalMutation({
 
     let added = 0;
     let updated = 0;
+    let autoAccepted = 0;
+    let needsCacheRebuild = false;
     const tierRoleNames = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
 
     for (const member of args.members) {
@@ -983,8 +1088,9 @@ export const syncDiscordMembersBatch = internalMutation({
         }
 
         if (
-          existingPlayer.status === "archived" ||
-          existingPlayer.currentMembershipStatus === "former"
+          hasTierRole &&
+          (existingPlayer.status === "archived" ||
+            existingPlayer.currentMembershipStatus === "former")
         ) {
           updateData.status = "active";
           updateData.currentMembershipStatus = "accepted";
@@ -1008,7 +1114,24 @@ export const syncDiscordMembersBatch = internalMutation({
             alternateDiscordUserIds: existingPlayer.alternateDiscordUserIds,
           });
           await syncPlayerImportLookupForPlayer(ctx, existingPlayer._id);
+          if (
+            changedFields.currentMembershipStatus !== undefined ||
+            changedFields.tier !== undefined
+          ) {
+            needsCacheRebuild = true;
+          }
           updated++;
+        }
+
+        const wasAutoAccepted = await autoAcceptPendingApplicationForDiscordMember(ctx, {
+          hasTierRole,
+          discordUserId: member.discordUserId,
+          discordUsername: member.discordUsername,
+          playerId: existingPlayer._id,
+        });
+        if (wasAutoAccepted) {
+          needsCacheRebuild = true;
+          autoAccepted++;
         }
       } else {
         const playerId = await ctx.db.insert("players", {
@@ -1033,10 +1156,195 @@ export const syncDiscordMembersBatch = internalMutation({
           epicUsername,
           discordUsername: member.discordUsername,
         });
+        const wasAutoAccepted = await autoAcceptPendingApplicationForDiscordMember(ctx, {
+          hasTierRole,
+          discordUserId: member.discordUserId,
+          discordUsername: member.discordUsername,
+          playerId,
+        });
+        if (hasTierRole || wasAutoAccepted) {
+          needsCacheRebuild = true;
+        }
+        if (wasAutoAccepted) {
+          autoAccepted++;
+        }
         added++;
       }
     }
 
-    return { added, updated };
+    if (needsCacheRebuild) {
+      await schedulePublicMemberDirectoryRebuild(ctx);
+      await scheduleGenderSheetRebuild(ctx);
+    }
+
+    return { added, updated, autoAccepted };
+  },
+});
+
+/** Webhook-safe: Discord bot POST /api/discord/sync-member — indexed lookups only. */
+export const upsertDiscordMember = internalMutation({
+  args: {
+    discordUserId: v.string(),
+    discordUsername: v.string(),
+    nickname: v.union(v.string(), v.null()),
+    joinedAt: v.string(),
+    roles: v.union(
+      v.array(
+        v.object({
+          id: v.string(),
+          name: v.string(),
+        }),
+      ),
+      v.null(),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const epicUsername = args.nickname || args.discordUsername;
+    const tierRoleNames = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
+    const hasTierRole =
+      args.roles?.some((role) => tierRoleNames.includes(role.name)) || false;
+
+    const { existingPlayer, matchConfidence } = await resolveExistingPlayerForWebhookSync(
+      ctx,
+      {
+        discordUserId: args.discordUserId,
+        discordUsername: args.discordUsername,
+        nickname: args.nickname,
+      },
+    );
+
+    if (existingPlayer) {
+      const updateData: {
+        discordUsername: string;
+        discordUserId: string;
+        nickname?: string;
+        epicUsername: string;
+        serverJoinDate: string;
+        discordRoles?: Array<{ id: string; name: string }>;
+        tier?: string;
+        status?: "active" | "discord_member";
+        currentMembershipStatus?: "accepted";
+        matchConfidence?: SyncMatchConfidence;
+        needsReview?: boolean;
+        hasLeftServer?: boolean;
+      } = {
+        discordUsername: args.discordUsername,
+        discordUserId: args.discordUserId,
+        nickname: args.nickname || undefined,
+        epicUsername,
+        serverJoinDate: args.joinedAt,
+        hasLeftServer: false,
+      };
+
+      if (args.roles) {
+        updateData.discordRoles = args.roles;
+        const discordTierRole = args.roles.find((role) =>
+          tierRoleNames.includes(role.name),
+        );
+        if (discordTierRole) {
+          const discordTier = discordTierRole.name.replace("Tier ", "");
+          if (existingPlayer.tier !== discordTier) {
+            updateData.tier = discordTier;
+          }
+        }
+      }
+
+      if (matchConfidence) {
+        updateData.matchConfidence = matchConfidence;
+        if (matchConfidence === "fuzzy") {
+          updateData.needsReview = true;
+        }
+      }
+
+      if (
+        hasTierRole &&
+        (existingPlayer.status === "archived" ||
+          existingPlayer.currentMembershipStatus === "former")
+      ) {
+        updateData.status = "active";
+        updateData.currentMembershipStatus = "accepted";
+      }
+
+      if (
+        hasTierRole &&
+        (existingPlayer.status === "discord_member" ||
+          existingPlayer.currentMembershipStatus === "rejected")
+      ) {
+        updateData.status = "active";
+        updateData.currentMembershipStatus = "accepted";
+      }
+
+      const changedFields = diffPatch(existingPlayer, updateData);
+      if (changedFields) {
+        await ctx.db.patch(existingPlayer._id, changedFields as Partial<Doc<"players">>);
+        await syncPlayerDiscordAliases(ctx, {
+          _id: existingPlayer._id,
+          discordUserId: args.discordUserId,
+          alternateDiscordUserIds: existingPlayer.alternateDiscordUserIds,
+        });
+        await syncPlayerImportLookupForPlayer(ctx, existingPlayer._id);
+      }
+
+      const autoAccepted = await autoAcceptPendingApplicationForDiscordMember(ctx, {
+        hasTierRole,
+        discordUserId: args.discordUserId,
+        discordUsername: args.discordUsername,
+        playerId: existingPlayer._id,
+      });
+
+      if (
+        autoAccepted ||
+        changedFields?.currentMembershipStatus !== undefined ||
+        changedFields?.tier !== undefined
+      ) {
+        await schedulePublicMemberDirectoryRebuild(ctx);
+        await scheduleGenderSheetRebuild(ctx);
+      }
+
+      return {
+        created: false,
+        playerId: existingPlayer._id,
+        updated: !!changedFields,
+        autoAccepted,
+        matchConfidence: matchConfidence || "unknown",
+      };
+    }
+
+    const playerId = await ctx.db.insert("players", {
+      discordUsername: args.discordUsername,
+      discordUserId: args.discordUserId,
+      nickname: args.nickname || undefined,
+      serverJoinDate: args.joinedAt,
+      epicUsername,
+      discordRoles: args.roles || undefined,
+      status: hasTierRole ? ("active" as const) : ("discord_member" as const),
+      currentMembershipStatus: hasTierRole ? ("accepted" as const) : undefined,
+      matchConfidence: "exact" as const,
+    });
+    await syncPlayerDiscordAliases(ctx, {
+      _id: playerId,
+      discordUserId: args.discordUserId,
+      alternateDiscordUserIds: undefined,
+    });
+    await upsertPlayerImportLookup(ctx, {
+      _id: playerId,
+      discordUserId: args.discordUserId,
+      epicUsername,
+      discordUsername: args.discordUsername,
+    });
+
+    const autoAccepted = await autoAcceptPendingApplicationForDiscordMember(ctx, {
+      hasTierRole,
+      discordUserId: args.discordUserId,
+      discordUsername: args.discordUsername,
+      playerId,
+    });
+
+    if (hasTierRole || autoAccepted) {
+      await schedulePublicMemberDirectoryRebuild(ctx);
+      await scheduleGenderSheetRebuild(ctx);
+    }
+
+    return { created: true, playerId, autoAccepted, matchConfidence: "exact" };
   },
 });

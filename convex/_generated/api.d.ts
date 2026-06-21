@@ -62,6 +62,7 @@ import type * as girlRole_queries from "../girlRole/queries.js";
 import type * as girlRole_sync from "../girlRole/sync.js";
 import type * as googleSheets from "../googleSheets.js";
 import type * as helpers_audit from "../helpers/audit.js";
+import type * as helpers_discordApplicationSync from "../helpers/discordApplicationSync.js";
 import type * as helpers_evaluationGender from "../helpers/evaluationGender.js";
 import type * as helpers_eventDrivenRebuilds from "../helpers/eventDrivenRebuilds.js";
 import type * as helpers_femaleVerification from "../helpers/femaleVerification.js";
@@ -260,6 +261,7 @@ declare const fullApi: ApiFromModules<{
   "girlRole/sync": typeof girlRole_sync;
   googleSheets: typeof googleSheets;
   "helpers/audit": typeof helpers_audit;
+  "helpers/discordApplicationSync": typeof helpers_discordApplicationSync;
   "helpers/evaluationGender": typeof helpers_evaluationGender;
   "helpers/eventDrivenRebuilds": typeof helpers_eventDrivenRebuilds;
   "helpers/femaleVerification": typeof helpers_femaleVerification;

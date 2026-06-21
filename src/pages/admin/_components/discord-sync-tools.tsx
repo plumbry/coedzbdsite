@@ -25,6 +25,7 @@ type DiscordSyncToolsProps = {
 
 export function DiscordSyncTools({ compact = false, featured = false }: DiscordSyncToolsProps) {
   const syncAcceptedMembers = useAction(api.discord.sync.syncAcceptedMembers);
+  const syncAllGuildMembers = useAction(api.discord.sync.syncAllGuildMembers);
   const syncPendingRoleChanges = useAction(api.discord.adminSync.syncPendingRoleChanges);
   const rebuildDiscordSyncCache = useMutation(api.discord.rebuildDiscordSyncCache);
 
@@ -46,11 +47,13 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
     setIsSyncingAccepted(true);
     try {
       const result = await syncAcceptedMembers();
+      const autoAcceptedSummary =
+        result.autoAccepted > 0 ? `, ${result.autoAccepted} auto-accepted` : "";
       toast.success(
-        `Synced ${result.totalMembers} accepted member(s): ${result.added} added, ${result.updated} updated${result.skipped > 0 ? `, ${result.skipped} not in server` : ""}`,
+        `Synced ${result.totalMembers} member(s): ${result.added} added, ${result.updated} updated${autoAcceptedSummary}${result.skipped > 0 ? `, ${result.skipped} not in server` : ""}`,
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to sync accepted members");
+      toast.error(error instanceof Error ? error.message : "Failed to sync members");
     } finally {
       setIsSyncingAccepted(false);
     }
@@ -92,7 +95,7 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
     const loadingId = toast.loading("Discord sync in progress…");
     try {
       const cache = await rebuildDiscordSyncCache();
-      const members = await syncAcceptedMembers();
+      const members = await syncAllGuildMembers();
       const roles = await syncPendingRoleChanges();
 
       const roleSummary =
@@ -100,8 +103,11 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
           ? "no pending role changes"
           : `${roles.rolesAdded} role(s) added, ${roles.rolesRemoved} removed`;
 
+      const autoAcceptedSummary =
+        members.autoAccepted > 0 ? `, ${members.autoAccepted} auto-accepted` : "";
+
       toast.success(
-        `Discord sync complete: cache ${cache.playerCount} players, ${members.totalMembers} member(s) synced (${members.updated} updated)${members.skipped > 0 ? `, ${members.skipped} not in server` : ""}, ${roleSummary}`,
+        `Discord sync complete: cache ${cache.playerCount} players, ${members.totalMembers} member(s) synced (${members.updated} updated${autoAcceptedSummary})${members.archived != null && members.archived > 0 ? `, ${members.archived} archived` : ""}, ${roleSummary}`,
         { id: loadingId },
       );
     } catch (error) {
@@ -131,7 +137,7 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
         ) : (
           <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
         )}
-        Sync all accepted members
+        Sync membership from Discord
       </Button>
       <Button
         size="sm"
@@ -168,9 +174,10 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
         <AlertDialogHeader>
           <AlertDialogTitle>Run full Discord sync?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will rebuild the sync cache, fetch Discord profile and roles for all accepted
-            members, then apply any pending event-ban or probation role changes. It may take several
-            minutes for large rosters.
+            This will rebuild the sync cache, sync every Discord guild member (including pending
+            applications and former members), archive members who left the server, then apply any
+            pending event-ban or probation role changes. It may take several minutes for large
+            rosters.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -214,7 +221,7 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
             Discord Sync
           </Button>
           <p className="text-xs text-muted-foreground">
-            Rebuilds cache, syncs accepted members, and applies pending role changes. Per-member
+            Rebuilds cache, runs a full guild sync, and applies pending role changes. Per-member
             sync is in Edit Player on Member Management.
           </p>
         </CardContent>
@@ -230,10 +237,11 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
         <AlertDialog open={confirmAcceptedOpen} onOpenChange={setConfirmAcceptedOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Sync all accepted members?</AlertDialogTitle>
+              <AlertDialogTitle>Sync membership from Discord?</AlertDialogTitle>
               <AlertDialogDescription>
-                Fetches Discord profile and role data for every accepted member. This may take
-                several minutes for large rosters.
+                Fetches Discord profile and role data for accepted members, former members, pending
+                applications, and Discord-tab members. Members with tier roles are auto-accepted or
+                restored to Accepted. This may take several minutes for large rosters.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -272,10 +280,11 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
       <AlertDialog open={confirmAcceptedOpen} onOpenChange={setConfirmAcceptedOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Sync all accepted members?</AlertDialogTitle>
+            <AlertDialogTitle>Sync membership from Discord?</AlertDialogTitle>
             <AlertDialogDescription>
-              Fetches Discord profile and role data for every accepted member. This may take
-              several minutes for large rosters.
+              Fetches Discord profile and role data for accepted members, former members, pending
+              applications, and Discord-tab members. Members with tier roles are auto-accepted or
+              restored to Accepted. This may take several minutes for large rosters.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
