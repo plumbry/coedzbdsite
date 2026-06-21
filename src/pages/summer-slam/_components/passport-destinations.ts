@@ -67,7 +67,7 @@ export const SEASON_REWARDS = [
     id: "passport",
     title: "Full Passport",
     description:
-      "Collect all five stamps to complete your passport and receive a certificate and exclusive Discord role.",
+      "Complete all five stamps to unlock the Bonus Stamp. You will also receive a certificate and exclusive Discord Role!",
     icon: "passport" as const,
   },
 ];

@@ -89,7 +89,6 @@ const LITTLE_PRIZE_EXAMPLES = [
   "Nitro Basic",
   "Discord Badge",
   "1 Week GIF Use in Scrim Chats",
-  "30 Day Custom Discord Nickname",
 ] as const;
 
 const BIG_PRIZE_EXAMPLES = [
@@ -123,7 +122,7 @@ function getPrizeItems(littleEvery: number, bigEvery: number) {
       title: fullPassport?.title ?? "Full Passport",
       body:
         fullPassport?.description ??
-        "Collect all five stamps to complete your passport and receive a certificate and exclusive Discord role.",
+        "Complete all five stamps to unlock the Bonus Stamp. You will also receive a certificate and exclusive Discord Role!",
     },
   ] as const;
 }
@@ -314,10 +313,6 @@ export default function SummerSlamLandingPage() {
                           </ul>
                         </div>
                       </div>
-                      <p className={cn("mx-auto mt-3 max-w-md text-orange-800/45", GUIDE_STEP_BODY_CLASS)}>
-                        Draw dates and prize details are announced in Discord. Ticket totals are tracked
-                        on your passport.
-                      </p>
                     </TabsContent>
                   </div>
                 </Tabs>
@@ -331,26 +326,24 @@ export default function SummerSlamLandingPage() {
               </p>
 
               <section className={cn(ssCard, ssCardPad, ssPassportStretchPanel)}>
-                <h2 className={ssSectionTitle}>Ticket totals</h2>
-                <p className="mt-1 text-[11px] leading-relaxed text-orange-900/55">
-                  How approved quests convert to wheel entries:
-                </p>
+                <h2 className={ssSectionTitle}>Ticket Totals</h2>
                 <ul className="mt-2 space-y-1 text-xs text-orange-900/70">
                   <li>
-                    <span className="font-semibold text-orange-950">
-                      {littleEvery === 1 ? "Every wheel point" : `Every ${littleEvery} wheel points`}
-                    </span>{" "}
-                    = 1 Little Wheel ticket
+                    Complete <span className="font-semibold text-orange-950">1 Quest</span> = Earn{" "}
+                    <span className="font-semibold text-orange-950">1 Little Prize Wheel Ticket</span>
                   </li>
                   <li>
-                    Every{" "}
-                    <span className="font-semibold text-orange-950">{bigEvery} wheel points</span> = 1
-                    Big Wheel ticket
+                    Complete <span className="font-semibold text-orange-950">5 Quests</span> = Earn{" "}
+                    <span className="font-semibold text-orange-950">5 Little Prize Wheel Tickets</span>
                   </li>
                   <li className="text-orange-800/45">
-                    Most quests award 1 wheel point when approved.
+                    Completed everything? Start your secret bonus quests
                   </li>
                 </ul>
+                <p className="mt-3 text-[11px] leading-relaxed text-orange-800/45">
+                  Draw dates and prize details are announced in Discord. Ticket totals are tracked on your
+                  passport.
+                </p>
               </section>
             </aside>
             </div>
