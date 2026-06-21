@@ -11,16 +11,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.t
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
 import {
-  formatCampaignDateRange,
   getCampaignPhase,
-  phaseBadge,
   phaseMessage,
 } from "./_components/campaign-phase.ts";
 import {
-  ssAccentBarClass,
   ssCard,
   ssCardPad,
-  ssDisplayTitle,
   ssMutedSurface,
   ssPageBg,
   ssPageContainer,
@@ -36,7 +32,7 @@ import { PassportPreviewMini } from "./_components/passport-preview-mini.tsx";
 import { PassportHero } from "./_components/passport-hero.tsx";
 import { SEASON_REWARDS } from "./_components/passport-destinations.ts";
 import { CAMPAIGN_SLUG, getPassportErrorTitle, mapEnsurePassportError } from "./_components/passport-types.ts";
-import { Compass, Gift, Sparkles, Stamp, Sun, Trophy, Upload, UserCheck } from "lucide-react";
+import { Compass, Gift, Stamp, Sun, Trophy, Upload, UserCheck } from "lucide-react";
 
 const STEPS = [
   {
@@ -72,7 +68,7 @@ const STEPS = [
 ];
 
 const TAB_TRIGGER_CLASS =
-  "flex-1 rounded-md border border-transparent px-3 py-2 text-xs font-semibold sm:text-sm " +
+  "flex flex-1 items-center justify-center rounded-md border border-transparent px-3 py-2 text-center text-xs font-semibold sm:text-sm " +
   "transition-[color,background-color,box-shadow] " +
   "data-[state=inactive]:bg-transparent data-[state=inactive]:text-orange-800/55 " +
   "data-[state=inactive]:hover:bg-orange-100/80 data-[state=inactive]:hover:text-orange-950 " +
@@ -120,7 +116,6 @@ export default function SummerSlamLandingPage() {
   const ensureMyPassport = useMutation(api.seasonal.ensureMyPassport);
 
   const phase = getCampaignPhase(campaign ?? null);
-  const badge = phaseBadge(phase);
   const statusMessage = phaseMessage(phase);
   const canEnterPassport = phase === "active";
   const hasPassport = Boolean(passportStatus?.passport);
@@ -128,9 +123,10 @@ export default function SummerSlamLandingPage() {
     isSignedIn && (!isConvexAuthenticated || passportStatus === undefined);
   const littleEvery = campaign?.littleWheelEntryEveryStamps ?? 1;
   const bigEvery = campaign?.bigWheelEntryEveryStamps ?? 5;
-  const campaignDateRange =
-    campaign !== undefined ? formatCampaignDateRange(campaign) : undefined;
   const prizeItems = getPrizeItems(littleEvery, bigEvery);
+  const campaignDescription =
+    campaign?.description ??
+    "Complete quests during scrims, submit evidence, earn a place on the prize wheel!";
 
   const handleClaimPassport = async () => {
     setIsClaimingPassport(true);
@@ -193,43 +189,6 @@ export default function SummerSlamLandingPage() {
               </Button>
             </div>
 
-            <header className={cn("mx-auto w-full max-w-3xl overflow-hidden text-center", ssCard)}>
-              <div className={ssAccentBarClass} aria-hidden />
-              <div className={ssCardPad}>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <span
-                    className={cn(
-                      "rounded px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider",
-                      badge.className,
-                    )}
-                  >
-                    {badge.label}
-                  </span>
-                  {campaign === undefined ? (
-                    <Skeleton className={cn("h-3 w-32", ssSkeleton)} />
-                  ) : campaignDateRange ? (
-                    <span className="text-[11px] text-orange-800/50">{campaignDateRange}</span>
-                  ) : null}
-                  <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
-                    <Sparkles className="h-3 w-3" aria-hidden />
-                    Summer Slam
-                  </span>
-                </div>
-                <h2 className={cn(ssDisplayTitle, "mt-1.5 text-xl sm:text-2xl")}>
-                  {campaign?.title ?? "Summer Slam Passport"}
-                </h2>
-                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-orange-900/60 sm:text-sm">
-                  {campaign?.description ??
-                    "Complete quests during scrims, submit evidence, earn a place on the prize wheel!"}
-                </p>
-                {statusMessage ? (
-                  <p className="mt-2 rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-xs text-orange-900/70">
-                    {statusMessage}
-                  </p>
-                ) : null}
-              </div>
-            </header>
-
             <div className={ssPassportGrid}>
             <div className={ssPassportMainColumn}>
               <section
@@ -237,6 +196,20 @@ export default function SummerSlamLandingPage() {
                 aria-label="Summer Slam guide"
               >
                 <Tabs defaultValue="how-it-works" className="gap-3">
+                  {campaign === undefined ? (
+                    <Skeleton className={cn("mx-auto h-4 w-full max-w-md", ssSkeleton)} />
+                  ) : (
+                    <div className="space-y-2 text-center">
+                      <p className="text-xs leading-relaxed text-orange-900/60 sm:text-sm">
+                        {campaignDescription}
+                      </p>
+                      {statusMessage ? (
+                        <p className="rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-xs text-orange-900/70">
+                          {statusMessage}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
                   <TabsList className="h-auto w-full justify-stretch rounded-lg border border-orange-200/60 bg-orange-50/50 p-1 text-orange-900">
                     <TabsTrigger value="how-it-works" className={TAB_TRIGGER_CLASS}>
                       How It Works
@@ -246,10 +219,10 @@ export default function SummerSlamLandingPage() {
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="how-it-works" className="mt-0">
-                    <ol className="space-y-2">
+                  <TabsContent value="how-it-works" className="mt-0 text-center">
+                    <ol className="space-y-3">
                       {STEPS.map((step, index) => (
-                        <li key={step.title} className="flex gap-2">
+                        <li key={step.title} className="flex flex-col items-center gap-1.5">
                           <div
                             className={cn(
                               "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-orange-700",
@@ -258,7 +231,7 @@ export default function SummerSlamLandingPage() {
                           >
                             <step.icon className="h-4 w-4" />
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 max-w-md">
                             <p className="text-xs font-semibold text-orange-950">
                               {index + 1}. {step.title}
                             </p>
@@ -269,14 +242,14 @@ export default function SummerSlamLandingPage() {
                     </ol>
                   </TabsContent>
 
-                  <TabsContent value="prizes" className="mt-0">
-                    <p className="text-xs leading-relaxed text-orange-900/60">
+                  <TabsContent value="prizes" className="mt-0 text-center">
+                    <p className="mx-auto max-w-md text-xs leading-relaxed text-orange-900/60">
                       Complete quests to earn wheel tickets for prize draws, and finish every stamp
                       category for the full passport reward.
                     </p>
-                    <ul className="mt-3 space-y-2">
+                    <ul className="mt-3 space-y-3">
                       {prizeItems.map((prize) => (
-                        <li key={prize.title} className="flex gap-2">
+                        <li key={prize.title} className="flex flex-col items-center gap-1.5">
                           <div
                             className={cn(
                               "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-orange-700",
@@ -285,14 +258,14 @@ export default function SummerSlamLandingPage() {
                           >
                             <prize.icon className="h-4 w-4" />
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 max-w-md">
                             <p className="text-xs font-semibold text-orange-950">{prize.title}</p>
                             <p className="text-[11px] text-orange-900/55">{prize.body}</p>
                           </div>
                         </li>
                       ))}
                     </ul>
-                    <p className="mt-3 text-[11px] text-orange-800/45">
+                    <p className="mx-auto mt-3 max-w-md text-[11px] text-orange-800/45">
                       Draw dates and prize details are announced in Discord. Ticket totals are tracked
                       on your passport.
                     </p>
@@ -325,7 +298,7 @@ export default function SummerSlamLandingPage() {
                     Big Wheel ticket
                   </li>
                   <li className="text-orange-800/45">
-                    Most quests award 1 wheel point when approved. Tickets are exported for prize draws.
+                    Most quests award 1 wheel point when approved.
                   </li>
                 </ul>
               </section>
