@@ -213,7 +213,7 @@ export default function SummerSlamLandingPage() {
                     showIcon={false}
                   />
                 )
-              )}
+              }
               <Button asChild variant="ghost" className="min-h-10 touch-manipulation">
                 <Link to="/support">Site Support</Link>
               </Button>
