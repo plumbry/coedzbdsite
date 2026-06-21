@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils.ts";
 import { PassportExperience, type PassportEvidenceSubmitPayload } from "./_components/passport-experience.tsx";
 import type { PassportAvatarId } from "./_components/passport-avatars.ts";
 import type { PassportBirthplaceId } from "./_components/passport-birthplaces.ts";
-import { ssCard, ssPageBg, ssSkeleton } from "./_components/passport-dashboard-theme.ts";
+import { ssCard, ssPageBg, ssPageContainer, ssPageContent, ssSkeleton } from "./_components/passport-dashboard-theme.ts";
+import { PASSPORT_HEADER_IMG_CLASS } from "./_components/passport-assets.ts";
 import {
   CAMPAIGN_SLUG,
   CAMPAIGN_NOT_READY_MESSAGE,
@@ -39,14 +40,15 @@ import { getCampaignPhase, phaseMessage } from "./_components/campaign-phase.ts"
 function PassportLoader() {
   return (
     <PageShell maxWidth="wide" className={ssPageBg}>
-      <div className="space-y-4 pt-1 pb-8">
-        <Skeleton className={cn("mx-auto h-40 w-64 max-w-full", ssSkeleton)} />
-        <Skeleton className={cn("mx-auto h-28 w-48 max-w-full", ssSkeleton)} />
-        <Skeleton className={cn("h-16 w-full", ssSkeleton)} />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <Skeleton key={index} className={cn("h-36 w-full", ssSkeleton)} />
-          ))}
+      <div className={ssPageContent}>
+        <div className={ssPageContainer}>
+          <Skeleton className={cn(PASSPORT_HEADER_IMG_CLASS, "aspect-[944/375]", ssSkeleton)} />
+          <Skeleton className={cn("h-16 w-full", ssSkeleton)} />
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Skeleton key={index} className={cn("h-36 w-full", ssSkeleton)} />
+            ))}
+          </div>
         </div>
       </div>
     </PageShell>

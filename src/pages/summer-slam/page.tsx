@@ -23,13 +23,14 @@ import {
   ssDisplayTitle,
   ssMutedSurface,
   ssPageBg,
+  ssPageContainer,
+  ssPageContent,
   ssPassportGrid,
   ssPassportMainColumn,
   ssPassportSidebar,
   ssPassportStretchPanel,
   ssSectionTitle,
   ssSkeleton,
-  ssStack,
 } from "./_components/passport-dashboard-theme.ts";
 import { PassportPreviewMini } from "./_components/passport-preview-mini.tsx";
 import { PassportHero } from "./_components/passport-hero.tsx";
@@ -152,12 +153,9 @@ export default function SummerSlamLandingPage() {
 
   return (
     <PageShell maxWidth="wide" className={ssPageBg}>
-      <div className={cn(ssStack, "pb-8 pt-1")}>
-        <div className="mx-auto w-full max-w-6xl px-3 sm:px-4">
-          <PassportHero
-            title={campaign?.title ?? "Summer Slam Passport"}
-            className="mb-4 w-full"
-          />
+      <div className={ssPageContent}>
+        <div className={ssPageContainer}>
+          <PassportHero title={campaign?.title ?? "Summer Slam Passport"} />
 
           <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:justify-center">

@@ -2,7 +2,7 @@ import { Calendar, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { InfoTooltip } from "./passport-info-tooltip.tsx";
 import { PASSPORT_HEADER, PASSPORT_HEADER_IMG_CLASS } from "./passport-assets.ts";
-import { ssLabel, ssStatCell } from "./passport-dashboard-theme.ts";
+import { ssLabel, ssPassportHeroClass, ssStatCell } from "./passport-dashboard-theme.ts";
 
 /** Campaign header artwork only — fallback stats for views without a passport identity card. */
 export function PassportHero({
@@ -13,8 +13,8 @@ export function PassportHero({
   className?: string;
 }) {
   return (
-    <header className={cn("overflow-hidden pb-1", className)}>
-      <div className="flex flex-col items-center px-1 pt-1">
+    <header className={cn(ssPassportHeroClass, "overflow-hidden", className)}>
+      <div className="flex flex-col items-center">
         <h1 className="sr-only">{title}</h1>
         <img
           src={PASSPORT_HEADER.src}

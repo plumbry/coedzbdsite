@@ -6,7 +6,7 @@ import { PassportRewardsPanel } from "./passport-rewards-panel.tsx";
 import { PassportEvidenceReviewPanel } from "./passport-evidence-review-panel.tsx";
 import { PassportOnboarding } from "./passport-onboarding.tsx";
 import { PassportCertificateDownloadButton } from "./passport-certificate-download-button.tsx";
-import { ssStack, ssPassportGrid, ssPassportMainColumn, ssPassportSidebar } from "./passport-dashboard-theme.ts";
+import { ssPassportGrid, ssPassportMainColumn, ssPassportSidebar, ssPageContainer, ssPageContent } from "./passport-dashboard-theme.ts";
 import {
   buildSeals,
   summariseSeason,
@@ -14,7 +14,6 @@ import {
 import { CATEGORY_PAGES, getQuestStatus, type QuestEntry } from "./passport-types.ts";
 import type { PassportAvatarId } from "./passport-avatars.ts";
 import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
-import { cn } from "@/lib/utils.ts";
 
 const EARNED_SEALS_STORAGE_KEY = "summer-slam-earned-seals";
 
@@ -110,11 +109,11 @@ export function PassportDashboard({
     ) : null;
 
   return (
-    <div className={cn(ssStack, "pb-8")}>
+    <div className={ssPageContent}>
       <PassportOnboarding />
 
-      <div className="mx-auto w-full max-w-6xl px-3 sm:px-4">
-        <PassportHero title={campaignTitle} className="mb-4 w-full" />
+      <div className={ssPageContainer}>
+        <PassportHero title={campaignTitle} />
 
         <div className={ssPassportGrid}>
           <div className={ssPassportMainColumn}>

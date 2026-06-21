@@ -10,6 +10,10 @@ export const ssCard =
 export const ssCardPad = "p-3 sm:p-4";
 export const ssStack = "space-y-4";
 export const ssGridGap = "gap-4";
+/** Shared page chrome — landing, passport, demo, and loading states. */
+export const ssPageContent = cn(ssStack, "pb-8 pt-1");
+export const ssPageContainer = "mx-auto w-full max-w-6xl px-3 sm:px-4";
+export const ssPassportHeroClass = "mb-4 w-full";
 /** Two-column passport dashboard layout — shared by live, demo, and complete demo. */
 export const ssPassportGrid =
   "flex flex-col gap-6 lg:grid lg:min-h-0 lg:items-stretch lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)] lg:gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]";
