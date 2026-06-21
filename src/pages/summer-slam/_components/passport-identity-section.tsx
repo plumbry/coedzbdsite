@@ -147,6 +147,7 @@ export function PassportIdentitySection({
         pagesCompleted={pagesCompleted}
         totalPages={totalPages}
         bonusUnlocked={bonusUnlocked}
+        bonusSeal={bonusSeal}
         seasonStartsAt={seasonStartsAt}
         seasonEndsAt={seasonEndsAt}
         celebratingSealIds={celebratingSealIds}

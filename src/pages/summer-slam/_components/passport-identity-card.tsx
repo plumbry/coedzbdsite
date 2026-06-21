@@ -103,49 +103,54 @@ function CollectionSealButton({
 }
 
 function BonusSealButton({
+  bonusSeal,
+  bonusUnlocked,
   onSelect,
-  revealed,
 }: {
+  bonusSeal: SealProgress;
+  bonusUnlocked: boolean;
   onSelect: () => void;
-  revealed: boolean;
 }) {
-  if (!revealed) return null;
+  const earned = bonusSeal.state === "earned";
+  const progressLabel = earned
+    ? "Done"
+    : bonusUnlocked && bonusSeal.total > 0
+      ? `${bonusSeal.approved}/${bonusSeal.total}`
+      : "Bonus";
 
   return (
-    <div className="col-span-5 mt-1 flex justify-center sm:col-span-1 sm:mt-0">
-      <div className={STAMP_COLUMN_CLASS}>
-        <button
-          type="button"
-          onClick={onSelect}
-          className={cn(
-            STAMP_BTN_CLASS,
-            "rounded-full transition-transform duration-150 motion-safe:animate-[sealPop_0.6s_ease-out]",
-            "hover:scale-[1.04] active:scale-[0.98]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-1",
-          )}
-          aria-label="Summer Legend bonus stamp ? tap to open hidden page"
-        >
-          <PassportSealImage
-            meta={{
-              id: "summer_spirit",
-              label: BONUS_STAMP_META.label,
-              title: BONUS_STAMP_META.title,
-              tagline: BONUS_STAMP_META.tagline,
-              image: "",
-              accent: BONUS_STAMP_META.accent,
-              tint: BONUS_STAMP_META.tint,
-              glow: "",
-              text: "text-amber-600",
-            }}
-            state="locked"
-            fill
-            showBadge={false}
-            className={COLLECTION_STAMP_SLOT}
-          />
-        </button>
-        <p className={cn(STAMP_LABEL_CLASS, "text-amber-800/70")}>{BONUS_STAMP_META.label}</p>
-        <p className={cn(STAMP_PROGRESS_CLASS, "text-amber-700/60")}>Bonus</p>
-      </div>
+    <div className={STAMP_COLUMN_CLASS}>
+      <button
+        type="button"
+        onClick={() => bonusUnlocked && onSelect()}
+        disabled={!bonusUnlocked}
+        className={cn(
+          STAMP_BTN_CLASS,
+          "rounded-full transition-transform duration-150",
+          bonusUnlocked && "hover:scale-[1.04] active:scale-[0.98]",
+          earned && "motion-safe:animate-[sealPop_0.6s_ease-out]",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-[#FDFBF7]",
+          !bonusUnlocked && "cursor-default opacity-90",
+        )}
+        aria-label={
+          earned
+            ? `${BONUS_STAMP_META.label} earned. Tap to open bonus page.`
+            : bonusUnlocked
+              ? `${BONUS_STAMP_META.label} incomplete. Tap to open bonus page.`
+              : `${BONUS_STAMP_META.label} locked until all five stamps are collected.`
+        }
+      >
+        <PassportSealImage
+          meta={earned ? bonusSeal.meta : { ...bonusSeal.meta, image: "" }}
+          state={earned ? "earned" : "locked"}
+          seal={earned ? bonusSeal : undefined}
+          fill
+          showBadge={earned}
+          className={COLLECTION_STAMP_SLOT}
+        />
+      </button>
+      <p className={cn(STAMP_LABEL_CLASS, "text-violet-800/70")}>{BONUS_STAMP_META.label}</p>
+      <p className={cn(STAMP_PROGRESS_CLASS, "text-violet-700/60")}>{progressLabel}</p>
     </div>
   );
 }
@@ -238,12 +243,14 @@ function MetaField({ label, children, className }: { label: string; children: Re
 function StampCollectionPanel({
   seals,
   celebratingSealIds,
+  bonusSeal,
   bonusUnlocked,
   onSelectSeal,
   onSelectBonus,
 }: {
   seals: SealProgress[];
   celebratingSealIds: string[];
+  bonusSeal: SealProgress;
   bonusUnlocked: boolean;
   onSelectSeal: (seal: SealProgress) => void;
   onSelectBonus: () => void;
@@ -267,7 +274,13 @@ function StampCollectionPanel({
             onSelect={onSelectSeal}
           />
         ))}
-        <BonusSealButton revealed={bonusUnlocked} onSelect={onSelectBonus} />
+      </div>
+      <div className="flex w-full justify-center pt-1 lg:pt-2">
+        <BonusSealButton
+          bonusSeal={bonusSeal}
+          bonusUnlocked={bonusUnlocked}
+          onSelect={onSelectBonus}
+        />
       </div>
       <p className="text-[9px] text-center text-orange-800/45 lg:text-[11px]">Tap a stamp to open its passport page</p>
     </section>
@@ -327,6 +340,7 @@ export function PassportIdentityCard({
   pagesCompleted,
   totalPages,
   bonusUnlocked,
+  bonusSeal,
   seasonStartsAt,
   seasonEndsAt,
   celebratingSealIds,
@@ -349,6 +363,7 @@ export function PassportIdentityCard({
   pagesCompleted: number;
   totalPages: number;
   bonusUnlocked: boolean;
+  bonusSeal: SealProgress;
   seasonStartsAt?: number;
   seasonEndsAt?: number;
   celebratingSealIds: string[];
@@ -560,6 +575,7 @@ export function PassportIdentityCard({
               <StampCollectionPanel
                 seals={seals}
                 celebratingSealIds={celebratingSealIds}
+                bonusSeal={bonusSeal}
                 bonusUnlocked={bonusUnlocked}
                 onSelectSeal={onSelectSeal}
                 onSelectBonus={onSelectBonus}

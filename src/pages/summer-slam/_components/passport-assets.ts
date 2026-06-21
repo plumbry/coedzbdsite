@@ -2,7 +2,7 @@
  * Shared Summer Slam artwork — used by landing, live passport, and demo passport.
  * Bump ASSET_VERSION whenever files in /public/summer-slam change.
  */
-export const ASSET_VERSION = "2026-06-20-header-v1";
+export const ASSET_VERSION = "2026-06-21-bonus-seal-v1";
 
 export function summerSlamAsset(path: string): string {
   return `${path}?v=${ASSET_VERSION}`;
@@ -14,6 +14,7 @@ const SEAL_SLUGS = {
   summer_spirit: "summer_spirit",
   team_player: "team_player",
   community: "community",
+  summer_legend: "summer_legend",
 } as const;
 
 export type SealSlug = keyof typeof SEAL_SLUGS;
@@ -49,4 +50,5 @@ export const STAMP_IMAGES = {
   summer_spirit: summerSlamAsset("/summer-slam/seals/summer_spirit.png"),
   team_player: summerSlamAsset("/summer-slam/seals/team_player.png"),
   community: summerSlamAsset("/summer-slam/seals/community.png"),
+  summer_legend: summerSlamAsset("/summer-slam/seals/summer_legend.png"),
 } as const;
