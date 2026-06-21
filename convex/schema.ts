@@ -10,8 +10,11 @@ export default defineSchema({
     role: v.optional(v.union(
       v.literal("admin"),
       v.literal("event_mod"),
-      v.literal("viewer")
+      v.literal("viewer"),
+      v.literal("analytics"),
     )),
+    /** Last stats cache refresh triggered by an analytics-role user (3-day cooldown). */
+    lastAnalyticsStatsRefreshAt: v.optional(v.number()),
     /** Discord snowflake — pre-seeded before first Clerk Discord login (Phase 1 migration). */
     discordUserId: v.optional(v.string()),
     /** Display-only; not used for auth matching. */
@@ -1256,6 +1259,15 @@ export default defineSchema({
         color: v.string(),
       }),
     ),
+    genderActive: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          value: v.number(),
+          color: v.string(),
+        }),
+      ),
+    ),
     tier: v.array(
       v.object({
         label: v.string(),
@@ -1296,6 +1308,15 @@ export default defineSchema({
         }),
       ),
     ),
+    applicationSource: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          value: v.number(),
+          color: v.string(),
+        }),
+      ),
+    ),
     eventsReady: v.boolean(),
     segmentMembersIndexed: v.optional(v.boolean()),
     lastUpdated: v.number(),
@@ -1308,6 +1329,7 @@ export default defineSchema({
       v.literal("tenure"),
       v.literal("events"),
       v.literal("recentEvents"),
+      v.literal("applicationSource"),
     ),
     segment: v.string(),
     playerId: v.id("players"),
@@ -1334,6 +1356,9 @@ export default defineSchema({
     male: v.number(),
     female: v.number(),
     genderUnknown: v.number(),
+    maleActive: v.optional(v.number()),
+    femaleActive: v.optional(v.number()),
+    genderUnknownActive: v.optional(v.number()),
     tierS: v.number(),
     tierA: v.number(),
     tierB: v.number(),
@@ -1356,6 +1381,11 @@ export default defineSchema({
     eventsFiveOrLess: v.number(),
     recentEventsOverThree: v.optional(v.number()),
     recentEventsThreeOrLess: v.optional(v.number()),
+    sourceTikTok: v.optional(v.number()),
+    sourceTwitter: v.optional(v.number()),
+    sourceTeammate: v.optional(v.number()),
+    sourceOther: v.optional(v.number()),
+    sourceUnknown: v.optional(v.number()),
     startedAt: v.number(),
     lastProgressAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),

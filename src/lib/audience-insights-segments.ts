@@ -3,7 +3,8 @@ export type AudienceChartType =
   | "tier"
   | "tenure"
   | "events"
-  | "recentEvents";
+  | "recentEvents"
+  | "applicationSource";
 
 export const AUDIENCE_CHART_TYPES: AudienceChartType[] = [
   "gender",
@@ -11,6 +12,7 @@ export const AUDIENCE_CHART_TYPES: AudienceChartType[] = [
   "tenure",
   "events",
   "recentEvents",
+  "applicationSource",
 ];
 
 const LABEL_TO_SEGMENT: Record<AudienceChartType, Record<string, string>> = {
@@ -41,6 +43,13 @@ const LABEL_TO_SEGMENT: Record<AudienceChartType, Record<string, string>> = {
   recentEvents: {
     "> 3 scrim leaderboards (last 4 weeks)": "over3",
     "3 or fewer scrim leaderboards (last 4 weeks)": "threeOrLess",
+  },
+  applicationSource: {
+    TikTok: "tiktok",
+    Twitter: "twitter",
+    Teammate: "teammate",
+    Other: "other",
+    Unknown: "unknown",
   },
 };
 
@@ -73,6 +82,13 @@ const SEGMENT_TO_LABEL: Record<AudienceChartType, Record<string, string>> = {
     over3: "More than 3 scrim leaderboards (last 4 weeks)",
     threeOrLess: "3 or fewer scrim leaderboards (last 4 weeks)",
   },
+  applicationSource: {
+    tiktok: "TikTok",
+    twitter: "Twitter",
+    teammate: "Teammate",
+    other: "Other",
+    unknown: "Unknown",
+  },
 };
 
 const CHART_TITLES: Record<AudienceChartType, string> = {
@@ -81,6 +97,7 @@ const CHART_TITLES: Record<AudienceChartType, string> = {
   tenure: "Member tenure",
   events: "Events played",
   recentEvents: "Recent scrim leaderboard participation",
+  applicationSource: "Application source",
 };
 
 export function isAudienceChartType(value: string): value is AudienceChartType {
@@ -114,7 +131,9 @@ export function audienceSegmentPageTitle(
 ): string {
   const segmentLabel = segmentKeyToLabel(chart, segment) ?? segment;
   const scope =
-    chart === "tier" && options?.activeOnly ? " (active members)" : "";
+    (chart === "tier" || chart === "gender") && options?.activeOnly
+      ? " (active members)"
+      : "";
   return `${CHART_TITLES[chart]} — ${segmentLabel}${scope}`;
 }
 

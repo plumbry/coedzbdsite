@@ -17,6 +17,7 @@ import {
   labelToSegmentKey,
   type AudienceChartType,
 } from "@/lib/audience-insights-segments.ts";
+import { useUserRole } from "@/hooks/use-user-role.ts";
 
 type ChartPoint = {
   label: string;
@@ -193,12 +194,45 @@ function DonutCard({
   );
 }
 
-type TierMemberScope = "all" | "active";
+type MemberScope = "all" | "active";
+
+function MemberScopeToggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: MemberScope;
+  onChange: (value: MemberScope) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(next) => {
+        if (next === "all" || next === "active") onChange(next);
+      }}
+      variant="outline"
+      size="sm"
+      className="shrink-0"
+      disabled={disabled}
+    >
+      <ToggleGroupItem value="all" aria-label="All members">
+        All Members
+      </ToggleGroupItem>
+      <ToggleGroupItem value="active" aria-label="Active members">
+        Active Members
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
 
 function AudienceInsightsContent() {
   const navigate = useNavigate();
+  const { isAdmin } = useUserRole();
   const insights = useQuery(api.audienceInsights.getAudienceInsights);
-  const [tierScope, setTierScope] = useState<TierMemberScope>("all");
+  const refreshCooldown = useQuery(api.users.getAnalyticsStatsRefreshCooldown);
+  const [memberScope, setMemberScope] = useState<MemberScope>("all");
 
   const openSegment = (
     chartType: AudienceChartType,
@@ -222,6 +256,12 @@ function AudienceInsightsContent() {
   );
 
   const isJobRunning = rebuildJob?.status === "running";
+  const refreshBlocked =
+    refreshCooldown?.applies === true && refreshCooldown.canRefresh === false;
+  const nextRefreshLabel =
+    refreshCooldown?.nextAvailableAt != null
+      ? new Date(refreshCooldown.nextAvailableAt).toLocaleString()
+      : null;
 
   useEffect(() => {
     if (watchRebuild && rebuildJob === null) {
@@ -280,7 +320,7 @@ function AudienceInsightsContent() {
     }
   };
 
-  const showEventBackfillHint = hasCache && !eventsReady;
+  const showEventBackfillHint = isAdmin && hasCache && !eventsReady;
 
   if (insights === undefined) {
     return (
@@ -296,13 +336,21 @@ function AudienceInsightsContent() {
     ? `Cached ${new Date(insights.lastUpdated).toLocaleString()}`
     : "Not cached yet";
 
-  const tierActiveUsesLiveData = insights.needsRebuild;
+  const activeMemberCacheNeedsRebuild = insights.needsRebuild;
+  const genderChartData =
+    memberScope === "active"
+      ? chartSegments(insights.genderActive)
+      : chartSegments(insights.gender);
+  const genderChartTotal =
+    memberScope === "active"
+      ? insights.totalActiveMembers || 1
+      : insights.totalMembers || 1;
   const tierChartData =
-    tierScope === "active"
+    memberScope === "active"
       ? chartSegments(insights.tierActive)
       : chartSegments(insights.tier);
   const tierChartTotal =
-    tierScope === "active"
+    memberScope === "active"
       ? insights.totalActiveMembers || 1
       : insights.totalMembers || 1;
 
@@ -388,12 +436,12 @@ function AudienceInsightsContent() {
         </Alert>
       )}
 
-      {hasCache && tierActiveUsesLiveData && !isJobRunning && (
+      {hasCache && activeMemberCacheNeedsRebuild && !isJobRunning && (
         <Alert>
-          <AlertTitle>Active tier split is live-calculated</AlertTitle>
+          <AlertTitle>Active member splits are live-calculated</AlertTitle>
           <AlertDescription>
-            The chart uses current player activity flags. Click Refresh stats once to cache active
-            tier data and speed up segment member lists.
+            Gender and tier active-member charts use current player activity flags. Click Refresh
+            stats once to cache active member data and speed up segment member lists.
           </AlertDescription>
         </Alert>
       )}
@@ -413,8 +461,13 @@ function AudienceInsightsContent() {
             variant="outline"
             size="sm"
             onClick={() => void runRebuild()}
-            disabled={isJobRunning}
+            disabled={isJobRunning || refreshBlocked}
             className="shrink-0"
+            title={
+              refreshBlocked && nextRefreshLabel
+                ? `Next refresh available ${nextRefreshLabel}`
+                : undefined
+            }
           >
             <RefreshCw className={`mr-2 h-4 w-4 ${isJobRunning ? "animate-spin" : ""}`} />
             {isJobRunning ? "Refreshing…" : "Refresh stats"}
@@ -422,19 +475,44 @@ function AudienceInsightsContent() {
         </CardContent>
       </Card>
 
+      {refreshBlocked && nextRefreshLabel && (
+        <Alert>
+          <AlertTitle>Refresh limit reached</AlertTitle>
+          <AlertDescription>
+            Analytics staff can refresh stats once every 3 days. Next refresh available{" "}
+            {nextRefreshLabel}.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <DonutCard
           title="Gender Split"
-          description="Distribution by evaluation gender category."
-          data={chartSegments(insights.gender)}
-          total={insights.totalMembers || 1}
+          description={
+            memberScope === "active"
+              ? "Active members (played in the last 6 weeks) by evaluation gender category."
+              : "Distribution by evaluation gender category."
+          }
+          data={genderChartData}
+          total={genderChartTotal}
           chartType="gender"
-          onSegmentClick={(key) => openSegment("gender", key)}
+          onSegmentClick={(key) =>
+            openSegment("gender", key, {
+              activeOnly: memberScope === "active",
+            })
+          }
+          headerActions={
+            <MemberScopeToggle
+              value={memberScope}
+              onChange={setMemberScope}
+              disabled={!hasCache}
+            />
+          }
         />
         <DonutCard
           title="Tier Split"
           description={
-            tierScope === "active"
+            memberScope === "active"
               ? "Active members (played in the last 6 weeks) by tier."
               : "How accepted members are distributed across tiers."
           }
@@ -443,28 +521,15 @@ function AudienceInsightsContent() {
           chartType="tier"
           onSegmentClick={(key) =>
             openSegment("tier", key, {
-              activeOnly: tierScope === "active",
+              activeOnly: memberScope === "active",
             })
           }
           headerActions={
-            <ToggleGroup
-              type="single"
-              value={tierScope}
-              onValueChange={(value) => {
-                if (value === "all" || value === "active") setTierScope(value);
-              }}
-              variant="outline"
-              size="sm"
-              className="shrink-0"
+            <MemberScopeToggle
+              value={memberScope}
+              onChange={setMemberScope}
               disabled={!hasCache}
-            >
-              <ToggleGroupItem value="all" aria-label="All members">
-                All Members
-              </ToggleGroupItem>
-              <ToggleGroupItem value="active" aria-label="Active members">
-                Active Members
-              </ToggleGroupItem>
-            </ToggleGroup>
+            />
           }
         />
       </div>
@@ -507,7 +572,7 @@ function AudienceInsightsContent() {
           <Card className="py-0">
             <CardHeader className="py-3">
               <CardTitle className="text-base">
-                Played More Than 3 Scrim Leaderboards in the Last 4 Weeks
+                Played More Than 3 Scrims in the Last 4 Weeks
               </CardTitle>
               <CardDescription>Refresh stats to build the cache.</CardDescription>
             </CardHeader>
@@ -517,7 +582,7 @@ function AudienceInsightsContent() {
           </Card>
         ) : (
           <DonutCard
-            title="Played More Than 3 Scrim Leaderboards in the Last 4 Weeks"
+            title="Played More Than 3 Scrims in the Last 4 Weeks"
             description="Each Yunite leaderboard on a scrim event counts separately (one calendar scrim can have many leaderboards), dated within the last 4 weeks."
             data={chartSegments(insights.recentEvents)}
             total={insights.totalMembers || 1}
@@ -525,6 +590,14 @@ function AudienceInsightsContent() {
             onSegmentClick={(key) => openSegment("recentEvents", key)}
           />
         )}
+        <DonutCard
+          title="Application Source"
+          description="How accepted members reported finding the community on their application."
+          data={chartSegments(insights.applicationSource)}
+          total={insights.totalMembers || 1}
+          chartType="applicationSource"
+          onSegmentClick={(key) => openSegment("applicationSource", key)}
+        />
       </div>
     </div>
   );
@@ -533,7 +606,7 @@ function AudienceInsightsContent() {
 export default function AudienceInsightsPage() {
   return (
     <AdminPageLayout
-      requireAdmin
+      requireAnalyticsHub
       title="Audience Insights"
       description="Cached audience overview — refresh when you want updated numbers."
       authTitle="Sign in to view audience insights"

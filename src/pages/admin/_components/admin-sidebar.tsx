@@ -231,8 +231,16 @@ function SidebarCollapseToggle({
 }
 
 export default function AdminSidebar() {
-  const { isAdmin, isModeratorOrAdmin, isEventMod, hasEventBanAccess, user, isLoading } =
-    useUserRole();
+  const {
+    isAdmin,
+    isAnalytics,
+    isModeratorOrAdmin,
+    isEventMod,
+    hasEventBanAccess,
+    hasAnalyticsHubAccess,
+    user,
+    isLoading,
+  } = useUserRole();
   const { signout } = useAuth();
   const location = useLocation();
   const [openSections, setOpenSections] = useState<Set<string>>(() => {
@@ -309,6 +317,16 @@ export default function AdminSidebar() {
           { path: "/admin/audience-insights", label: "Audience Insights", icon: PieChart },
         ],
       });
+    } else if (isAnalytics) {
+      result.push({
+        id: "analytics",
+        label: "Analytics",
+        items: [
+          { path: "/admin/stats", label: "Analytics Hub", icon: BarChart3 },
+          { path: "/admin/audience-insights", label: "Audience Insights", icon: PieChart },
+          { path: "/admin/leaderboard-stats", label: "Leaderboard Stats", icon: Trophy },
+        ],
+      });
     }
 
     if (isAdmin) {
@@ -375,7 +393,7 @@ export default function AdminSidebar() {
     }
 
     return result;
-  }, [isAdmin, isModeratorOrAdmin, hasEventBanAccess]);
+  }, [isAdmin, isAnalytics, isModeratorOrAdmin, hasEventBanAccess]);
 
   useEffect(() => {
     if (sections.length === 0) return;
@@ -423,7 +441,7 @@ export default function AdminSidebar() {
     });
   }, [collapsed, location.pathname, sections]);
 
-  const showNav = isModeratorOrAdmin || isEventMod;
+  const showNav = isModeratorOrAdmin || isEventMod || hasAnalyticsHubAccess;
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -448,7 +466,7 @@ export default function AdminSidebar() {
         {/* User profile */}
         {!isLoading && (
           <div className={cn("shrink-0 border-b pb-3", collapsed ? "mb-2" : "mb-4 pb-4")}>
-            {isModeratorOrAdmin || isEventMod ? (
+            {isModeratorOrAdmin || isEventMod || isAnalytics ? (
               <div className={cn(collapsed && "flex flex-col items-center gap-2")}>
                 {collapsed ? (
                   <Tooltip>
@@ -535,13 +553,24 @@ export default function AdminSidebar() {
           <ScrollArea className="min-h-0 flex-1">
             <nav className="space-y-1 pr-2">
               <div className={cn("pb-2", collapsed && "flex justify-center")}>
-                <SidebarNavLink
-                  path="/admin"
-                  label="Admin Home"
-                  icon={LayoutDashboard}
-                  active={isActive("/admin")}
-                  collapsed={collapsed}
-                />
+                {(isAdmin || isModeratorOrAdmin || isEventMod) && (
+                  <SidebarNavLink
+                    path="/admin"
+                    label="Admin Home"
+                    icon={LayoutDashboard}
+                    active={isActive("/admin")}
+                    collapsed={collapsed}
+                  />
+                )}
+                {isAnalytics && !isAdmin && (
+                  <SidebarNavLink
+                    path="/admin/stats"
+                    label="Analytics Hub"
+                    icon={BarChart3}
+                    active={isActive("/admin/stats")}
+                    collapsed={collapsed}
+                  />
+                )}
               </div>
               {collapsed
                 ? sections.map((section, sectionIndex) => (

@@ -42,7 +42,7 @@ export default function AudienceInsightsSegmentPage() {
   const { chart, segment } = useParams<{ chart: string; segment: string }>();
   const [searchParams] = useSearchParams();
   const activeOnly =
-    chart === "tier" && searchParams.get("members") === "active";
+    (chart === "tier" || chart === "gender") && searchParams.get("members") === "active";
   const [search, setSearch] = useState("");
   const [allMembers, setAllMembers] = useState<MemberRow[]>([]);
   const [playersCursor, setPlayersCursor] = useState<string | null>(null);
@@ -123,7 +123,7 @@ export default function AudienceInsightsSegmentPage() {
 
   return (
     <AdminPageLayout
-      requireAdmin
+      requireAnalyticsHub
       title={title}
       description={
         activeOnly

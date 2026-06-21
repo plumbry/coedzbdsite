@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import { useUserRole } from "@/hooks/use-user-role.ts";
 import {
   Trophy,
   TrendingUp,
@@ -19,12 +20,14 @@ type StatsLink = {
   description: string;
   href: string;
   icon: LucideIcon;
+  analyticsVisible?: boolean;
 };
 
 type StatsSection = {
   title: string;
   description: string;
   links: StatsLink[];
+  analyticsVisible?: boolean;
 };
 
 const statsSections: StatsSection[] = [
@@ -55,12 +58,14 @@ const statsSections: StatsSection[] = [
   {
     title: "Population & events",
     description: "Member mix, event participation, and leaderboard participation rates.",
+    analyticsVisible: true,
     links: [
       {
         title: "Audience Insights",
-        description: "Gender, tier, tenure, and events-played donut charts.",
+        description: "Gender, tier, tenure, application source, and events-played donut charts.",
         href: "/admin/audience-insights",
         icon: Users,
+        analyticsVisible: true,
       },
       {
         title: "Average Stats",
@@ -73,6 +78,7 @@ const statsSections: StatsSection[] = [
         description: "Event leaderboard participation and top-finisher rates.",
         href: "/admin/leaderboard-stats",
         icon: Trophy,
+        analyticsVisible: true,
       },
     ],
   },
@@ -144,16 +150,34 @@ function StatsSectionGrid({ section }: { section: StatsSection }) {
   );
 }
 
+function filterSectionsForAnalytics(sections: StatsSection[]): StatsSection[] {
+  return sections
+    .filter((section) => section.analyticsVisible)
+    .map((section) => ({
+      ...section,
+      links: section.links.filter((link) => link.analyticsVisible),
+    }))
+    .filter((section) => section.links.length > 0);
+}
+
 export default function StatsPage() {
+  const { isAnalytics, isAdmin } = useUserRole();
+  const visibleSections =
+    isAnalytics && !isAdmin ? filterSectionsForAnalytics(statsSections) : statsSections;
+
   return (
     <AdminPageLayout
-      requireAdmin
+      requireAnalyticsHub
       title="Analytics Hub"
-      description="Tier evaluation, holistic scores, earnings, and unified stat rebuilds."
+      description={
+        isAnalytics && !isAdmin
+          ? "Audience insights and leaderboard participation rates."
+          : "Tier evaluation, holistic scores, earnings, and unified stat rebuilds."
+      }
       authTitle="Sign in to access analytics"
     >
       <div className="space-y-8">
-        {statsSections.map((section) => (
+        {visibleSections.map((section) => (
           <StatsSectionGrid key={section.title} section={section} />
         ))}
       </div>

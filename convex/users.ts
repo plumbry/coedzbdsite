@@ -2,8 +2,11 @@ import { ConvexError, v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { isValidDiscordSnowflake } from "./auth_discord";
-import { requireAdmin } from "./auth_helpers";
-import { getDisplayName } from "./auth_helpers";
+import {
+  ANALYTICS_STATS_REFRESH_COOLDOWN_MS,
+  getDisplayName,
+  requireAdmin,
+} from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
 import type { Id } from "./_generated/dataModel";
 import { provisionFromIdentity } from "./userProvisioning";
@@ -250,10 +253,54 @@ export const becomeAdmin = mutation({
   },
 });
 
+export const getAnalyticsStatsRefreshCooldown = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { applies: false as const, canRefresh: true };
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .first();
+
+    if (!user || user.role !== "analytics") {
+      return { applies: false as const, canRefresh: true };
+    }
+
+    const lastRefreshAt = user.lastAnalyticsStatsRefreshAt;
+    if (!lastRefreshAt) {
+      return {
+        applies: true as const,
+        canRefresh: true,
+        lastRefreshAt: undefined,
+        nextAvailableAt: undefined,
+      };
+    }
+
+    const nextAvailableAt = lastRefreshAt + ANALYTICS_STATS_REFRESH_COOLDOWN_MS;
+    return {
+      applies: true as const,
+      canRefresh: Date.now() >= nextAvailableAt,
+      lastRefreshAt,
+      nextAvailableAt,
+    };
+  },
+});
+
 export const updateUserRole = mutation({
   args: {
     userId: v.id("users"),
-    role: v.union(v.literal("admin"), v.literal("event_mod"), v.literal("viewer")),
+    role: v.union(
+      v.literal("admin"),
+      v.literal("event_mod"),
+      v.literal("viewer"),
+      v.literal("analytics"),
+    ),
   },
   handler: async (ctx, args) => {
     const currentUser = await requireAdmin(ctx);

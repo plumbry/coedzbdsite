@@ -19,6 +19,7 @@ interface AdminPageLayoutProps {
   requireAdmin?: boolean;
   requireModerator?: boolean;
   requireEventBanAccess?: boolean;
+  requireAnalyticsHub?: boolean;
   header?: Omit<PageHeaderProps, "title" | "description">;
   children: React.ReactNode;
 }
@@ -62,10 +63,17 @@ function AdminAuthorizedContent({
   requireAdmin,
   requireModerator,
   requireEventBanAccess,
+  requireAnalyticsHub,
   header,
   children,
 }: Omit<AdminPageLayoutProps, "authTitle">) {
-  const { isAdmin, isModeratorOrAdmin, hasEventBanAccess, isLoading } = useUserRole();
+  const {
+    isAdmin,
+    isModeratorOrAdmin,
+    hasEventBanAccess,
+    hasAnalyticsHubAccess,
+    isLoading,
+  } = useUserRole();
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
   useEffect(() => {
@@ -103,13 +111,19 @@ function AdminAuthorizedContent({
   }
 
   const allowed =
-    (!requireAdmin && !requireModerator && !requireEventBanAccess) ||
+    (!requireAdmin &&
+      !requireModerator &&
+      !requireEventBanAccess &&
+      !requireAnalyticsHub) ||
     (requireAdmin && isAdmin) ||
     (requireModerator && isModeratorOrAdmin) ||
-    (requireEventBanAccess && hasEventBanAccess);
+    (requireEventBanAccess && hasEventBanAccess) ||
+    (requireAnalyticsHub && hasAnalyticsHubAccess);
 
   if (!allowed) {
-    const descriptionText = requireAdmin
+    const descriptionText = requireAnalyticsHub
+      ? "This page is only accessible to analytics staff and administrators."
+      : requireAdmin
       ? "This page is only accessible to administrators."
       : requireEventBanAccess
         ? "This page is only accessible to event moderators and administrators."
@@ -149,6 +163,7 @@ export default function AdminPageLayout({
   requireAdmin = false,
   requireModerator = false,
   requireEventBanAccess = false,
+  requireAnalyticsHub = false,
   header,
   children,
 }: AdminPageLayoutProps) {
@@ -183,6 +198,7 @@ export default function AdminPageLayout({
       requireAdmin={requireAdmin}
       requireModerator={requireModerator}
       requireEventBanAccess={requireEventBanAccess}
+      requireAnalyticsHub={requireAnalyticsHub}
       header={header}
     >
       {children}

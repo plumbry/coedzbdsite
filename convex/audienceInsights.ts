@@ -13,10 +13,10 @@ import {
   buildScrimYuniteTournamentIdSet,
   isScrimYuniteLeaderboard,
 } from "./lib/scrimLeaderboard";
-import { requireAdmin } from "./auth_helpers";
+import { requireAnalyticsHubAccess, requireAnalyticsStatsRefresh } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
-const AUDIENCE_INSIGHTS_CACHE_VERSION = 6;
+const AUDIENCE_INSIGHTS_CACHE_VERSION = 8;
 const RECENT_EVENT_WINDOW_WEEKS = 4;
 const RECENT_EVENT_PLAYED_THRESHOLD = 3;
 const MEMBERS_PER_BATCH = 8;
@@ -32,7 +32,10 @@ const chartTypeValidator = v.union(
   v.literal("tenure"),
   v.literal("events"),
   v.literal("recentEvents"),
+  v.literal("applicationSource"),
 );
+
+type ApplicationSource = "TikTok" | "Twitter" | "Teammate" | "Other";
 
 type ChartSegment = {
   label: string;
@@ -46,6 +49,9 @@ type JobCounters = {
   male: number;
   female: number;
   genderUnknown: number;
+  maleActive: number;
+  femaleActive: number;
+  genderUnknownActive: number;
   tierS: number;
   tierA: number;
   tierB: number;
@@ -67,12 +73,20 @@ type JobCounters = {
   eventsFiveOrLess: number;
   recentEventsOverThree: number;
   recentEventsThreeOrLess: number;
+  sourceTikTok: number;
+  sourceTwitter: number;
+  sourceTeammate: number;
+  sourceOther: number;
+  sourceUnknown: number;
 };
 
 const EMPTY_COUNTERS: JobCounters = {
   male: 0,
   female: 0,
   genderUnknown: 0,
+  maleActive: 0,
+  femaleActive: 0,
+  genderUnknownActive: 0,
   tierS: 0,
   tierA: 0,
   tierB: 0,
@@ -94,6 +108,11 @@ const EMPTY_COUNTERS: JobCounters = {
   eventsFiveOrLess: 0,
   recentEventsOverThree: 0,
   recentEventsThreeOrLess: 0,
+  sourceTikTok: 0,
+  sourceTwitter: 0,
+  sourceTeammate: 0,
+  sourceOther: 0,
+  sourceUnknown: 0,
 };
 
 function monthsSinceServerJoin(serverJoinDate: string): number | null {
@@ -217,6 +236,7 @@ function accumulateMember(
   member: AcceptedMember,
   gender: number | undefined,
   recentEventsInWindow: number,
+  applicationSource: ApplicationSource | null,
 ) {
   if (gender === 100) counters.male += 1;
   else if (gender === 50) counters.female += 1;
@@ -230,6 +250,9 @@ function accumulateMember(
 
   if (member.isRecentlyActive) {
     counters.totalActiveMembers += 1;
+    if (gender === 100) counters.maleActive += 1;
+    else if (gender === 50) counters.femaleActive += 1;
+    else counters.genderUnknownActive += 1;
     if (member.tier === "S") counters.tierSActive += 1;
     else if (member.tier === "A") counters.tierAActive += 1;
     else if (member.tier === "B") counters.tierBActive += 1;
@@ -251,6 +274,12 @@ function accumulateMember(
     monthsSinceServerJoin(member.serverJoinDate),
   );
   counters[tenureKey] += 1;
+
+  if (applicationSource === "TikTok") counters.sourceTikTok += 1;
+  else if (applicationSource === "Twitter") counters.sourceTwitter += 1;
+  else if (applicationSource === "Teammate") counters.sourceTeammate += 1;
+  else if (applicationSource === "Other") counters.sourceOther += 1;
+  else counters.sourceUnknown += 1;
 }
 
 function tierSegmentsFromCounters(
@@ -268,6 +297,19 @@ function tierSegmentsFromCounters(
   ].filter((s) => s.value > 0);
 }
 
+function genderSegmentsFromCounters(
+  counters: Pick<
+    JobCounters,
+    "male" | "female" | "genderUnknown"
+  >,
+): ChartSegment[] {
+  return [
+    { label: "Male", value: counters.male, color: "#4f46e5" },
+    { label: "Female", value: counters.female, color: "#22c55e" },
+    { label: "Unknown", value: counters.genderUnknown, color: "#ef4444" },
+  ].filter((s) => s.value > 0);
+}
+
 function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
   const filterPositive = (segments: ChartSegment[]) =>
     segments.filter((s) => s.value > 0);
@@ -275,11 +317,12 @@ function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
   return {
     totalMembers,
     totalActiveMembers: counters.totalActiveMembers,
-    gender: filterPositive([
-      { label: "Male", value: counters.male, color: "#4f46e5" },
-      { label: "Female", value: counters.female, color: "#22c55e" },
-      { label: "Unknown", value: counters.genderUnknown, color: "#ef4444" },
-    ]),
+    gender: genderSegmentsFromCounters(counters),
+    genderActive: genderSegmentsFromCounters({
+      male: counters.maleActive,
+      female: counters.femaleActive,
+      genderUnknown: counters.genderUnknownActive,
+    }),
     tier: tierSegmentsFromCounters(counters),
     tierActive: tierSegmentsFromCounters({
       tierS: counters.tierSActive,
@@ -316,6 +359,13 @@ function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
         color: "#16a34a",
       },
     ],
+    applicationSource: filterPositive([
+      { label: "TikTok", value: counters.sourceTikTok, color: "#fe2c55" },
+      { label: "Twitter", value: counters.sourceTwitter, color: "#1da1f2" },
+      { label: "Teammate", value: counters.sourceTeammate, color: "#22c55e" },
+      { label: "Other", value: counters.sourceOther, color: "#f59e0b" },
+      { label: "Unknown", value: counters.sourceUnknown, color: "#6b7280" },
+    ]),
   };
 }
 
@@ -328,6 +378,25 @@ async function genderForPlayer(
     .withIndex("by_player", (q) => q.eq("playerId", playerId))
     .first();
   return score?.gender;
+}
+
+async function applicationSourceForPlayer(
+  ctx: MutationCtx | QueryCtx,
+  playerId: Id<"players">,
+): Promise<ApplicationSource | null> {
+  const applications = await ctx.db
+    .query("applications")
+    .withIndex("by_player_id", (q) => q.eq("playerId", playerId))
+    .collect();
+
+  const acceptedWithSource = applications
+    .filter((app) => app.status === "accepted" && app.source)
+    .sort(
+      (a, b) =>
+        (b.acceptedAt ?? b._creationTime) - (a.acceptedAt ?? a._creationTime),
+    );
+
+  return acceptedWithSource[0]?.source ?? null;
 }
 
 function tenureBucketToSegmentSlug(
@@ -376,6 +445,9 @@ function isValidSegment(chart: string, segment: string): boolean {
   if (chart === "recentEvents") {
     return segment === "over3" || segment === "threeOrLess";
   }
+  if (chart === "applicationSource") {
+    return ["tiktok", "twitter", "teammate", "other", "unknown"].includes(segment);
+  }
   return false;
 }
 
@@ -403,11 +475,20 @@ function recentEventsSegmentForCount(recentEventsInWindow: number): string {
     : "threeOrLess";
 }
 
+function applicationSourceSegment(source: ApplicationSource | null): string {
+  if (source === "TikTok") return "tiktok";
+  if (source === "Twitter") return "twitter";
+  if (source === "Teammate") return "teammate";
+  if (source === "Other") return "other";
+  return "unknown";
+}
+
 async function insertSegmentMemberRows(
   ctx: MutationCtx,
   member: AcceptedMember,
   gender: number | undefined,
   recentEventsInWindow: number,
+  applicationSource: ApplicationSource | null,
 ) {
   const base = {
     playerId: member._id,
@@ -433,6 +514,10 @@ async function insertSegmentMemberRows(
       chart: "recentEvents" as const,
       segment: recentEventsSegmentForCount(recentEventsInWindow),
     },
+    {
+      chart: "applicationSource" as const,
+      segment: applicationSourceSegment(applicationSource),
+    },
   ];
 
   for (const row of segmentRows) {
@@ -450,11 +535,13 @@ async function upsertAudienceInsightsSnapshot(
     totalMembers: number;
     totalActiveMembers: number;
     gender: ChartSegment[];
+    genderActive: ChartSegment[];
     tier: ChartSegment[];
     tierActive: ChartSegment[];
     tenure: ChartSegment[];
     events: ChartSegment[];
     recentEvents: ChartSegment[];
+    applicationSource: ChartSegment[];
     eventsReady: boolean;
     segmentMembersIndexed: boolean;
     lastUpdated: number;
@@ -473,6 +560,9 @@ function countersFromJob(job: Doc<"audienceInsightsJobs">): JobCounters {
     male: job.male ?? 0,
     female: job.female ?? 0,
     genderUnknown: job.genderUnknown ?? 0,
+    maleActive: job.maleActive ?? 0,
+    femaleActive: job.femaleActive ?? 0,
+    genderUnknownActive: job.genderUnknownActive ?? 0,
     tierS: job.tierS ?? 0,
     tierA: job.tierA ?? 0,
     tierB: job.tierB ?? 0,
@@ -494,6 +584,11 @@ function countersFromJob(job: Doc<"audienceInsightsJobs">): JobCounters {
     eventsFiveOrLess: job.eventsFiveOrLess ?? 0,
     recentEventsOverThree: job.recentEventsOverThree ?? 0,
     recentEventsThreeOrLess: job.recentEventsThreeOrLess ?? 0,
+    sourceTikTok: job.sourceTikTok ?? 0,
+    sourceTwitter: job.sourceTwitter ?? 0,
+    sourceTeammate: job.sourceTeammate ?? 0,
+    sourceOther: job.sourceOther ?? 0,
+    sourceUnknown: job.sourceUnknown ?? 0,
   };
 }
 
@@ -603,11 +698,13 @@ const emptyInsights = {
   totalMembers: 0,
   totalActiveMembers: 0,
   gender: [] as ChartSegment[],
+  genderActive: [] as ChartSegment[],
   tier: [] as ChartSegment[],
   tierActive: [] as ChartSegment[],
   tenure: [] as ChartSegment[],
   events: [] as ChartSegment[],
   recentEvents: [] as ChartSegment[],
+  applicationSource: [] as ChartSegment[],
   eventsReady: false,
   tierActiveReady: false,
   tierActiveSource: "cache" as const,
@@ -619,7 +716,7 @@ const emptyInsights = {
 export const getAudienceInsights = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireAnalyticsHubAccess(ctx);
 
     const cached = await ctx.db.query("audienceInsightsSnapshot").first();
     if (!cached) {
@@ -630,11 +727,13 @@ export const getAudienceInsights = query({
       totalMembers: cached.totalMembers,
       totalActiveMembers: cached.totalActiveMembers ?? 0,
       gender: cached.gender ?? [],
+      genderActive: cached.genderActive ?? [],
       tier: cached.tier ?? [],
       tierActive: cached.tierActive ?? [],
       tenure: cached.tenure ?? [],
       events: cached.events ?? [],
       recentEvents: cached.recentEvents ?? [],
+      applicationSource: cached.applicationSource ?? [],
       eventsReady: cached.eventsReady,
       segmentMembersIndexed: cached.segmentMembersIndexed === true,
       lastUpdated: cached.lastUpdated,
@@ -654,7 +753,7 @@ export const listAudienceInsightMembers = query({
     activeOnly: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    await requireAnalyticsHubAccess(ctx);
 
     if (!isValidSegment(args.chart, args.segment)) {
       throw new ConvexError({
@@ -673,7 +772,8 @@ export const listAudienceInsightMembers = query({
       };
     }
 
-    const activeOnly = args.chart === "tier" && args.activeOnly === true;
+    const activeOnly =
+      (args.chart === "tier" || args.chart === "gender") && args.activeOnly === true;
 
     const page = await ctx.db
       .query("audienceInsightsSegmentMembers")
@@ -755,7 +855,7 @@ export const clearSegmentMembers = internalMutation({
 export const getRebuildJobStatus = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireAnalyticsHubAccess(ctx);
 
     const job = await ctx.db
       .query("audienceInsightsJobs")
@@ -784,7 +884,7 @@ export const getRebuildJobStatus = query({
 export const cleanupAudienceInsightsRebuildJobs = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireAnalyticsHubAccess(ctx);
     await reconcileAudienceInsightsJobs(ctx);
     await failStaleRunningJobs(ctx);
     return { ok: true };
@@ -794,7 +894,7 @@ export const cleanupAudienceInsightsRebuildJobs = mutation({
 export const cancelAudienceInsightsRebuild = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireAnalyticsHubAccess(ctx);
 
     const running = await ctx.db
       .query("audienceInsightsJobs")
@@ -818,7 +918,7 @@ export const cancelAudienceInsightsRebuild = mutation({
 export const rebuildAudienceInsightsCache = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireAnalyticsStatsRefresh(ctx);
 
     await failStaleRunningJobs(ctx);
 
@@ -885,6 +985,7 @@ export const processRebuildBatch = internalMutation({
       for (const member of page.page) {
         if (!isVisibleInMemberLists(member)) continue;
         const gender = await genderForPlayer(ctx, member._id);
+        const applicationSource = await applicationSourceForPlayer(ctx, member._id);
         const recentEventsInWindow = await countRecentScrimLeaderboardsForPlayer(
           ctx,
           member._id,
@@ -892,12 +993,13 @@ export const processRebuildBatch = internalMutation({
           scrimTournamentIds,
           linkedEventCache,
         );
-        accumulateMember(counters, member, gender, recentEventsInWindow);
+        accumulateMember(counters, member, gender, recentEventsInWindow, applicationSource);
         await insertSegmentMemberRows(
           ctx,
           member,
           gender,
           recentEventsInWindow,
+          applicationSource,
         );
       }
 

@@ -3,6 +3,12 @@ import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 
+export const ANALYTICS_STATS_REFRESH_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
+
+export function hasAnalyticsHubAccess(user: Doc<"users"> | null | undefined): boolean {
+  return user?.role === "admin" || user?.role === "analytics";
+}
+
 /** Returns the user's preferred display name: username > name > email > fallback */
 export function getDisplayName(user: Doc<"users">): string {
   return user.username || user.name || user.email || "Unknown";
@@ -94,4 +100,42 @@ export async function requireEventBanAccess(ctx: QueryCtx | MutationCtx) {
 /** Write access for event bans (admin or event_mod only). */
 export async function requireEventBanWriteAccess(ctx: QueryCtx | MutationCtx) {
   return await requireEventBanAccess(ctx);
+}
+
+/** Audience Insights and Leaderboard Stats (admin or analytics). */
+export async function requireAnalyticsHubAccess(ctx: QueryCtx | MutationCtx) {
+  const user = await getCurrentUser(ctx);
+
+  if (!hasAnalyticsHubAccess(user)) {
+    throw new ConvexError({
+      message: "Analytics hub access required",
+      code: "FORBIDDEN",
+    });
+  }
+
+  return user;
+}
+
+/** Enforces the 3-day stats refresh limit for analytics-role users. */
+export async function requireAnalyticsStatsRefresh(ctx: MutationCtx) {
+  const user = await requireAnalyticsHubAccess(ctx);
+
+  if (user.role === "admin") {
+    return user;
+  }
+
+  const lastRefresh = user.lastAnalyticsStatsRefreshAt;
+  if (
+    lastRefresh &&
+    Date.now() - lastRefresh < ANALYTICS_STATS_REFRESH_COOLDOWN_MS
+  ) {
+    const nextAvailableAt = lastRefresh + ANALYTICS_STATS_REFRESH_COOLDOWN_MS;
+    throw new ConvexError({
+      message: `Stats refresh is limited to once every 3 days. Next refresh available ${new Date(nextAvailableAt).toLocaleString()}.`,
+      code: "RATE_LIMITED",
+    });
+  }
+
+  await ctx.db.patch(user._id, { lastAnalyticsStatsRefreshAt: Date.now() });
+  return user;
 }

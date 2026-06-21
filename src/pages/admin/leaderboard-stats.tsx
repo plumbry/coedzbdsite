@@ -28,6 +28,7 @@ type SortDirection = "asc" | "desc";
 function LeaderboardStatsContent() {
   const stats = useQuery(api.leaderboardStats.getLeaderboardStats);
   const cacheMeta = useQuery(api.leaderboardStats.getLeaderboardStatsCacheMeta);
+  const refreshCooldown = useQuery(api.users.getAnalyticsStatsRefreshCooldown);
   const rebuildCache = useMutation(api.leaderboardStats.rebuildLeaderboardStatsCache);
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [sortField, setSortField] = useState<SortField>("eventDate");
@@ -53,6 +54,13 @@ function LeaderboardStatsContent() {
     tierCPlayers: true,
   });
 
+  const refreshBlocked =
+    refreshCooldown?.applies === true && refreshCooldown.canRefresh === false;
+  const nextRefreshLabel =
+    refreshCooldown?.nextAvailableAt != null
+      ? new Date(refreshCooldown.nextAvailableAt).toLocaleString()
+      : null;
+
   if (stats === undefined) {
     return (
       <div className="space-y-4">
@@ -67,7 +75,12 @@ function LeaderboardStatsContent() {
       <div className="space-y-4 rounded-lg border border-dashed p-8 text-center">
         <p className="text-muted-foreground">{stats.message}</p>
         <Button
-          disabled={isRebuilding}
+          disabled={isRebuilding || refreshBlocked}
+          title={
+            refreshBlocked && nextRefreshLabel
+              ? `Next refresh available ${nextRefreshLabel}`
+              : undefined
+          }
           onClick={async () => {
             setIsRebuilding(true);
             try {
@@ -253,7 +266,12 @@ function LeaderboardStatsContent() {
           <Button
             variant="outline"
             size="sm"
-            disabled={isRebuilding}
+            disabled={isRebuilding || refreshBlocked}
+            title={
+              refreshBlocked && nextRefreshLabel
+                ? `Next refresh available ${nextRefreshLabel}`
+                : undefined
+            }
             onClick={async () => {
               setIsRebuilding(true);
               try {
@@ -704,7 +722,7 @@ function LeaderboardStatsContent() {
 
 export default function LeaderboardStats() {
   return (
-    <AdminPageLayout requireAdmin
+    <AdminPageLayout requireAnalyticsHub
       title="Leaderboard Statistics"
       authTitle="Sign in to view leaderboard statistics"
     >

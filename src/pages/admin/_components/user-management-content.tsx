@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
-import { Users, Shield, Eye, UserCog, Calendar, RefreshCw } from "lucide-react";
+import { Users, Shield, Eye, UserCog, Calendar, RefreshCw, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { useClientPagination } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
@@ -25,10 +25,19 @@ export default function UserManagement() {
     return <Skeleton className="h-48 w-full" />;
   }
 
-  const handleRoleChange = async (userId: Id<"users">, role: "admin" | "event_mod" | "viewer") => {
+  const handleRoleChange = async (
+    userId: Id<"users">,
+    role: "admin" | "event_mod" | "viewer" | "analytics",
+  ) => {
     try {
       await updateUserRole({ userId, role });
-      toast.success(`User role updated to ${role === "event_mod" ? "Mod" : role}`);
+      const roleLabel =
+        role === "event_mod"
+          ? "Mod"
+          : role === "analytics"
+            ? "Analytics"
+            : role;
+      toast.success(`User role updated to ${roleLabel}`);
     } catch (error) {
       if (error instanceof Error && error.message.includes("cannot change your own role")) {
         toast.error("You cannot change your own role");
@@ -56,6 +65,7 @@ export default function UserManagement() {
 
   const adminUsers = users.filter((u) => u.role === "admin");
   const eventModUsers = users.filter((u) => u.role === "event_mod");
+  const analyticsUsers = users.filter((u) => u.role === "analytics");
   const viewerUsers = users.filter((u) => !u.role || u.role === "viewer");
 
   return (
@@ -63,7 +73,7 @@ export default function UserManagement() {
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardDescription>
-            {adminUsers.length} admin{adminUsers.length !== 1 ? "s" : ""}, {eventModUsers.length} mod{eventModUsers.length !== 1 ? "s" : ""}, {viewerUsers.length} viewer{viewerUsers.length !== 1 ? "s" : ""}
+            {adminUsers.length} admin{adminUsers.length !== 1 ? "s" : ""}, {eventModUsers.length} mod{eventModUsers.length !== 1 ? "s" : ""}, {analyticsUsers.length} analytics, {viewerUsers.length} viewer{viewerUsers.length !== 1 ? "s" : ""}
           </CardDescription>
           <Button
             size="sm"
@@ -122,17 +132,33 @@ export default function UserManagement() {
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={role === "admin" ? "default" : role === "event_mod" ? "secondary" : "outline"}
+                        variant={
+                          role === "admin"
+                            ? "default"
+                            : role === "event_mod"
+                              ? "secondary"
+                              : role === "analytics"
+                                ? "secondary"
+                                : "outline"
+                        }
                         className="flex items-center gap-1 w-fit"
                       >
                         {role === "admin" ? (
                           <Shield className="h-3 w-3" />
                         ) : role === "event_mod" ? (
                           <Calendar className="h-3 w-3" />
+                        ) : role === "analytics" ? (
+                          <BarChart3 className="h-3 w-3" />
                         ) : (
                           <Eye className="h-3 w-3" />
                         )}
-                        {role === "admin" ? "Admin" : role === "event_mod" ? "Mod" : "Viewer"}
+                        {role === "admin"
+                          ? "Admin"
+                          : role === "event_mod"
+                            ? "Mod"
+                            : role === "analytics"
+                              ? "Analytics"
+                              : "Viewer"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -157,6 +183,17 @@ export default function UserManagement() {
                           >
                             <UserCog className="mr-1 h-3 w-3" />
                             Mod
+                          </Button>
+                        )}
+                        {role !== "analytics" && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRoleChange(user._id, "analytics")}
+                            disabled={isCurrentUser}
+                          >
+                            <BarChart3 className="mr-1 h-3 w-3" />
+                            Analytics
                           </Button>
                         )}
                         {role !== "viewer" && (

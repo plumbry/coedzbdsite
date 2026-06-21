@@ -26,10 +26,10 @@ import {
   ssPassportMainColumn,
   ssPassportSidebar,
   ssPassportStretchPanel,
-  ssSectionTitle,
   ssSkeleton,
 } from "./_components/passport-dashboard-theme.ts";
-import { PassportPreviewMini } from "./_components/passport-preview-mini.tsx";
+import { PassportTicketTotalsPanel } from "./_components/passport-ticket-totals-panel.tsx";
+import { PassportLeaderboardPanel } from "./_components/passport-leaderboard-panel.tsx";
 import { PassportHero } from "./_components/passport-hero.tsx";
 import { SEASON_REWARDS } from "./_components/passport-destinations.ts";
 import { CAMPAIGN_SLUG, getPassportErrorTitle, mapEnsurePassportError } from "./_components/passport-types.ts";
@@ -320,31 +320,8 @@ export default function SummerSlamLandingPage() {
             </div>
 
             <aside className={ssPassportSidebar}>
-              <PassportPreviewMini className="shrink-0" />
-              <p className="shrink-0 text-center text-[10px] text-orange-800/45 lg:text-left">
-                Your passport updates as you complete quests
-              </p>
-
-              <section className={cn(ssCard, ssCardPad, ssPassportStretchPanel)}>
-                <h2 className={ssSectionTitle}>Ticket Totals</h2>
-                <ul className="mt-2 space-y-1 text-xs text-orange-900/70">
-                  <li>
-                    Complete <span className="font-semibold text-orange-950">1 Quest</span> = Earn{" "}
-                    <span className="font-semibold text-orange-950">1 Little Prize Wheel Ticket</span>
-                  </li>
-                  <li>
-                    Complete <span className="font-semibold text-orange-950">5 Quests</span> = Earn{" "}
-                    <span className="font-semibold text-orange-950">5 Little Prize Wheel Tickets</span>
-                  </li>
-                  <li className="text-orange-800/45">
-                    Completed everything? Start your secret bonus quests
-                  </li>
-                </ul>
-                <p className="mt-3 text-[11px] leading-relaxed text-orange-800/45">
-                  Draw dates and prize details are announced in Discord. Ticket totals are tracked on your
-                  passport.
-                </p>
-              </section>
+              <PassportTicketTotalsPanel />
+              <PassportLeaderboardPanel />
             </aside>
             </div>
           </div>

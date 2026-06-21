@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { requireAdmin } from "./auth_helpers";
+import { requireAnalyticsHubAccess, requireAnalyticsStatsRefresh, hasAnalyticsHubAccess } from "./auth_helpers";
 import { internal } from "./_generated/api";
 
 export type LeaderboardStatRow = {
@@ -147,7 +147,7 @@ export const getLeaderboardStats = query({
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
 
-    if (!user || user.role !== "admin") {
+    if (!user || !hasAnalyticsHubAccess(user)) {
       return { available: false as const, stats: [] as LeaderboardStatRow[], message: "Forbidden" };
     }
 
@@ -168,7 +168,7 @@ export const getLeaderboardStats = query({
 export const getLeaderboardStatsCacheMeta = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireAnalyticsHubAccess(ctx);
     const cache = await ctx.db.query("leaderboardStatsCache").first();
     return cache ? { lastUpdated: cache.lastUpdated, rowCount: cache.stats.length } : null;
   },
@@ -177,7 +177,7 @@ export const getLeaderboardStatsCacheMeta = query({
 export const rebuildLeaderboardStatsCache = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireAnalyticsStatsRefresh(ctx);
     await ctx.scheduler.runAfter(0, internal.leaderboardStats.storeLeaderboardStatsCache, {});
   },
 });

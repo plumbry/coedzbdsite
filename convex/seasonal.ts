@@ -528,6 +528,45 @@ export const getCampaign = query({
   },
 });
 
+export const getQuestLeaderboard = query({
+  args: {
+    slug: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const campaign = await getCampaignBySlug(ctx, normalizeSlug(args.slug));
+    if (!campaign) return [];
+
+    const limit = Math.min(Math.max(args.limit ?? 10, 1), 25);
+    const approvedRows = await ctx.db
+      .query("seasonalQuestProgress")
+      .withIndex("by_campaign_and_status", (q) =>
+        q.eq("campaignId", campaign._id).eq("status", "approved"),
+      )
+      .collect();
+
+    const countsByPlayer = new Map<Id<"players">, number>();
+    for (const row of approvedRows) {
+      countsByPlayer.set(row.playerId, (countsByPlayer.get(row.playerId) ?? 0) + 1);
+    }
+
+    const sorted = [...countsByPlayer.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit);
+
+    const rows = [];
+    for (const [playerId, completedQuests] of sorted) {
+      const player = await ctx.db.get(playerId);
+      rows.push({
+        rank: rows.length + 1,
+        displayName: player?.discordUsername ?? player?.epicUsername ?? "Unknown player",
+        completedQuests,
+      });
+    }
+    return rows;
+  },
+});
+
 export const updateCampaign = mutation({
   args: {
     slug: v.optional(v.string()),
