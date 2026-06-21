@@ -6,7 +6,7 @@ import { PassportRewardsPanel } from "./passport-rewards-panel.tsx";
 import { PassportEvidenceReviewPanel } from "./passport-evidence-review-panel.tsx";
 import { PassportOnboarding } from "./passport-onboarding.tsx";
 import { PassportCertificateDownloadButton } from "./passport-certificate-download-button.tsx";
-import { ssStack } from "./passport-dashboard-theme.ts";
+import { ssStack, ssPassportGrid, ssPassportMainColumn, ssPassportSidebar } from "./passport-dashboard-theme.ts";
 import {
   buildSeals,
   summariseSeason,
@@ -116,8 +116,8 @@ export function PassportDashboard({
       <div className="mx-auto w-full max-w-6xl px-3 sm:px-4">
         <PassportHero title={campaignTitle} className="mb-4 w-full" />
 
-        <div className="flex flex-col gap-6 lg:grid lg:items-stretch lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)] lg:gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
-          <div className="min-w-0 lg:flex lg:min-h-0 lg:flex-col">
+        <div className={ssPassportGrid}>
+          <div className={ssPassportMainColumn}>
             <PassportIdentitySection
             playerName={playerName}
             avatarId={avatarId}
@@ -134,7 +134,7 @@ export function PassportDashboard({
             />
           </div>
 
-          <aside className={cn(ssStack, "min-w-0 gap-4 lg:flex lg:min-h-0 lg:flex-col")}>
+          <aside className={ssPassportSidebar}>
             <PassportRewardsPanel
               className="shrink-0"
               season={season}
@@ -151,7 +151,6 @@ export function PassportDashboard({
             />
 
             <PassportEvidenceReviewPanel
-              className="lg:min-h-0 lg:flex-1"
               quests={quests}
               onUpdateEvidence={onRequestEvidence}
             />

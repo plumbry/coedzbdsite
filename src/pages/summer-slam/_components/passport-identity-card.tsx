@@ -379,7 +379,7 @@ export function PassportIdentityCard({
     <section
       aria-label="Summer Slam passport"
       className={cn(
-        "relative w-full max-w-2xl px-0 sm:px-4 lg:flex lg:h-full lg:max-w-none lg:flex-col lg:px-0",
+        "relative w-full max-w-2xl px-0 sm:px-4 lg:flex lg:h-full lg:max-w-none lg:min-h-0 lg:flex-1 lg:flex-col lg:px-0",
         className,
       )}
     >
@@ -504,14 +504,6 @@ export function PassportIdentityCard({
                 <MetaField label="Passport No.">
                   <p className="font-mono text-[11px] font-semibold tracking-[0.04em] text-orange-950/80 lg:text-xs">
                     {passportNo}
-                  </p>
-                </MetaField>
-
-                <MetaField label="Passport Level">
-                  <p className="text-[11px] font-semibold text-orange-950 lg:text-xs">
-                    Level {passportTier.level}
-                    {" \u00b7 "}
-                    {passportTier.title}
                   </p>
                 </MetaField>
 

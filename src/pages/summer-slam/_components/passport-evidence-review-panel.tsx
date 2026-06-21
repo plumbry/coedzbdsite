@@ -2,7 +2,7 @@ import { AlertCircle, Clock, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
 import { PassportSectionHeader } from "./passport-section-header.tsx";
-import { ssCard, ssCardPad } from "./passport-dashboard-theme.ts";
+import { ssCard, ssCardPad, ssPassportStretchPanel } from "./passport-dashboard-theme.ts";
 import { getDestination } from "./passport-destinations.ts";
 import {
   getQuestStatus,
@@ -123,7 +123,7 @@ export function PassportEvidenceReviewPanel({
 
   return (
     <section
-      className={cn(ssCard, ssCardPad, "flex flex-col lg:min-h-0", className)}
+      className={cn(ssCard, ssCardPad, ssPassportStretchPanel, className)}
       aria-label="Recent activity"
     >
       <PassportSectionHeader

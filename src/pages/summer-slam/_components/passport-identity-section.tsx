@@ -13,6 +13,7 @@ import {
   isBonusStampUnlocked,
 } from "./passport-bonus-stamp.ts";
 import { computeQuestPoints, getPassportTier } from "./passport-levels.ts";
+import { ssPassportStretchCard, ssPassportStretchMain } from "./passport-dashboard-theme.ts";
 import type { PassportAvatarId } from "./passport-avatars.ts";
 import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
 import type { SealProgress } from "./passport-seal.ts";
@@ -133,8 +134,9 @@ export function PassportIdentitySection({
 
   return (
     <>
-      <div className={cn("flex flex-col", className)}>
+      <div className={cn(ssPassportStretchMain, className)}>
       <PassportIdentityCard
+        className={ssPassportStretchCard}
         playerName={playerName}
         avatarId={avatarId}
         birthplaceId={birthplaceId}

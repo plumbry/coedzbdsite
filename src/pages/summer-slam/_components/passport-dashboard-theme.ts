@@ -10,6 +10,14 @@ export const ssCard =
 export const ssCardPad = "p-3 sm:p-4";
 export const ssStack = "space-y-4";
 export const ssGridGap = "gap-4";
+/** Two-column passport dashboard layout — shared by live, demo, and complete demo. */
+export const ssPassportGrid =
+  "flex flex-col gap-6 lg:grid lg:min-h-0 lg:items-stretch lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)] lg:gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]";
+export const ssPassportMainColumn = "min-w-0 lg:flex lg:h-full lg:min-h-0 lg:flex-col";
+export const ssPassportSidebar = "flex min-w-0 flex-col gap-4 lg:h-full lg:min-h-0";
+export const ssPassportStretchMain = "flex min-h-0 flex-col lg:h-full lg:flex-1";
+export const ssPassportStretchCard = "min-h-0 lg:flex-1";
+export const ssPassportStretchPanel = "flex min-h-0 flex-col lg:flex-1";
 /** Align dashboard sections with the passport card and keep side breathing room. */
 export const ssDashboardInset = "mx-auto w-full max-w-2xl px-3 sm:px-4";
 export const ssCardHover =
