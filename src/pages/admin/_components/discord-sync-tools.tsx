@@ -190,7 +190,7 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
             Discord Sync
           </CardTitle>
           <CardDescription className="text-xs">
-            Manual admin sync only — {statusLine}
+            Daily auto-sync at 5:00 AM UTC · {statusLine}
             {inProgress && syncStatus?.recordsAdded != null && (
               <>
                 {" "}
@@ -253,7 +253,7 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
       <CardHeader className="pb-2">
         <CardTitle className="text-sm">Discord Sync</CardTitle>
         <CardDescription className="text-xs">
-          Manual admin sync only. Status updates via live subscription — {statusLine}
+          Daily auto-sync at 5:00 AM UTC. Status updates via live subscription — {statusLine}
           {inProgress && syncStatus?.recordsAdded != null && (
             <>
               {" "}
@@ -265,8 +265,8 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
       <CardContent className="py-3 space-y-3">
         {buttons}
         <p className="text-xs text-muted-foreground">
-          Per-member sync is available in the Edit Player dialog. No sync runs automatically on
-          login, join, or page load.
+          Per-member sync is available in the Edit Player dialog. Full guild sync runs automatically
+          once daily via cron.
         </p>
       </CardContent>
       <AlertDialog open={confirmAcceptedOpen} onOpenChange={setConfirmAcceptedOpen}>

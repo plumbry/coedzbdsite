@@ -1,7 +1,7 @@
 "use node";
 
 import { v } from "convex/values";
-import { action } from "../_generated/server";
+import { action, internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
 import { requireAdminAction } from "../auth_helpers";
@@ -201,6 +201,83 @@ export const syncSingleDiscordMember = action({
       updated: result.updated,
       unchanged: result.added === 0 && result.updated === 0,
     };
+  },
+});
+
+/** Full guild member sync — used by the daily cron and archives players who left the server. */
+async function fetchAndSyncAllDiscordMembers(ctx: ActionCtx): Promise<void> {
+  const { discordBotToken, discordGuildId } = getDiscordConfig();
+
+  try {
+    await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
+      syncType: "discord",
+      status: "in_progress",
+    });
+
+    const roleNameById = await fetchGuildRoleMap(discordBotToken, discordGuildId);
+    const allMembers = await fetchAllGuildMembers(discordBotToken, discordGuildId);
+
+    let added = 0;
+    let updated = 0;
+    const discordUserIds: string[] = [];
+    const syncRunId = crypto.randomUUID();
+
+    await ctx.runMutation(internal.discord.beginDiscordMemberSyncRun, { syncRunId });
+
+    try {
+      for (let i = 0; i < allMembers.length; i += SYNC_BATCH_SIZE) {
+        const batch = allMembers.slice(i, i + SYNC_BATCH_SIZE).map((member) => {
+          discordUserIds.push(member.user.id);
+          return memberToBatchPayload(member, roleNameById);
+        });
+
+        const result = await ctx.runMutation(internal.discord.syncDiscordMembersBatch, {
+          syncRunId,
+          members: batch,
+        });
+        added += result.added;
+        updated += result.updated;
+
+        await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
+          syncType: "discord",
+          status: "in_progress",
+          recordsAdded: allMembers.length,
+          recordsUpdated: Math.min(i + SYNC_BATCH_SIZE, allMembers.length),
+        });
+      }
+    } finally {
+      await ctx.runMutation(internal.discord.completeDiscordMemberSyncRun, { syncRunId });
+    }
+
+    const archiveResult: { archived: number } = await ctx.runMutation(
+      internal.discord.archiveMissingPlayersInternal,
+      { currentDiscordUserIds: discordUserIds },
+    );
+
+    await ctx.runMutation(internal.memberManagement.storePublicMemberDirectoryCache, {});
+
+    await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
+      syncType: "discord",
+      status: "success",
+      recordsAdded: added,
+      recordsUpdated: updated,
+      recordsArchived: archiveResult.archived,
+    });
+  } catch (error) {
+    await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
+      syncType: "discord",
+      status: "error",
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw error;
+  }
+}
+
+// Daily cron entry point (05:00 UTC).
+export const syncDiscordMembersInternal = internalAction({
+  args: {},
+  handler: async (ctx): Promise<void> => {
+    await fetchAndSyncAllDiscordMembers(ctx);
   },
 });
 

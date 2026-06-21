@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Sync strategy: Discord member/role sync is admin-triggered only (see discord/sync.ts).
+// Sync strategy: Discord member sync runs daily via cron; admins can also trigger manual syncs.
 // Manual admin buttons trigger Yunite/stats syncs on demand.
 // Imports and score changes schedule targeted cache rebuilds (see helpers/eventDrivenRebuilds).
 
@@ -12,6 +12,13 @@ crons.daily(
   "mark inactive members",
   { hourUTC: 3, minuteUTC: 30 },
   internal.memberManagement.markInactivePlayersPastThreshold,
+);
+
+// Sync Discord guild members daily (profiles, roles, archive missing)
+crons.daily(
+  "sync discord members",
+  { hourUTC: 5, minuteUTC: 0 }, // 5:00 AM UTC daily
+  internal.discord.sync.syncDiscordMembersInternal,
 );
 
 // Sync event bans from Google Sheet daily

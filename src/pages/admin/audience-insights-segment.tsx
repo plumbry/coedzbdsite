@@ -27,9 +27,10 @@ import {
   type AudienceChartType,
 } from "@/lib/audience-insights-segments.ts";
 import { sortByTier } from "@/lib/tier-sort.ts";
+import { useUserRole } from "@/hooks/use-user-role.ts";
 
 type MemberRow = {
-  playerId: Id<"players">;
+  playerId?: Id<"players">;
   discordUsername: string;
   epicUsername: string;
   tier: string | undefined;
@@ -38,11 +39,21 @@ type MemberRow = {
   serverJoinDate: string;
 };
 
+function memberRowKey(member: MemberRow): string {
+  return member.playerId ?? member.discordUsername;
+}
+
 export default function AudienceInsightsSegmentPage() {
+  const { isAdmin } = useUserRole();
   const { chart, segment } = useParams<{ chart: string; segment: string }>();
   const [searchParams] = useSearchParams();
   const activeOnly =
     (chart === "tier" || chart === "gender") && searchParams.get("members") === "active";
+  const sourceWindowParam = searchParams.get("window");
+  const sourceWindowDays =
+    chart === "applicationSource" && (sourceWindowParam === "7" || sourceWindowParam === "30")
+      ? (Number(sourceWindowParam) as 7 | 30)
+      : undefined;
   const [search, setSearch] = useState("");
   const [allMembers, setAllMembers] = useState<MemberRow[]>([]);
   const [playersCursor, setPlayersCursor] = useState<string | null>(null);
@@ -60,6 +71,7 @@ export default function AudienceInsightsSegmentPage() {
           segment: segmentKey,
           playersCursor: playersCursor ?? undefined,
           activeOnly: activeOnly || undefined,
+          sourceWindowDays,
         }
       : "skip",
   );
@@ -70,16 +82,17 @@ export default function AudienceInsightsSegmentPage() {
     setHasMore(true);
     setInitialLoaded(false);
     setSearch("");
-  }, [chartType, segmentKey, activeOnly]);
+  }, [chartType, segmentKey, activeOnly, sourceWindowDays]);
 
   useEffect(() => {
     if (!page) return;
 
     setAllMembers((prev) => {
-      const seen = new Set(prev.map((m) => m.playerId));
+      const seen = new Set(prev.map((m) => memberRowKey(m)));
       const merged = [...prev];
       for (const member of page.members) {
-        if (!seen.has(member.playerId)) {
+        const key = memberRowKey(member);
+        if (!seen.has(key)) {
           merged.push(member);
         }
       }
@@ -113,11 +126,22 @@ export default function AudienceInsightsSegmentPage() {
     resetDeps: [search, chartType, segmentKey],
   });
 
+  if (!isAdmin) {
+    return <Navigate to="/admin/audience-insights" replace />;
+  }
+
   if (!chartType || !isValidSegmentKey(chartType, segmentKey)) {
     return <Navigate to="/admin/audience-insights" replace />;
   }
 
-  const title = audienceSegmentPageTitle(chartType, segmentKey, { activeOnly });
+  if (chartType === "applicationSource" && sourceWindowDays === undefined) {
+    return <Navigate to="/admin/audience-insights" replace />;
+  }
+
+  const title = audienceSegmentPageTitle(chartType, segmentKey, {
+    activeOnly,
+    sourceWindowDays,
+  });
   const isLoadingFirstPage = !initialLoaded && page === undefined;
   const needsRefresh = page?.needsRefresh === true;
 
@@ -126,9 +150,11 @@ export default function AudienceInsightsSegmentPage() {
       requireAnalyticsHub
       title={title}
       description={
-        activeOnly
-          ? "Active members in this segment (played in the last 6 weeks)."
-          : "Accepted members in this audience segment."
+        chartType === "applicationSource"
+          ? `Applications submitted in the last ${sourceWindowDays} days in this source segment.`
+          : activeOnly
+            ? "Active members in this segment (played in the last 6 weeks)."
+            : "Accepted members in this audience segment."
       }
       authTitle="Sign in to view audience segment"
       header={{
@@ -199,8 +225,9 @@ export default function AudienceInsightsSegmentPage() {
               <TableBody>
                 {(membersPagination.pageItems ?? []).map((member) => {
                   const profileUsername = member.epicUsername || member.discordUsername;
+                  const rowKey = memberRowKey(member);
                   return (
-                    <TableRow key={member.playerId}>
+                    <TableRow key={rowKey}>
                       <TableCell className="font-medium">{member.discordUsername}</TableCell>
                       <TableCell>{member.epicUsername}</TableCell>
                       <TableCell>
@@ -215,16 +242,20 @@ export default function AudienceInsightsSegmentPage() {
                         {member.eventsPlayedCount}
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                          <Link
-                            to={`/player/${encodeURIComponent(profileUsername)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Open player profile"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </Link>
-                        </Button>
+                        {member.playerId ? (
+                          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                            <Link
+                              to={`/player/${encodeURIComponent(profileUsername)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Open player profile"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

@@ -1308,7 +1308,7 @@ export default defineSchema({
         }),
       ),
     ),
-    applicationSource: v.optional(
+    applicationSource7d: v.optional(
       v.array(
         v.object({
           label: v.string(),
@@ -1317,6 +1317,17 @@ export default defineSchema({
         }),
       ),
     ),
+    applicationSource30d: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          value: v.number(),
+          color: v.string(),
+        }),
+      ),
+    ),
+    applicationSource7dTotal: v.optional(v.number()),
+    applicationSource30dTotal: v.optional(v.number()),
     eventsReady: v.boolean(),
     segmentMembersIndexed: v.optional(v.boolean()),
     lastUpdated: v.number(),
@@ -1332,7 +1343,8 @@ export default defineSchema({
       v.literal("applicationSource"),
     ),
     segment: v.string(),
-    playerId: v.id("players"),
+    sourceWindowDays: v.optional(v.union(v.literal(7), v.literal(30))),
+    playerId: v.optional(v.id("players")),
     discordUsername: v.string(),
     epicUsername: v.string(),
     tier: v.optional(v.string()),
@@ -1342,7 +1354,8 @@ export default defineSchema({
     isRecentlyActive: v.optional(v.boolean()),
   })
     .index("by_chart_segment", ["chart", "segment"])
-    .index("by_chart_segment_active", ["chart", "segment", "isRecentlyActive"]),
+    .index("by_chart_segment_active", ["chart", "segment", "isRecentlyActive"])
+    .index("by_chart_segment_window", ["chart", "segment", "sourceWindowDays"]),
 
   audienceInsightsJobs: defineTable({
     status: v.union(

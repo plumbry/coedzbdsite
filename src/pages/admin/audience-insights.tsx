@@ -76,6 +76,7 @@ function DonutCard({
   total,
   chartType,
   onSegmentClick,
+  segmentClickable = true,
   headerActions,
 }: {
   title: string;
@@ -84,9 +85,11 @@ function DonutCard({
   total: number;
   chartType: AudienceChartType;
   onSegmentClick: (segmentKey: string) => void;
+  segmentClickable?: boolean;
   headerActions?: ReactNode;
 }) {
   const handleLabelClick = (label: string) => {
+    if (!segmentClickable) return;
     const key = labelToSegmentKey(chartType, label);
     if (key) onSegmentClick(key);
   };
@@ -118,7 +121,8 @@ function DonutCard({
           {headerActions}
         </div>
         <CardDescription>
-          {description} Click a slice or legend item to view members.
+          {description}
+          {segmentClickable ? " Click a slice or legend item to view members." : ""}
         </CardDescription>
       </CardHeader>
       <CardContent className="pb-4">
@@ -133,21 +137,25 @@ function DonutCard({
                   innerRadius={62}
                   outerRadius={92}
                   strokeWidth={0}
-                  className="cursor-pointer outline-none"
-                  onClick={(slice) => {
-                    const label =
-                      slice && typeof slice === "object" && "label" in slice
-                        ? String(slice.label)
-                        : slice &&
-                            typeof slice === "object" &&
-                            "payload" in slice &&
-                            slice.payload &&
-                            typeof slice.payload === "object" &&
-                            "label" in slice.payload
-                          ? String(slice.payload.label)
-                          : null;
-                    if (label) handleLabelClick(label);
-                  }}
+                  className={segmentClickable ? "cursor-pointer outline-none" : "outline-none"}
+                  onClick={
+                    segmentClickable
+                      ? (slice) => {
+                          const label =
+                            slice && typeof slice === "object" && "label" in slice
+                              ? String(slice.label)
+                              : slice &&
+                                  typeof slice === "object" &&
+                                  "payload" in slice &&
+                                  slice.payload &&
+                                  typeof slice.payload === "object" &&
+                                  "label" in slice.payload
+                                ? String(slice.payload.label)
+                                : null;
+                          if (label) handleLabelClick(label);
+                        }
+                      : undefined
+                  }
                 >
                   {segments.map((entry) => (
                     <Cell key={entry.label} fill={entry.color} />
@@ -170,23 +178,42 @@ function DonutCard({
             </ResponsiveContainer>
           </div>
           <div className="space-y-2">
-            {segments.map((entry) => (
-              <button
-                key={entry.label}
-                type="button"
-                onClick={() => handleLabelClick(entry.label)}
-                className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm hover:bg-muted/60 transition-colors"
-              >
-                <span
-                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: entry.color }}
-                />
-                <span className="text-muted-foreground">{entry.label}:</span>
-                <span className="font-medium">
-                  {pct(entry.value, total)}% ({entry.value})
-                </span>
-              </button>
-            ))}
+            {segments.map((entry) => {
+              const legendContent = (
+                <>
+                  <span
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: entry.color }}
+                  />
+                  <span className="text-muted-foreground">{entry.label}:</span>
+                  <span className="font-medium">
+                    {pct(entry.value, total)}% ({entry.value})
+                  </span>
+                </>
+              );
+
+              if (!segmentClickable) {
+                return (
+                  <div
+                    key={entry.label}
+                    className="flex w-full items-center gap-2 px-1 py-0.5 text-sm"
+                  >
+                    {legendContent}
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={entry.label}
+                  type="button"
+                  onClick={() => handleLabelClick(entry.label)}
+                  className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm hover:bg-muted/60 transition-colors"
+                >
+                  {legendContent}
+                </button>
+              );
+            })}
           </div>
         </div>
       </CardContent>
@@ -195,6 +222,7 @@ function DonutCard({
 }
 
 type MemberScope = "all" | "active";
+type ApplicationSourceWindow = "7" | "30";
 
 function MemberScopeToggle({
   value,
@@ -227,17 +255,51 @@ function MemberScopeToggle({
   );
 }
 
+function ApplicationSourceWindowToggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: ApplicationSourceWindow;
+  onChange: (value: ApplicationSourceWindow) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(next) => {
+        if (next === "7" || next === "30") onChange(next);
+      }}
+      variant="outline"
+      size="sm"
+      className="shrink-0"
+      disabled={disabled}
+    >
+      <ToggleGroupItem value="7" aria-label="Last 7 days">
+        Last 7 Days
+      </ToggleGroupItem>
+      <ToggleGroupItem value="30" aria-label="Last 30 days">
+        Last 30 Days
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
+
 function AudienceInsightsContent() {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
+  const canDrillIntoSegments = isAdmin;
   const insights = useQuery(api.audienceInsights.getAudienceInsights);
   const refreshCooldown = useQuery(api.users.getAnalyticsStatsRefreshCooldown);
   const [memberScope, setMemberScope] = useState<MemberScope>("all");
+  const [applicationSourceWindow, setApplicationSourceWindow] =
+    useState<ApplicationSourceWindow>("30");
 
   const openSegment = (
     chartType: AudienceChartType,
     segmentKey: string,
-    options?: { activeOnly?: boolean },
+    options?: { activeOnly?: boolean; sourceWindowDays?: 7 | 30 },
   ) => {
     navigate(audienceSegmentPath(chartType, segmentKey, options));
   };
@@ -353,6 +415,14 @@ function AudienceInsightsContent() {
     memberScope === "active"
       ? insights.totalActiveMembers || 1
       : insights.totalMembers || 1;
+  const applicationSourceChartData =
+    applicationSourceWindow === "7"
+      ? chartSegments(insights.applicationSource7d)
+      : chartSegments(insights.applicationSource30d);
+  const applicationSourceChartTotal =
+    applicationSourceWindow === "7"
+      ? insights.applicationSource7dTotal || 1
+      : insights.applicationSource30dTotal || 1;
 
   return (
     <div className="space-y-4">
@@ -496,6 +566,7 @@ function AudienceInsightsContent() {
           data={genderChartData}
           total={genderChartTotal}
           chartType="gender"
+          segmentClickable={canDrillIntoSegments}
           onSegmentClick={(key) =>
             openSegment("gender", key, {
               activeOnly: memberScope === "active",
@@ -519,6 +590,7 @@ function AudienceInsightsContent() {
           data={tierChartData}
           total={tierChartTotal}
           chartType="tier"
+          segmentClickable={canDrillIntoSegments}
           onSegmentClick={(key) =>
             openSegment("tier", key, {
               activeOnly: memberScope === "active",
@@ -541,6 +613,7 @@ function AudienceInsightsContent() {
           data={chartSegments(insights.tenure)}
           total={insights.totalMembers || 1}
           chartType="tenure"
+          segmentClickable={canDrillIntoSegments}
           onSegmentClick={(key) => openSegment("tenure", key)}
         />
         {!eventsReady ? (
@@ -562,6 +635,7 @@ function AudienceInsightsContent() {
             data={chartSegments(insights.events)}
             total={insights.totalMembers}
             chartType="events"
+            segmentClickable={canDrillIntoSegments}
             onSegmentClick={(key) => openSegment("events", key)}
           />
         )}
@@ -587,16 +661,33 @@ function AudienceInsightsContent() {
             data={chartSegments(insights.recentEvents)}
             total={insights.totalMembers || 1}
             chartType="recentEvents"
+            segmentClickable={canDrillIntoSegments}
             onSegmentClick={(key) => openSegment("recentEvents", key)}
           />
         )}
         <DonutCard
           title="Application Source"
-          description="How accepted members reported finding the community on their application."
-          data={chartSegments(insights.applicationSource)}
-          total={insights.totalMembers || 1}
+          description={
+            applicationSourceWindow === "7"
+              ? "How applicants reported finding the community on applications submitted in the last 7 days."
+              : "How applicants reported finding the community on applications submitted in the last 30 days."
+          }
+          data={applicationSourceChartData}
+          total={applicationSourceChartTotal}
           chartType="applicationSource"
-          onSegmentClick={(key) => openSegment("applicationSource", key)}
+          segmentClickable={canDrillIntoSegments}
+          onSegmentClick={(key) =>
+            openSegment("applicationSource", key, {
+              sourceWindowDays: applicationSourceWindow === "7" ? 7 : 30,
+            })
+          }
+          headerActions={
+            <ApplicationSourceWindowToggle
+              value={applicationSourceWindow}
+              onChange={setApplicationSourceWindow}
+              disabled={!hasCache}
+            />
+          }
         />
       </div>
     </div>

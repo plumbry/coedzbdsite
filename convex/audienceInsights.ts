@@ -13,10 +13,12 @@ import {
   buildScrimYuniteTournamentIdSet,
   isScrimYuniteLeaderboard,
 } from "./lib/scrimLeaderboard";
-import { requireAnalyticsHubAccess, requireAnalyticsStatsRefresh } from "./auth_helpers";
+import { requireAdmin, requireAnalyticsHubAccess, requireAnalyticsStatsRefresh } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
-const AUDIENCE_INSIGHTS_CACHE_VERSION = 8;
+const AUDIENCE_INSIGHTS_CACHE_VERSION = 9;
+const APPLICATION_SOURCE_7D_MS = 7 * 24 * 60 * 60 * 1000;
+const APPLICATION_SOURCE_30D_MS = 30 * 24 * 60 * 60 * 1000;
 const RECENT_EVENT_WINDOW_WEEKS = 4;
 const RECENT_EVENT_PLAYED_THRESHOLD = 3;
 const MEMBERS_PER_BATCH = 8;
@@ -73,11 +75,6 @@ type JobCounters = {
   eventsFiveOrLess: number;
   recentEventsOverThree: number;
   recentEventsThreeOrLess: number;
-  sourceTikTok: number;
-  sourceTwitter: number;
-  sourceTeammate: number;
-  sourceOther: number;
-  sourceUnknown: number;
 };
 
 const EMPTY_COUNTERS: JobCounters = {
@@ -108,11 +105,6 @@ const EMPTY_COUNTERS: JobCounters = {
   eventsFiveOrLess: 0,
   recentEventsOverThree: 0,
   recentEventsThreeOrLess: 0,
-  sourceTikTok: 0,
-  sourceTwitter: 0,
-  sourceTeammate: 0,
-  sourceOther: 0,
-  sourceUnknown: 0,
 };
 
 function monthsSinceServerJoin(serverJoinDate: string): number | null {
@@ -236,7 +228,6 @@ function accumulateMember(
   member: AcceptedMember,
   gender: number | undefined,
   recentEventsInWindow: number,
-  applicationSource: ApplicationSource | null,
 ) {
   if (gender === 100) counters.male += 1;
   else if (gender === 50) counters.female += 1;
@@ -274,12 +265,6 @@ function accumulateMember(
     monthsSinceServerJoin(member.serverJoinDate),
   );
   counters[tenureKey] += 1;
-
-  if (applicationSource === "TikTok") counters.sourceTikTok += 1;
-  else if (applicationSource === "Twitter") counters.sourceTwitter += 1;
-  else if (applicationSource === "Teammate") counters.sourceTeammate += 1;
-  else if (applicationSource === "Other") counters.sourceOther += 1;
-  else counters.sourceUnknown += 1;
 }
 
 function tierSegmentsFromCounters(
@@ -359,14 +344,69 @@ function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
         color: "#16a34a",
       },
     ],
-    applicationSource: filterPositive([
-      { label: "TikTok", value: counters.sourceTikTok, color: "#fe2c55" },
-      { label: "Twitter", value: counters.sourceTwitter, color: "#1da1f2" },
-      { label: "Teammate", value: counters.sourceTeammate, color: "#22c55e" },
-      { label: "Other", value: counters.sourceOther, color: "#f59e0b" },
-      { label: "Unknown", value: counters.sourceUnknown, color: "#6b7280" },
-    ]),
   };
+}
+
+type ApplicationSourceCounters = {
+  sourceTikTok: number;
+  sourceTwitter: number;
+  sourceTeammate: number;
+  sourceOther: number;
+  sourceUnknown: number;
+};
+
+const EMPTY_APPLICATION_SOURCE_COUNTERS: ApplicationSourceCounters = {
+  sourceTikTok: 0,
+  sourceTwitter: 0,
+  sourceTeammate: 0,
+  sourceOther: 0,
+  sourceUnknown: 0,
+};
+
+function incrementApplicationSourceCounter(
+  counters: ApplicationSourceCounters,
+  source: ApplicationSource | null | undefined,
+) {
+  if (source === "TikTok") counters.sourceTikTok += 1;
+  else if (source === "Twitter") counters.sourceTwitter += 1;
+  else if (source === "Teammate") counters.sourceTeammate += 1;
+  else if (source === "Other") counters.sourceOther += 1;
+  else counters.sourceUnknown += 1;
+}
+
+function totalApplicationSourceCount(counters: ApplicationSourceCounters): number {
+  return (
+    counters.sourceTikTok +
+    counters.sourceTwitter +
+    counters.sourceTeammate +
+    counters.sourceOther +
+    counters.sourceUnknown
+  );
+}
+
+function applicationSourceSegmentsFromCounters(
+  counters: ApplicationSourceCounters,
+): ChartSegment[] {
+  return [
+    { label: "TikTok", value: counters.sourceTikTok, color: "#fe2c55" },
+    { label: "Twitter", value: counters.sourceTwitter, color: "#1da1f2" },
+    { label: "Teammate", value: counters.sourceTeammate, color: "#22c55e" },
+    { label: "Other", value: counters.sourceOther, color: "#f59e0b" },
+    { label: "Unknown", value: counters.sourceUnknown, color: "#6b7280" },
+  ].filter((segment) => segment.value > 0);
+}
+
+function epicUsernameFromFortniteProfileLink(link: string): string | undefined {
+  const marker = "/profile/all/";
+  const markerIndex = link.indexOf(marker);
+  if (markerIndex === -1) return undefined;
+  const encoded = link.slice(markerIndex + marker.length).split(/[/?#]/)[0];
+  if (!encoded) return undefined;
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return encoded;
+  }
 }
 
 async function genderForPlayer(
@@ -380,23 +420,78 @@ async function genderForPlayer(
   return score?.gender;
 }
 
-async function applicationSourceForPlayer(
-  ctx: MutationCtx | QueryCtx,
-  playerId: Id<"players">,
-): Promise<ApplicationSource | null> {
-  const applications = await ctx.db
-    .query("applications")
-    .withIndex("by_player_id", (q) => q.eq("playerId", playerId))
-    .collect();
+async function buildApplicationSourceInsights(ctx: MutationCtx) {
+  const now = Date.now();
+  const window7Start = now - APPLICATION_SOURCE_7D_MS;
+  const window30Start = now - APPLICATION_SOURCE_30D_MS;
+  const counters7d = { ...EMPTY_APPLICATION_SOURCE_COUNTERS };
+  const counters30d = { ...EMPTY_APPLICATION_SOURCE_COUNTERS };
 
-  const acceptedWithSource = applications
-    .filter((app) => app.status === "accepted" && app.source)
-    .sort(
-      (a, b) =>
-        (b.acceptedAt ?? b._creationTime) - (a.acceptedAt ?? a._creationTime),
-    );
+  const applications = await ctx.db.query("applications").collect();
 
-  return acceptedWithSource[0]?.source ?? null;
+  for (const app of applications) {
+    const submittedAt = app._creationTime;
+    const in7d = submittedAt >= window7Start;
+    const in30d = submittedAt >= window30Start;
+    if (!in7d && !in30d) continue;
+
+    if (in7d) {
+      incrementApplicationSourceCounter(counters7d, app.source);
+      await insertApplicationSourceSegmentRow(ctx, app, 7);
+    }
+    if (in30d) {
+      incrementApplicationSourceCounter(counters30d, app.source);
+      await insertApplicationSourceSegmentRow(ctx, app, 30);
+    }
+  }
+
+  return {
+    applicationSource7d: applicationSourceSegmentsFromCounters(counters7d),
+    applicationSource30d: applicationSourceSegmentsFromCounters(counters30d),
+    applicationSource7dTotal: totalApplicationSourceCount(counters7d),
+    applicationSource30dTotal: totalApplicationSourceCount(counters30d),
+  };
+}
+
+async function insertApplicationSourceSegmentRow(
+  ctx: MutationCtx,
+  app: Doc<"applications">,
+  sourceWindowDays: 7 | 30,
+) {
+  let epicUsername =
+    epicUsernameFromFortniteProfileLink(app.fortniteProfileLink) ?? "—";
+  let tier: string | undefined;
+  let eventsPlayedCount = 0;
+  let genderLabelValue = "—";
+  let serverJoinDate = "—";
+  let isRecentlyActive = false;
+  let playerId = app.playerId;
+
+  if (playerId) {
+    const player = await ctx.db.get(playerId);
+    if (player) {
+      epicUsername = player.epicUsername;
+      tier = player.tier;
+      eventsPlayedCount = player.eventsPlayedCount ?? 0;
+      serverJoinDate = player.serverJoinDate;
+      isRecentlyActive = player.isRecentlyActive ?? false;
+      genderLabelValue = genderLabel(await genderForPlayer(ctx, playerId));
+    }
+  }
+
+  await ctx.db.insert("audienceInsightsSegmentMembers", {
+    chart: "applicationSource",
+    segment: applicationSourceSegment(app.source ?? null),
+    sourceWindowDays,
+    playerId,
+    discordUsername: app.discordUsername,
+    epicUsername,
+    tier,
+    eventsPlayedCount,
+    genderLabel: genderLabelValue,
+    serverJoinDate,
+    isRecentlyActive,
+  });
 }
 
 function tenureBucketToSegmentSlug(
@@ -488,7 +583,6 @@ async function insertSegmentMemberRows(
   member: AcceptedMember,
   gender: number | undefined,
   recentEventsInWindow: number,
-  applicationSource: ApplicationSource | null,
 ) {
   const base = {
     playerId: member._id,
@@ -514,10 +608,6 @@ async function insertSegmentMemberRows(
       chart: "recentEvents" as const,
       segment: recentEventsSegmentForCount(recentEventsInWindow),
     },
-    {
-      chart: "applicationSource" as const,
-      segment: applicationSourceSegment(applicationSource),
-    },
   ];
 
   for (const row of segmentRows) {
@@ -541,7 +631,10 @@ async function upsertAudienceInsightsSnapshot(
     tenure: ChartSegment[];
     events: ChartSegment[];
     recentEvents: ChartSegment[];
-    applicationSource: ChartSegment[];
+    applicationSource7d: ChartSegment[];
+    applicationSource30d: ChartSegment[];
+    applicationSource7dTotal: number;
+    applicationSource30dTotal: number;
     eventsReady: boolean;
     segmentMembersIndexed: boolean;
     lastUpdated: number;
@@ -584,11 +677,6 @@ function countersFromJob(job: Doc<"audienceInsightsJobs">): JobCounters {
     eventsFiveOrLess: job.eventsFiveOrLess ?? 0,
     recentEventsOverThree: job.recentEventsOverThree ?? 0,
     recentEventsThreeOrLess: job.recentEventsThreeOrLess ?? 0,
-    sourceTikTok: job.sourceTikTok ?? 0,
-    sourceTwitter: job.sourceTwitter ?? 0,
-    sourceTeammate: job.sourceTeammate ?? 0,
-    sourceOther: job.sourceOther ?? 0,
-    sourceUnknown: job.sourceUnknown ?? 0,
   };
 }
 
@@ -704,7 +792,10 @@ const emptyInsights = {
   tenure: [] as ChartSegment[],
   events: [] as ChartSegment[],
   recentEvents: [] as ChartSegment[],
-  applicationSource: [] as ChartSegment[],
+  applicationSource7d: [] as ChartSegment[],
+  applicationSource30d: [] as ChartSegment[],
+  applicationSource7dTotal: 0,
+  applicationSource30dTotal: 0,
   eventsReady: false,
   tierActiveReady: false,
   tierActiveSource: "cache" as const,
@@ -733,7 +824,10 @@ export const getAudienceInsights = query({
       tenure: cached.tenure ?? [],
       events: cached.events ?? [],
       recentEvents: cached.recentEvents ?? [],
-      applicationSource: cached.applicationSource ?? [],
+      applicationSource7d: cached.applicationSource7d ?? [],
+      applicationSource30d: cached.applicationSource30d ?? [],
+      applicationSource7dTotal: cached.applicationSource7dTotal ?? 0,
+      applicationSource30dTotal: cached.applicationSource30dTotal ?? 0,
       eventsReady: cached.eventsReady,
       segmentMembersIndexed: cached.segmentMembersIndexed === true,
       lastUpdated: cached.lastUpdated,
@@ -751,13 +845,25 @@ export const listAudienceInsightMembers = query({
     segment: v.string(),
     playersCursor: v.optional(v.union(v.string(), v.null())),
     activeOnly: v.optional(v.boolean()),
+    sourceWindowDays: v.optional(v.union(v.literal(7), v.literal(30))),
   },
   handler: async (ctx, args) => {
-    await requireAnalyticsHubAccess(ctx);
+    await requireAdmin(ctx);
 
     if (!isValidSegment(args.chart, args.segment)) {
       throw new ConvexError({
         message: "Invalid audience insight segment",
+        code: "INVALID_ARGUMENT",
+      });
+    }
+
+    if (
+      args.chart === "applicationSource" &&
+      args.sourceWindowDays !== 7 &&
+      args.sourceWindowDays !== 30
+    ) {
+      throw new ConvexError({
+        message: "Application source segments require a 7- or 30-day window",
         code: "INVALID_ARGUMENT",
       });
     }
@@ -775,21 +881,36 @@ export const listAudienceInsightMembers = query({
     const activeOnly =
       (args.chart === "tier" || args.chart === "gender") && args.activeOnly === true;
 
-    const page = await ctx.db
-      .query("audienceInsightsSegmentMembers")
-      .withIndex("by_chart_segment", (q) =>
-        q.eq("chart", args.chart).eq("segment", args.segment),
-      )
-      .paginate({
-        numItems: SEGMENT_LIST_PAGE_SIZE,
-        cursor: args.playersCursor ?? null,
-      });
+    const page =
+      args.chart === "applicationSource"
+        ? await ctx.db
+            .query("audienceInsightsSegmentMembers")
+            .withIndex("by_chart_segment_window", (q) =>
+              q
+                .eq("chart", "applicationSource")
+                .eq("segment", args.segment)
+                .eq("sourceWindowDays", args.sourceWindowDays!),
+            )
+            .paginate({
+              numItems: SEGMENT_LIST_PAGE_SIZE,
+              cursor: args.playersCursor ?? null,
+            })
+        : await ctx.db
+            .query("audienceInsightsSegmentMembers")
+            .withIndex("by_chart_segment", (q) =>
+              q.eq("chart", args.chart).eq("segment", args.segment),
+            )
+            .paginate({
+              numItems: SEGMENT_LIST_PAGE_SIZE,
+              cursor: args.playersCursor ?? null,
+            });
 
     const members = [];
     for (const row of page.page) {
       if (activeOnly) {
         if (row.isRecentlyActive === false) continue;
         if (row.isRecentlyActive !== true) {
+          if (!row.playerId) continue;
           const player = await ctx.db.get(row.playerId);
           if (!player?.isRecentlyActive) continue;
         }
@@ -985,7 +1106,6 @@ export const processRebuildBatch = internalMutation({
       for (const member of page.page) {
         if (!isVisibleInMemberLists(member)) continue;
         const gender = await genderForPlayer(ctx, member._id);
-        const applicationSource = await applicationSourceForPlayer(ctx, member._id);
         const recentEventsInWindow = await countRecentScrimLeaderboardsForPlayer(
           ctx,
           member._id,
@@ -993,13 +1113,12 @@ export const processRebuildBatch = internalMutation({
           scrimTournamentIds,
           linkedEventCache,
         );
-        accumulateMember(counters, member, gender, recentEventsInWindow, applicationSource);
+        accumulateMember(counters, member, gender, recentEventsInWindow);
         await insertSegmentMemberRows(
           ctx,
           member,
           gender,
           recentEventsInWindow,
-          applicationSource,
         );
       }
 
@@ -1025,9 +1144,11 @@ export const processRebuildBatch = internalMutation({
       const completedAt = Date.now();
       const totalMembers = processedCount;
       const segments = segmentsFromCounters(counters, totalMembers);
+      const applicationSourceInsights = await buildApplicationSourceInsights(ctx);
 
       await upsertAudienceInsightsSnapshot(ctx, {
         ...segments,
+        ...applicationSourceInsights,
         insightsCacheVersion: AUDIENCE_INSIGHTS_CACHE_VERSION,
         eventsReady: true,
         segmentMembersIndexed: true,

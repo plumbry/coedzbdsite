@@ -115,25 +115,32 @@ export function segmentKeyToLabel(chart: AudienceChartType, segment: string): st
 export function audienceSegmentPath(
   chart: AudienceChartType,
   segment: string,
-  options?: { activeOnly?: boolean },
+  options?: { activeOnly?: boolean; sourceWindowDays?: 7 | 30 },
 ): string {
   const base = `/admin/audience-insights/${chart}/${segment}`;
+  const params = new URLSearchParams();
   if (options?.activeOnly) {
-    return `${base}?members=active`;
+    params.set("members", "active");
   }
-  return base;
+  if (options?.sourceWindowDays) {
+    params.set("window", String(options.sourceWindowDays));
+  }
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
 }
 
 export function audienceSegmentPageTitle(
   chart: AudienceChartType,
   segment: string,
-  options?: { activeOnly?: boolean },
+  options?: { activeOnly?: boolean; sourceWindowDays?: 7 | 30 },
 ): string {
   const segmentLabel = segmentKeyToLabel(chart, segment) ?? segment;
   const scope =
     (chart === "tier" || chart === "gender") && options?.activeOnly
       ? " (active members)"
-      : "";
+      : chart === "applicationSource" && options?.sourceWindowDays
+        ? ` (last ${options.sourceWindowDays} days)`
+        : "";
   return `${CHART_TITLES[chart]} — ${segmentLabel}${scope}`;
 }
 
