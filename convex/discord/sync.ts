@@ -153,20 +153,26 @@ function getDiscordConfig() {
 function memberMatchesMembershipSyncTargets(
   member: DiscordMember,
   discordUserIdSet: Set<string>,
-  pendingDiscordUsernameSet: Set<string>,
+  pendingMatchKeySet: Set<string>,
 ): boolean {
   if (discordUserIdSet.has(member.user.id)) {
     return true;
   }
 
   const formattedUsername = formatDiscordUsername(member.user);
-  if (pendingDiscordUsernameSet.has(normalizeDiscordUsernameForMatch(formattedUsername))) {
+  if (pendingMatchKeySet.has(normalizeDiscordUsernameForMatch(formattedUsername))) {
     return true;
   }
 
-  return pendingDiscordUsernameSet.has(
-    normalizeDiscordUsernameForMatch(member.user.username),
-  );
+  if (pendingMatchKeySet.has(normalizeDiscordUsernameForMatch(member.user.username))) {
+    return true;
+  }
+
+  if (member.nick && pendingMatchKeySet.has(normalizeDiscordUsernameForMatch(member.nick))) {
+    return true;
+  }
+
+  return false;
 }
 
 async function ensureSyncRun(ctx: ActionCtx): Promise<string> {
@@ -335,9 +341,9 @@ export const syncAcceptedMembers = action({
 
     const targets = await ctx.runQuery(internal.discord.listMembershipSyncDiscordTargets, {});
     const discordUserIdSet = new Set(targets.discordUserIds);
-    const pendingDiscordUsernameSet = new Set(targets.pendingDiscordUsernames);
+    const pendingMatchKeySet = new Set(targets.pendingMatchKeys);
 
-    if (discordUserIdSet.size === 0 && pendingDiscordUsernameSet.size === 0) {
+    if (discordUserIdSet.size === 0 && pendingMatchKeySet.size === 0) {
       return {
         success: true,
         totalMembers: 0,
@@ -352,7 +358,7 @@ export const syncAcceptedMembers = action({
       await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
         syncType: "discord",
         status: "in_progress",
-        recordsAdded: discordUserIdSet.size + pendingDiscordUsernameSet.size,
+        recordsAdded: discordUserIdSet.size + pendingMatchKeySet.size,
         recordsUpdated: 0,
       });
 
@@ -362,13 +368,11 @@ export const syncAcceptedMembers = action({
         memberMatchesMembershipSyncTargets(
           member,
           discordUserIdSet,
-          pendingDiscordUsernameSet,
+          pendingMatchKeySet,
         ),
       );
       const skipped =
-        discordUserIdSet.size +
-        pendingDiscordUsernameSet.size -
-        membersToSync.length;
+        discordUserIdSet.size + pendingMatchKeySet.size - membersToSync.length;
 
       const syncRunId = await ensureSyncRun(ctx);
       let added = 0;
