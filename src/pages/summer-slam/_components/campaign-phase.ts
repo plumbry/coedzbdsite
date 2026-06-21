@@ -13,6 +13,7 @@ export type CampaignPublic = {
   stampName: string;
   littleWheelEntryEveryStamps: number;
   bigWheelEntryEveryStamps: number;
+  activeQuestCount?: number;
 };
 
 export function getCampaignPhase(
@@ -24,6 +25,16 @@ export function getCampaignPhase(
   if (campaign.endsAt && now > campaign.endsAt) return "ended";
   if (!campaign.isActive) return "ended";
   return "active";
+}
+
+/** Passport entry is only available once the campaign is live and has quests configured. */
+export function isPassportAccessible(
+  campaign: CampaignPublic | null | undefined,
+  now = Date.now(),
+): boolean {
+  if (!campaign) return false;
+  if (getCampaignPhase(campaign, now) !== "active") return false;
+  return (campaign.activeQuestCount ?? 0) > 0;
 }
 
 export function formatCampaignDateRange(

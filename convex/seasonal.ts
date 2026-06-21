@@ -512,10 +512,19 @@ export const getCampaign = query({
   handler: async (ctx, args) => {
     const campaign = await getCampaignBySlug(ctx, normalizeSlug(args.slug));
     if (!campaign) return null;
+    const activeQuestCount = (
+      await ctx.db
+        .query("seasonalQuests")
+        .withIndex("by_campaign_and_active", (q) =>
+          q.eq("campaignId", campaign._id).eq("isActive", true),
+        )
+        .collect()
+    ).length;
+    const publicCampaign = { ...campaign, activeQuestCount };
     if (campaign.description === LEGACY_CAMPAIGN_DESCRIPTION) {
-      return { ...campaign, description: DEFAULT_CAMPAIGN_DESCRIPTION };
+      return { ...publicCampaign, description: DEFAULT_CAMPAIGN_DESCRIPTION };
     }
-    return campaign;
+    return publicCampaign;
   },
 });
 

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
 import {
   getCampaignPhase,
+  isPassportAccessible,
   phaseMessage,
 } from "./_components/campaign-phase.ts";
 import {
@@ -81,6 +82,25 @@ const GUIDE_TAB_PANEL_CLASS =
 const GUIDE_STEP_TITLE_CLASS = "text-sm font-semibold text-orange-950";
 const GUIDE_STEP_BODY_CLASS = "text-[13px] text-orange-900/55";
 
+const LITTLE_PRIZE_EXAMPLES = [
+  "$5 Cash",
+  "500 V-Bucks",
+  "Gifted Emotes",
+  "Nitro Basic",
+  "Discord Badge",
+  "1 Week GIF Use in Scrim Chats",
+  "30 Day Custom Discord Nickname",
+] as const;
+
+const BIG_PRIZE_EXAMPLES = [
+  "$10–15 Cash",
+  "1,000 V-Bucks",
+  "Gifted Skins",
+  "Steam Gift Cards",
+  "Nitro",
+  "Discord Role",
+] as const;
+
 function getPrizeItems(littleEvery: number, bigEvery: number) {
   const fullPassport = SEASON_REWARDS.find((reward) => reward.id === "passport");
 
@@ -122,7 +142,7 @@ export default function SummerSlamLandingPage() {
 
   const phase = getCampaignPhase(campaign ?? null);
   const statusMessage = phaseMessage(phase);
-  const canEnterPassport = phase === "active";
+  const canEnterPassport = isPassportAccessible(campaign ?? null);
   const hasPassport = Boolean(passportStatus?.passport);
   const isPassportStatusLoading =
     isSignedIn && (!isConvexAuthenticated || passportStatus === undefined);
@@ -162,8 +182,17 @@ export default function SummerSlamLandingPage() {
             <div className="flex flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:justify-center">
               {!isLoaded || campaign === undefined || isPassportStatusLoading ? (
                 <Skeleton className={cn("h-10 w-48 max-w-full", ssSkeleton)} />
-              ) : canEnterPassport ? (
+              ) : !canEnterPassport ? (
                 isSignedIn ? (
+                  <Button asChild className="min-h-10 touch-manipulation">
+                    <Link to="/summer-slam/passport">Coming Soon</Link>
+                  </Button>
+                ) : (
+                  <Button disabled className="min-h-10 touch-manipulation">
+                    Coming Soon
+                  </Button>
+                )
+              ) : isSignedIn ? (
                   hasPassport ? (
                     <Button asChild className="min-h-10 touch-manipulation">
                       <Link to="/summer-slam/passport">My Passport</Link>
@@ -184,10 +213,6 @@ export default function SummerSlamLandingPage() {
                     showIcon={false}
                   />
                 )
-              ) : (
-                <Button disabled className="min-h-10">
-                  Passport unavailable
-                </Button>
               )}
               <Button asChild variant="ghost" className="min-h-10 touch-manipulation">
                 <Link to="/support">Site Support</Link>
@@ -271,6 +296,24 @@ export default function SummerSlamLandingPage() {
                           </li>
                         ))}
                       </ul>
+                      <div className="mx-auto mt-4 grid w-full max-w-md gap-4 sm:grid-cols-2">
+                        <div className="text-center">
+                          <p className={GUIDE_STEP_TITLE_CLASS}>Little Prize Examples</p>
+                          <ul className={cn("mt-2 space-y-1", GUIDE_STEP_BODY_CLASS)}>
+                            {LITTLE_PRIZE_EXAMPLES.map((prize) => (
+                              <li key={prize}>{prize}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="text-center">
+                          <p className={GUIDE_STEP_TITLE_CLASS}>Big Prize Examples</p>
+                          <ul className={cn("mt-2 space-y-1", GUIDE_STEP_BODY_CLASS)}>
+                            {BIG_PRIZE_EXAMPLES.map((prize) => (
+                              <li key={prize}>{prize}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
                       <p className={cn("mx-auto mt-3 max-w-md text-orange-800/45", GUIDE_STEP_BODY_CLASS)}>
                         Draw dates and prize details are announced in Discord. Ticket totals are tracked
                         on your passport.

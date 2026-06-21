@@ -22,8 +22,6 @@ import {
   CAMPAIGN_NOT_STARTED_TITLE,
   CAMPAIGN_ENDED_MESSAGE,
   CAMPAIGN_ENDED_TITLE,
-  INACTIVE_CAMPAIGN_MESSAGE,
-  INACTIVE_CAMPAIGN_TITLE,
   EVIDENCE_SUBMITTED_SUCCESS_MESSAGE,
   getPassportErrorTitle,
   mapEnsurePassportError,
@@ -35,7 +33,7 @@ import {
   UPLOAD_FAILED_MESSAGE,
   type QuestEntry,
 } from "./_components/passport-types.ts";
-import { getCampaignPhase, phaseMessage } from "./_components/campaign-phase.ts";
+import { getCampaignPhase, isPassportAccessible } from "./_components/campaign-phase.ts";
 
 function PassportLoader() {
   return (
@@ -238,15 +236,13 @@ function PassportContent() {
     );
   }
 
-  if (campaign !== undefined && campaignPhase !== "active") {
+  if (campaign !== undefined && !isPassportAccessible(campaign)) {
     const phaseUnavailable =
       campaignPhase === "not_started"
         ? { title: CAMPAIGN_NOT_STARTED_TITLE, description: CAMPAIGN_NOT_STARTED_MESSAGE }
         : campaignPhase === "ended"
           ? { title: CAMPAIGN_ENDED_TITLE, description: CAMPAIGN_ENDED_MESSAGE }
-          : campaignPhase === "not_configured"
-            ? { title: CAMPAIGN_NOT_READY_TITLE, description: CAMPAIGN_NOT_READY_MESSAGE }
-            : { title: INACTIVE_CAMPAIGN_TITLE, description: phaseMessage(campaignPhase) ?? INACTIVE_CAMPAIGN_MESSAGE };
+          : { title: CAMPAIGN_NOT_READY_TITLE, description: CAMPAIGN_NOT_READY_MESSAGE };
 
     return (
       <PassportUnavailable
