@@ -127,6 +127,7 @@ export function PassportEvidenceReviewPanel({
       aria-label="Recent activity"
     >
       <PassportSectionHeader
+        layout="stack"
         title="Recent Activity"
         description="Outstanding evidence submissions"
       />
