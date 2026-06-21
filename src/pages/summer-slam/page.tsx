@@ -295,7 +295,7 @@ export default function SummerSlamLandingPage() {
                           </li>
                         ))}
                       </ul>
-                      <div className="mx-auto mt-4 grid w-full max-w-md gap-4 sm:grid-cols-2">
+                      <div className="mx-auto mt-6 grid w-full max-w-md gap-4 sm:grid-cols-2">
                         <div className="text-center">
                           <p className={GUIDE_STEP_TITLE_CLASS}>Little Prize Examples</p>
                           <ul className={cn("mt-2 space-y-1", GUIDE_STEP_BODY_CLASS)}>
