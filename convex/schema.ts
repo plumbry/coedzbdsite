@@ -1328,6 +1328,16 @@ export default defineSchema({
     ),
     applicationSource7dTotal: v.optional(v.number()),
     applicationSource30dTotal: v.optional(v.number()),
+    /** Legacy snapshot field — superseded by applicationSource7d/30d. */
+    applicationSource: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          value: v.number(),
+          color: v.string(),
+        }),
+      ),
+    ),
     eventsReady: v.boolean(),
     segmentMembersIndexed: v.optional(v.boolean()),
     lastUpdated: v.number(),
