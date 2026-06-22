@@ -160,6 +160,35 @@ export default function EventDetail() {
   }
 
   const usesLinkedScrimSeries = Boolean(event.linkedScrimSeriesId);
+  const leaderboardLinksCard = publicLeaderboardLinks.length > 0 ? (
+    <Card>
+      <CardHeader>
+        <CardTitle>Leaderboards</CardTitle>
+        <CardDescription>
+          Yunite links for this event (configured on the event and from linked imports)
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {publicLeaderboardLinks.map((link) => (
+            <a
+              key={link.url}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between p-3 border rounded-lg hover:border-primary transition-colors"
+            >
+              <div>
+                <p className="font-medium">{link.label}</p>
+                <p className="text-sm text-muted-foreground truncate max-w-md">{link.url}</p>
+              </div>
+              <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
+            </a>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  ) : null;
 
   return (
     <PageShell>
@@ -295,37 +324,6 @@ export default function EventDetail() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground whitespace-pre-wrap">{event.description}</p>
-          </CardContent>
-        </Card>
-      )}
-      
-      {/* Yunite leaderboard links (event URLs + linked imports) */}
-      {publicLeaderboardLinks.length > 0 && (
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Leaderboards</CardTitle>
-            <CardDescription>
-              Yunite links for this event (configured on the event and from linked imports)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {publicLeaderboardLinks.map((link) => (
-                <a
-                  key={link.url}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 border rounded-lg hover:border-primary transition-colors"
-                >
-                  <div>
-                    <p className="font-medium">{link.label}</p>
-                    <p className="text-sm text-muted-foreground truncate max-w-md">{link.url}</p>
-                  </div>
-                  <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
-                </a>
-              ))}
-            </div>
           </CardContent>
         </Card>
       )}
@@ -1282,6 +1280,9 @@ export default function EventDetail() {
           </CardContent>
         </Card>
       )}
+      
+      {/* Yunite leaderboard links (event URLs + linked imports) */}
+      {leaderboardLinksCard}
       </div>
     </PageShell>
   );
