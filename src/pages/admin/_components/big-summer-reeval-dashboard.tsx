@@ -88,6 +88,7 @@ type DashboardFilter =
   | "deadline_passed"
   | "ready_to_review"
   | "reviewed"
+  | "no_change"
   | "tier_changes"
   | "access_removal_queue"
   | "access_removed"
@@ -103,6 +104,7 @@ const FILTER_LABELS: Record<DashboardFilter, string> = {
   deadline_passed: "Deadline Passed",
   ready_to_review: "Ready To Review",
   reviewed: "Reviewed",
+  no_change: "No Change",
   tier_changes: "Tier Changes",
   access_removal_queue: "Access Removal Queue",
   access_removed: "Access Removed",
@@ -195,6 +197,7 @@ export default function BigSummerReEvalDashboard() {
   const [epicIdDraft, setEpicIdDraft] = useState("");
 
   const initStatus = useQuery(api.bigSummerReEval.queries.getInitializationStatus, {});
+  const progress = useQuery(api.bigSummerReEval.queries.getReEvalProgress, {});
   const filterCounts = useQuery(api.bigSummerReEval.queries.getFilterCounts, {});
   const rows = useQuery(api.bigSummerReEval.queries.listDashboard, {
     filter,
@@ -263,7 +266,7 @@ export default function BigSummerReEvalDashboard() {
     setIsInitializing(true);
     try {
       const result = await initialize({});
-      toast.success(`Initialized ${result.created} player re-eval records`);
+      toast.success(`Enrolled ${result.created} active members for review`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Initialization failed");
     } finally {
@@ -336,7 +339,7 @@ export default function BigSummerReEvalDashboard() {
     setEpicIdDraft(row?.epicId ?? "");
   };
 
-  if (initStatus === undefined || filterCounts === undefined) {
+  if (initStatus === undefined || filterCounts === undefined || progress === undefined) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-full" />
@@ -353,26 +356,50 @@ export default function BigSummerReEvalDashboard() {
             <div>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Sun className="h-5 w-5 text-amber-500" />
-                Big Summer Re-Eval
+                Summer Re-Eval
               </CardTitle>
-              <CardDescription>
-                Operational dashboard for tracker compliance, review decisions, and Discord role changes.
-                {initStatus.reEvalCount > 0 && (
-                  <span className="ml-1">
-                    {initStatus.reEvalCount} of {initStatus.activeCount} active players enrolled.
-                  </span>
-                )}
+              <CardDescription className="max-w-2xl">
+                Member Management re-eval mode: review every active member and record a
+                decision. Most members will be <strong>No Change</strong> — Discord updates
+                are only queued when a decision differs from the member&apos;s current tier
+                or access.
               </CardDescription>
+              {progress.enrolled > 0 && (
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                  <span>
+                    Reviewed: <strong className="text-foreground">{progress.withDecision}</strong> / {progress.enrolled}
+                  </span>
+                  <span>
+                    No change: <strong className="text-foreground">{progress.noChange}</strong>
+                  </span>
+                  <span>
+                    Pending review: <strong className="text-foreground">{progress.pendingReview}</strong>
+                  </span>
+                  <span>
+                    Need Discord update: <strong className="text-foreground">{progress.needsDiscordUpdate}</strong>
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               {initStatus.needsInitialization && (
                 <Button size="sm" onClick={handleInitialize} disabled={isInitializing}>
                   {isInitializing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Initialize Active Players
+                  Enroll All Active Members
                 </Button>
               )}
-              <Button size="sm" variant="secondary" onClick={handleOpenQueueConfirm}>
-                Queue Discord Role Changes
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleOpenQueueConfirm}
+                disabled={progress.needsDiscordUpdate === 0}
+                title={
+                  progress.needsDiscordUpdate === 0
+                    ? "No reviewed decisions require a Discord change"
+                    : undefined
+                }
+              >
+                Queue Discord Updates ({progress.needsDiscordUpdate})
               </Button>
               {(queueHealth?.stuckProcessing ?? 0) > 0 && (
                 <Button size="sm" variant="outline" onClick={() => setResetConfirmOpen(true)}>
@@ -698,7 +725,7 @@ export default function BigSummerReEvalDashboard() {
                     <SelectItem value="A">A — Promote</SelectItem>
                     <SelectItem value="B">B</SelectItem>
                     <SelectItem value="C">C — Demote</SelectItem>
-                    <SelectItem value="no_change">No Change</SelectItem>
+                    <SelectItem value="no_change">No Change — keep current tier</SelectItem>
                     <SelectItem value="remove_access">Remove Access</SelectItem>
                     <SelectItem value="retired">Retired</SelectItem>
                   </SelectContent>
@@ -791,9 +818,10 @@ export default function BigSummerReEvalDashboard() {
       <Dialog open={queueConfirmOpen} onOpenChange={setQueueConfirmOpen}>
         <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle>Big Re-Eval Summary</DialogTitle>
+            <DialogTitle>Queue Discord Updates</DialogTitle>
             <DialogDescription>
-              Review pending Discord role changes before queuing them for the bot.
+              Only members whose final decision differs from their current tier or access
+              will be queued. Everyone else stays as-is on Discord.
             </DialogDescription>
           </DialogHeader>
           {queuePreview === undefined ? (
@@ -803,7 +831,7 @@ export default function BigSummerReEvalDashboard() {
             </div>
           ) : queuePreview.queued === 0 ? (
             <p className="text-sm text-muted-foreground py-2">
-              No players need Discord role changes right now.
+              No reviewed decisions require a Discord update right now.
             </p>
           ) : (
             <div className="space-y-3 text-sm">

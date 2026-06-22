@@ -676,7 +676,7 @@ export default function MemberManagement() {
               {isAdmin && <TabsTrigger value="rejected" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Rejected</TabsTrigger>}
               <TabsTrigger value="former" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Former</TabsTrigger>
               {isAdmin && <TabsTrigger value="discord" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Discord</TabsTrigger>}
-              {isAdmin && <TabsTrigger value="big-reeval" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Big Re-Eval</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="big-reeval" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Summer Re-Eval</TabsTrigger>}
             </TabsList>
           </div>
           

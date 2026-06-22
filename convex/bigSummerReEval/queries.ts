@@ -30,6 +30,7 @@ function matchesFilter(
     reEvalStatus: string;
     fortniteTrackerLink?: string;
     finalDecision?: string;
+    currentTier?: string;
     queueStatus: string | null;
   },
 ): boolean {
@@ -59,7 +60,14 @@ function matchesFilter(
     case "ready_to_review":
       return row.reEvalStatus === "ready_to_review";
     case "reviewed":
-      return row.reEvalStatus === "reviewed";
+      return row.reEvalStatus === "reviewed" || !!row.finalDecision;
+    case "no_change":
+      return (
+        row.finalDecision === "no_change" ||
+        (!!row.finalDecision &&
+          !!row.currentTier &&
+          row.finalDecision === row.currentTier)
+      );
     case "tier_changes":
       return (
         row.reEvalStatus === "tier_change_queued" ||
@@ -172,6 +180,7 @@ export const getFilterCounts = query({
       "deadline_passed",
       "ready_to_review",
       "reviewed",
+      "no_change",
       "tier_changes",
       "access_removal_queue",
       "access_removed",
@@ -286,6 +295,52 @@ export const getByPlayerIdInternal = internalQuery({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
     return getReEvalByPlayerId(ctx, args.playerId);
+  },
+});
+
+export const getReEvalProgress = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
+    const candidates = await computeQueueCandidates(ctx);
+
+    let enrolled = 0;
+    let withDecision = 0;
+    let noChange = 0;
+
+    for (const reEval of reEvalRows) {
+      const player = await ctx.db.get(reEval.playerId);
+      if (!player) continue;
+      if (player.status !== "active" || player.currentMembershipStatus !== "accepted") {
+        continue;
+      }
+      enrolled += 1;
+      if (!reEval.finalDecision) continue;
+      withDecision += 1;
+      if (
+        reEval.finalDecision === "no_change" ||
+        reEval.finalDecision === player.tier
+      ) {
+        noChange += 1;
+      }
+    }
+
+    const activePlayers = await ctx.db
+      .query("players")
+      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
+      .collect();
+    const activeCount = activePlayers.filter((p) => p.status === "active").length;
+
+    return {
+      activeCount,
+      enrolled,
+      withDecision,
+      pendingReview: Math.max(0, enrolled - withDecision),
+      noChange,
+      needsDiscordUpdate: candidates.length,
+    };
   },
 });
 

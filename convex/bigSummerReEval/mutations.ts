@@ -93,8 +93,8 @@ export const initializeForActivePlayers = mutation({
       userId: admin._id,
       userName: getDisplayName(admin),
       action: "big_summer_reeval_initialized",
-      playerId: activePlayers[0]?._id ?? admin._id,
-      newValue: `Created ${created} re-eval records`,
+      playerId: activePlayers[0]?._id,
+      newValue: `Enrolled ${created} active members for summer re-eval (no tier changes applied)`,
     });
 
     return { created };
@@ -432,7 +432,7 @@ export const setFinalDecision = mutation({
     const patch: Record<string, unknown> = { finalDecision: args.finalDecision };
     if (args.finalDecision === "retired") {
       patch.reEvalStatus = "retired";
-    } else if (args.finalDecision !== "no_change") {
+    } else {
       patch.reEvalStatus = "reviewed";
     }
 

@@ -92,6 +92,7 @@ export type DashboardFilter =
   | "deadline_passed"
   | "ready_to_review"
   | "reviewed"
+  | "no_change"
   | "tier_changes"
   | "access_removal_queue"
   | "access_removed"
