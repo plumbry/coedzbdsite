@@ -689,8 +689,8 @@ export default function MemberManagement() {
                     </CardDescription>
                   </div>
                   {isAdmin && (
-                    <Button size="sm" onClick={() => setNewAppDialogOpen(true)} className="w-full sm:w-auto">
-                      <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    <Button size="sm" onClick={() => setNewAppDialogOpen(true)} className="w-auto">
+                      <Plus className="sm:mr-1.5" />
                       New Application
                     </Button>
                   )}
