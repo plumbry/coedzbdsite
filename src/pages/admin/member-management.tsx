@@ -627,13 +627,14 @@ export default function MemberManagement() {
       showSidebar={!!isModeratorOrAdmin}
       header={{
         actions: isAdmin ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <DiscordSyncTools compact />
             <Button
               size="sm"
               variant="secondary"
               onClick={handleSyncGirlRole}
               disabled={isSyncingGirlRole}
+              className="h-10 w-full justify-start touch-manipulation sm:h-9 sm:w-auto sm:justify-center"
               title={
                 girlRoleSyncStatus?.lastSyncedAt
                   ? `${girlRoleSyncStatus.count} verifications · last synced ${format(new Date(girlRoleSyncStatus.lastSyncedAt), "MMM d, yyyy h:mm a")}`
@@ -763,12 +764,12 @@ export default function MemberManagement() {
                               <ExternalLink className="h-3 w-3 shrink-0" />
                             </a>
                             {isAdmin && (
-                              <div className="flex flex-wrap gap-1">
+                              <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:gap-1">
                                 <Button
                                   onClick={() => setEditingApplicationId(app._id)}
                                   variant="secondary"
                                   size="sm"
-                                  className="cursor-pointer px-2 h-7 text-xs"
+                                  className="h-9 cursor-pointer px-2 text-xs touch-manipulation sm:h-7"
                                 >
                                   <Edit className="mr-1 h-3 w-3" />
                                   Edit
@@ -776,7 +777,7 @@ export default function MemberManagement() {
                                 <Button
                                   onClick={() => handleAccept(app._id)}
                                   size="sm"
-                                  className="cursor-pointer px-2 h-7 text-xs"
+                                  className="h-9 cursor-pointer px-2 text-xs touch-manipulation sm:h-7"
                                 >
                                   <UserCheck className="mr-1 h-3 w-3" />
                                   Accept
@@ -788,7 +789,7 @@ export default function MemberManagement() {
                                   }}
                                   variant="destructive"
                                   size="sm"
-                                  className="cursor-pointer px-2 h-7 text-xs"
+                                  className="h-9 cursor-pointer px-2 text-xs touch-manipulation sm:h-7"
                                 >
                                   <UserX className="mr-1 h-3 w-3" />
                                   Reject
@@ -800,7 +801,7 @@ export default function MemberManagement() {
                                   }}
                                   variant="destructive"
                                   size="sm"
-                                  className="cursor-pointer px-2 h-7 text-xs"
+                                  className="h-9 cursor-pointer px-2 text-xs touch-manipulation sm:h-7"
                                 >
                                   <Trash2 className="mr-1 h-3 w-3" />
                                   Delete

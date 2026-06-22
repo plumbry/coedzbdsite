@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, RefreshCw, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils.ts";
 
 type DiscordSyncToolsProps = {
   compact?: boolean;
@@ -125,45 +126,56 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
       : "No sync run yet";
 
   const buttons = (
-    <div className="flex flex-wrap gap-2">
+    <div
+      className={cn(
+        "grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap",
+        compact && "max-sm:w-full",
+      )}
+    >
       <Button
         size="sm"
         variant="secondary"
         disabled={isBusy || inProgress}
         onClick={() => setConfirmAcceptedOpen(true)}
+        className="h-10 w-full justify-start touch-manipulation sm:h-9 sm:w-auto sm:justify-center"
       >
         {isSyncingAccepted || inProgress ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="mr-1.5 h-3.5 w-3.5 shrink-0 animate-spin" />
         ) : (
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5 shrink-0" />
         )}
-        Sync membership from Discord
+        <span className="sm:hidden">Sync from Discord</span>
+        <span className="hidden sm:inline">Sync membership from Discord</span>
       </Button>
       <Button
         size="sm"
         variant="secondary"
         disabled={isBusy}
         onClick={handleSyncPendingRoles}
+        className="h-10 w-full justify-start touch-manipulation sm:h-9 sm:w-auto sm:justify-center"
       >
         {isSyncingRoles ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="mr-1.5 h-3.5 w-3.5 shrink-0 animate-spin" />
         ) : (
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5 shrink-0" />
         )}
-        Sync pending role changes
+        <span className="sm:hidden">Sync pending roles</span>
+        <span className="hidden sm:inline">Sync pending role changes</span>
       </Button>
       <Button
         size="sm"
         variant="outline"
         disabled={isBusy}
         onClick={handleRebuildCache}
+        className="h-10 w-full justify-start touch-manipulation sm:h-9 sm:w-auto sm:justify-center"
       >
         {isRebuildingCache ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="mr-1.5 h-3.5 w-3.5 shrink-0 animate-spin" />
         ) : (
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5 shrink-0" />
         )}
-        Rebuild sync cache
+        <span className="sm:hidden">Rebuild cache</span>
+        <span className="hidden sm:inline">Rebuild sync cache</span>
       </Button>
     </div>
   );
