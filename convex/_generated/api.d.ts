@@ -175,6 +175,7 @@ import type * as tierReEvaluation from "../tierReEvaluation.js";
 import type * as tierReEvaluationBatched from "../tierReEvaluationBatched.js";
 import type * as tierSnapshot from "../tierSnapshot.js";
 import type * as topFiveCache from "../topFiveCache.js";
+import type * as userMerge from "../userMerge.js";
 import type * as userProvisioning from "../userProvisioning.js";
 import type * as users from "../users.js";
 import type * as validation_phase3b from "../validation/phase3b.js";
@@ -374,6 +375,7 @@ declare const fullApi: ApiFromModules<{
   tierReEvaluationBatched: typeof tierReEvaluationBatched;
   tierSnapshot: typeof tierSnapshot;
   topFiveCache: typeof topFiveCache;
+  userMerge: typeof userMerge;
   userProvisioning: typeof userProvisioning;
   users: typeof users;
   "validation/phase3b": typeof validation_phase3b;
