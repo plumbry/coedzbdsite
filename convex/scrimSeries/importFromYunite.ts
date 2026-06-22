@@ -279,19 +279,12 @@ export const importYuniteScores = action({
             continue;
           }
 
-          // Parse amount
-          let amount = series.penaltyAmount; // Default to series penalty amount
-          if (correction.amount !== undefined && correction.amount !== null) {
-            const parsed = Number(correction.amount);
-            amount = isNaN(parsed) ? series.penaltyAmount : Math.abs(parsed);
-          }
-
           // Insert penalty with dedup key
           await ctx.runMutation(api.scrimSeries.mutations.addPenaltyWithDedup, {
             seriesId: args.seriesId,
             playerId: matchedPlayer._id,
             reason: correction.reason || "Yunite correction",
-            amount,
+            amount: series.penaltyAmount,
             dedupKey,
             sessionNumber: args.sessionNumber,
           });

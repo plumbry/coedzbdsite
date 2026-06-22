@@ -263,10 +263,7 @@ export const getLeaderboard = query({
       // Penalties (only non-excluded count) — each row may represent multiple occurrences.
       const activePenalties = playerPenalties.filter((p) => !p.excluded);
       const penaltyCount = activePenalties.reduce((sum, p) => sum + (p.quantity ?? 1), 0);
-      const penaltyTotal = activePenalties.reduce(
-        (sum, p) => sum + (p.amount ?? series.penaltyAmount) * (p.quantity ?? 1),
-        0,
-      );
+      const penaltyTotal = penaltyCount * series.penaltyAmount;
 
       // Final total: Best N minus penalties (participation is a separate metric, not used here)
       const finalTotal = bestNTotal - penaltyTotal;

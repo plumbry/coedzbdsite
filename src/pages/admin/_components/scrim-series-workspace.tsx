@@ -1591,7 +1591,7 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
                       />
                     </td>
                     <td className="py-1.5 px-2 text-center">
-                      <Badge variant="secondary" className="text-xs">-{p.amount * quantity}</Badge>
+                      <Badge variant="secondary" className="text-xs">-{series.penaltyAmount * quantity}</Badge>
                     </td>
                     <td className="py-1.5 pl-2 text-right">
                       <Button
