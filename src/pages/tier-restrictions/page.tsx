@@ -103,7 +103,7 @@ export default function TierRestrictionsPage() {
       <PageHeader
         title="Tier Restrictions"
         icon={Shield}
-        back={{ label: "Back to Members", href: "/" }}
+        back={{ label: "Back to Home", href: "/" }}
         description="Teams must follow the allowed tier combinations below when registering for scrims. Each row shows a valid team composition based on player tiers."
       />
 

@@ -34,8 +34,10 @@ import {
   DEMO_CAMPAIGN,
   DEMO_COUNTS,
   DEMO_PASSPORTS,
-  DEMO_QUESTS,
   DEMO_REVIEW_QUEUE,
+  loadDemoAdminConfig,
+  resetDemoAdminConfig,
+  saveDemoAdminConfig,
   type AdminCategory,
   type DemoQuest,
 } from "./_components/admin-mock-data.ts";
@@ -43,10 +45,11 @@ import {
 type CompletionMethod = "auto" | "manual" | "admin";
 type ReviewStatus = "pending_review" | "approved" | "rejected" | "needs_more_evidence";
 
-const DEMO_NOTICE = "Demo mode — changes are not saved.";
+const DEMO_NOTICE = "Saved to this browser's demo configuration.";
 
 export default function SummerSlamAdminDemoPage() {
-  const [quests, setQuests] = useState<DemoQuest[]>(DEMO_QUESTS);
+  const initialConfig = useMemo(() => loadDemoAdminConfig(), []);
+  const [quests, setQuests] = useState<DemoQuest[]>(initialConfig.quests);
   const [questPendingDelete, setQuestPendingDelete] = useState<DemoQuest | null>(null);
   const [editingQuestId, setEditingQuestId] = useState<string | undefined>();
   const [title, setTitle] = useState("");
@@ -63,12 +66,12 @@ export default function SummerSlamAdminDemoPage() {
   const [filterText, setFilterText] = useState("");
   const [reviewNote, setReviewNote] = useState("");
 
-  const [campaignTitle, setCampaignTitle] = useState(DEMO_CAMPAIGN.title);
-  const [campaignDescription, setCampaignDescription] = useState(DEMO_CAMPAIGN.description);
-  const [campaignActive, setCampaignActive] = useState(DEMO_CAMPAIGN.isActive);
-  const [stampName, setStampName] = useState(DEMO_CAMPAIGN.stampName);
-  const [littleWheelEvery, setLittleWheelEvery] = useState(DEMO_CAMPAIGN.littleWheelEntryEveryStamps);
-  const [bigWheelEvery, setBigWheelEvery] = useState(DEMO_CAMPAIGN.bigWheelEntryEveryStamps);
+  const [campaignTitle, setCampaignTitle] = useState(initialConfig.campaign.title);
+  const [campaignDescription, setCampaignDescription] = useState(initialConfig.campaign.description);
+  const [campaignActive, setCampaignActive] = useState(initialConfig.campaign.isActive);
+  const [stampName, setStampName] = useState(initialConfig.campaign.stampName);
+  const [littleWheelEvery, setLittleWheelEvery] = useState(initialConfig.campaign.littleWheelEntryEveryStamps);
+  const [bigWheelEvery, setBigWheelEvery] = useState(initialConfig.campaign.bigWheelEntryEveryStamps);
 
   const filteredReviewQueue = useMemo(() => {
     const term = filterText.trim().toLowerCase();
@@ -86,6 +89,23 @@ export default function SummerSlamAdminDemoPage() {
 
   const howToComplete: HowToComplete =
     completionMethod === "manual" ? "submit" : "auto";
+
+  const buildCampaignConfig = () => ({
+    title: campaignTitle.trim() || DEMO_CAMPAIGN.title,
+    description: campaignDescription.trim() || DEMO_CAMPAIGN.description,
+    isActive: campaignActive,
+    stampName: stampName.trim() || DEMO_CAMPAIGN.stampName,
+    littleWheelEntryEveryStamps: Math.max(1, littleWheelEvery || 1),
+    bigWheelEntryEveryStamps: Math.max(1, bigWheelEvery || 1),
+  });
+
+  const persistDemoConfig = (nextQuests = quests) => {
+    saveDemoAdminConfig({
+      campaign: buildCampaignConfig(),
+      quests: nextQuests,
+    });
+    toast.success(DEMO_NOTICE);
+  };
 
   const resetQuestForm = () => {
     setEditingQuestId(undefined);
@@ -117,12 +137,56 @@ export default function SummerSlamAdminDemoPage() {
 
   const handleDeleteQuest = () => {
     if (!questPendingDelete) return;
-    setQuests((prev) => prev.filter((quest) => quest._id !== questPendingDelete._id));
+    const nextQuests = quests.filter((quest) => quest._id !== questPendingDelete._id);
+    setQuests(nextQuests);
     if (editingQuestId === questPendingDelete._id) {
       resetQuestForm();
     }
-    toast.success("Quest deleted.");
+    persistDemoConfig(nextQuests);
     setQuestPendingDelete(null);
+  };
+
+  const handleSaveQuest = () => {
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
+    if (!trimmedTitle || !trimmedDescription) {
+      toast.error("Add a quest title and description first.");
+      return;
+    }
+
+    const quest: DemoQuest = {
+      _id: editingQuestId ?? `demo_custom_${Date.now()}`,
+      title: trimmedTitle,
+      category,
+      description: trimmedDescription,
+      evidenceInstructions: evidenceInstructions.trim() || undefined,
+      adminHint: adminHint.trim() || undefined,
+      completionMethod,
+      evidenceInput: completionMethod === "manual" ? evidenceInput : undefined,
+      stampReward: Math.max(1, stampReward || 1),
+      sortOrder,
+      isActive,
+    };
+    const nextQuests = editingQuestId
+      ? quests.map((existing) => (existing._id === editingQuestId ? quest : existing))
+      : [...quests, quest];
+
+    setQuests(nextQuests);
+    persistDemoConfig(nextQuests);
+    resetQuestForm();
+  };
+
+  const handleResetDemoConfig = () => {
+    const next = resetDemoAdminConfig();
+    setQuests(next.quests);
+    setCampaignTitle(next.campaign.title);
+    setCampaignDescription(next.campaign.description);
+    setCampaignActive(next.campaign.isActive);
+    setStampName(next.campaign.stampName);
+    setLittleWheelEvery(next.campaign.littleWheelEntryEveryStamps);
+    setBigWheelEvery(next.campaign.bigWheelEntryEveryStamps);
+    resetQuestForm();
+    toast.success("Demo configuration reset.");
   };
 
   return (
@@ -130,7 +194,7 @@ export default function SummerSlamAdminDemoPage() {
     <PageShell maxWidth="wide">
       <PageHeader
         title="Summer Slam Passport — Admin Demo"
-        description="A read-only preview of the staff control panel with mock data. Actions are disabled."
+        description="A local preview of the staff control panel with mock data. Saved changes update the passport demo in this browser."
         variant="compact"
       />
 
@@ -139,11 +203,16 @@ export default function SummerSlamAdminDemoPage() {
           <Badge variant="outline" className="border-orange-300 text-orange-700">
             Preview
           </Badge>
-          <p className="text-xs text-orange-900/70">Mock data — nothing here is saved.</p>
+          <p className="text-xs text-orange-900/70">Mock data — saved locally for demo testing only.</p>
         </div>
-        <a href="/summer-slam/passport/demo" className="text-[11px] font-medium text-teal-700 hover:underline">
-          Passport demo →
-        </a>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={handleResetDemoConfig} className="text-[11px] font-medium text-orange-700 hover:underline">
+            Reset demo data
+          </button>
+          <a href="/summer-slam/passport/demo" className="text-[11px] font-medium text-teal-700 hover:underline">
+            Passport demo →
+          </a>
+        </div>
       </div>
 
       <div className="space-y-6">
@@ -187,7 +256,7 @@ export default function SummerSlamAdminDemoPage() {
                   </div>
                 </div>
               </div>
-              <Button onClick={() => toast.info(DEMO_NOTICE)}>
+              <Button onClick={() => persistDemoConfig()}>
                 <Save className="mr-2 h-4 w-4" />
                 Save Campaign
               </Button>
@@ -223,7 +292,7 @@ export default function SummerSlamAdminDemoPage() {
           <Card>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">Active Quests</p>
-              <p className="text-2xl font-bold">{DEMO_COUNTS.activeQuests}</p>
+              <p className="text-2xl font-bold">{quests.filter((quest) => quest.isActive).length}</p>
             </CardContent>
           </Card>
           <Card>
@@ -342,7 +411,7 @@ export default function SummerSlamAdminDemoPage() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button onClick={() => toast.info(DEMO_NOTICE)}>
+                  <Button onClick={handleSaveQuest}>
                     <Save className="mr-2 h-4 w-4" />
                     Save Quest
                   </Button>

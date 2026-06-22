@@ -33,7 +33,8 @@ export default function SiteHeader() {
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <ScrollArea className="w-full" scrollbars={["horizontal"]}>
             <nav className="flex w-max items-center gap-2 sm:gap-3 md:gap-4 pb-1">
-              <NavLink to="/">Members</NavLink>
+              <NavLink to="/">Home</NavLink>
+              <NavLink to="/members">Members</NavLink>
               <NavLink to="/events">Events</NavLink>
               <NavLink to="/tier-restrictions" className="hidden sm:inline">
                 Tier Restrictions

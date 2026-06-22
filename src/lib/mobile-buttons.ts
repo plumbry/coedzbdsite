@@ -6,9 +6,9 @@ export const mobileCompactButtonClass =
 
 export const mobileCompactIconButtonClass = "max-sm:!size-7 max-sm:min-h-7 max-sm:min-w-7";
 
-/** Shared single-row mobile layout for button groups (horizontal scroll when needed). */
+/** Shared single-row mobile layout for button groups without mobile scrollbars. */
 export const mobileButtonRowClass =
-  "max-sm:flex-nowrap max-sm:gap-1 max-sm:overflow-x-auto max-sm:pb-0.5 max-sm:[&_[data-slot=button]]:w-auto max-sm:[&_[data-slot=button]]:shrink-0";
+  "max-sm:min-w-0 max-sm:flex-nowrap max-sm:justify-center max-sm:gap-0.5 max-sm:overflow-x-hidden max-sm:[&_[data-slot=button]]:min-w-0 max-sm:[&_[data-slot=button]]:w-auto max-sm:[&_[data-slot=button]]:shrink";
 
 /** Page header action rows — children with `contents` participate in this row on mobile. */
 export const mobilePageHeaderActionsClass = cn(

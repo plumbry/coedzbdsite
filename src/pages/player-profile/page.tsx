@@ -26,7 +26,7 @@ export default function PlayerProfile() {
     <PageShell>
       <PageHeader
         title={player?.discordUsername ?? username ?? "Player Profile"}
-        back={{ label: "Back to Members", href: "/" }}
+        back={{ label: "Back to Home", href: "/" }}
         variant="compact"
       />
 
@@ -46,7 +46,7 @@ export default function PlayerProfile() {
           </p>
           <Link to="/">
             <Button variant="secondary" size="sm" className="mt-4">
-              Back to Members
+              Back to Home
             </Button>
           </Link>
         </div>

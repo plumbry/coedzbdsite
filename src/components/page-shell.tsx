@@ -94,7 +94,7 @@ export function AdminMain({
             <span className="text-sm font-medium text-muted-foreground">Admin menu</span>
           </div>
         )}
-        <main className="flex-1 overflow-x-auto p-3 md:p-5">
+        <main className="flex-1 overflow-x-hidden p-3 md:overflow-x-auto md:p-5">
           <div
             className={cn(
               "mx-auto w-full space-y-4",

@@ -536,18 +536,18 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
           <Tooltip>
             <TooltipTrigger asChild>
               <Link to="/" onClick={onNavigate} className="flex justify-center">
-                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Back to Members">
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Back to Home">
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
               </Link>
             </TooltipTrigger>
-            <TooltipContent side="right">Back to Members</TooltipContent>
+            <TooltipContent side="right">Back to Home</TooltipContent>
           </Tooltip>
         ) : (
           <Link to="/" onClick={onNavigate}>
             <Button variant="ghost" size="sm" className="w-full justify-start">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Members
+              Back to Home
             </Button>
           </Link>
         )}

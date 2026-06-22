@@ -2,7 +2,8 @@ import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { DefaultProviders } from "./components/providers/default.tsx";
 import AdminLayout from "./components/admin-layout.tsx";
 import UsernameSetupDialog from "./components/username-setup-dialog.tsx";
-import Index from "./pages/Index.tsx";
+import LandingPage from "./pages/landing/page.tsx";
+import MembersPage from "./pages/Index.tsx";
 import PlayerProfile from "./pages/player-profile/page.tsx";
 
 import TierReEvaluation from "./pages/admin/tier-re-evaluation.tsx";
@@ -44,6 +45,7 @@ import SummerSlamLandingPage from "./pages/summer-slam/page.tsx";
 import SummerSlamPassportPage from "./pages/summer-slam/passport.tsx";
 import SummerSlamPassportDemoPage from "./pages/summer-slam/passport-demo.tsx";
 import SummerSlamPassportDemoCompletePage from "./pages/summer-slam/passport-demo-complete.tsx";
+import SummerSlamAdminDemoPage from "./pages/summer-slam/admin-demo.tsx";
 import TierRestrictionsPage from "./pages/tier-restrictions/page.tsx";
 import SsoCallbackPage from "./pages/auth/sso-callback.tsx";
 
@@ -61,7 +63,8 @@ export default function App() {
     <DefaultProviders>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/members" element={<MembersPage />} />
           <Route path="/player/:username" element={<PlayerProfile />} />
 
           <Route path="/admin" element={<AdminLayout />}>
@@ -114,6 +117,7 @@ export default function App() {
           <Route path="/scrim-series" element={<ScrimSeriesLandingPage />} />
           <Route path="/scrim-series/:slug" element={<ScrimSeriesLeaderboardPage />} />
           <Route path="/summer-slam" element={<SummerSlamLandingPage />} />
+          <Route path="/summer-slam/admin/demo" element={<SummerSlamAdminDemoPage />} />
           <Route
             path="/summer-slam/passport/demo/complete"
             element={<SummerSlamPassportDemoCompletePage />}

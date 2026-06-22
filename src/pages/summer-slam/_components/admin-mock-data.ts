@@ -1,5 +1,6 @@
 import { MOCK_CAMPAIGN, MOCK_QUEST_ENTRIES } from "./passport-mock-data.ts";
 import type { EvidenceInput } from "./passport-quest-meta.ts";
+import type { QuestEntry } from "./passport-types.ts";
 
 /**
  * Static mock dataset powering the read-only Summer Slam admin demo at
@@ -46,6 +47,8 @@ export const DEMO_CAMPAIGN = {
   bigWheelEntryEveryStamps: MOCK_CAMPAIGN.bigWheelEntryEveryStamps,
 };
 
+export type DemoCampaignConfig = typeof DEMO_CAMPAIGN;
+
 export const DEMO_QUESTS: DemoQuest[] = MOCK_QUEST_ENTRIES.map((entry, index) => ({
   _id: entry.quest._id as unknown as string,
   title: entry.quest.title,
@@ -62,6 +65,171 @@ export const DEMO_QUESTS: DemoQuest[] = MOCK_QUEST_ENTRIES.map((entry, index) =>
   sortOrder: (index + 1) * 10,
   isActive: true,
 }));
+
+export type DemoAdminConfig = {
+  campaign: DemoCampaignConfig;
+  quests: DemoQuest[];
+  updatedAt: number;
+};
+
+export const DEMO_ADMIN_CONFIG_STORAGE_KEY = "summer-slam-admin-demo-config";
+
+function cloneDemoQuests(quests: DemoQuest[]) {
+  return quests.map((quest) => ({ ...quest }));
+}
+
+export function getDefaultDemoAdminConfig(): DemoAdminConfig {
+  return {
+    campaign: { ...DEMO_CAMPAIGN },
+    quests: cloneDemoQuests(DEMO_QUESTS),
+    updatedAt: Date.now(),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normaliseDemoCampaign(value: unknown): DemoCampaignConfig {
+  if (!isRecord(value)) return { ...DEMO_CAMPAIGN };
+  return {
+    title: typeof value.title === "string" ? value.title : DEMO_CAMPAIGN.title,
+    description:
+      typeof value.description === "string" ? value.description : DEMO_CAMPAIGN.description,
+    isActive:
+      typeof value.isActive === "boolean" ? value.isActive : DEMO_CAMPAIGN.isActive,
+    stampName: typeof value.stampName === "string" ? value.stampName : DEMO_CAMPAIGN.stampName,
+    littleWheelEntryEveryStamps:
+      typeof value.littleWheelEntryEveryStamps === "number" &&
+      Number.isFinite(value.littleWheelEntryEveryStamps)
+        ? Math.max(1, value.littleWheelEntryEveryStamps)
+        : DEMO_CAMPAIGN.littleWheelEntryEveryStamps,
+    bigWheelEntryEveryStamps:
+      typeof value.bigWheelEntryEveryStamps === "number" &&
+      Number.isFinite(value.bigWheelEntryEveryStamps)
+        ? Math.max(1, value.bigWheelEntryEveryStamps)
+        : DEMO_CAMPAIGN.bigWheelEntryEveryStamps,
+  };
+}
+
+function normaliseDemoQuest(value: unknown, fallback?: DemoQuest): DemoQuest | null {
+  if (!isRecord(value)) return fallback ? { ...fallback } : null;
+  const id = typeof value._id === "string" ? value._id : fallback?._id;
+  const title = typeof value.title === "string" ? value.title : fallback?.title;
+  const category = typeof value.category === "string" ? value.category : fallback?.category;
+  const description =
+    typeof value.description === "string" ? value.description : fallback?.description;
+  const completionMethod =
+    value.completionMethod === "auto" ||
+    value.completionMethod === "manual" ||
+    value.completionMethod === "admin"
+      ? value.completionMethod
+      : fallback?.completionMethod;
+  const stampReward =
+    typeof value.stampReward === "number" && Number.isFinite(value.stampReward)
+      ? Math.max(1, value.stampReward)
+      : fallback?.stampReward;
+  const sortOrder =
+    typeof value.sortOrder === "number" && Number.isFinite(value.sortOrder)
+      ? value.sortOrder
+      : fallback?.sortOrder;
+  const isActive = typeof value.isActive === "boolean" ? value.isActive : fallback?.isActive;
+
+  if (!id || !title || !category || !description || !completionMethod || !stampReward || sortOrder === undefined || isActive === undefined) {
+    return null;
+  }
+
+  return {
+    _id: id,
+    title,
+    category: category as AdminCategory,
+    description,
+    evidenceInstructions:
+      typeof value.evidenceInstructions === "string"
+        ? value.evidenceInstructions
+        : fallback?.evidenceInstructions,
+    adminHint: typeof value.adminHint === "string" ? value.adminHint : fallback?.adminHint,
+    completionMethod,
+    evidenceInput:
+      value.evidenceInput === "image" || value.evidenceInput === "link"
+        ? value.evidenceInput
+        : fallback?.evidenceInput,
+    stampReward,
+    sortOrder,
+    isActive,
+  };
+}
+
+export function loadDemoAdminConfig(): DemoAdminConfig {
+  if (typeof window === "undefined") return getDefaultDemoAdminConfig();
+  try {
+    const raw = window.localStorage.getItem(DEMO_ADMIN_CONFIG_STORAGE_KEY);
+    if (!raw) return getDefaultDemoAdminConfig();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed)) return getDefaultDemoAdminConfig();
+
+    const fallbackQuests = new Map(DEMO_QUESTS.map((quest) => [quest._id, quest]));
+    const parsedQuests = Array.isArray(parsed.quests)
+      ? parsed.quests
+          .map((quest) =>
+            normaliseDemoQuest(
+              quest,
+              isRecord(quest) && typeof quest._id === "string"
+                ? fallbackQuests.get(quest._id)
+                : undefined,
+            ),
+          )
+          .filter((quest): quest is DemoQuest => quest !== null)
+      : cloneDemoQuests(DEMO_QUESTS);
+
+    return {
+      campaign: normaliseDemoCampaign(parsed.campaign),
+      quests: parsedQuests.length > 0 ? parsedQuests : cloneDemoQuests(DEMO_QUESTS),
+      updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : Date.now(),
+    };
+  } catch {
+    return getDefaultDemoAdminConfig();
+  }
+}
+
+export function saveDemoAdminConfig(config: Omit<DemoAdminConfig, "updatedAt">): DemoAdminConfig {
+  const next = {
+    campaign: { ...config.campaign },
+    quests: cloneDemoQuests(config.quests),
+    updatedAt: Date.now(),
+  };
+  window.localStorage.setItem(DEMO_ADMIN_CONFIG_STORAGE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event("summer-slam-admin-demo-config-updated"));
+  return next;
+}
+
+export function resetDemoAdminConfig() {
+  if (typeof window === "undefined") return getDefaultDemoAdminConfig();
+  window.localStorage.removeItem(DEMO_ADMIN_CONFIG_STORAGE_KEY);
+  window.dispatchEvent(new Event("summer-slam-admin-demo-config-updated"));
+  return getDefaultDemoAdminConfig();
+}
+
+export function buildDemoQuestEntries(config: DemoAdminConfig, baseEntries: QuestEntry[]) {
+  const progressByQuestId = new Map(baseEntries.map((entry) => [entry.quest._id as string, entry.progress]));
+  return config.quests
+    .filter((quest) => quest.isActive)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((quest) => ({
+      quest: {
+        _id: quest._id as QuestEntry["quest"]["_id"],
+        title: quest.title,
+        description: quest.description,
+        category: quest.category,
+        completionMethod: quest.completionMethod,
+        evidenceInput: quest.evidenceInput,
+        evidenceInstructions: quest.evidenceInstructions,
+        adminHint: quest.adminHint,
+        stampReward: quest.stampReward,
+      },
+      progress: progressByQuestId.get(quest._id) ?? null,
+    }));
+}
 
 export type DemoReviewRow = {
   id: string;

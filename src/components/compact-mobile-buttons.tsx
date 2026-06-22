@@ -6,11 +6,11 @@ export function useCompactMobileButtons() {
   return useContext(CompactMobileButtonsContext);
 }
 
-/** Disables compact mobile button sizing for Summer Slam and other opted-out areas. */
+/** Preserves the old wrapper API while keeping compact mobile buttons enabled site-wide. */
 export function CompactMobileButtonsOptOut({ children }: { children: React.ReactNode }) {
   return (
-    <CompactMobileButtonsContext.Provider value={false}>
-      <div data-compact-mobile="off" className="contents">
+    <CompactMobileButtonsContext.Provider value={true}>
+      <div className="contents">
         {children}
       </div>
     </CompactMobileButtonsContext.Provider>
