@@ -7,23 +7,32 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
-import { Users, Shield, Eye, UserCog, Calendar, RefreshCw, BarChart3 } from "lucide-react";
+import { Users, Shield, Eye, UserCog, Calendar, RefreshCw, BarChart3, GitMerge, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useClientPagination } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
 import { useState } from "react";
+import MergeUsersDialog from "./merge-users-dialog.tsx";
+import DeleteUserDialog from "./delete-user-dialog.tsx";
 
 export default function UserManagement() {
   const users = useQuery(api.users.getAllUsers, {});
+  const duplicateEmails = useQuery(api.userMerge.getDuplicateUserEmails, {});
   const usersPagination = useClientPagination(users, {});
   const currentUser = useQuery(api.users.getCurrentUser);
   const updateUserRole = useMutation(api.users.updateUserRole);
   const syncUsersFromClerk = useAction(api.userProvisioning.syncUsersFromClerk);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [mergeGroupEmail, setMergeGroupEmail] = useState<string | null>(null);
+  const [deleteUserId, setDeleteUserId] = useState<Id<"users"> | null>(null);
 
-  if (users === undefined || currentUser === undefined) {
+  if (users === undefined || currentUser === undefined || duplicateEmails === undefined) {
     return <Skeleton className="h-48 w-full" />;
   }
+
+  const selectedMergeGroup = duplicateEmails.find(
+    (group: { email: string }) => group.email === mergeGroupEmail,
+  );
 
   const handleRoleChange = async (
     userId: Id<"users">,
@@ -69,6 +78,7 @@ export default function UserManagement() {
   const viewerUsers = users.filter((u) => !u.role || u.role === "viewer");
 
   return (
+    <>
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -87,6 +97,37 @@ export default function UserManagement() {
         </div>
       </CardHeader>
       <CardContent>
+        {duplicateEmails.length > 0 && (
+          <div className="mb-4 space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+            <p className="text-sm font-medium">Duplicate accounts detected</p>
+            {duplicateEmails.map((group: { email: string; users: Array<{ _id: Id<"users"> }> }) => (
+              <div
+                key={group.email}
+                className="flex flex-wrap items-center justify-between gap-2 text-sm"
+              >
+                <span className="text-muted-foreground">
+                  {group.email} ({group.users.length} accounts)
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setMergeGroupEmail(group.email)}
+                  disabled={group.users.length !== 2}
+                >
+                  <GitMerge className="mr-2 h-4 w-4" />
+                  Merge
+                </Button>
+              </div>
+            ))}
+            {duplicateEmails.some(
+              (group: { users: unknown[] }) => group.users.length > 2,
+            ) && (
+              <p className="text-xs text-muted-foreground">
+                Groups with more than two accounts need to be merged one pair at a time.
+              </p>
+            )}
+          </div>
+        )}
         {users.length === 0 ? (
           <Empty>
             <EmptyHeader>
@@ -207,6 +248,17 @@ export default function UserManagement() {
                             Viewer
                           </Button>
                         )}
+                        {role !== "admin" && !isCurrentUser && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeleteUserId(user._id)}
+                          >
+                            <Trash2 className="mr-1 h-3 w-3" />
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -227,5 +279,25 @@ export default function UserManagement() {
         )}
       </CardContent>
     </Card>
+    {selectedMergeGroup && selectedMergeGroup.users.length === 2 && (
+      <MergeUsersDialog
+        open={mergeGroupEmail !== null}
+        onOpenChange={(open) => {
+          if (!open) setMergeGroupEmail(null);
+        }}
+        users={selectedMergeGroup.users as [
+          (typeof selectedMergeGroup.users)[0],
+          (typeof selectedMergeGroup.users)[1],
+        ]}
+        onMerged={() => setMergeGroupEmail(null)}
+      />
+    )}
+    <DeleteUserDialog
+      userId={deleteUserId}
+      onOpenChange={(open) => {
+        if (!open) setDeleteUserId(null);
+      }}
+    />
+    </>
   );
 }

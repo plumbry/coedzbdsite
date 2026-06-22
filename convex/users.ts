@@ -8,8 +8,32 @@ import {
   requireAdmin,
 } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
-import type { Id } from "./_generated/dataModel";
-import { provisionFromIdentity } from "./userProvisioning";
+import type { Doc, Id } from "./_generated/dataModel";
+import { countUserReferences } from "./userMerge";
+import { isUnlinkedMigrationUser, provisionFromIdentity } from "./userProvisioning";
+
+function userLabel(user: Pick<Doc<"users">, "_id" | "username" | "name" | "email">): string {
+  return user.username || user.name || user.email || user._id;
+}
+
+function assertDeletableUser(
+  admin: Doc<"users">,
+  target: Doc<"users">,
+): void {
+  if (admin._id === target._id) {
+    throw new ConvexError({
+      message: "You cannot delete your own account",
+      code: "BAD_REQUEST",
+    });
+  }
+
+  if (target.role === "admin") {
+    throw new ConvexError({
+      message: "Admin accounts cannot be deleted from User Management",
+      code: "BAD_REQUEST",
+    });
+  }
+}
 
 async function assertDiscordUserIdAvailable(
   ctx: MutationCtx,
@@ -338,5 +362,95 @@ export const updateUserRole = mutation({
     });
 
     return { success: true };
+  },
+});
+
+export const previewUserDelete = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const target = await ctx.db.get(args.userId);
+    if (!target) {
+      throw new ConvexError({
+        message: "User not found",
+        code: "NOT_FOUND",
+      });
+    }
+
+    const references = await countUserReferences(ctx, args.userId);
+    const referenceTotal = Object.values(references).reduce((sum, count) => sum + count, 0);
+
+    return {
+      user: {
+        _id: target._id,
+        name: target.name,
+        username: target.username,
+        email: target.email,
+        role: target.role,
+        discordUserId: target.discordUserId,
+        discordUsername: target.discordUsername,
+        isClerkLinked: !isUnlinkedMigrationUser(target),
+        isLegacy: isUnlinkedMigrationUser(target),
+      },
+      references,
+      referenceTotal,
+    };
+  },
+});
+
+export const deleteUser = mutation({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+
+    const target = await ctx.db.get(args.userId);
+    if (!target) {
+      throw new ConvexError({
+        message: "User not found",
+        code: "NOT_FOUND",
+      });
+    }
+
+    assertDeletableUser(admin, target);
+
+    const references = await countUserReferences(ctx, args.userId);
+
+    const passports = await ctx.db
+      .query("seasonalPassports")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const passport of passports) {
+      await ctx.db.delete(passport._id);
+    }
+
+    await ctx.db.delete(args.userId);
+
+    await logAudit(ctx, {
+      userId: admin._id,
+      userName: getDisplayName(admin),
+      action: "user_deleted",
+      entityType: "user",
+      entityId: args.userId,
+      details: `Deleted account ${userLabel(target)} (${target.email || "no email"})`,
+      previousValue: JSON.stringify({
+        email: target.email,
+        username: target.username,
+        role: target.role,
+        discordUserId: target.discordUserId,
+        references,
+      }),
+    });
+
+    return {
+      success: true,
+      deletedUserId: args.userId,
+      passportsRemoved: passports.length,
+      references,
+    };
   },
 });
