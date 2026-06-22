@@ -9,7 +9,7 @@ import EditUsernameDialog from "@/components/edit-username-dialog.tsx";
 import { cn } from "@/lib/utils.ts";
 
 const navLinkClass =
-  "font-semibold text-foreground hover:text-primary transition-colors whitespace-nowrap text-sm";
+  "inline-flex min-h-10 items-center font-semibold text-foreground hover:text-primary transition-colors whitespace-nowrap text-sm px-1 py-2 touch-manipulation sm:min-h-0 sm:px-0 sm:py-0";
 
 function NavLink({ to, children, className }: { to: string; children: React.ReactNode; className?: string }) {
   const { pathname } = useLocation();
@@ -29,10 +29,10 @@ export default function SiteHeader() {
 
   return (
     <header className="border-b bg-background">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 md:px-6 py-2">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 md:px-6 py-1.5 sm:py-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <ScrollArea className="w-full" scrollbars={["horizontal"]}>
-            <nav className="flex w-max items-center gap-3 sm:gap-4 pb-1">
+            <nav className="flex w-max items-center gap-2 sm:gap-3 md:gap-4 pb-1">
               <NavLink to="/">Members</NavLink>
               <NavLink to="/events">Events</NavLink>
               <NavLink to="/tier-restrictions" className="hidden sm:inline">
@@ -60,7 +60,7 @@ export default function SiteHeader() {
                 variant="ghost"
                 size="sm"
                 onClick={() => signout()}
-                className="text-destructive hover:text-destructive px-2 sm:px-3"
+                className="min-h-10 text-destructive hover:text-destructive px-2 sm:min-h-0 sm:px-3 touch-manipulation"
               >
                 <LogOut className="h-4 w-4" />
                 <span className="hidden sm:inline ml-2">Sign Out</span>
