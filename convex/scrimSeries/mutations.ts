@@ -14,6 +14,14 @@ function generateSlug(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
+function normalizePenaltyQuantity(quantity: number | undefined): number {
+  if (quantity === undefined) return 1;
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    throw new ConvexError({ message: "Penalty quantity must be a positive integer", code: "BAD_REQUEST" });
+  }
+  return quantity;
+}
+
 /** Create a scrim series from a calendar scrim-series event and link it (one-time). */
 export const createAndLinkToEvent = mutation({
   args: {
@@ -668,6 +676,7 @@ export const addPenalty = mutation({
     seriesId: v.id("scrimSeries"),
     playerId: v.id("scrimSeriesPlayers"),
     reason: v.string(),
+    quantity: v.optional(v.number()),
     amount: v.optional(v.number()),
     sessionNumber: v.optional(v.number()),
   },
@@ -684,11 +693,13 @@ export const addPenalty = mutation({
 
     // Default amount to series penalty amount
     const amount = args.amount ?? series.penaltyAmount;
+    const quantity = normalizePenaltyQuantity(args.quantity);
 
     return await ctx.db.insert("scrimSeriesPenalties", {
       seriesId: args.seriesId,
       playerId: args.playerId,
       reason: args.reason,
+      quantity,
       amount,
       excluded: false,
       ...(args.sessionNumber !== undefined ? { sessionNumber: args.sessionNumber } : {}),
@@ -700,6 +711,7 @@ export const updatePenalty = mutation({
   args: {
     penaltyId: v.id("scrimSeriesPenalties"),
     reason: v.optional(v.string()),
+    quantity: v.optional(v.number()),
     amount: v.optional(v.number()),
     excluded: v.optional(v.boolean()),
   },
@@ -716,6 +728,7 @@ export const updatePenalty = mutation({
 
     const updates: Record<string, unknown> = {};
     if (args.reason !== undefined) updates.reason = args.reason;
+    if (args.quantity !== undefined) updates.quantity = normalizePenaltyQuantity(args.quantity);
     if (args.amount !== undefined) updates.amount = args.amount;
     if (args.excluded !== undefined) updates.excluded = args.excluded;
 
@@ -746,6 +759,7 @@ export const addPenaltyWithDedup = mutation({
     seriesId: v.id("scrimSeries"),
     playerId: v.id("scrimSeriesPlayers"),
     reason: v.string(),
+    quantity: v.optional(v.number()),
     amount: v.number(),
     dedupKey: v.string(),
     sessionNumber: v.number(),
@@ -760,6 +774,7 @@ export const addPenaltyWithDedup = mutation({
       seriesId: args.seriesId,
       playerId: args.playerId,
       reason: args.reason,
+      quantity: normalizePenaltyQuantity(args.quantity),
       amount: args.amount,
       excluded: false,
       sessionNumber: args.sessionNumber,

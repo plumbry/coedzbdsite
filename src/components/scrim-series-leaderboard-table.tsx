@@ -32,7 +32,6 @@ export default function ScrimSeriesLeaderboardTable({
   entries,
   bestN,
   participationThreshold,
-  penaltyAmount,
   gamesPerSession,
 }: {
   entries: ScrimSeriesLeaderboardEntry[];
@@ -278,7 +277,7 @@ export default function ScrimSeriesLeaderboardTable({
                       <td className="px-3 py-2.5 text-center">
                         {entry.penaltyCount > 0 ? (
                           <span className="text-destructive font-medium text-xs">
-                            -{entry.penaltyCount * penaltyAmount} ({entry.penaltyCount})
+                            -{entry.penaltyTotal} ({entry.penaltyCount})
                           </span>
                         ) : (
                           <span className="text-muted-foreground/40 text-xs">0</span>

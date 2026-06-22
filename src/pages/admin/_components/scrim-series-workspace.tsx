@@ -1428,6 +1428,10 @@ function getPenaltySessionNumber(p: {
   return null;
 }
 
+function getPenaltyQuantity(p: { quantity?: number }) {
+  return p.quantity ?? 1;
+}
+
 function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const players = useQuery(api.scrimSeries.queries.getPlayers, { seriesId });
   const penalties = useQuery(api.scrimSeries.queries.getPenalties, { seriesId });
@@ -1447,6 +1451,23 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const toggleExclude = async (penaltyId: Id<"scrimSeriesPenalties">, current: boolean) => {
     await updatePenalty({ penaltyId, excluded: !current });
     toast.success(current ? "Penalty included" : "Penalty excluded");
+  };
+
+  const handleQuantityChange = async (
+    penaltyId: Id<"scrimSeriesPenalties">,
+    currentQuantity: number,
+    input: HTMLInputElement,
+  ) => {
+    const quantity = Number(input.value);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      input.value = String(currentQuantity);
+      toast.error("Penalty quantity must be at least 1");
+      return;
+    }
+    if (quantity === currentQuantity) return;
+
+    await updatePenalty({ penaltyId, quantity });
+    toast.success("Penalty quantity updated");
   };
 
   const handleRemove = async (penaltyId: Id<"scrimSeriesPenalties">) => {
@@ -1535,6 +1556,7 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
                   >
                     Reason {sortBy === "reason" ? (sortDir === "asc" ? "↑" : "↓") : ""}
                   </th>
+                  <th className="text-center py-2 px-2 font-medium text-muted-foreground w-16">Qty</th>
                   <th className="text-center py-2 px-2 font-medium text-muted-foreground w-16">Amt</th>
                   <th className="text-right py-2 pl-2 font-medium text-muted-foreground w-28">Actions</th>
                 </tr>
@@ -1542,6 +1564,7 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
               <tbody>
                 {sortedPenalties.map((p) => {
                   const sessionNumber = getPenaltySessionNumber(p);
+                  const quantity = getPenaltyQuantity(p);
                   return (
                   <tr key={p._id} className={`border-b border-muted/30 hover:bg-muted/20 ${p.excluded ? "opacity-50 line-through" : ""}`}>
                     <td className="py-1.5 pr-4 font-medium truncate max-w-[150px]">{getPlayerName(p.playerId)}</td>
@@ -1554,7 +1577,21 @@ function PenaltyManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
                     </td>
                     <td className="py-1.5 pr-4 text-muted-foreground truncate max-w-[200px]">{p.reason}</td>
                     <td className="py-1.5 px-2 text-center">
-                      <Badge variant="secondary" className="text-xs">-{p.amount}</Badge>
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        defaultValue={quantity}
+                        onBlur={(event) => void handleQuantityChange(p._id, quantity, event.currentTarget)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") event.currentTarget.blur();
+                        }}
+                        className="mx-auto h-7 w-14 px-2 text-center text-xs"
+                        aria-label={`Penalty quantity for ${getPlayerName(p.playerId)}`}
+                      />
+                    </td>
+                    <td className="py-1.5 px-2 text-center">
+                      <Badge variant="secondary" className="text-xs">-{p.amount * quantity}</Badge>
                     </td>
                     <td className="py-1.5 pl-2 text-right">
                       <Button

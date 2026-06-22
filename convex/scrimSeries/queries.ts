@@ -260,10 +260,13 @@ export const getLeaderboard = query({
       const isValid = participationPct >= series.participationThreshold;
       const meetsMinGames = gamesPlayed >= series.bestN;
 
-      // Penalties (only non-excluded count) — use count * series penalty amount
+      // Penalties (only non-excluded count) — each row may represent multiple occurrences.
       const activePenalties = playerPenalties.filter((p) => !p.excluded);
-      const penaltyCount = activePenalties.length;
-      const penaltyTotal = penaltyCount * series.penaltyAmount;
+      const penaltyCount = activePenalties.reduce((sum, p) => sum + (p.quantity ?? 1), 0);
+      const penaltyTotal = activePenalties.reduce(
+        (sum, p) => sum + (p.amount ?? series.penaltyAmount) * (p.quantity ?? 1),
+        0,
+      );
 
       // Final total: Best N minus penalties (participation is a separate metric, not used here)
       const finalTotal = bestNTotal - penaltyTotal;

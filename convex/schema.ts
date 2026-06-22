@@ -1907,6 +1907,7 @@ export default defineSchema({
     seriesId: v.id("scrimSeries"),
     playerId: v.id("scrimSeriesPlayers"),
     reason: v.string(),
+    quantity: v.optional(v.number()), // Number of penalty occurrences represented by this row
     amount: v.number(), // Deduction amount (usually same as series penaltyAmount)
     excluded: v.boolean(), // If true, penalty is excluded from final calculation
     sessionNumber: v.optional(v.number()), // 1-based session (S1, S2, …); set on Yunite import

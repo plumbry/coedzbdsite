@@ -167,7 +167,7 @@ const ScrimSeriesLeaderboardImageExport = forwardRef<
                       }}
                     >
                       {entry.penaltyCount > 0
-                        ? `−${entry.penaltyCount * penaltyAmount} (${entry.penaltyCount})`
+                        ? `−${entry.penaltyTotal} (${entry.penaltyCount})`
                         : "0"}
                     </td>
                   )}
