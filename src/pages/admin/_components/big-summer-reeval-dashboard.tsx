@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -196,7 +196,6 @@ export default function BigSummerReEvalDashboard() {
   const [trackerLinkDraft, setTrackerLinkDraft] = useState("");
   const [epicIdDraft, setEpicIdDraft] = useState("");
 
-  const initStatus = useQuery(api.bigSummerReEval.queries.getInitializationStatus, {});
   const progress = useQuery(api.bigSummerReEval.queries.getReEvalProgress, {});
   const filterCounts = useQuery(api.bigSummerReEval.queries.getFilterCounts, {});
   const rows = useQuery(api.bigSummerReEval.queries.listDashboard, {
@@ -217,7 +216,7 @@ export default function BigSummerReEvalDashboard() {
     queueConfirmOpen ? {} : "skip",
   );
 
-  const initialize = useMutation(api.bigSummerReEval.mutations.initializeForActivePlayers);
+  const syncEnrolled = useMutation(api.bigSummerReEval.mutations.syncEnrolledPlayers);
   const setTrackerStatus = useMutation(api.bigSummerReEval.mutations.setTrackerStatus);
   const markDmSent = useMutation(api.bigSummerReEval.mutations.markDmSent);
   const markTicketSent = useMutation(api.bigSummerReEval.mutations.markTicketSent);
@@ -236,9 +235,12 @@ export default function BigSummerReEvalDashboard() {
   const queueDiscordRoleChanges = useMutation(api.bigSummerReEval.mutations.queueDiscordRoleChanges);
   const resetStuckQueue = useMutation(api.bigSummerReEval.mutations.resetStuckProcessingQueueItems);
 
-  const [isInitializing, setIsInitializing] = useState(false);
   const [isQueueing, setIsQueueing] = useState(false);
   const [isResettingQueue, setIsResettingQueue] = useState(false);
+
+  useEffect(() => {
+    void syncEnrolled({});
+  }, [syncEnrolled]);
 
   const sortedRows = useMemo((): DashboardRow[] => {
     if (!rows) return [];
@@ -262,18 +264,6 @@ export default function BigSummerReEvalDashboard() {
     }
   };
 
-  const handleInitialize = async () => {
-    setIsInitializing(true);
-    try {
-      const result = await initialize({});
-      toast.success(`Enrolled ${result.created} active members for review`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Initialization failed");
-    } finally {
-      setIsInitializing(false);
-    }
-  };
-
   const runAction = async (label: string, fn: () => Promise<unknown>) => {
     try {
       await fn();
@@ -281,21 +271,6 @@ export default function BigSummerReEvalDashboard() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Action failed");
     }
-  };
-
-  const handleMemberResponse = async (
-    reEvalId: Id<"bigSummerReEval">,
-    response: "yes" | "no" | "unset",
-    currentStatus?: string,
-  ) => {
-    if (response === "no" && currentStatus === "deadline_passed") {
-      setSelectedId(reEvalId);
-      setDeadlineModalOpen(true);
-      return;
-    }
-    await runAction("Response updated", () =>
-      setMemberResponse({ reEvalId, memberResponse: response }),
-    );
   };
 
   const handleOpenQueueConfirm = () => {
@@ -313,6 +288,21 @@ export default function BigSummerReEvalDashboard() {
     } finally {
       setIsQueueing(false);
     }
+  };
+
+  const handleMemberResponse = async (
+    reEvalId: Id<"bigSummerReEval">,
+    response: "yes" | "no" | "unset",
+    currentStatus?: string,
+  ) => {
+    if (response === "no" && currentStatus === "deadline_passed") {
+      setSelectedId(reEvalId);
+      setDeadlineModalOpen(true);
+      return;
+    }
+    await runAction("Response updated", () =>
+      setMemberResponse({ reEvalId, memberResponse: response }),
+    );
   };
 
   const handleResetStuckQueue = async (forceAll: boolean) => {
@@ -339,7 +329,7 @@ export default function BigSummerReEvalDashboard() {
     setEpicIdDraft(row?.epicId ?? "");
   };
 
-  if (initStatus === undefined || filterCounts === undefined || progress === undefined) {
+  if (filterCounts === undefined || progress === undefined) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-full" />
@@ -359,10 +349,10 @@ export default function BigSummerReEvalDashboard() {
                 Summer Re-Eval
               </CardTitle>
               <CardDescription className="max-w-2xl">
-                Member Management re-eval mode: review every active member and record a
-                decision. Most members will be <strong>No Change</strong> — Discord updates
-                are only queued when a decision differs from the member&apos;s current tier
-                or access.
+                Member Management re-eval mode. All active members are automatically
+                included — review everyone and record a decision. Most members will be{" "}
+                <strong>No Change</strong>; Discord updates are only queued when a
+                decision differs from the member&apos;s current tier or access.
               </CardDescription>
               {progress.enrolled > 0 && (
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
@@ -382,12 +372,6 @@ export default function BigSummerReEvalDashboard() {
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              {initStatus.needsInitialization && (
-                <Button size="sm" onClick={handleInitialize} disabled={isInitializing}>
-                  {isInitializing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Enroll All Active Members
-                </Button>
-              )}
               <Button
                 size="sm"
                 variant="secondary"

@@ -345,3 +345,71 @@ export function queueReasonForAction(
   if (action === "retire") return QUEUE_ACTION_REASONS.retire;
   return QUEUE_ACTION_REASONS.tierChange;
 }
+
+export async function ensurePlayerEnrolledInReEval(
+  ctx: MutationCtx,
+  playerId: Id<"players">,
+): Promise<boolean> {
+  const player = await ctx.db.get(playerId);
+  if (!player) return false;
+  if (player.status !== "active" || player.currentMembershipStatus !== "accepted") {
+    return false;
+  }
+
+  const existing = await getReEvalByPlayerId(ctx, playerId);
+  if (existing) return false;
+
+  const appLink = await getAcceptedApplicationTrackerLink(ctx, playerId);
+  const trackerLink = appLink ?? defaultTrackerLink(player.epicUsername);
+  const now = Date.now();
+
+  await ctx.db.insert("bigSummerReEval", {
+    playerId,
+    trackerStatus: inferInitialTrackerStatus(trackerLink),
+    reEvalStatus: "unchecked",
+    fortniteTrackerLink: trackerLink,
+    memberResponse: "unset",
+    lastUpdatedAt: now,
+  });
+  return true;
+}
+
+export async function ensureAllActivePlayersEnrolled(
+  ctx: MutationCtx,
+): Promise<{ created: number; enrolled: number }> {
+  const activePlayers = await ctx.db
+    .query("players")
+    .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
+    .collect();
+
+  let created = 0;
+  let enrolled = 0;
+  for (const player of activePlayers) {
+    if (player.status !== "active") continue;
+    enrolled += 1;
+    const wasCreated = await ensurePlayerEnrolledInReEval(ctx, player._id);
+    if (wasCreated) created += 1;
+  }
+  return { created, enrolled };
+}
+
+export async function countActivePlayersForReEval(ctx: QueryCtx | MutationCtx) {
+  const activePlayers = await ctx.db
+    .query("players")
+    .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
+    .collect();
+  return activePlayers.filter((player) => player.status === "active").length;
+}
+
+export async function countEnrolledActivePlayers(ctx: QueryCtx | MutationCtx) {
+  const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
+  let enrolled = 0;
+  for (const reEval of reEvalRows) {
+    const player = await ctx.db.get(reEval.playerId);
+    if (!player) continue;
+    if (player.status === "active" && player.currentMembershipStatus === "accepted") {
+      enrolled += 1;
+    }
+  }
+  return enrolled;
+}

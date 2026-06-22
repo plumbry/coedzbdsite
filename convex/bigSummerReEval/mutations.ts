@@ -12,11 +12,7 @@ import {
   type TrackerStatus,
 } from "./constants";
 import {
-  defaultTrackerLink,
-  getAcceptedApplicationTrackerLink,
-  getReEvalByPlayerId,
   hasActiveQueueItem,
-  inferInitialTrackerStatus,
   memberResponseBlocksDeadline,
   startTrackerDeadline,
   trackerStillProblematic,
@@ -24,7 +20,32 @@ import {
   writeSystemReEvalAudit,
   computeQueueCandidates,
   queueReasonForAction,
+  ensureAllActivePlayersEnrolled,
 } from "./helpers";
+
+export const ensureActivePlayersEnrolledInternal = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    return ensureAllActivePlayersEnrolled(ctx);
+  },
+});
+
+export const syncEnrolledPlayers = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    return ensureAllActivePlayersEnrolled(ctx);
+  },
+});
+
+export const initializeForActivePlayers = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const result = await ensureAllActivePlayersEnrolled(ctx);
+    return { created: result.created };
+  },
+});
 
 const trackerStatusValidator = v.union(
   ...TRACKER_STATUSES.map((s) => v.literal(s)),
@@ -57,49 +78,6 @@ async function patchReEval(
     newValue: audit.newValue,
   });
 }
-
-export const initializeForActivePlayers = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const admin = await requireAdmin(ctx);
-    const activePlayers = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
-      .collect();
-
-    let created = 0;
-    const now = Date.now();
-
-    for (const player of activePlayers) {
-      if (player.status !== "active") continue;
-      const existing = await getReEvalByPlayerId(ctx, player._id);
-      if (existing) continue;
-
-      const appLink = await getAcceptedApplicationTrackerLink(ctx, player._id);
-      const trackerLink = appLink ?? defaultTrackerLink(player.epicUsername);
-
-      await ctx.db.insert("bigSummerReEval", {
-        playerId: player._id,
-        trackerStatus: inferInitialTrackerStatus(trackerLink),
-        reEvalStatus: "unchecked",
-        fortniteTrackerLink: trackerLink,
-        memberResponse: "unset",
-        lastUpdatedAt: now,
-      });
-      created += 1;
-    }
-
-    await writeReEvalAudit(ctx, {
-      userId: admin._id,
-      userName: getDisplayName(admin),
-      action: "big_summer_reeval_initialized",
-      playerId: activePlayers[0]?._id,
-      newValue: `Enrolled ${created} active members for summer re-eval (no tier changes applied)`,
-    });
-
-    return { created };
-  },
-});
 
 export const updateEpicId = mutation({
   args: {
@@ -626,6 +604,7 @@ export const resetStuckProcessingQueueItems = mutation({
 export const processDeadlinesInternal = internalMutation({
   args: {},
   handler: async (ctx) => {
+    await ensureAllActivePlayersEnrolled(ctx);
     const now = Date.now();
     const waiting = await ctx.db
       .query("bigSummerReEval")

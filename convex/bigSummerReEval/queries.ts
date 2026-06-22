@@ -11,6 +11,8 @@ import {
   computeQueueCandidates,
   summarizeQueueCandidates,
   isNeedsAction,
+  countActivePlayersForReEval,
+  countEnrolledActivePlayers,
 } from "./helpers";
 
 async function getLatestQueueStatus(ctx: QueryCtx, playerId: Id<"players">) {
@@ -281,13 +283,9 @@ export const getInitializationStatus = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    const activePlayers = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
-      .collect();
-    const activeCount = activePlayers.filter((p) => p.status === "active").length;
-    const reEvalCount = (await ctx.db.query("bigSummerReEval").collect()).length;
-    return { activeCount, reEvalCount, needsInitialization: reEvalCount < activeCount };
+    const activeCount = await countActivePlayersForReEval(ctx);
+    const reEvalCount = await countEnrolledActivePlayers(ctx);
+    return { activeCount, reEvalCount, needsInitialization: false };
   },
 });
 
