@@ -278,47 +278,35 @@
   }
 }
 
-/* Compact mobile button groups — skipped inside [data-compact-mobile="off"] (Summer Slam). */
+/* Compact mobile button groups — single row, skipped inside Summer Slam opt-out. */
 @layer components {
   @media (max-width: 639px) {
     :not([data-compact-mobile="off"]) .mobile-button-group,
     :not([data-compact-mobile="off"])
       .flex.flex-wrap:has(> [data-slot="button"]):not(:has(> :not([data-slot="button"]))) {
-      display: grid;
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.25rem;
+      overflow-x: auto;
       width: 100%;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.375rem;
+      padding-bottom: 0.125rem;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    :not([data-compact-mobile="off"]) .mobile-button-group::-webkit-scrollbar,
+    :not([data-compact-mobile="off"])
+      .flex.flex-wrap:has(> [data-slot="button"]):not(:has(> :not([data-slot="button"])))::-webkit-scrollbar {
+      display: none;
     }
 
     :not([data-compact-mobile="off"]) .mobile-button-group > [data-slot="button"],
     :not([data-compact-mobile="off"])
       .flex.flex-wrap:has(> [data-slot="button"]):not(:has(> :not([data-slot="button"])))
       > [data-slot="button"] {
-      width: 100%;
-      justify-content: center;
-    }
-
-    :not([data-compact-mobile="off"]) .mobile-button-group[data-cols="4"],
-    :not([data-compact-mobile="off"])
-      .flex.flex-wrap:has(> [data-slot="button"]:nth-child(4):last-child):not(
-        :has(> :not([data-slot="button"]))
-      ) {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-
-    :not([data-compact-mobile="off"])
-      .flex.flex-wrap:has(> [data-slot="button"]:nth-child(3):last-child):not(
-        :has(> :not([data-slot="button"]))
-      ) {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    :not([data-compact-mobile="off"])
-      .flex.flex-wrap:has(> [data-slot="button"]:nth-child(3):last-child):not(
-        :has(> :not([data-slot="button"]))
-      )
-      > [data-slot="button"]:last-child {
-      grid-column: span 2;
+      width: auto;
+      flex-shrink: 0;
     }
   }
 }

@@ -1,29 +1,30 @@
 import { cn } from "@/lib/utils.ts";
 
-/** Compact touch-friendly button sizing — applied via Button when compact mobile is enabled. */
+/** Compact mobile button sizing — applied via Button when compact mobile is enabled. */
 export const mobileCompactButtonClass =
-  "max-sm:h-8 max-sm:min-h-8 max-sm:px-1.5 max-sm:text-[11px] max-sm:leading-tight max-sm:gap-1 touch-manipulation";
+  "max-sm:h-7 max-sm:min-h-7 max-sm:px-1 max-sm:py-0 max-sm:text-[10px] max-sm:leading-none max-sm:gap-0.5 max-sm:has-[>svg]:px-1 max-sm:[&_svg:not([class*='size-'])]:size-3 touch-manipulation";
 
-export const mobileCompactIconButtonClass = "max-sm:!size-8 max-sm:min-h-8 max-sm:min-w-8";
+export const mobileCompactIconButtonClass = "max-sm:!size-7 max-sm:min-h-7 max-sm:min-w-7";
 
-/** Page header / toolbar action rows with multiple buttons. */
-export const mobilePageHeaderActionsClass =
-  "flex w-full flex-wrap gap-2 max-sm:grid max-sm:grid-cols-2 max-sm:gap-1.5 max-sm:[&_[data-slot=button]]:w-full max-sm:[&_[data-slot=button]]:justify-center sm:items-center";
+/** Shared single-row mobile layout for button groups (horizontal scroll when needed). */
+export const mobileButtonRowClass =
+  "max-sm:flex-nowrap max-sm:gap-1 max-sm:overflow-x-auto max-sm:pb-0.5 max-sm:[&_[data-slot=button]]:w-auto max-sm:[&_[data-slot=button]]:shrink-0";
 
-/** Inline row of 3–4 equal action buttons (e.g. Edit / Accept / Reject / Delete). */
-export const mobileActionRowClass =
-  "mobile-button-group flex flex-wrap gap-1 max-sm:grid max-sm:w-full max-sm:grid-cols-4 max-sm:gap-1 max-sm:[&_[data-slot=button]]:w-full max-sm:[&_[data-slot=button]]:justify-center";
+/** Page header action rows — children with `contents` participate in this row on mobile. */
+export const mobilePageHeaderActionsClass = cn(
+  "flex w-full flex-wrap items-center gap-2",
+  mobileButtonRowClass,
+);
 
-/** Discord sync compact wrapper — children participate in parent action grid on mobile. */
+/** Inline action buttons (e.g. Edit / Accept / Reject / Delete). */
+export const mobileActionRowClass = cn(
+  "mobile-button-group flex flex-wrap gap-1",
+  mobileButtonRowClass,
+);
+
+/** Discord sync compact wrapper — inline in parent row on mobile. */
 export const mobileActionGroupContentsClass = "contents sm:flex sm:w-auto sm:flex-wrap sm:gap-2";
 
 export function mobileButtonOnlyGroupClass(className?: string) {
-  return cn(
-    "flex flex-wrap gap-2",
-    "max-sm:grid max-sm:w-full max-sm:grid-cols-2 max-sm:gap-1.5",
-    "max-sm:[&>[data-slot=button]]:w-full max-sm:[&>[data-slot=button]]:justify-center",
-    "max-sm:[&>[data-slot=button]:nth-child(3):last-child]:col-span-2",
-    "max-sm:has-[>[data-slot=button]:nth-child(4):last-child]:grid-cols-4",
-    className,
-  );
+  return cn("flex flex-wrap gap-2", mobileButtonRowClass, className);
 }
