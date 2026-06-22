@@ -29,9 +29,9 @@ crons.daily(
 );
 
 // Big Summer Re-Eval: check tracker deadlines and auto-queue access removals
-crons.hourly(
+crons.daily(
   "big summer reeval deadlines",
-  { minuteUTC: 15 },
+  { hourUTC: 6, minuteUTC: 15 },
   internal.bigSummerReEval.mutations.processDeadlinesInternal,
 );
 
