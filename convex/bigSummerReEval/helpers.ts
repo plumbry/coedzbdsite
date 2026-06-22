@@ -41,7 +41,7 @@ export async function getAcceptedApplicationTrackerLink(
 export function inferInitialTrackerStatus(
   trackerLink: string | undefined,
 ): TrackerStatus {
-  if (!trackerLink?.trim()) return "missing";
+  if (!trackerLink?.trim()) return "private";
   return "public";
 }
 
@@ -51,8 +51,8 @@ export function memberResponseBlocksDeadline(
   return memberResponse === "no" || memberResponse === "unset" || !memberResponse;
 }
 
-export function trackerStillProblematic(trackerStatus: TrackerStatus): boolean {
-  return TRACKER_PROBLEM_STATUSES.includes(trackerStatus);
+export function trackerStillProblematic(trackerStatus: string): boolean {
+  return (TRACKER_PROBLEM_STATUSES as readonly string[]).includes(trackerStatus);
 }
 
 export async function writeReEvalAudit(
