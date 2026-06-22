@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
+import { CompactMobileButtonsOptOut } from "@/components/compact-mobile-buttons.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -369,6 +370,7 @@ export default function SummerSlamAdminPage() {
   };
 
   return (
+    <CompactMobileButtonsOptOut>
     <AdminPageLayout
       requireAdmin
       title="Summer Slam Passport"
@@ -939,5 +941,6 @@ export default function SummerSlamAdminPage() {
         </AlertDialogContent>
       </AlertDialog>
     </AdminPageLayout>
+    </CompactMobileButtonsOptOut>
   );
 }

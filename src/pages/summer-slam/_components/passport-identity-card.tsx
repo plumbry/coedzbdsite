@@ -22,9 +22,9 @@ import { formatSealDate, sealBadgeStatus, type SealProgress } from "./passport-s
 import type { PassportTier } from "./passport-levels.ts";
 
 const AVATAR_CLASS =
-  "size-24 shrink-0 rounded-full object-contain drop-shadow-[0_2px_8px_rgba(60,50,40,0.14)] lg:size-[7.75rem]";
+  "size-20 shrink-0 rounded-full object-contain drop-shadow-[0_2px_8px_rgba(60,50,40,0.14)] sm:size-24 lg:size-[7.75rem]";
 const AVATAR_PLACEHOLDER_CLASS =
-  "flex size-24 shrink-0 items-center justify-center rounded-full border border-dashed border-orange-300/55 bg-orange-50/30 text-[8px] font-medium uppercase leading-tight tracking-wide text-orange-400/80 lg:size-[7.75rem] lg:text-[10px]";
+  "flex size-20 shrink-0 items-center justify-center rounded-full border border-dashed border-orange-300/55 bg-orange-50/30 text-[8px] font-medium uppercase leading-tight tracking-wide text-orange-400/80 sm:size-24 sm:text-[9px] lg:size-[7.75rem] lg:text-[10px]";
 const ZBD_LOGO_SRC = "/icon/co-ed-zbd-logo.jpg";
 const STAMP_BTN_CLASS =
   "relative mx-auto w-full max-w-[72px] touch-manipulation sm:max-w-[76px] lg:max-w-[96px] xl:max-w-[104px]";
@@ -213,7 +213,7 @@ function PassportPerforations() {
     <>
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-6 left-0 top-6 flex w-1.5 flex-col items-center justify-between py-0.5"
+        className="pointer-events-none absolute bottom-6 left-0 top-6 hidden w-1.5 flex-col items-center justify-between py-0.5 sm:flex"
       >
         {marks.map((_, index) => (
           <span
@@ -224,7 +224,7 @@ function PassportPerforations() {
       </div>
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-6 right-0 top-6 flex w-1.5 flex-col items-center justify-between py-0.5"
+        className="pointer-events-none absolute bottom-6 right-0 top-6 hidden w-1.5 flex-col items-center justify-between py-0.5 sm:flex"
       >
         {marks.map((_, index) => (
           <span
@@ -288,7 +288,7 @@ function StampCollectionPanel({
           onSelect={onSelectBonus}
         />
       </div>
-      <p className="text-[9px] text-center text-orange-800/45 lg:text-[11px]">Tap a stamp to open its passport page</p>
+      <p className="text-[9px] text-center text-orange-800/45 sm:text-[11px] max-sm:hidden">Tap a stamp to open its passport page</p>
     </section>
   );
 }
@@ -307,17 +307,17 @@ function PassportSummaryStrip({
   totalPages: number;
 }) {
   return (
-    <div className="rounded-lg border border-orange-200/50 bg-white/45 px-2.5 py-2 lg:px-3.5 lg:py-3">
-      <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-orange-800/40 lg:text-[9px]">
+    <div className="rounded-lg border border-orange-200/50 bg-white/45 px-2 py-1.5 sm:px-2.5 sm:py-2 lg:px-3.5 lg:py-3">
+      <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-orange-800/40 sm:text-[9px]">
         Summer Slam Passport
       </p>
-      <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 lg:mt-1.5">
-        <p className="font-display text-sm font-bold text-orange-950 lg:text-base">
+      <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 sm:mt-1 sm:gap-x-3 lg:mt-1.5">
+        <p className="font-display text-xs font-bold text-orange-950 sm:text-sm lg:text-base">
           Level {tier.level}
-          <span className="ml-1.5 text-[11px] font-semibold text-teal-800/75 lg:text-sm">{tier.title}</span>
+          <span className="ml-1 text-[10px] font-semibold text-teal-800/75 sm:ml-1.5 sm:text-[11px] lg:text-sm">{tier.title}</span>
         </p>
       </div>
-      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] font-medium text-orange-900/70 lg:mt-2 lg:text-xs">
+      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] font-medium text-orange-900/70 sm:mt-1.5 sm:gap-x-3 sm:text-[10px] lg:mt-2 lg:text-xs">
         <span>
           <span className="font-bold tabular-nums text-orange-950">{questPoints}</span> Quest Points
         </span>
@@ -451,17 +451,17 @@ export function PassportIdentityCard({
           </div>
         </div>
 
-        <div className="relative flex flex-col p-3 sm:p-4 lg:min-h-0 lg:flex-1 lg:p-5">
+        <div className="relative flex flex-col p-2.5 sm:p-4 lg:min-h-0 lg:flex-1 lg:p-5">
           <div
             className={cn(
-              "flex flex-col gap-5 lg:min-h-0 lg:flex-1",
+              "flex flex-col gap-3 sm:gap-5 lg:min-h-0 lg:flex-1",
               pageOpen && "pointer-events-none invisible",
             )}
             aria-hidden={pageOpen || undefined}
           >
-        <div className="flex flex-col gap-5 lg:min-h-0 lg:flex-1">
-          <div className="flex flex-col gap-5 lg:min-h-0 lg:flex-1 lg:grid lg:grid-cols-2 lg:gap-5">
-            <div className="flex min-w-0 flex-col gap-4 lg:justify-between lg:gap-5 lg:py-1">
+        <div className="flex flex-col gap-3 sm:gap-5 lg:min-h-0 lg:flex-1">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:min-h-0 lg:flex-1 lg:gap-5">
+            <div className="flex min-w-0 flex-col gap-3 sm:gap-4 lg:justify-between lg:gap-5 lg:py-1">
               <PassportSummaryStrip
                 tier={passportTier}
                 questPoints={questPoints}
@@ -470,7 +470,7 @@ export function PassportIdentityCard({
                 totalPages={totalPages}
               />
 
-              <div className="flex items-start gap-3 lg:gap-4">
+              <div className="flex items-start gap-2.5 sm:gap-3 lg:gap-4">
                 {avatar ? (
                   canEditAvatar ? (
                     <button
@@ -503,17 +503,17 @@ export function PassportIdentityCard({
                 )}
 
                 <div className="min-w-0 flex-1 pt-0.5 lg:pt-1">
-                  <p className="font-display text-lg font-semibold uppercase leading-tight tracking-[0.04em] text-orange-950 sm:text-xl lg:text-2xl">
+                  <p className="font-display text-base font-semibold uppercase leading-tight tracking-[0.04em] text-orange-950 sm:text-lg lg:text-2xl">
                     {playerName}
                   </p>
-                  <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-orange-800/55 lg:text-xs">
+                  <p className="text-[9px] font-medium uppercase tracking-[0.16em] text-orange-800/55 sm:text-[10px] lg:text-xs">
                     Summer Slam Passport Holder
                   </p>
                   {canEditAvatar ? (
                     <button
                       type="button"
                       onClick={onChangeAvatar}
-                      className="mt-1 text-[10px] font-semibold text-teal-800/65 underline-offset-2 hover:text-teal-900 hover:underline touch-manipulation lg:text-xs"
+                      className="mt-1 min-h-9 text-[10px] font-semibold text-teal-800/65 underline-offset-2 hover:text-teal-900 hover:underline touch-manipulation sm:min-h-0 lg:text-xs"
                     >
                       Change avatar
                     </button>
@@ -537,9 +537,9 @@ export function PassportIdentityCard({
                     >
                       <SelectTrigger
                         className={cn(
-                          "h-7 w-full border-0 border-b border-dashed border-orange-300/45 bg-transparent px-0",
-                          "text-[11px] font-medium text-orange-950/85 shadow-none rounded-none lg:h-8 lg:text-xs",
-                          "focus:ring-0 focus:ring-offset-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-40",
+                          "h-9 w-full min-h-9 border-0 border-b border-dashed border-orange-300/45 bg-transparent px-0",
+                          "text-[11px] font-medium text-orange-950/85 shadow-none rounded-none lg:h-8 lg:min-h-0 lg:text-xs",
+                          "focus:ring-0 focus:ring-offset-0 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-40",
                           "touch-manipulation",
                         )}
                       >
@@ -577,7 +577,7 @@ export function PassportIdentityCard({
               </div>
             </div>
 
-            <div className="flex min-w-0 flex-col gap-4 border-t border-dashed border-orange-200/55 pt-5 lg:justify-between lg:gap-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 lg:py-1">
+            <div className="flex min-w-0 flex-col gap-3 border-t border-dashed border-orange-200/55 pt-3 sm:gap-4 sm:border-t-0 sm:pt-0 lg:justify-between lg:gap-5 lg:border-l lg:pl-5 lg:py-1">
               <StampCollectionPanel
                 seals={seals}
                 celebratingSealIds={celebratingSealIds}
@@ -587,7 +587,7 @@ export function PassportIdentityCard({
                 onSelectBonus={onSelectBonus}
               />
 
-              <div className="space-y-3 lg:mt-auto lg:space-y-3">
+              <div className="space-y-2 sm:space-y-3 lg:mt-auto lg:space-y-3">
               <div className="space-y-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <p className={cn(ssLabel, "lg:text-[11px]")}>Passport Completion</p>
@@ -601,14 +601,14 @@ export function PassportIdentityCard({
                 </div>
               </div>
 
-              <p className="text-[11px] text-orange-950/85 lg:text-xs">
+              <p className="text-[11px] text-orange-950/85 max-sm:hidden lg:text-xs">
                 <span className={cn(ssLabel, "mr-1.5 lg:text-[11px]")}>Expiry Date</span>
                 <span className="font-bold tabular-nums text-orange-950">
                   {expiryDate ?? "TBA"}
                 </span>
               </p>
 
-              <div className="space-y-0.5">
+              <div className="hidden space-y-0.5 sm:block">
                 <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-orange-800/35 lg:text-[9px]">
                   Issuing Authority
                 </p>
@@ -629,7 +629,7 @@ export function PassportIdentityCard({
           ) : null}
         </div>
 
-        <div className="relative flex shrink-0 items-end gap-3 border-t border-dashed border-orange-200/55 px-3.5 py-2 sm:px-4 lg:px-5 lg:py-2.5">
+        <div className="relative hidden shrink-0 items-end gap-3 border-t border-dashed border-orange-200/55 px-3.5 py-2 sm:flex sm:px-4 lg:px-5 lg:py-2.5">
           <div className="shrink-0 pb-0.5">
             <StampedZbdLogo />
           </div>

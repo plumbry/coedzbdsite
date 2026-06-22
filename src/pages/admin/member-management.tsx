@@ -33,6 +33,7 @@ import FemaleVerifiedBadge from "@/components/female-verified-badge.tsx";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { compareTierField } from "@/lib/tier-sort.ts";
 import { DiscordSyncTools } from "./_components/discord-sync-tools.tsx";
+import { mobileActionRowClass } from "@/lib/mobile-buttons.ts";
 
 const ADMIN_TABS = ["applications", "accepted", "rejected", "former", "discord"];
 const MOD_TABS = ["applications", "accepted", "former"];
@@ -627,7 +628,7 @@ export default function MemberManagement() {
       showSidebar={!!isModeratorOrAdmin}
       header={{
         actions: isAdmin ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <>
             <DiscordSyncTools compact />
             <Button
               size="sm"
@@ -641,37 +642,37 @@ export default function MemberManagement() {
               }
             >
               {isSyncingGirlRole ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="shrink-0 animate-spin sm:mr-1.5" />
               ) : (
-                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                <RefreshCw className="shrink-0 sm:mr-1.5" />
               )}
-              Sync Girl Role
+              <span className="truncate">Girl Role</span>
               {girlRoleSyncStatus && girlRoleSyncStatus.count > 0 && !isSyncingGirlRole && (
-                <Badge variant="outline" className="ml-1.5 px-1.5 py-0 text-[10px] font-normal">
+                <Badge variant="outline" className="ml-0.5 shrink-0 px-1 py-0 text-[9px] font-normal sm:ml-1.5 sm:px-1.5 sm:text-[10px]">
                   {girlRoleSyncStatus.count}
                 </Badge>
               )}
             </Button>
-          </div>
+          </>
         ) : undefined,
       }}
     >
       <Tabs value={activeTab} onValueChange={handleTabChange}>
           <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
             <TabsList
-              className={`inline-flex w-auto min-w-full md:grid md:w-full h-10 ${
+              className={`inline-flex h-9 w-max min-w-0 gap-0.5 p-0.5 md:grid md:h-10 md:w-full md:gap-1 md:p-1 ${
                 isAdmin ? "md:grid-cols-5" : isModeratorOrAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
               }`}
             >
               {isModeratorOrAdmin && (
-                <TabsTrigger value="applications" className="text-xs md:text-sm py-1.5 whitespace-nowrap">
+                <TabsTrigger value="applications" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">
                   Applications
                 </TabsTrigger>
               )}
-              <TabsTrigger value="accepted" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Accepted</TabsTrigger>
-              {isAdmin && <TabsTrigger value="rejected" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Rejected</TabsTrigger>}
-              <TabsTrigger value="former" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Former</TabsTrigger>
-              {isAdmin && <TabsTrigger value="discord" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Discord</TabsTrigger>}
+              <TabsTrigger value="accepted" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Accepted</TabsTrigger>
+              {isAdmin && <TabsTrigger value="rejected" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Rejected</TabsTrigger>}
+              <TabsTrigger value="former" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Former</TabsTrigger>
+              {isAdmin && <TabsTrigger value="discord" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Discord</TabsTrigger>}
             </TabsList>
           </div>
           
@@ -688,8 +689,8 @@ export default function MemberManagement() {
                     </CardDescription>
                   </div>
                   {isAdmin && (
-                    <Button onClick={() => setNewAppDialogOpen(true)} className="cursor-pointer w-full sm:w-auto">
-                      <Plus className="mr-2 h-4 w-4" />
+                    <Button size="sm" onClick={() => setNewAppDialogOpen(true)} className="w-full sm:w-auto">
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />
                       New Application
                     </Button>
                   )}
@@ -763,23 +764,18 @@ export default function MemberManagement() {
                               <ExternalLink className="h-3 w-3 shrink-0" />
                             </a>
                             {isAdmin && (
-                              <div className="flex flex-wrap gap-1">
+                              <div className={mobileActionRowClass}>
                                 <Button
                                   onClick={() => setEditingApplicationId(app._id)}
                                   variant="secondary"
                                   size="sm"
-                                  className="cursor-pointer px-2 h-7 text-xs"
                                 >
-                                  <Edit className="mr-1 h-3 w-3" />
-                                  Edit
+                                  <Edit className="sm:mr-1" />
+                                  <span className="truncate">Edit</span>
                                 </Button>
-                                <Button
-                                  onClick={() => handleAccept(app._id)}
-                                  size="sm"
-                                  className="cursor-pointer px-2 h-7 text-xs"
-                                >
-                                  <UserCheck className="mr-1 h-3 w-3" />
-                                  Accept
+                                <Button onClick={() => handleAccept(app._id)} size="sm">
+                                  <UserCheck className="sm:mr-1" />
+                                  <span className="truncate">Accept</span>
                                 </Button>
                                 <Button
                                   onClick={() => {
@@ -788,10 +784,9 @@ export default function MemberManagement() {
                                   }}
                                   variant="destructive"
                                   size="sm"
-                                  className="cursor-pointer px-2 h-7 text-xs"
                                 >
-                                  <UserX className="mr-1 h-3 w-3" />
-                                  Reject
+                                  <UserX className="sm:mr-1" />
+                                  <span className="truncate">Reject</span>
                                 </Button>
                                 <Button
                                   onClick={() => {
@@ -800,10 +795,9 @@ export default function MemberManagement() {
                                   }}
                                   variant="destructive"
                                   size="sm"
-                                  className="cursor-pointer px-2 h-7 text-xs"
                                 >
-                                  <Trash2 className="mr-1 h-3 w-3" />
-                                  Delete
+                                  <Trash2 className="sm:mr-1" />
+                                  <span className="truncate">Delete</span>
                                 </Button>
                               </div>
                             )}

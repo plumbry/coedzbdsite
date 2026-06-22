@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import PageShell from "@/components/page-shell.tsx";
+import { CompactMobileButtonsOptOut } from "@/components/compact-mobile-buttons.tsx";
 import { toast } from "sonner";
 import { PassportDashboard } from "./passport-dashboard.tsx";
 import { PassportEvidenceDialog } from "./passport-evidence-dialog.tsx";
@@ -136,8 +137,9 @@ export function PassportExperience({
   };
 
   return (
-    <PageShell maxWidth="wide" className={ssPageBg}>
-      <PassportDashboard
+    <CompactMobileButtonsOptOut>
+      <PageShell maxWidth="wide" className={ssPageBg}>
+        <PassportDashboard
         campaignTitle={campaignTitle}
         playerName={playerName}
         avatarId={avatarId}
@@ -168,5 +170,6 @@ export function PassportExperience({
         onSubmit={handleSubmitEvidence}
       />
     </PageShell>
+    </CompactMobileButtonsOptOut>
   );
 }

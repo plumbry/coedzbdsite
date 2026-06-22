@@ -45,24 +45,24 @@ export function PassportRewardsPanel({
     <section className={cn(ssCard, ssCardPad, className)} aria-label="Rewards">
       <h2 className={cn(ssSectionTitle, "mb-2")}>Rewards</h2>
 
-      <dl className="mb-2 grid grid-cols-3 gap-1.5">
+      <dl className="mb-2 grid grid-cols-3 gap-1.5 sm:gap-2">
         <div className={ssStatCell}>
           <dt className={ssLabel}>Quests</dt>
-          <dd className="text-sm font-bold tabular-nums text-orange-950">{approvedStamps}</dd>
+          <dd className="text-base font-bold tabular-nums text-orange-950 sm:text-sm">{approvedStamps}</dd>
         </div>
         <div className={ssStatCell}>
           <dt className={ssLabel}>Little</dt>
-          <dd className="text-sm font-bold tabular-nums text-teal-800">{littleWheelEntries}</dd>
+          <dd className="text-base font-bold tabular-nums text-teal-800 sm:text-sm">{littleWheelEntries}</dd>
         </div>
         <div className={ssStatCell}>
           <dt className={ssLabel}>Big</dt>
-          <dd className="text-sm font-bold tabular-nums text-violet-800">{bigWheelEntries}</dd>
+          <dd className="text-base font-bold tabular-nums text-violet-800 sm:text-sm">{bigWheelEntries}</dd>
         </div>
       </dl>
 
       {isComplete ? (
         <div className="mb-2 space-y-2">
-          <p className="rounded-lg border border-teal-200/60 bg-teal-50/50 px-2 py-1 text-[11px] font-semibold text-teal-900">
+          <p className="rounded-lg border border-teal-200/60 bg-teal-50/50 px-2.5 py-2 text-xs font-semibold text-teal-900 sm:px-2 sm:py-1 sm:text-[11px]">
             Passport complete — certificate &amp; Discord role unlocked
           </p>
           {certificateDownload ??

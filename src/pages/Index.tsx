@@ -5,9 +5,10 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
+import { Button } from "@/components/ui/button.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Users, Trophy, ArrowUpDown } from "lucide-react";
+import { Users, Trophy, ArrowUpDown, Filter, ChevronDown } from "lucide-react";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
 import { Link } from "react-router-dom";
 import PageShell from "@/components/page-shell.tsx";
@@ -18,6 +19,7 @@ import SearchInput from "@/components/search-input.tsx";
 import StatCard from "@/components/stat-card.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible.tsx";
 import { compareTierField, DEFAULT_PLAYER_LIST_SORT } from "@/lib/tier-sort.ts";
 
 export default function Index() {
@@ -100,6 +102,56 @@ export default function Index() {
     resetDeps: [search, genderFilter, tierFilter, statusFilter, sort],
   });
   const displayedMembers = membersPagination.pageItems ?? [];
+
+  const activeFilterCount = [
+    genderFilter !== "all",
+    tierFilter !== "all",
+    statusFilter !== "all",
+    search.length > 0,
+  ].filter(Boolean).length;
+
+  const memberFilters = (
+    <>
+      <Select value={genderFilter} onValueChange={setGenderFilter}>
+        <SelectTrigger className="w-full sm:w-[140px]">
+          <SelectValue placeholder="Gender" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All</SelectItem>
+          <SelectItem value="male">Male</SelectItem>
+          <SelectItem value="female">Female</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={tierFilter} onValueChange={setTierFilter}>
+        <SelectTrigger className="w-full sm:w-[140px]">
+          <SelectValue placeholder="Tier" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Tiers</SelectItem>
+          <SelectItem value="S">S</SelectItem>
+          <SelectItem value="A">A</SelectItem>
+          <SelectItem value="B">B</SelectItem>
+          <SelectItem value="C">C</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <SelectTrigger className="w-full sm:w-[140px]">
+          <SelectValue placeholder="Status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Status</SelectItem>
+          <SelectItem value="active">Active</SelectItem>
+          <SelectItem value="inactive">Inactive</SelectItem>
+        </SelectContent>
+      </Select>
+      <SearchInput
+        placeholder="Search members..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        containerClassName="col-span-2 w-full sm:col-span-1 sm:w-64"
+      />
+    </>
+  );
   
   if (directory === undefined) {
     return (
@@ -160,55 +212,45 @@ export default function Index() {
       )}
 
       <Card className="gap-0 py-0">
-        <CardHeader className="border-b py-3">
+        <CardHeader className="border-b py-3 px-3 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Active Members</CardTitle>
-            <PageToolbar className="w-full sm:w-auto">
-              <Select value={genderFilter} onValueChange={setGenderFilter}>
-                <SelectTrigger className="w-full sm:w-[140px]">
-                  <SelectValue placeholder="Gender" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="male">Male</SelectItem>
-                  <SelectItem value="female">Female</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={tierFilter} onValueChange={setTierFilter}>
-                <SelectTrigger className="w-full sm:w-[140px]">
-                  <SelectValue placeholder="Tier" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Tiers</SelectItem>
-                  <SelectItem value="S">S</SelectItem>
-                  <SelectItem value="A">A</SelectItem>
-                  <SelectItem value="B">B</SelectItem>
-                  <SelectItem value="C">C</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[140px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-              <SearchInput
-                placeholder="Search members..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                containerClassName="w-full sm:w-64"
-              />
+            <div className="md:hidden">
+              <Collapsible defaultOpen={activeFilterCount > 0}>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 w-full justify-between touch-manipulation"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Filter className="h-4 w-4" />
+                      Filters
+                      {activeFilterCount > 0 && (
+                        <Badge variant="secondary" className="px-1.5 py-0 text-xs">
+                          {activeFilterCount}
+                        </Badge>
+                      )}
+                    </span>
+                    <ChevronDown className="h-4 w-4 opacity-60" />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <PageToolbar className="mt-2 grid w-full grid-cols-2 gap-2">
+                    {memberFilters}
+                  </PageToolbar>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+            <PageToolbar className="hidden w-full sm:w-auto md:flex">
+              {memberFilters}
             </PageToolbar>
           </div>
         </CardHeader>
         <CardContent className="px-0 pb-0">
           {sortedMembers && sortedMembers.length > 0 ? (
             <>
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -308,7 +350,60 @@ export default function Index() {
                 </TableBody>
               </Table>
             </div>
-            <div className="px-4 pb-4">
+            <div className="divide-y md:hidden">
+              {displayedMembers.map((member) => (
+                <div key={member._id} className="flex items-center justify-between gap-3 px-3 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      {isAdmin ? (
+                        <Link
+                          to={`/player/${member.discordUsername}`}
+                          className="truncate text-sm font-medium text-primary hover:underline"
+                        >
+                          {member.nickname || member.discordUsername}
+                        </Link>
+                      ) : (
+                        <span className="truncate text-sm font-medium">
+                          {member.nickname || member.discordUsername}
+                        </span>
+                      )}
+                      {member.femaleVerified && <FemaleVerifiedBadge compact />}
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      {member.epicUsername && member.epicUsername !== member.discordUsername && (
+                        <span className="truncate">{member.epicUsername}</span>
+                      )}
+                      {member.tier && (
+                        <Badge
+                          variant={
+                            member.tier === "S"
+                              ? "default"
+                              : member.tier === "A"
+                                ? "secondary"
+                                : "outline"
+                          }
+                          className="px-1.5 py-0 text-xs"
+                        >
+                          {member.tier}
+                        </Badge>
+                      )}
+                      <Badge
+                        variant={member.isActive ? "default" : "destructive"}
+                        className="px-1.5 py-0 text-xs"
+                      >
+                        {member.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                      {isAdmin && (
+                        <span className="tabular-nums">
+                          {member.totalScore?.toFixed(2) || "0.00"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="px-3 pb-4 sm:px-4">
               <TablePagination
                 page={membersPagination.page}
                 totalPages={membersPagination.totalPages}

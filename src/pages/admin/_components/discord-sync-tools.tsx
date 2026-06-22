@@ -16,6 +16,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, RefreshCw, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils.ts";
+import { mobileActionGroupContentsClass } from "@/lib/mobile-buttons.ts";
 
 type DiscordSyncToolsProps = {
   compact?: boolean;
@@ -125,7 +127,11 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
       : "No sync run yet";
 
   const buttons = (
-    <div className="flex flex-wrap gap-2">
+    <div
+      className={cn(
+        compact ? mobileActionGroupContentsClass : "flex flex-wrap gap-2",
+      )}
+    >
       <Button
         size="sm"
         variant="secondary"
@@ -133,11 +139,12 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
         onClick={() => setConfirmAcceptedOpen(true)}
       >
         {isSyncingAccepted || inProgress ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="shrink-0 animate-spin sm:mr-1.5" />
         ) : (
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          <RefreshCw className="shrink-0 sm:mr-1.5" />
         )}
-        Sync membership from Discord
+        <span className="truncate sm:hidden">Discord sync</span>
+        <span className="hidden truncate sm:inline">Sync membership from Discord</span>
       </Button>
       <Button
         size="sm"
@@ -146,11 +153,12 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
         onClick={handleSyncPendingRoles}
       >
         {isSyncingRoles ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="shrink-0 animate-spin sm:mr-1.5" />
         ) : (
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          <RefreshCw className="shrink-0 sm:mr-1.5" />
         )}
-        Sync pending role changes
+        <span className="truncate sm:hidden">Role sync</span>
+        <span className="hidden truncate sm:inline">Sync pending role changes</span>
       </Button>
       <Button
         size="sm"
@@ -159,11 +167,12 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
         onClick={handleRebuildCache}
       >
         {isRebuildingCache ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="shrink-0 animate-spin sm:mr-1.5" />
         ) : (
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          <RefreshCw className="shrink-0 sm:mr-1.5" />
         )}
-        Rebuild sync cache
+        <span className="truncate sm:hidden">Rebuild</span>
+        <span className="hidden truncate sm:inline">Rebuild sync cache</span>
       </Button>
     </div>
   );
