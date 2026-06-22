@@ -160,10 +160,10 @@ export default function Index() {
       )}
 
       <Card className="gap-0 py-0">
-        <CardHeader className="border-b py-3">
+        <CardHeader className="border-b py-3 px-3 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Active Members</CardTitle>
-            <PageToolbar className="w-full sm:w-auto">
+            <PageToolbar className="w-full sm:w-auto grid grid-cols-2 sm:flex">
               <Select value={genderFilter} onValueChange={setGenderFilter}>
                 <SelectTrigger className="w-full sm:w-[140px]">
                   <SelectValue placeholder="Gender" />
@@ -200,7 +200,7 @@ export default function Index() {
                 placeholder="Search members..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                containerClassName="w-full sm:w-64"
+                containerClassName="col-span-2 w-full sm:col-span-1 sm:w-64"
               />
             </PageToolbar>
           </div>
@@ -208,7 +208,7 @@ export default function Index() {
         <CardContent className="px-0 pb-0">
           {sortedMembers && sortedMembers.length > 0 ? (
             <>
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -308,7 +308,60 @@ export default function Index() {
                 </TableBody>
               </Table>
             </div>
-            <div className="px-4 pb-4">
+            <div className="divide-y md:hidden">
+              {displayedMembers.map((member) => (
+                <div key={member._id} className="flex items-center justify-between gap-3 px-3 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      {isAdmin ? (
+                        <Link
+                          to={`/player/${member.discordUsername}`}
+                          className="truncate text-sm font-medium text-primary hover:underline"
+                        >
+                          {member.nickname || member.discordUsername}
+                        </Link>
+                      ) : (
+                        <span className="truncate text-sm font-medium">
+                          {member.nickname || member.discordUsername}
+                        </span>
+                      )}
+                      {member.femaleVerified && <FemaleVerifiedBadge compact />}
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      {member.epicUsername && member.epicUsername !== member.discordUsername && (
+                        <span className="truncate">{member.epicUsername}</span>
+                      )}
+                      {member.tier && (
+                        <Badge
+                          variant={
+                            member.tier === "S"
+                              ? "default"
+                              : member.tier === "A"
+                                ? "secondary"
+                                : "outline"
+                          }
+                          className="px-1.5 py-0 text-xs"
+                        >
+                          {member.tier}
+                        </Badge>
+                      )}
+                      <Badge
+                        variant={member.isActive ? "default" : "destructive"}
+                        className="px-1.5 py-0 text-xs"
+                      >
+                        {member.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                      {isAdmin && (
+                        <span className="tabular-nums">
+                          {member.totalScore?.toFixed(2) || "0.00"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="px-3 pb-4 sm:px-4">
               <TablePagination
                 page={membersPagination.page}
                 totalPages={membersPagination.totalPages}

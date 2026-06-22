@@ -242,7 +242,7 @@ export default function PotentialEventCalendarManager({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <PageHeader
         title="Event Calendar"
         description="Plan potential events on a shared calendar. These entries are separate from the main events system."
@@ -269,8 +269,8 @@ export default function PotentialEventCalendarManager({
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_1fr]">
-        <Card>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_1fr] lg:gap-6">
+        <Card className="mx-auto w-full max-w-sm lg:max-w-none">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-base font-medium">
               {format(month, "MMMM yyyy")}
@@ -458,7 +458,8 @@ export default function PotentialEventCalendarManager({
         </div>
       </div>
 
-      <PeriodCalendarGrid
+      <div className="hidden lg:block">
+        <PeriodCalendarGrid
         gridView={gridView}
         onGridViewChange={handleGridViewChange}
         periodStart={gridPeriodStart}
@@ -489,7 +490,8 @@ export default function PotentialEventCalendarManager({
           setPeriodStart(today);
         }}
         canEdit={canEdit}
-      />
+        />
+      </div>
 
       <PotentialEventCalendarEntryDialog
         open={dialogOpen}

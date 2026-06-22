@@ -93,7 +93,8 @@ function SidebarNavLink({
   icon: Icon,
   active,
   collapsed,
-}: NavItem & { active: boolean; collapsed: boolean }) {
+  onNavigate,
+}: NavItem & { active: boolean; collapsed: boolean; onNavigate?: () => void }) {
   const button = (
     <Button
       variant={active ? "default" : "ghost"}
@@ -111,6 +112,7 @@ function SidebarNavLink({
   const link = (
     <Link
       to={path}
+      onClick={onNavigate}
       className={cn("block min-w-0", collapsed ? "flex justify-center" : "w-full")}
     >
       {button}
@@ -230,7 +232,14 @@ function SidebarCollapseToggle({
   );
 }
 
-export default function AdminSidebar() {
+interface AdminSidebarProps {
+  /** When true, renders panel content only (for mobile sheet). */
+  inSheet?: boolean;
+  /** Called after navigation (e.g. to close mobile sheet). */
+  onNavigate?: () => void;
+}
+
+export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSidebarProps = {}) {
   const {
     isAdmin,
     isAnalytics,
@@ -442,194 +451,215 @@ export default function AdminSidebar() {
   }, [collapsed, location.pathname, sections]);
 
   const showNav = isModeratorOrAdmin || isEventMod || hasAnalyticsHubAccess;
+  const effectiveCollapsed = inSheet ? false : collapsed;
+
+  const panel = (
+    <>
+      {!inSheet && (
+        <div
+          className={cn(
+            "mb-2 flex shrink-0 border-b pb-2",
+            effectiveCollapsed ? "justify-center" : "justify-end",
+          )}
+        >
+          <SidebarCollapseToggle
+            collapsed={effectiveCollapsed}
+            onToggle={() => setCollapsed((prev) => !prev)}
+          />
+        </div>
+      )}
+
+      {/* User profile */}
+      {!isLoading && (
+        <div className={cn("shrink-0 border-b pb-3", effectiveCollapsed ? "mb-2" : "mb-4 pb-4")}>
+          {isModeratorOrAdmin || isEventMod || isAnalytics ? (
+            <div className={cn(effectiveCollapsed && "flex flex-col items-center gap-2")}>
+              {effectiveCollapsed ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+                      <User className="h-4 w-4 text-primary" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p className="font-medium">{user?.name || "User"}</p>
+                    <p className="text-background/80">{user?.email}</p>
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <User className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{user?.name || "User"}</p>
+                    <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+                  </div>
+                </div>
+              )}
+              <IconAction
+                label="Sign Out"
+                icon={LogOut}
+                onClick={() => signout()}
+                collapsed={effectiveCollapsed}
+                className="text-destructive hover:text-destructive"
+              />
+            </div>
+          ) : effectiveCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex justify-center">
+                  <SignInButton
+                    variant="default"
+                    size="icon"
+                    className="h-9 w-9"
+                    signInText=""
+                    showIcon={true}
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right">Sign In</TooltipContent>
+            </Tooltip>
+          ) : (
+            <SignInButton
+              variant="default"
+              size="sm"
+              className="w-full"
+              showIcon={true}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Back to public site */}
+      <div className={cn("shrink-0", effectiveCollapsed ? "mb-2" : "mb-4")}>
+        {effectiveCollapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link to="/" onClick={onNavigate} className="flex justify-center">
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Back to Members">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Back to Members</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Link to="/" onClick={onNavigate}>
+            <Button variant="ghost" size="sm" className="w-full justify-start">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Members
+            </Button>
+          </Link>
+        )}
+      </div>
+
+      {/* Navigation */}
+      {showNav && (
+        <ScrollArea className="min-h-0 flex-1">
+          <nav className="space-y-1 pr-2">
+            <div className={cn("pb-2", effectiveCollapsed && "flex justify-center")}>
+              {(isAdmin || isModeratorOrAdmin || isEventMod) && (
+                <SidebarNavLink
+                  path="/admin"
+                  label="Admin Home"
+                  icon={LayoutDashboard}
+                  active={isActive("/admin")}
+                  collapsed={effectiveCollapsed}
+                  onNavigate={onNavigate}
+                />
+              )}
+              {isAnalytics && !isAdmin && (
+                <SidebarNavLink
+                  path="/admin/stats"
+                  label="Analytics Hub"
+                  icon={BarChart3}
+                  active={isActive("/admin/stats")}
+                  collapsed={effectiveCollapsed}
+                  onNavigate={onNavigate}
+                />
+              )}
+            </div>
+            {effectiveCollapsed
+              ? sections.map((section, sectionIndex) => (
+                  <div key={section.id}>
+                    {sectionIndex > 0 && (
+                      <div className="my-2 border-t border-border/60" />
+                    )}
+                    <div className="flex justify-center">
+                      <CollapsedSectionToggle
+                        label={section.label}
+                        open={openSections.has(section.id)}
+                        onToggle={() => toggleSection(section.id)}
+                      />
+                    </div>
+                    {openSections.has(section.id) && (
+                      <div className="space-y-1">
+                        {section.items.map((item) => (
+                          <SidebarNavLink
+                            key={item.path}
+                            {...item}
+                            active={isActive(item.path)}
+                            collapsed
+                            onNavigate={onNavigate}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              : sections.map((section) => (
+                  <div key={section.id} className="pb-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(section.id)}
+                      className="mb-2 flex w-full min-w-0 items-center justify-between px-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <span className="truncate">{section.label}</span>
+                      {openSections.has(section.id) ? (
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                      )}
+                    </button>
+                    {openSections.has(section.id) && (
+                      <div className="space-y-1">
+                        {section.items.map((item) => (
+                          <SidebarNavLink
+                            key={item.path}
+                            {...item}
+                            active={isActive(item.path)}
+                            collapsed={false}
+                            onNavigate={onNavigate}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+          </nav>
+        </ScrollArea>
+      )}
+    </>
+  );
+
+  if (inSheet) {
+    return (
+      <TooltipProvider delayDuration={0}>
+        <div className="flex h-full flex-col p-4">{panel}</div>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          "sticky top-0 z-20 flex h-[calc(100vh-2.5rem)] shrink-0 flex-col border-r bg-background transition-[width] duration-200 ease-in-out",
-          collapsed ? "w-14 p-2" : "w-56 p-4",
+          "sticky top-0 z-20 hidden h-[calc(100vh-2.5rem)] shrink-0 flex-col border-r bg-background transition-[width] duration-200 ease-in-out md:flex",
+          effectiveCollapsed ? "w-14 p-2" : "w-56 p-4",
         )}
       >
-        <div
-          className={cn(
-            "mb-2 flex shrink-0 border-b pb-2",
-            collapsed ? "justify-center" : "justify-end",
-          )}
-        >
-          <SidebarCollapseToggle
-            collapsed={collapsed}
-            onToggle={() => setCollapsed((prev) => !prev)}
-          />
-        </div>
-
-        {/* User profile */}
-        {!isLoading && (
-          <div className={cn("shrink-0 border-b pb-3", collapsed ? "mb-2" : "mb-4 pb-4")}>
-            {isModeratorOrAdmin || isEventMod || isAnalytics ? (
-              <div className={cn(collapsed && "flex flex-col items-center gap-2")}>
-                {collapsed ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-                        <User className="h-4 w-4 text-primary" />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      <p className="font-medium">{user?.name || "User"}</p>
-                      <p className="text-background/80">{user?.email}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <div className="mb-3 flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                      <User className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{user?.name || "User"}</p>
-                      <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
-                    </div>
-                  </div>
-                )}
-                <IconAction
-                  label="Sign Out"
-                  icon={LogOut}
-                  onClick={() => signout()}
-                  collapsed={collapsed}
-                  className="text-destructive hover:text-destructive"
-                />
-              </div>
-            ) : collapsed ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex justify-center">
-                    <SignInButton
-                      variant="default"
-                      size="icon"
-                      className="h-9 w-9"
-                      signInText=""
-                      showIcon={true}
-                    />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="right">Sign In</TooltipContent>
-              </Tooltip>
-            ) : (
-              <SignInButton
-                variant="default"
-                size="sm"
-                className="w-full"
-                showIcon={true}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Back to public site */}
-        <div className={cn("shrink-0", collapsed ? "mb-2" : "mb-4")}>
-          {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link to="/" className="flex justify-center">
-                  <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Back to Members">
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right">Back to Members</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Link to="/">
-              <Button variant="ghost" size="sm" className="w-full justify-start">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Members
-              </Button>
-            </Link>
-          )}
-        </div>
-
-        {/* Navigation */}
-        {showNav && (
-          <ScrollArea className="min-h-0 flex-1">
-            <nav className="space-y-1 pr-2">
-              <div className={cn("pb-2", collapsed && "flex justify-center")}>
-                {(isAdmin || isModeratorOrAdmin || isEventMod) && (
-                  <SidebarNavLink
-                    path="/admin"
-                    label="Admin Home"
-                    icon={LayoutDashboard}
-                    active={isActive("/admin")}
-                    collapsed={collapsed}
-                  />
-                )}
-                {isAnalytics && !isAdmin && (
-                  <SidebarNavLink
-                    path="/admin/stats"
-                    label="Analytics Hub"
-                    icon={BarChart3}
-                    active={isActive("/admin/stats")}
-                    collapsed={collapsed}
-                  />
-                )}
-              </div>
-              {collapsed
-                ? sections.map((section, sectionIndex) => (
-                    <div key={section.id}>
-                      {sectionIndex > 0 && (
-                        <div className="my-2 border-t border-border/60" />
-                      )}
-                      <div className="flex justify-center">
-                        <CollapsedSectionToggle
-                          label={section.label}
-                          open={openSections.has(section.id)}
-                          onToggle={() => toggleSection(section.id)}
-                        />
-                      </div>
-                      {openSections.has(section.id) && (
-                        <div className="space-y-1">
-                          {section.items.map((item) => (
-                            <SidebarNavLink
-                              key={item.path}
-                              {...item}
-                              active={isActive(item.path)}
-                              collapsed
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                : sections.map((section) => (
-                    <div key={section.id} className="pb-2">
-                      <button
-                        type="button"
-                        onClick={() => toggleSection(section.id)}
-                        className="mb-2 flex w-full min-w-0 items-center justify-between px-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        <span className="truncate">{section.label}</span>
-                        {openSections.has(section.id) ? (
-                          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-                        ) : (
-                          <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                        )}
-                      </button>
-                      {openSections.has(section.id) && (
-                        <div className="space-y-1">
-                          {section.items.map((item) => (
-                            <SidebarNavLink
-                              key={item.path}
-                              {...item}
-                              active={isActive(item.path)}
-                              collapsed={false}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-            </nav>
-          </ScrollArea>
-        )}
+        {panel}
       </aside>
     </TooltipProvider>
   );
