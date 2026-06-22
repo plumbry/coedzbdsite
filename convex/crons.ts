@@ -28,6 +28,13 @@ crons.daily(
   internal.eventBans.sync.syncEventBansInternal,
 );
 
+// Big Summer Re-Eval: check tracker deadlines and auto-queue access removals
+crons.hourly(
+  "big summer reeval deadlines",
+  { minuteUTC: 15 },
+  internal.bigSummerReEval.mutations.processDeadlinesInternal,
+);
+
 // Refresh Osirion tournament cache for in-game earnings scans
 crons.daily(
   "refresh tournament scan cache",
