@@ -221,24 +221,30 @@ function DonutCard({
   );
 }
 
-type MemberScope = "all" | "active";
+type GenderMemberScope = "all" | "active" | "new";
+type TierMemberScope = "all" | "active";
 type ApplicationSourceWindow = "7" | "30";
+type NewMemberWindow = "7" | "30";
 
 function MemberScopeToggle({
   value,
   onChange,
   disabled,
+  includeNew = false,
 }: {
-  value: MemberScope;
-  onChange: (value: MemberScope) => void;
+  value: GenderMemberScope | TierMemberScope;
+  onChange: (value: GenderMemberScope | TierMemberScope) => void;
   disabled?: boolean;
+  includeNew?: boolean;
 }) {
   return (
     <ToggleGroup
       type="single"
       value={value}
       onValueChange={(next) => {
-        if (next === "all" || next === "active") onChange(next);
+        if (next === "all" || next === "active" || (includeNew && next === "new")) {
+          onChange(next);
+        }
       }}
       variant="outline"
       size="sm"
@@ -251,6 +257,11 @@ function MemberScopeToggle({
       <ToggleGroupItem value="active" aria-label="Active members">
         Active Members
       </ToggleGroupItem>
+      {includeNew && (
+        <ToggleGroupItem value="new" aria-label="New members">
+          New Members
+        </ToggleGroupItem>
+      )}
     </ToggleGroup>
   );
 }
@@ -286,20 +297,53 @@ function ApplicationSourceWindowToggle({
   );
 }
 
+function NewMemberWindowToggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: NewMemberWindow;
+  onChange: (value: NewMemberWindow) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={(next) => {
+        if (next === "7" || next === "30") onChange(next);
+      }}
+      variant="outline"
+      size="sm"
+      className="shrink-0"
+      disabled={disabled}
+    >
+      <ToggleGroupItem value="7" aria-label="New members from last 7 days">
+        7 Days
+      </ToggleGroupItem>
+      <ToggleGroupItem value="30" aria-label="New members from last 30 days">
+        30 Days
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
+
 function AudienceInsightsContent() {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
   const canDrillIntoSegments = isAdmin;
   const insights = useQuery(api.audienceInsights.getAudienceInsights);
   const refreshCooldown = useQuery(api.users.getAnalyticsStatsRefreshCooldown);
-  const [memberScope, setMemberScope] = useState<MemberScope>("all");
+  const [genderMemberScope, setGenderMemberScope] = useState<GenderMemberScope>("all");
+  const [newMemberWindow, setNewMemberWindow] = useState<NewMemberWindow>("30");
+  const [tierMemberScope, setTierMemberScope] = useState<TierMemberScope>("all");
   const [applicationSourceWindow, setApplicationSourceWindow] =
     useState<ApplicationSourceWindow>("30");
 
   const openSegment = (
     chartType: AudienceChartType,
     segmentKey: string,
-    options?: { activeOnly?: boolean; sourceWindowDays?: 7 | 30 },
+    options?: { activeOnly?: boolean; newMemberWindowDays?: 7 | 30; sourceWindowDays?: 7 | 30 },
   ) => {
     navigate(audienceSegmentPath(chartType, segmentKey, options));
   };
@@ -400,19 +444,27 @@ function AudienceInsightsContent() {
 
   const activeMemberCacheNeedsRebuild = insights.needsRebuild;
   const genderChartData =
-    memberScope === "active"
+    genderMemberScope === "active"
       ? chartSegments(insights.genderActive)
-      : chartSegments(insights.gender);
+      : genderMemberScope === "new" && newMemberWindow === "7"
+        ? chartSegments(insights.genderNew7d)
+        : genderMemberScope === "new"
+          ? chartSegments(insights.genderNew30d)
+          : chartSegments(insights.gender);
   const genderChartTotal =
-    memberScope === "active"
+    genderMemberScope === "active"
       ? insights.totalActiveMembers || 1
-      : insights.totalMembers || 1;
+      : genderMemberScope === "new" && newMemberWindow === "7"
+        ? insights.totalNewMembers7d || 1
+        : genderMemberScope === "new"
+          ? insights.totalNewMembers30d || 1
+          : insights.totalMembers || 1;
   const tierChartData =
-    memberScope === "active"
+    tierMemberScope === "active"
       ? chartSegments(insights.tierActive)
       : chartSegments(insights.tier);
   const tierChartTotal =
-    memberScope === "active"
+    tierMemberScope === "active"
       ? insights.totalActiveMembers || 1
       : insights.totalMembers || 1;
   const applicationSourceChartData =
@@ -508,10 +560,10 @@ function AudienceInsightsContent() {
 
       {hasCache && activeMemberCacheNeedsRebuild && !isJobRunning && (
         <Alert>
-          <AlertTitle>Active member splits are live-calculated</AlertTitle>
+          <AlertTitle>Member scope splits need a refresh</AlertTitle>
           <AlertDescription>
-            Gender and tier active-member charts use current player activity flags. Click Refresh
-            stats once to cache active member data and speed up segment member lists.
+            Click Refresh stats once to cache active-member and new-member gender data, and to
+            speed up segment member lists.
           </AlertDescription>
         </Alert>
       )}
@@ -559,8 +611,10 @@ function AudienceInsightsContent() {
         <DonutCard
           title="Gender Split"
           description={
-            memberScope === "active"
+            genderMemberScope === "active"
               ? "Active members (played in the last 6 weeks) by evaluation gender category."
+              : genderMemberScope === "new"
+                ? `New members accepted in the last ${newMemberWindow} days by evaluation gender category.`
               : "Distribution by evaluation gender category."
           }
           data={genderChartData}
@@ -569,21 +623,33 @@ function AudienceInsightsContent() {
           segmentClickable={canDrillIntoSegments}
           onSegmentClick={(key) =>
             openSegment("gender", key, {
-              activeOnly: memberScope === "active",
+              activeOnly: genderMemberScope === "active",
+              newMemberWindowDays:
+                genderMemberScope === "new" ? (Number(newMemberWindow) as 7 | 30) : undefined,
             })
           }
           headerActions={
-            <MemberScopeToggle
-              value={memberScope}
-              onChange={setMemberScope}
-              disabled={!hasCache}
-            />
+            <div className="flex flex-col items-start gap-2 sm:items-end">
+              <MemberScopeToggle
+                value={genderMemberScope}
+                onChange={(value) => setGenderMemberScope(value as GenderMemberScope)}
+                disabled={!hasCache}
+                includeNew
+              />
+              {genderMemberScope === "new" && (
+                <NewMemberWindowToggle
+                  value={newMemberWindow}
+                  onChange={setNewMemberWindow}
+                  disabled={!hasCache}
+                />
+              )}
+            </div>
           }
         />
         <DonutCard
           title="Tier Split"
           description={
-            memberScope === "active"
+            tierMemberScope === "active"
               ? "Active members (played in the last 6 weeks) by tier."
               : "How accepted members are distributed across tiers."
           }
@@ -593,13 +659,13 @@ function AudienceInsightsContent() {
           segmentClickable={canDrillIntoSegments}
           onSegmentClick={(key) =>
             openSegment("tier", key, {
-              activeOnly: memberScope === "active",
+              activeOnly: tierMemberScope === "active",
             })
           }
           headerActions={
             <MemberScopeToggle
-              value={memberScope}
-              onChange={setMemberScope}
+              value={tierMemberScope}
+              onChange={(value) => setTierMemberScope(value as TierMemberScope)}
               disabled={!hasCache}
             />
           }

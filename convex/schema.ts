@@ -1268,6 +1268,24 @@ export default defineSchema({
         }),
       ),
     ),
+    genderNew7d: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          value: v.number(),
+          color: v.string(),
+        }),
+      ),
+    ),
+    genderNew30d: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          value: v.number(),
+          color: v.string(),
+        }),
+      ),
+    ),
     tier: v.array(
       v.object({
         label: v.string(),
@@ -1285,6 +1303,8 @@ export default defineSchema({
       ),
     ),
     totalActiveMembers: v.optional(v.number()),
+    totalNewMembers7d: v.optional(v.number()),
+    totalNewMembers30d: v.optional(v.number()),
     tenure: v.array(
       v.object({
         label: v.string(),
@@ -1362,6 +1382,8 @@ export default defineSchema({
     genderLabel: v.string(),
     serverJoinDate: v.string(),
     isRecentlyActive: v.optional(v.boolean()),
+    isNewMember7d: v.optional(v.boolean()),
+    isNewMember30d: v.optional(v.boolean()),
   })
     .index("by_chart_segment", ["chart", "segment"])
     .index("by_chart_segment_active", ["chart", "segment", "isRecentlyActive"])
@@ -1382,6 +1404,12 @@ export default defineSchema({
     maleActive: v.optional(v.number()),
     femaleActive: v.optional(v.number()),
     genderUnknownActive: v.optional(v.number()),
+    maleNew7d: v.optional(v.number()),
+    femaleNew7d: v.optional(v.number()),
+    genderUnknownNew7d: v.optional(v.number()),
+    maleNew30d: v.optional(v.number()),
+    femaleNew30d: v.optional(v.number()),
+    genderUnknownNew30d: v.optional(v.number()),
     tierS: v.number(),
     tierA: v.number(),
     tierB: v.number(),
@@ -1404,6 +1432,8 @@ export default defineSchema({
     eventsFiveOrLess: v.number(),
     recentEventsOverThree: v.optional(v.number()),
     recentEventsThreeOrLess: v.optional(v.number()),
+    totalNewMembers7d: v.optional(v.number()),
+    totalNewMembers30d: v.optional(v.number()),
     sourceTikTok: v.optional(v.number()),
     sourceTwitter: v.optional(v.number()),
     sourceTeammate: v.optional(v.number()),

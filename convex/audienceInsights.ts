@@ -16,9 +16,11 @@ import {
 import { requireAdmin, requireAnalyticsHubAccess, requireAnalyticsStatsRefresh } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
-const AUDIENCE_INSIGHTS_CACHE_VERSION = 9;
+const AUDIENCE_INSIGHTS_CACHE_VERSION = 11;
 const APPLICATION_SOURCE_7D_MS = 7 * 24 * 60 * 60 * 1000;
 const APPLICATION_SOURCE_30D_MS = 30 * 24 * 60 * 60 * 1000;
+const NEW_MEMBER_7D_MS = 7 * 24 * 60 * 60 * 1000;
+const NEW_MEMBER_30D_MS = 30 * 24 * 60 * 60 * 1000;
 const RECENT_EVENT_WINDOW_WEEKS = 4;
 const RECENT_EVENT_PLAYED_THRESHOLD = 3;
 const MEMBERS_PER_BATCH = 8;
@@ -54,6 +56,12 @@ type JobCounters = {
   maleActive: number;
   femaleActive: number;
   genderUnknownActive: number;
+  maleNew7d: number;
+  femaleNew7d: number;
+  genderUnknownNew7d: number;
+  maleNew30d: number;
+  femaleNew30d: number;
+  genderUnknownNew30d: number;
   tierS: number;
   tierA: number;
   tierB: number;
@@ -75,6 +83,8 @@ type JobCounters = {
   eventsFiveOrLess: number;
   recentEventsOverThree: number;
   recentEventsThreeOrLess: number;
+  totalNewMembers7d: number;
+  totalNewMembers30d: number;
 };
 
 const EMPTY_COUNTERS: JobCounters = {
@@ -84,6 +94,12 @@ const EMPTY_COUNTERS: JobCounters = {
   maleActive: 0,
   femaleActive: 0,
   genderUnknownActive: 0,
+  maleNew7d: 0,
+  femaleNew7d: 0,
+  genderUnknownNew7d: 0,
+  maleNew30d: 0,
+  femaleNew30d: 0,
+  genderUnknownNew30d: 0,
   tierS: 0,
   tierA: 0,
   tierB: 0,
@@ -105,6 +121,8 @@ const EMPTY_COUNTERS: JobCounters = {
   eventsFiveOrLess: 0,
   recentEventsOverThree: 0,
   recentEventsThreeOrLess: 0,
+  totalNewMembers7d: 0,
+  totalNewMembers30d: 0,
 };
 
 function monthsSinceServerJoin(serverJoinDate: string): number | null {
@@ -228,6 +246,8 @@ function accumulateMember(
   member: AcceptedMember,
   gender: number | undefined,
   recentEventsInWindow: number,
+  isNewMember7d: boolean,
+  isNewMember30d: boolean,
 ) {
   if (gender === 100) counters.male += 1;
   else if (gender === 50) counters.female += 1;
@@ -249,6 +269,20 @@ function accumulateMember(
     else if (member.tier === "B") counters.tierBActive += 1;
     else if (member.tier === "C") counters.tierCActive += 1;
     else counters.tierOtherActive += 1;
+  }
+
+  if (isNewMember7d) {
+    counters.totalNewMembers7d += 1;
+    if (gender === 100) counters.maleNew7d += 1;
+    else if (gender === 50) counters.femaleNew7d += 1;
+    else counters.genderUnknownNew7d += 1;
+  }
+
+  if (isNewMember30d) {
+    counters.totalNewMembers30d += 1;
+    if (gender === 100) counters.maleNew30d += 1;
+    else if (gender === 50) counters.femaleNew30d += 1;
+    else counters.genderUnknownNew30d += 1;
   }
 
   const eventsPlayed = member.eventsPlayedCount ?? 0;
@@ -302,11 +336,23 @@ function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
   return {
     totalMembers,
     totalActiveMembers: counters.totalActiveMembers,
+    totalNewMembers7d: counters.totalNewMembers7d,
+    totalNewMembers30d: counters.totalNewMembers30d,
     gender: genderSegmentsFromCounters(counters),
     genderActive: genderSegmentsFromCounters({
       male: counters.maleActive,
       female: counters.femaleActive,
       genderUnknown: counters.genderUnknownActive,
+    }),
+    genderNew7d: genderSegmentsFromCounters({
+      male: counters.maleNew7d,
+      female: counters.femaleNew7d,
+      genderUnknown: counters.genderUnknownNew7d,
+    }),
+    genderNew30d: genderSegmentsFromCounters({
+      male: counters.maleNew30d,
+      female: counters.femaleNew30d,
+      genderUnknown: counters.genderUnknownNew30d,
     }),
     tier: tierSegmentsFromCounters(counters),
     tierActive: tierSegmentsFromCounters({
@@ -418,6 +464,22 @@ async function genderForPlayer(
     .withIndex("by_player", (q) => q.eq("playerId", playerId))
     .first();
   return score?.gender;
+}
+
+async function isNewMemberFromRecentAcceptedApplication(
+  ctx: MutationCtx | QueryCtx,
+  playerId: Id<"players">,
+  windowStartMs: number,
+): Promise<boolean> {
+  const applications = await ctx.db
+    .query("applications")
+    .withIndex("by_player_id", (q) => q.eq("playerId", playerId))
+    .collect();
+
+  return applications.some((app) => {
+    if (app.status !== "accepted") return false;
+    return (app.acceptedAt ?? app._creationTime) >= windowStartMs;
+  });
 }
 
 async function buildApplicationSourceInsights(ctx: MutationCtx) {
@@ -583,6 +645,8 @@ async function insertSegmentMemberRows(
   member: AcceptedMember,
   gender: number | undefined,
   recentEventsInWindow: number,
+  isNewMember7d: boolean,
+  isNewMember30d: boolean,
 ) {
   const base = {
     playerId: member._id,
@@ -593,6 +657,8 @@ async function insertSegmentMemberRows(
     genderLabel: genderLabel(gender),
     serverJoinDate: member.serverJoinDate,
     isRecentlyActive: member.isRecentlyActive ?? false,
+    isNewMember7d,
+    isNewMember30d,
   };
 
   const tenureBucket = tenureBucketForMonths(
@@ -624,8 +690,12 @@ async function upsertAudienceInsightsSnapshot(
     insightsCacheVersion: number;
     totalMembers: number;
     totalActiveMembers: number;
+    totalNewMembers7d: number;
+    totalNewMembers30d: number;
     gender: ChartSegment[];
     genderActive: ChartSegment[];
+    genderNew7d: ChartSegment[];
+    genderNew30d: ChartSegment[];
     tier: ChartSegment[];
     tierActive: ChartSegment[];
     tenure: ChartSegment[];
@@ -656,6 +726,12 @@ function countersFromJob(job: Doc<"audienceInsightsJobs">): JobCounters {
     maleActive: job.maleActive ?? 0,
     femaleActive: job.femaleActive ?? 0,
     genderUnknownActive: job.genderUnknownActive ?? 0,
+    maleNew7d: job.maleNew7d ?? 0,
+    femaleNew7d: job.femaleNew7d ?? 0,
+    genderUnknownNew7d: job.genderUnknownNew7d ?? 0,
+    maleNew30d: job.maleNew30d ?? 0,
+    femaleNew30d: job.femaleNew30d ?? 0,
+    genderUnknownNew30d: job.genderUnknownNew30d ?? 0,
     tierS: job.tierS ?? 0,
     tierA: job.tierA ?? 0,
     tierB: job.tierB ?? 0,
@@ -677,15 +753,19 @@ function countersFromJob(job: Doc<"audienceInsightsJobs">): JobCounters {
     eventsFiveOrLess: job.eventsFiveOrLess ?? 0,
     recentEventsOverThree: job.recentEventsOverThree ?? 0,
     recentEventsThreeOrLess: job.recentEventsThreeOrLess ?? 0,
+    totalNewMembers7d: job.totalNewMembers7d ?? 0,
+    totalNewMembers30d: job.totalNewMembers30d ?? 0,
   };
 }
 
-function snapshotHasActiveTierCache(
+function snapshotHasMemberScopeCache(
   cached: Doc<"audienceInsightsSnapshot">,
 ): boolean {
   return (
     cached.insightsCacheVersion === AUDIENCE_INSIGHTS_CACHE_VERSION ||
-    typeof cached.totalActiveMembers === "number"
+    (typeof cached.totalActiveMembers === "number" &&
+      typeof cached.totalNewMembers7d === "number" &&
+      typeof cached.totalNewMembers30d === "number")
   );
 }
 
@@ -785,8 +865,12 @@ async function reconcileAudienceInsightsJobs(ctx: MutationCtx) {
 const emptyInsights = {
   totalMembers: 0,
   totalActiveMembers: 0,
+  totalNewMembers7d: 0,
+  totalNewMembers30d: 0,
   gender: [] as ChartSegment[],
   genderActive: [] as ChartSegment[],
+  genderNew7d: [] as ChartSegment[],
+  genderNew30d: [] as ChartSegment[],
   tier: [] as ChartSegment[],
   tierActive: [] as ChartSegment[],
   tenure: [] as ChartSegment[],
@@ -817,8 +901,12 @@ export const getAudienceInsights = query({
     return {
       totalMembers: cached.totalMembers,
       totalActiveMembers: cached.totalActiveMembers ?? 0,
+      totalNewMembers7d: cached.totalNewMembers7d ?? 0,
+      totalNewMembers30d: cached.totalNewMembers30d ?? 0,
       gender: cached.gender ?? [],
       genderActive: cached.genderActive ?? [],
+      genderNew7d: cached.genderNew7d ?? [],
+      genderNew30d: cached.genderNew30d ?? [],
       tier: cached.tier ?? [],
       tierActive: cached.tierActive ?? [],
       tenure: cached.tenure ?? [],
@@ -831,8 +919,8 @@ export const getAudienceInsights = query({
       eventsReady: cached.eventsReady,
       segmentMembersIndexed: cached.segmentMembersIndexed === true,
       lastUpdated: cached.lastUpdated,
-      needsRebuild: !snapshotHasActiveTierCache(cached),
-      tierActiveReady: snapshotHasActiveTierCache(cached),
+      needsRebuild: !snapshotHasMemberScopeCache(cached),
+      tierActiveReady: snapshotHasMemberScopeCache(cached),
       tierActiveSource: "cache" as const,
     };
   },
@@ -845,6 +933,7 @@ export const listAudienceInsightMembers = query({
     segment: v.string(),
     playersCursor: v.optional(v.union(v.string(), v.null())),
     activeOnly: v.optional(v.boolean()),
+    newMemberWindowDays: v.optional(v.union(v.literal(7), v.literal(30))),
     sourceWindowDays: v.optional(v.union(v.literal(7), v.literal(30))),
   },
   handler: async (ctx, args) => {
@@ -880,6 +969,11 @@ export const listAudienceInsightMembers = query({
 
     const activeOnly =
       (args.chart === "tier" || args.chart === "gender") && args.activeOnly === true;
+    const newMemberWindowDays =
+      args.chart === "gender" &&
+      (args.newMemberWindowDays === 7 || args.newMemberWindowDays === 30)
+        ? args.newMemberWindowDays
+        : null;
 
     const page =
       args.chart === "applicationSource"
@@ -915,6 +1009,8 @@ export const listAudienceInsightMembers = query({
           if (!player?.isRecentlyActive) continue;
         }
       }
+      if (newMemberWindowDays === 7 && row.isNewMember7d !== true) continue;
+      if (newMemberWindowDays === 30 && row.isNewMember30d !== true) continue;
       members.push({
         playerId: row.playerId,
         discordUsername: row.discordUsername,
@@ -1088,6 +1184,9 @@ export const processRebuildBatch = internalMutation({
     }
 
     const counters = countersFromJob(job);
+    const now = Date.now();
+    const newMember7dWindowStart = now - NEW_MEMBER_7D_MS;
+    const newMember30dWindowStart = now - NEW_MEMBER_30D_MS;
     const importDateCache = new Map<Id<"thirdPartyImports">, number | null>();
     const scrimTournamentIds = await buildScrimYuniteTournamentIdSet(ctx);
     const linkedEventCache = new Map<Id<"events">, Doc<"events"> | null>();
@@ -1113,12 +1212,31 @@ export const processRebuildBatch = internalMutation({
           scrimTournamentIds,
           linkedEventCache,
         );
-        accumulateMember(counters, member, gender, recentEventsInWindow);
+        const isNewMember7d = await isNewMemberFromRecentAcceptedApplication(
+          ctx,
+          member._id,
+          newMember7dWindowStart,
+        );
+        const isNewMember30d = await isNewMemberFromRecentAcceptedApplication(
+          ctx,
+          member._id,
+          newMember30dWindowStart,
+        );
+        accumulateMember(
+          counters,
+          member,
+          gender,
+          recentEventsInWindow,
+          isNewMember7d,
+          isNewMember30d,
+        );
         await insertSegmentMemberRows(
           ctx,
           member,
           gender,
           recentEventsInWindow,
+          isNewMember7d,
+          isNewMember30d,
         );
       }
 

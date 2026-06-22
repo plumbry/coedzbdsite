@@ -632,13 +632,14 @@ export default function MemberManagement() {
       showSidebar={!!isModeratorOrAdmin}
       header={{
         actions: isAdmin ? (
-          <>
+          <div className="flex w-full flex-nowrap items-center justify-center gap-1 sm:w-auto sm:justify-end sm:gap-2">
             <DiscordSyncTools compact />
             <Button
               size="sm"
               variant="secondary"
               onClick={handleSyncGirlRole}
               disabled={isSyncingGirlRole}
+              className="h-7 px-1.5 text-[11px] sm:h-8 sm:px-3 sm:text-sm"
               title={
                 girlRoleSyncStatus?.lastSyncedAt
                   ? `${girlRoleSyncStatus.count} verifications · last synced ${format(new Date(girlRoleSyncStatus.lastSyncedAt), "MMM d, yyyy h:mm a")}`
@@ -646,23 +647,23 @@ export default function MemberManagement() {
               }
             >
               {isSyncingGirlRole ? (
-                <Loader2 className="shrink-0 animate-spin sm:mr-1.5" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin sm:mr-1.5" />
               ) : (
-                <RefreshCw className="shrink-0 sm:mr-1.5" />
+                <RefreshCw className="h-3.5 w-3.5 sm:mr-1.5" />
               )}
-              <span className="truncate">Girl Role</span>
+              Girl Role
               {girlRoleSyncStatus && girlRoleSyncStatus.count > 0 && !isSyncingGirlRole && (
                 <Badge variant="outline" className="ml-0.5 shrink-0 px-1 py-0 text-[9px] font-normal sm:ml-1.5 sm:px-1.5 sm:text-[10px]">
                   {girlRoleSyncStatus.count}
                 </Badge>
               )}
             </Button>
-          </>
+          </div>
         ) : undefined,
       }}
     >
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="min-w-0">
+          <div className="min-w-0">
             <TabsList
               className={`inline-flex h-9 w-max min-w-0 gap-0.5 p-0.5 md:grid md:h-10 md:w-full md:gap-1 md:p-1 ${
                 isAdmin ? "md:grid-cols-6" : isModeratorOrAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
@@ -684,9 +685,9 @@ export default function MemberManagement() {
           {/* Applications Tab - staff view; admin manages */}
           {isModeratorOrAdmin && (
             <TabsContent value="applications">
-            <Card className="p-0 sm:p-6">
-              <CardHeader className="px-3 py-4 sm:px-6 sm:py-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <Card className="gap-2 p-0 py-3 sm:gap-3 sm:p-6">
+              <CardHeader className="px-3 py-1 sm:px-6 sm:py-6">
+                <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <div>
                     <CardTitle>Applications</CardTitle>
                     <CardDescription>
@@ -694,8 +695,8 @@ export default function MemberManagement() {
                     </CardDescription>
                   </div>
                   {isAdmin && (
-                    <Button size="sm" onClick={() => setNewAppDialogOpen(true)} className="w-auto">
-                      <Plus className="sm:mr-1.5" />
+                    <Button onClick={() => setNewAppDialogOpen(true)} className="mx-auto h-7 cursor-pointer px-2 text-xs sm:mx-0 sm:h-9 sm:px-4 sm:text-sm">
+                      <Plus className="h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />
                       New Application
                     </Button>
                   )}
@@ -703,18 +704,18 @@ export default function MemberManagement() {
               </CardHeader>
               <CardContent className="px-3 sm:px-6">
                 {pendingApplications === undefined ? (
-                  <Skeleton className="h-96 w-full" />
+                  <Skeleton className="h-40 w-full sm:h-96" />
                 ) : pendingApplications.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
+                  <div className="py-6 text-center text-muted-foreground sm:py-12">
                     No pending applications
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2 sm:space-y-3">
                     {(applicationsPagination.pageItems ?? []).map((app) => (
-                      <Card key={app._id} className="border-2">
-                        <CardHeader className="pb-3">
-                          <div className="flex items-start justify-between">
-                            <div>
+                      <Card key={app._id} className="gap-2 border-2 py-3 sm:gap-3 sm:py-4">
+                        <CardHeader className="px-3 pb-1 sm:px-4 sm:pb-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
                               <CardTitle className="text-base">{app.discordUsername}</CardTitle>
                               {app.discordId && (
                                 <CardDescription className="text-xs">
@@ -752,20 +753,20 @@ export default function MemberManagement() {
                                 )}
                               </div>
                             </div>
-                            <div className="text-xs text-muted-foreground">
+                            <div className="shrink-0 text-xs text-muted-foreground">
                               {format(new Date(app._creationTime), "MMM d, yyyy")}
                             </div>
                           </div>
                         </CardHeader>
-                        <CardContent className="pt-0">
-                          <div className="space-y-3">
+                        <CardContent className="px-3 pt-0 sm:px-4">
+                          <div className="space-y-2 sm:space-y-3">
                             <a
                               href={app.fortniteProfileLink}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline flex items-center gap-1 break-all"
+                              className="flex min-w-0 items-center gap-1 overflow-hidden text-xs text-primary hover:underline"
                             >
-                              {app.fortniteProfileLink}
+                              <span className="min-w-0 truncate">{app.fortniteProfileLink}</span>
                               <ExternalLink className="h-3 w-3 shrink-0" />
                             </a>
                             {isAdmin && (
@@ -774,13 +775,18 @@ export default function MemberManagement() {
                                   onClick={() => setEditingApplicationId(app._id)}
                                   variant="secondary"
                                   size="sm"
+                                  className="h-7 cursor-pointer px-1 text-[11px] sm:px-2 sm:text-xs"
                                 >
-                                  <Edit className="sm:mr-1" />
-                                  <span className="truncate">Edit</span>
+                                  <Edit className="h-3 w-3 sm:mr-1" />
+                                  Edit
                                 </Button>
-                                <Button onClick={() => handleAccept(app._id)} size="sm">
-                                  <UserCheck className="sm:mr-1" />
-                                  <span className="truncate">Accept</span>
+                                <Button
+                                  onClick={() => handleAccept(app._id)}
+                                  size="sm"
+                                  className="h-7 cursor-pointer px-1 text-[11px] sm:px-2 sm:text-xs"
+                                >
+                                  <UserCheck className="h-3 w-3 sm:mr-1" />
+                                  Accept
                                 </Button>
                                 <Button
                                   onClick={() => {
@@ -789,9 +795,10 @@ export default function MemberManagement() {
                                   }}
                                   variant="destructive"
                                   size="sm"
+                                  className="h-7 cursor-pointer px-1 text-[11px] sm:px-2 sm:text-xs"
                                 >
-                                  <UserX className="sm:mr-1" />
-                                  <span className="truncate">Reject</span>
+                                  <UserX className="h-3 w-3 sm:mr-1" />
+                                  Reject
                                 </Button>
                                 <Button
                                   onClick={() => {
@@ -800,9 +807,10 @@ export default function MemberManagement() {
                                   }}
                                   variant="destructive"
                                   size="sm"
+                                  className="h-7 cursor-pointer px-1 text-[11px] sm:px-2 sm:text-xs"
                                 >
-                                  <Trash2 className="sm:mr-1" />
-                                  <span className="truncate">Delete</span>
+                                  <Trash2 className="h-3 w-3 sm:mr-1" />
+                                  Delete
                                 </Button>
                               </div>
                             )}
@@ -888,7 +896,7 @@ export default function MemberManagement() {
                         Select two members to merge duplicate records (e.g. similar Discord names).
                       </p>
                     )}
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-hidden md:overflow-x-auto">
                     {/* Desktop table */}
                     <Table className="hidden md:table [&_td]:py-1.5 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
                       <TableHeader>
@@ -1160,7 +1168,7 @@ export default function MemberManagement() {
                       />
                     </div>
                     {activeTab === "discord" && renderDiscordLookupAlert()}
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-hidden md:overflow-x-auto">
                     <Table className="hidden md:table [&_td]:py-1.5 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
                       <TableHeader>
                         <TableRow>
@@ -1384,7 +1392,7 @@ export default function MemberManagement() {
                       />
                     </div>
                     {activeTab === "rejected" && renderDiscordLookupAlert()}
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-hidden md:overflow-x-auto">
                     <Table className="hidden md:table [&_td]:py-1.5 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
                       <TableHeader>
                         <TableRow>
@@ -1539,7 +1547,7 @@ export default function MemberManagement() {
                       />
                     </div>
                     {activeTab === "former" && renderDiscordLookupAlert()}
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-hidden md:overflow-x-auto">
                     <Table className="hidden md:table [&_td]:py-1.5 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
                       <TableHeader>
                         <TableRow>

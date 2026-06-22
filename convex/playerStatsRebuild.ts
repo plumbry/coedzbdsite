@@ -57,7 +57,7 @@ function jobIdleMs(job: { lastProgressAt: number; startedAt: number }, now: numb
 async function failStaleRunningJobs(ctx: MutationCtx) {
   const running = await ctx.db
     .query("playerStatsRebuildJobs")
-    .withIndex("by_status", (q: { eq: Function }) => q.eq("status", "running"))
+    .withIndex("by_status", (q) => q.eq("status", "running"))
     .collect();
   const now = Date.now();
   for (const job of running) {
@@ -80,7 +80,7 @@ async function failStaleRunningJobs(ctx: MutationCtx) {
 async function reconcilePlayerStatsRebuildJobs(ctx: MutationCtx) {
   const running = await ctx.db
     .query("playerStatsRebuildJobs")
-    .withIndex("by_status", (q: { eq: Function }) => q.eq("status", "running"))
+    .withIndex("by_status", (q) => q.eq("status", "running"))
     .collect();
 
   const now = Date.now();

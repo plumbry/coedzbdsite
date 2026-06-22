@@ -6,9 +6,14 @@ import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
 import { requireAdminAction } from "../auth_helpers";
 import { normalizeDiscordUsernameForMatch } from "../helpers/discordApplicationSync";
+import {
+  canUseDiscordNickname,
+  sanitizeDiscordNickname,
+} from "../lib/discordNicknamePolicy";
 
 const SYNC_BATCH_SIZE = 25;
 const ADMIN_CACHE_RUN_ID = "admin-cache";
+const CHANGE_NICKNAME_PERMISSION = 1n << 26n;
 
 interface DiscordMember {
   user: {
@@ -25,6 +30,7 @@ interface DiscordMember {
 interface DiscordRole {
   id: string;
   name: string;
+  permissions?: string;
 }
 
 type SyncResult = {
@@ -35,6 +41,8 @@ type SyncResult = {
   skipped: number;
   autoAccepted: number;
   archived?: number;
+  nicknamesCleared?: number;
+  nicknamePermissionRolesUpdated?: number;
 };
 
 function formatDiscordUsername(user: DiscordMember["user"]): string {
@@ -47,24 +55,51 @@ function memberToBatchPayload(
   member: DiscordMember,
   roleNameById: Map<string, string>,
 ) {
+  const roles = (member.roles ?? [])
+    .map((roleId) => {
+      const name = roleNameById.get(roleId);
+      return name ? { id: roleId, name } : null;
+    })
+    .filter((role): role is { id: string; name: string } => role !== null);
+  const nickname = sanitizeDiscordNickname(member.nick, roles);
+
   return {
     discordUsername: formatDiscordUsername(member.user),
     discordUserId: member.user.id,
-    nickname: member.nick || undefined,
+    nickname,
     serverJoinDate: member.joined_at,
-    roles: (member.roles ?? [])
-      .map((roleId) => {
-        const name = roleNameById.get(roleId);
-        return name ? { id: roleId, name } : null;
-      })
-      .filter((role): role is { id: string; name: string } => role !== null),
+    roles,
   };
+}
+
+function memberRoles(
+  member: DiscordMember,
+  roleNameById: Map<string, string>,
+): Array<{ id: string; name: string }> {
+  return (member.roles ?? [])
+    .map((roleId) => {
+      const name = roleNameById.get(roleId);
+      return name ? { id: roleId, name } : null;
+    })
+    .filter((role): role is { id: string; name: string } => role !== null);
 }
 
 async function fetchGuildRoleMap(
   discordBotToken: string,
   discordGuildId: string,
 ): Promise<Map<string, string>> {
+  const guildRoles = await fetchGuildRoles(discordBotToken, discordGuildId);
+  const roleNameById = new Map<string, string>();
+  for (const role of guildRoles) {
+    roleNameById.set(role.id, role.name);
+  }
+  return roleNameById;
+}
+
+async function fetchGuildRoles(
+  discordBotToken: string,
+  discordGuildId: string,
+): Promise<DiscordRole[]> {
   const rolesResponse = await fetch(
     `https://discord.com/api/v10/guilds/${discordGuildId}/roles`,
     { headers: { Authorization: `Bot ${discordBotToken}` } },
@@ -73,12 +108,103 @@ async function fetchGuildRoleMap(
     const errorText = await rolesResponse.text();
     throw new Error(`Discord roles API error: ${rolesResponse.status} - ${errorText}`);
   }
-  const guildRoles: DiscordRole[] = await rolesResponse.json();
-  const roleNameById = new Map<string, string>();
-  for (const role of guildRoles) {
-    roleNameById.set(role.id, role.name);
+  return await rolesResponse.json();
+}
+
+async function patchGuildRolePermissions(
+  discordBotToken: string,
+  discordGuildId: string,
+  roleId: string,
+  permissions: bigint,
+): Promise<void> {
+  const response = await fetch(
+    `https://discord.com/api/v10/guilds/${discordGuildId}/roles/${roleId}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bot ${discordBotToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ permissions: permissions.toString() }),
+    },
+  );
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Discord role patch error: ${response.status} - ${errorText}`);
   }
-  return roleNameById;
+}
+
+async function removeViewerNicknamePermissions(
+  discordBotToken: string,
+  discordGuildId: string,
+  guildRoles: DiscordRole[],
+): Promise<number> {
+  let rolesUpdated = 0;
+  for (const role of guildRoles) {
+    const roleName = role.name.toLowerCase();
+    const controlsViewerAccess = role.id === discordGuildId || roleName === "viewer";
+    if (!controlsViewerAccess || !role.permissions) {
+      continue;
+    }
+
+    const permissions = BigInt(role.permissions);
+    if ((permissions & CHANGE_NICKNAME_PERMISSION) === 0n) {
+      continue;
+    }
+
+    await patchGuildRolePermissions(
+      discordBotToken,
+      discordGuildId,
+      role.id,
+      permissions & ~CHANGE_NICKNAME_PERMISSION,
+    );
+    rolesUpdated++;
+  }
+  return rolesUpdated;
+}
+
+async function clearViewerOnlyDiscordNicknames(
+  discordBotToken: string,
+  discordGuildId: string,
+  members: DiscordMember[],
+  roleNameById: Map<string, string>,
+): Promise<{ cleared: number; discordUserIds: string[]; errors: number }> {
+  let cleared = 0;
+  let errors = 0;
+  const discordUserIds: string[] = [];
+
+  for (const member of members) {
+    if (!member.nick) {
+      continue;
+    }
+    const roles = memberRoles(member, roleNameById);
+    if (canUseDiscordNickname(roles)) {
+      continue;
+    }
+
+    const response = await fetch(
+      `https://discord.com/api/v10/guilds/${discordGuildId}/members/${member.user.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bot ${discordBotToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nick: null }),
+      },
+    );
+
+    if (!response.ok) {
+      errors++;
+      continue;
+    }
+
+    member.nick = null;
+    discordUserIds.push(member.user.id);
+    cleared++;
+  }
+
+  return { cleared, discordUserIds, errors };
 }
 
 async function fetchGuildMember(
@@ -212,13 +338,27 @@ export const syncSingleDiscordMember = action({
       throw new Error(`Discord member ${args.discordUserId} not found in guild`);
     }
 
-    const roleNameById = await fetchGuildRoleMap(discordBotToken, discordGuildId);
+    const guildRoles = await fetchGuildRoles(discordBotToken, discordGuildId);
+    const roleNameById = new Map(guildRoles.map((role) => [role.id, role.name]));
+    await removeViewerNicknamePermissions(discordBotToken, discordGuildId, guildRoles);
+    const nicknameCleanup = await clearViewerOnlyDiscordNicknames(
+      discordBotToken,
+      discordGuildId,
+      [member],
+      roleNameById,
+    );
+    if (nicknameCleanup.discordUserIds.length > 0) {
+      await ctx.runMutation(internal.discord.clearNicknamesForDiscordUsersInternal, {
+        discordUserIds: nicknameCleanup.discordUserIds,
+      });
+    }
     const syncRunId = await ensureSyncRun(ctx);
 
     const result: { added: number; updated: number; autoAccepted: number } = await ctx.runMutation(
       internal.discord.syncDiscordMembersBatch,
       {
         syncRunId,
+        allowMembershipAcceptance: true,
         members: [memberToBatchPayload(member, roleNameById)],
       },
     );
@@ -235,7 +375,10 @@ export const syncSingleDiscordMember = action({
 });
 
 /** Full guild member sync — used by the daily cron and archives players who left the server. */
-async function fetchAndSyncAllDiscordMembers(ctx: ActionCtx): Promise<SyncResult> {
+async function fetchAndSyncAllDiscordMembers(
+  ctx: ActionCtx,
+  options: { allowMembershipAcceptance: boolean },
+): Promise<SyncResult> {
   const { discordBotToken, discordGuildId } = getDiscordConfig();
 
   try {
@@ -244,8 +387,25 @@ async function fetchAndSyncAllDiscordMembers(ctx: ActionCtx): Promise<SyncResult
       status: "in_progress",
     });
 
-    const roleNameById = await fetchGuildRoleMap(discordBotToken, discordGuildId);
+    const guildRoles = await fetchGuildRoles(discordBotToken, discordGuildId);
+    const roleNameById = new Map(guildRoles.map((role) => [role.id, role.name]));
     const allMembers = await fetchAllGuildMembers(discordBotToken, discordGuildId);
+    const nicknamePermissionRolesUpdated = await removeViewerNicknamePermissions(
+      discordBotToken,
+      discordGuildId,
+      guildRoles,
+    );
+    const nicknameCleanup = await clearViewerOnlyDiscordNicknames(
+      discordBotToken,
+      discordGuildId,
+      allMembers,
+      roleNameById,
+    );
+    if (nicknameCleanup.discordUserIds.length > 0) {
+      await ctx.runMutation(internal.discord.clearNicknamesForDiscordUsersInternal, {
+        discordUserIds: nicknameCleanup.discordUserIds,
+      });
+    }
 
     let added = 0;
     let updated = 0;
@@ -264,6 +424,7 @@ async function fetchAndSyncAllDiscordMembers(ctx: ActionCtx): Promise<SyncResult
 
         const result = await ctx.runMutation(internal.discord.syncDiscordMembersBatch, {
           syncRunId,
+          allowMembershipAcceptance: options.allowMembershipAcceptance,
           members: batch,
         });
         added += result.added;
@@ -304,6 +465,8 @@ async function fetchAndSyncAllDiscordMembers(ctx: ActionCtx): Promise<SyncResult
       skipped: 0,
       autoAccepted,
       archived: archiveResult.archived,
+      nicknamesCleared: nicknameCleanup.cleared,
+      nicknamePermissionRolesUpdated,
     };
   } catch (error) {
     await ctx.runMutation(internal.sync.updateSyncStatusInternal, {
@@ -319,7 +482,7 @@ async function fetchAndSyncAllDiscordMembers(ctx: ActionCtx): Promise<SyncResult
 export const syncDiscordMembersInternal = internalAction({
   args: {},
   handler: async (ctx): Promise<void> => {
-    await fetchAndSyncAllDiscordMembers(ctx);
+    await fetchAndSyncAllDiscordMembers(ctx, { allowMembershipAcceptance: true });
   },
 });
 
@@ -328,7 +491,51 @@ export const syncAllGuildMembers = action({
   args: {},
   handler: async (ctx): Promise<SyncResult> => {
     await requireAdminAction(ctx);
-    return await fetchAndSyncAllDiscordMembers(ctx);
+    return await fetchAndSyncAllDiscordMembers(ctx, { allowMembershipAcceptance: true });
+  },
+});
+
+/** Admin-only: remove viewer nickname permissions and clear viewer-only nicknames now. */
+export const enforceViewerNicknamePolicy = action({
+  args: {},
+  handler: async (
+    ctx,
+  ): Promise<{
+    success: boolean;
+    membersChecked: number;
+    nicknamesCleared: number;
+    nicknamePermissionRolesUpdated: number;
+    errors: number;
+  }> => {
+    await requireAdminAction(ctx);
+    const { discordBotToken, discordGuildId } = getDiscordConfig();
+    const guildRoles = await fetchGuildRoles(discordBotToken, discordGuildId);
+    const roleNameById = new Map(guildRoles.map((role) => [role.id, role.name]));
+    const nicknamePermissionRolesUpdated = await removeViewerNicknamePermissions(
+      discordBotToken,
+      discordGuildId,
+      guildRoles,
+    );
+    const allMembers = await fetchAllGuildMembers(discordBotToken, discordGuildId);
+    const nicknameCleanup = await clearViewerOnlyDiscordNicknames(
+      discordBotToken,
+      discordGuildId,
+      allMembers,
+      roleNameById,
+    );
+    if (nicknameCleanup.discordUserIds.length > 0) {
+      await ctx.runMutation(internal.discord.clearNicknamesForDiscordUsersInternal, {
+        discordUserIds: nicknameCleanup.discordUserIds,
+      });
+    }
+
+    return {
+      success: true,
+      membersChecked: allMembers.length,
+      nicknamesCleared: nicknameCleanup.cleared,
+      nicknamePermissionRolesUpdated,
+      errors: nicknameCleanup.errors,
+    };
   },
 });
 
@@ -362,8 +569,25 @@ export const syncAcceptedMembers = action({
         recordsUpdated: 0,
       });
 
-      const roleNameById = await fetchGuildRoleMap(discordBotToken, discordGuildId);
+      const guildRoles = await fetchGuildRoles(discordBotToken, discordGuildId);
+      const roleNameById = new Map(guildRoles.map((role) => [role.id, role.name]));
       const allMembers = await fetchAllGuildMembers(discordBotToken, discordGuildId);
+      const nicknamePermissionRolesUpdated = await removeViewerNicknamePermissions(
+        discordBotToken,
+        discordGuildId,
+        guildRoles,
+      );
+      const nicknameCleanup = await clearViewerOnlyDiscordNicknames(
+        discordBotToken,
+        discordGuildId,
+        allMembers,
+        roleNameById,
+      );
+      if (nicknameCleanup.discordUserIds.length > 0) {
+        await ctx.runMutation(internal.discord.clearNicknamesForDiscordUsersInternal, {
+          discordUserIds: nicknameCleanup.discordUserIds,
+        });
+      }
       const membersToSync = allMembers.filter((member) =>
         memberMatchesMembershipSyncTargets(
           member,
@@ -387,6 +611,7 @@ export const syncAcceptedMembers = action({
 
         const result = await ctx.runMutation(internal.discord.syncDiscordMembersBatch, {
           syncRunId,
+          allowMembershipAcceptance: true,
           members: batch,
         });
         added += result.added;
@@ -417,6 +642,8 @@ export const syncAcceptedMembers = action({
         updated,
         skipped: Math.max(0, skipped),
         autoAccepted,
+        nicknamesCleared: nicknameCleanup.cleared,
+        nicknamePermissionRolesUpdated,
       };
     } catch (error) {
       await ctx.runMutation(internal.sync.updateSyncStatusInternal, {

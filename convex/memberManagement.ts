@@ -445,6 +445,14 @@ export const updateApplication = mutation({
     discordUsername: v.string(),
     epicUsername: v.string(),
     discordId: v.optional(v.string()),
+    source: v.optional(
+      v.union(
+        v.literal("TikTok"),
+        v.literal("Twitter"),
+        v.literal("Teammate"),
+        v.literal("Other"),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
@@ -459,9 +467,10 @@ export const updateApplication = mutation({
     
     const fortniteProfileLink = `https://fortnitetracker.com/profile/all/${encodeURIComponent(args.epicUsername)}`;
     
-    const updateData: Record<string, string> = {
+    const updateData: Partial<Doc<"applications">> = {
       discordUsername: args.discordUsername,
       fortniteProfileLink,
+      source: args.source,
     };
     
     if (args.discordId !== undefined) {

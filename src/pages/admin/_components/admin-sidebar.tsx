@@ -333,7 +333,6 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
         items: [
           { path: "/admin/stats", label: "Analytics Hub", icon: BarChart3 },
           { path: "/admin/audience-insights", label: "Audience Insights", icon: PieChart },
-          { path: "/admin/leaderboard-stats", label: "Leaderboard Stats", icon: Trophy },
         ],
       });
     }

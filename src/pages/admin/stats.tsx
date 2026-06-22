@@ -57,7 +57,7 @@ const statsSections: StatsSection[] = [
   },
   {
     title: "Population & events",
-    description: "Member mix, event participation, and leaderboard participation rates.",
+    description: "Member mix, event participation, and audience trends.",
     analyticsVisible: true,
     links: [
       {
@@ -78,7 +78,6 @@ const statsSections: StatsSection[] = [
         description: "Event leaderboard participation and top-finisher rates.",
         href: "/admin/leaderboard-stats",
         icon: Trophy,
-        analyticsVisible: true,
       },
     ],
   },
@@ -171,7 +170,7 @@ export default function StatsPage() {
       title="Analytics Hub"
       description={
         isAnalytics && !isAdmin
-          ? "Audience insights and leaderboard participation rates."
+          ? "Audience insights for analytics staff."
           : "Tier evaluation, holistic scores, earnings, and unified stat rebuilds."
       }
       authTitle="Sign in to access analytics"

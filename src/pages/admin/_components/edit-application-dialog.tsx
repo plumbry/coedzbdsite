@@ -143,11 +143,17 @@ function getTierColor(tier: string): "default" | "secondary" | "destructive" {
   return "secondary";
 }
 
+type ApplicationSource = "TikTok" | "Twitter" | "Teammate" | "Other";
+type SourceSelection = "None" | ApplicationSource;
+
+const SOURCE_OPTIONS: SourceSelection[] = ["None", "TikTok", "Twitter", "Teammate", "Other"];
+
 type ApplicationData = {
   _id: Id<"applications">;
   discordUsername: string;
   discordId: string;
   fortniteProfileLink: string;
+  source?: ApplicationSource;
   playerId?: Id<"players">;
 };
 
@@ -161,6 +167,7 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
   const [discordUsername, setDiscordUsername] = useState("");
   const [epicUsername, setEpicUsername] = useState("");
   const [discordId, setDiscordId] = useState("");
+  const [source, setSource] = useState<SourceSelection>("None");
   const [scores, setScores] = useState<ScoreState>(INITIAL_SCORES);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scoresLoaded, setScoresLoaded] = useState(false);
@@ -186,6 +193,7 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
       setDiscordUsername(application.discordUsername);
       setEpicUsername(application.fortniteProfileLink.split("/").pop() || "");
       setDiscordId(application.discordId || "");
+      setSource(application.source ?? "None");
       setStep("info");
       setScoresLoaded(false);
     }
@@ -245,6 +253,7 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
         discordUsername: discordUsername.trim(),
         epicUsername: epicUsername.trim(),
         discordId: discordId.trim() || undefined,
+        source: source === "None" ? undefined : source,
       });
 
       // Step 2: Save evaluation scores
@@ -298,6 +307,7 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
         discordUsername: discordUsername.trim(),
         epicUsername: epicUsername.trim(),
         discordId: discordId.trim() || undefined,
+        source: source === "None" ? undefined : source,
       });
       toast.success("Application updated");
       handleClose();
@@ -394,6 +404,21 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
                   onChange={(e) => setDiscordId(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">Optional - can be linked later</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-source">Source</Label>
+                <Select value={source} onValueChange={(value) => setSource(value as SourceSelection)}>
+                  <SelectTrigger id="edit-source">
+                    <SelectValue placeholder="Select source..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SOURCE_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter className="flex justify-between sm:justify-between">

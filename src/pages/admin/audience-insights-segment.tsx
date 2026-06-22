@@ -49,6 +49,12 @@ export default function AudienceInsightsSegmentPage() {
   const [searchParams] = useSearchParams();
   const activeOnly =
     (chart === "tier" || chart === "gender") && searchParams.get("members") === "active";
+  const newMemberWindowDays =
+    chart === "gender" &&
+    searchParams.get("members") === "new" &&
+    (searchParams.get("window") === "7" || searchParams.get("window") === "30")
+      ? (Number(searchParams.get("window")) as 7 | 30)
+      : undefined;
   const sourceWindowParam = searchParams.get("window");
   const sourceWindowDays =
     chart === "applicationSource" && (sourceWindowParam === "7" || sourceWindowParam === "30")
@@ -71,6 +77,7 @@ export default function AudienceInsightsSegmentPage() {
           segment: segmentKey,
           playersCursor: playersCursor ?? undefined,
           activeOnly: activeOnly || undefined,
+          newMemberWindowDays,
           sourceWindowDays,
         }
       : "skip",
@@ -82,7 +89,7 @@ export default function AudienceInsightsSegmentPage() {
     setHasMore(true);
     setInitialLoaded(false);
     setSearch("");
-  }, [chartType, segmentKey, activeOnly, sourceWindowDays]);
+  }, [chartType, segmentKey, activeOnly, newMemberWindowDays, sourceWindowDays]);
 
   useEffect(() => {
     if (!page) return;
@@ -138,8 +145,13 @@ export default function AudienceInsightsSegmentPage() {
     return <Navigate to="/admin/audience-insights" replace />;
   }
 
+  if (chartType === "gender" && searchParams.get("members") === "new" && !newMemberWindowDays) {
+    return <Navigate to="/admin/audience-insights" replace />;
+  }
+
   const title = audienceSegmentPageTitle(chartType, segmentKey, {
     activeOnly,
+    newMemberWindowDays,
     sourceWindowDays,
   });
   const isLoadingFirstPage = !initialLoaded && page === undefined;
@@ -152,6 +164,8 @@ export default function AudienceInsightsSegmentPage() {
       description={
         chartType === "applicationSource"
           ? `Applications submitted in the last ${sourceWindowDays} days in this source segment.`
+          : newMemberWindowDays
+            ? `Accepted members from applications approved in the last ${newMemberWindowDays} days.`
           : activeOnly
             ? "Active members in this segment (played in the last 6 weeks)."
             : "Accepted members in this audience segment."

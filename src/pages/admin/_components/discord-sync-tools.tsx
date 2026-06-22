@@ -137,42 +137,63 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
         variant="secondary"
         disabled={isBusy || inProgress}
         onClick={() => setConfirmAcceptedOpen(true)}
+        className={compact ? "h-7 px-1.5 text-[11px] sm:h-8 sm:px-3 sm:text-sm" : undefined}
       >
         {isSyncingAccepted || inProgress ? (
-          <Loader2 className="shrink-0 animate-spin sm:mr-1.5" />
+          <Loader2 className={compact ? "h-3.5 w-3.5 animate-spin sm:mr-1.5" : "mr-1.5 h-3.5 w-3.5 animate-spin"} />
         ) : (
-          <RefreshCw className="shrink-0 sm:mr-1.5" />
+          <RefreshCw className={compact ? "h-3.5 w-3.5 sm:mr-1.5" : "mr-1.5 h-3.5 w-3.5"} />
         )}
-        <span className="truncate sm:hidden">Discord sync</span>
-        <span className="hidden truncate sm:inline">Sync membership from Discord</span>
+        {compact ? (
+          <>
+            <span className="sm:hidden">Discord</span>
+            <span className="hidden sm:inline">Sync membership from Discord</span>
+          </>
+        ) : (
+          "Sync membership from Discord"
+        )}
       </Button>
       <Button
         size="sm"
         variant="secondary"
         disabled={isBusy}
         onClick={handleSyncPendingRoles}
+        className={compact ? "h-7 px-1.5 text-[11px] sm:h-8 sm:px-3 sm:text-sm" : undefined}
       >
         {isSyncingRoles ? (
-          <Loader2 className="shrink-0 animate-spin sm:mr-1.5" />
+          <Loader2 className={compact ? "h-3.5 w-3.5 animate-spin sm:mr-1.5" : "mr-1.5 h-3.5 w-3.5 animate-spin"} />
         ) : (
-          <RefreshCw className="shrink-0 sm:mr-1.5" />
+          <RefreshCw className={compact ? "h-3.5 w-3.5 sm:mr-1.5" : "mr-1.5 h-3.5 w-3.5"} />
         )}
-        <span className="truncate sm:hidden">Role sync</span>
-        <span className="hidden truncate sm:inline">Sync pending role changes</span>
+        {compact ? (
+          <>
+            <span className="sm:hidden">Role sync</span>
+            <span className="hidden sm:inline">Sync pending role changes</span>
+          </>
+        ) : (
+          "Sync pending role changes"
+        )}
       </Button>
       <Button
         size="sm"
         variant="outline"
         disabled={isBusy}
         onClick={handleRebuildCache}
+        className={compact ? "h-7 px-1.5 text-[11px] sm:h-8 sm:px-3 sm:text-sm" : undefined}
       >
         {isRebuildingCache ? (
-          <Loader2 className="shrink-0 animate-spin sm:mr-1.5" />
+          <Loader2 className={compact ? "h-3.5 w-3.5 animate-spin sm:mr-1.5" : "mr-1.5 h-3.5 w-3.5 animate-spin"} />
         ) : (
-          <RefreshCw className="shrink-0 sm:mr-1.5" />
+          <RefreshCw className={compact ? "h-3.5 w-3.5 sm:mr-1.5" : "mr-1.5 h-3.5 w-3.5"} />
         )}
-        <span className="truncate sm:hidden">Rebuild</span>
-        <span className="hidden truncate sm:inline">Rebuild sync cache</span>
+        {compact ? (
+          <>
+            <span className="sm:hidden">Rebuild</span>
+            <span className="hidden sm:inline">Rebuild sync cache</span>
+          </>
+        ) : (
+          "Rebuild sync cache"
+        )}
       </Button>
     </div>
   );

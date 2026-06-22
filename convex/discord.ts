@@ -20,10 +20,20 @@ import {
 import { findPlayerByDiscordUserId } from "./helpers/playerDiscordAliases";
 import { schedulePublicMemberDirectoryRebuild } from "./helpers/publicMemberDirectory";
 import { scheduleGenderSheetRebuild } from "./helpers/genderSheetSchedule";
+import {
+  sanitizeDiscordNickname,
+} from "./lib/discordNicknamePolicy";
 
 type SyncMatchConfidence = "exact" | "username" | "fuzzy" | "manual";
 
 const ADMIN_CACHE_RUN_ID = "admin-cache";
+
+function nicknameForPlayerPatch(
+  nickname: string | null | undefined,
+  roles: Array<{ id: string; name: string }> | null | undefined,
+): string | undefined {
+  return sanitizeDiscordNickname(nickname, roles);
+}
 
 function hasRealDiscordUserId(discordUserId: string | undefined): boolean {
   return !!discordUserId && !discordUserId.startsWith("placeholder_");
@@ -329,6 +339,27 @@ export const archiveMissingPlayersInternal = internalMutation({
   },
 });
 
+export const clearNicknamesForDiscordUsersInternal = internalMutation({
+  args: {
+    discordUserIds: v.array(v.string()),
+  },
+  handler: async (ctx, args): Promise<{ cleared: number }> => {
+    let cleared = 0;
+    for (const discordUserId of args.discordUserIds) {
+      const player = await ctx.db
+        .query("players")
+        .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", discordUserId))
+        .first();
+      if (!player?.nickname) {
+        continue;
+      }
+      await ctx.db.patch(player._id, { nickname: undefined });
+      cleared++;
+    }
+    return { cleared };
+  },
+});
+
 // One-time bulk archive of all active players without real Discord IDs
 export const archiveAllWithoutDiscordId = mutation({
   args: {},
@@ -463,12 +494,17 @@ export const manualMatchToPlayer = mutation({
       });
     }
 
+  const allowedNickname = nicknameForPlayerPatch(
+    discordMember.nickname,
+    discordMember.discordRoles,
+  );
+
     // Update the target player with Discord member's data
     await ctx.db.patch(args.targetPlayerId, {
       discordUsername: discordMember.discordUsername,
       discordUserId: discordMember.discordUserId,
       epicUsername: discordMember.epicUsername,
-      nickname: discordMember.nickname,
+    nickname: allowedNickname,
       discordRoles: discordMember.discordRoles,
       serverJoinDate: discordMember.serverJoinDate,
       matchConfidence: "manual" as const,
@@ -1023,6 +1059,7 @@ export const completeDiscordMemberSyncRun = internalMutation({
 export const syncDiscordMembersBatch = internalMutation({
   args: {
     syncRunId: v.optional(v.string()),
+    allowMembershipAcceptance: v.optional(v.boolean()),
     members: v.array(
       v.object({
         discordUsername: v.string(),
@@ -1041,6 +1078,7 @@ export const syncDiscordMembersBatch = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
+    const allowMembershipAcceptance = args.allowMembershipAcceptance ?? false;
     let playersCache: DiscordBatchSyncPlayer[];
     if (args.syncRunId) {
       const run = await ctx.db
@@ -1062,14 +1100,15 @@ export const syncDiscordMembersBatch = internalMutation({
     const tierRoleNames = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
 
     for (const member of args.members) {
-      const epicUsername = member.nickname || member.discordUsername;
+      const allowedNickname = nicknameForPlayerPatch(member.nickname, member.roles);
+      const epicUsername = allowedNickname || member.discordUsername;
       const hasTierRole = member.roles?.some((role) => tierRoleNames.includes(role.name)) || false;
       const { existingPlayer: matchedPlayer, matchConfidence } = await resolveExistingPlayerForBatchSync(
         ctx,
         {
           discordUserId: member.discordUserId,
           discordUsername: member.discordUsername,
-          nickname: member.nickname,
+          nickname: allowedNickname,
         },
         playersCache,
       );
@@ -1092,7 +1131,7 @@ export const syncDiscordMembersBatch = internalMutation({
         } = {
           discordUsername: member.discordUsername,
           discordUserId: member.discordUserId,
-          nickname: member.nickname,
+          nickname: allowedNickname,
           epicUsername,
           serverJoinDate: member.serverJoinDate,
           hasLeftServer: false,
@@ -1117,6 +1156,7 @@ export const syncDiscordMembersBatch = internalMutation({
         }
 
         if (
+          allowMembershipAcceptance &&
           hasTierRole &&
           (existingPlayer.status === "archived" ||
             existingPlayer.currentMembershipStatus === "former")
@@ -1126,6 +1166,7 @@ export const syncDiscordMembersBatch = internalMutation({
         }
 
         if (
+          allowMembershipAcceptance &&
           hasTierRole &&
           (existingPlayer.status === "discord_member" ||
             existingPlayer.currentMembershipStatus === "rejected")
@@ -1152,13 +1193,15 @@ export const syncDiscordMembersBatch = internalMutation({
           updated++;
         }
 
-        const wasAutoAccepted = await autoAcceptPendingApplicationForDiscordMember(ctx, {
-          hasTierRole,
-          discordUserId: member.discordUserId,
-          discordUsername: member.discordUsername,
-          playerId: existingPlayer._id,
-          nickname: member.nickname,
-        });
+        const wasAutoAccepted = allowMembershipAcceptance
+          ? await autoAcceptPendingApplicationForDiscordMember(ctx, {
+              hasTierRole,
+              discordUserId: member.discordUserId,
+              discordUsername: member.discordUsername,
+              playerId: existingPlayer._id,
+              nickname: allowedNickname,
+            })
+          : false;
         if (wasAutoAccepted) {
           needsCacheRebuild = true;
           autoAccepted++;
@@ -1167,7 +1210,7 @@ export const syncDiscordMembersBatch = internalMutation({
         const pendingApplication = await findPendingApplicationForDiscordMember(ctx, {
           discordUserId: member.discordUserId,
           discordUsername: member.discordUsername,
-          nickname: member.nickname,
+          nickname: allowedNickname,
         });
 
         if (pendingApplication?.playerId) {
@@ -1187,7 +1230,7 @@ export const syncDiscordMembersBatch = internalMutation({
             } = {
               discordUsername: member.discordUsername,
               discordUserId: member.discordUserId,
-              nickname: member.nickname,
+              nickname: allowedNickname,
               epicUsername,
               serverJoinDate: member.serverJoinDate,
               hasLeftServer: false,
@@ -1206,7 +1249,7 @@ export const syncDiscordMembersBatch = internalMutation({
               }
             }
 
-            if (hasTierRole) {
+            if (allowMembershipAcceptance && hasTierRole) {
               updateData.status = "active";
               updateData.currentMembershipStatus = "accepted";
             }
@@ -1229,13 +1272,15 @@ export const syncDiscordMembersBatch = internalMutation({
               updated++;
             }
 
-            const wasAutoAccepted = await autoAcceptPendingApplicationForDiscordMember(ctx, {
-              hasTierRole,
-              discordUserId: member.discordUserId,
-              discordUsername: member.discordUsername,
-              playerId: evaluationPlayer._id,
-              nickname: member.nickname,
-            });
+            const wasAutoAccepted = allowMembershipAcceptance
+              ? await autoAcceptPendingApplicationForDiscordMember(ctx, {
+                  hasTierRole,
+                  discordUserId: member.discordUserId,
+                  discordUsername: member.discordUsername,
+                  playerId: evaluationPlayer._id,
+                  nickname: allowedNickname,
+                })
+              : false;
             if (wasAutoAccepted) {
               needsCacheRebuild = true;
               autoAccepted++;
@@ -1247,12 +1292,13 @@ export const syncDiscordMembersBatch = internalMutation({
         const playerId = await ctx.db.insert("players", {
           discordUsername: member.discordUsername,
           discordUserId: member.discordUserId,
-          nickname: member.nickname,
+          nickname: allowedNickname,
           serverJoinDate: member.serverJoinDate,
           epicUsername,
           discordRoles: member.roles,
-          status: hasTierRole ? "active" : "discord_member",
-          currentMembershipStatus: hasTierRole ? "accepted" : undefined,
+          status: allowMembershipAcceptance && hasTierRole ? "active" : "discord_member",
+          currentMembershipStatus:
+            allowMembershipAcceptance && hasTierRole ? "accepted" : undefined,
           matchConfidence: "exact" as const,
         });
         await syncPlayerDiscordAliases(ctx, {
@@ -1266,14 +1312,16 @@ export const syncDiscordMembersBatch = internalMutation({
           epicUsername,
           discordUsername: member.discordUsername,
         });
-        const wasAutoAccepted = await autoAcceptPendingApplicationForDiscordMember(ctx, {
-          hasTierRole,
-          discordUserId: member.discordUserId,
-          discordUsername: member.discordUsername,
-          playerId,
-          nickname: member.nickname,
-        });
-        if (hasTierRole || wasAutoAccepted) {
+        const wasAutoAccepted = allowMembershipAcceptance
+          ? await autoAcceptPendingApplicationForDiscordMember(ctx, {
+              hasTierRole,
+              discordUserId: member.discordUserId,
+              discordUsername: member.discordUsername,
+              playerId,
+              nickname: allowedNickname,
+            })
+          : false;
+        if ((allowMembershipAcceptance && hasTierRole) || wasAutoAccepted) {
           needsCacheRebuild = true;
         }
         if (wasAutoAccepted) {
@@ -1310,7 +1358,8 @@ export const upsertDiscordMember = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
-    const epicUsername = args.nickname || args.discordUsername;
+    const allowedNickname = nicknameForPlayerPatch(args.nickname, args.roles);
+    const epicUsername = allowedNickname || args.discordUsername;
     const tierRoleNames = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
     const hasTierRole =
       args.roles?.some((role) => tierRoleNames.includes(role.name)) || false;
@@ -1320,7 +1369,7 @@ export const upsertDiscordMember = internalMutation({
       {
         discordUserId: args.discordUserId,
         discordUsername: args.discordUsername,
-        nickname: args.nickname,
+        nickname: allowedNickname,
       },
     );
 
@@ -1341,7 +1390,7 @@ export const upsertDiscordMember = internalMutation({
       } = {
         discordUsername: args.discordUsername,
         discordUserId: args.discordUserId,
-        nickname: args.nickname || undefined,
+        nickname: allowedNickname,
         epicUsername,
         serverJoinDate: args.joinedAt,
         hasLeftServer: false,
@@ -1401,7 +1450,7 @@ export const upsertDiscordMember = internalMutation({
         discordUserId: args.discordUserId,
         discordUsername: args.discordUsername,
         playerId: existingPlayer._id,
-        nickname: args.nickname,
+        nickname: allowedNickname,
       });
 
       if (
@@ -1425,7 +1474,7 @@ export const upsertDiscordMember = internalMutation({
     const pendingApplication = await findPendingApplicationForDiscordMember(ctx, {
       discordUserId: args.discordUserId,
       discordUsername: args.discordUsername,
-      nickname: args.nickname,
+      nickname: allowedNickname,
     });
 
     if (pendingApplication?.playerId) {
@@ -1446,7 +1495,7 @@ export const upsertDiscordMember = internalMutation({
         } = {
           discordUsername: args.discordUsername,
           discordUserId: args.discordUserId,
-          nickname: args.nickname || undefined,
+          nickname: allowedNickname,
           epicUsername,
           serverJoinDate: args.joinedAt,
           hasLeftServer: false,
@@ -1487,7 +1536,7 @@ export const upsertDiscordMember = internalMutation({
           discordUserId: args.discordUserId,
           discordUsername: args.discordUsername,
           playerId: evaluationPlayer._id,
-          nickname: args.nickname,
+          nickname: allowedNickname,
         });
 
         if (
@@ -1512,7 +1561,7 @@ export const upsertDiscordMember = internalMutation({
     const playerId = await ctx.db.insert("players", {
       discordUsername: args.discordUsername,
       discordUserId: args.discordUserId,
-      nickname: args.nickname || undefined,
+      nickname: allowedNickname,
       serverJoinDate: args.joinedAt,
       epicUsername,
       discordRoles: args.roles || undefined,
@@ -1537,7 +1586,7 @@ export const upsertDiscordMember = internalMutation({
       discordUserId: args.discordUserId,
       discordUsername: args.discordUsername,
       playerId,
-      nickname: args.nickname,
+      nickname: allowedNickname,
     });
 
     if (hasTierRole || autoAccepted) {
