@@ -55,7 +55,7 @@ function pickDiscordUserId(
   return pickNonEmpty(primary.discordUserId, secondary.discordUserId);
 }
 
-async function countUserReferences(
+export async function countUserReferences(
   ctx: QueryCtx,
   userId: Id<"users">,
 ): Promise<Record<string, number>> {

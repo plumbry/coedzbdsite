@@ -7,12 +7,13 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
-import { Users, Shield, Eye, UserCog, Calendar, RefreshCw, BarChart3, GitMerge } from "lucide-react";
+import { Users, Shield, Eye, UserCog, Calendar, RefreshCw, BarChart3, GitMerge, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useClientPagination } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
 import { useState } from "react";
 import MergeUsersDialog from "./merge-users-dialog.tsx";
+import DeleteUserDialog from "./delete-user-dialog.tsx";
 
 export default function UserManagement() {
   const users = useQuery(api.users.getAllUsers, {});
@@ -23,6 +24,7 @@ export default function UserManagement() {
   const syncUsersFromClerk = useAction(api.userProvisioning.syncUsersFromClerk);
   const [isSyncing, setIsSyncing] = useState(false);
   const [mergeGroupEmail, setMergeGroupEmail] = useState<string | null>(null);
+  const [deleteUserId, setDeleteUserId] = useState<Id<"users"> | null>(null);
 
   if (users === undefined || currentUser === undefined || duplicateEmails === undefined) {
     return <Skeleton className="h-48 w-full" />;
@@ -246,6 +248,17 @@ export default function UserManagement() {
                             Viewer
                           </Button>
                         )}
+                        {role !== "admin" && !isCurrentUser && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeleteUserId(user._id)}
+                          >
+                            <Trash2 className="mr-1 h-3 w-3" />
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -279,6 +292,12 @@ export default function UserManagement() {
         onMerged={() => setMergeGroupEmail(null)}
       />
     )}
+    <DeleteUserDialog
+      userId={deleteUserId}
+      onOpenChange={(open) => {
+        if (!open) setDeleteUserId(null);
+      }}
+    />
     </>
   );
 }
