@@ -2122,4 +2122,97 @@ export default defineSchema({
       v.union(v.literal("admin"), v.literal("password")),
     ),
   }),
+
+  // ─── Big Summer Re-Eval ─────────────────────────────────────────────────────
+
+  bigSummerReEval: defineTable({
+    playerId: v.id("players"),
+    trackerStatus: v.union(
+      v.literal("public"),
+      v.literal("private"),
+      v.literal("missing"),
+      v.literal("mismatch"),
+      v.literal("waiting_for_public_tracker"),
+      v.literal("waiting_for_public_tracker_extended"),
+      v.literal("tracker_fixed"),
+    ),
+    reEvalStatus: v.union(
+      v.literal("unchecked"),
+      v.literal("waiting_initial_5_days"),
+      v.literal("deadline_passed"),
+      v.literal("extended_final_5_days"),
+      v.literal("extension_deadline_passed"),
+      v.literal("ready_to_review"),
+      v.literal("reviewed"),
+      v.literal("queued_for_access_removal"),
+      v.literal("access_removed"),
+      v.literal("tier_change_queued"),
+      v.literal("tier_change_complete"),
+      v.literal("tier_change_failed"),
+      v.literal("retired"),
+    ),
+    fortniteTrackerLink: v.optional(v.string()),
+    trackerRequestSentAt: v.optional(v.number()),
+    deadlineAt: v.optional(v.number()),
+    extensionGranted: v.optional(v.boolean()),
+    extensionCount: v.optional(v.number()),
+    extendedAt: v.optional(v.number()),
+    dmSentAt: v.optional(v.number()),
+    ticketSentAt: v.optional(v.number()),
+    assignedAdminId: v.optional(v.id("users")),
+    assignedAdminName: v.optional(v.string()),
+    memberResponse: v.optional(
+      v.union(v.literal("yes"), v.literal("no"), v.literal("unset")),
+    ),
+    finalDecision: v.optional(
+      v.union(
+        v.literal("S"),
+        v.literal("A"),
+        v.literal("B"),
+        v.literal("C"),
+        v.literal("no_change"),
+        v.literal("remove_access"),
+        v.literal("retired"),
+      ),
+    ),
+    notes: v.optional(v.string()),
+    lastUpdatedAt: v.number(),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_re_eval_status", ["reEvalStatus"])
+    .index("by_tracker_status", ["trackerStatus"])
+    .index("by_deadline", ["deadlineAt"]),
+
+  tierRoleChangeQueue: defineTable({
+    playerId: v.id("players"),
+    discordId: v.string(),
+    playerName: v.string(),
+    currentTier: v.optional(v.string()),
+    targetTier: v.optional(v.string()),
+    action: v.union(
+      v.literal("change_tier"),
+      v.literal("remove_access"),
+      v.literal("retire"),
+      v.literal("no_change"),
+    ),
+    reason: v.string(),
+    requestedBy: v.optional(v.id("users")),
+    requestedByName: v.optional(v.string()),
+    requestedAt: v.number(),
+    processedAt: v.optional(v.number()),
+    processingStartedAt: v.optional(v.number()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("skipped"),
+    ),
+    processedByBot: v.optional(v.boolean()),
+    errorMessage: v.optional(v.string()),
+    reEvalId: v.optional(v.id("bigSummerReEval")),
+  })
+    .index("by_status", ["status"])
+    .index("by_player", ["playerId"])
+    .index("by_player_and_status", ["playerId", "status"]),
 });

@@ -66,6 +66,20 @@ in different places and must not be confused:
 | `API_URL` | both scripts | The Convex HTTP endpoint the bot posts member data to (`.../sync-member`; archive URL derived from it). | Required to run the bot. |
 | `API_KEY` | both scripts | Bearer key sent to the Convex webhooks (must match `DISCORD_SYNC_API_KEY`/`API_KEY` on Convex). | Required to run the bot. |
 
+### Big Summer Re-Eval role queue (`discord-big-summer-reeval-sync.js`)
+
+Runs alongside the member sync bot. Polls Convex for pending tier role changes from the
+Big Re-Eval admin workflow and applies them in Discord.
+
+| Variable | Used in | What it does | Required? |
+| --- | --- | --- | --- |
+| `DISCORD_TOKEN` | `discord-big-summer-reeval-sync.js` | Bot login token. | Required |
+| `DISCORD_SERVER_ID` | same | Guild ID. | Required |
+| `CONVEX_SITE_URL` | same | Convex site URL (e.g. `https://your-deployment.convex.site`). | Required |
+| `API_KEY` | same | Bearer key for `/api/discord/tier-role-change-queue/*` endpoints. | Required |
+| `ADMIN_LOG_CHANNEL_ID` | same | Channel for processing summaries. | Optional |
+| `POLL_INTERVAL_MS` | same | Poll interval (default `60000`). | Optional |
+
 ---
 
 ## 4. Generated `.env.example`

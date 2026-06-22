@@ -428,6 +428,95 @@ http.route({
   }),
 });
 
+// Big Summer Re-Eval: Discord bot polls tier role change queue
+http.route({
+  path: "/api/discord/tier-role-change-queue/pending",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const url = new URL(request.url);
+    const limitParam = url.searchParams.get("limit");
+    const limit = limitParam ? Number(limitParam) : undefined;
+
+    const items = await ctx.runMutation(
+      internal.bigSummerReEval.botHttp.claimPendingQueueItems,
+      { limit: Number.isFinite(limit) ? limit : undefined },
+    );
+
+    return new Response(JSON.stringify({ items }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+http.route({
+  path: "/api/discord/tier-role-change-queue/complete",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    try {
+      const body = await request.json();
+      if (!body.results || !Array.isArray(body.results)) {
+        return new Response(
+          JSON.stringify({ error: "Missing required field: results" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      await ctx.runMutation(internal.bigSummerReEval.botHttp.completeQueueItems, {
+        results: body.results,
+      });
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Error completing tier role change queue:", error);
+      return new Response(
+        JSON.stringify({
+          error: "Internal server error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }),
+});
+
 // Clerk webhook: provision Convex user rows when Clerk accounts are created or sign in
 http.route({
   path: "/api/clerk/webhook",

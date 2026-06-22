@@ -7,6 +7,7 @@ import { relinkEventResultsForPlayer } from "./helpers/playerResults";
 import { syncPlayerDiscordAliases } from "./helpers/playerDiscordAliases";
 import { internal } from "./_generated/api";
 import { diffPatch } from "./helpers/patchIfChanged";
+import { ensurePlayerEnrolledInReEval } from "./bigSummerReEval/helpers";
 import {
   syncPlayerImportLookupForPlayer,
   upsertPlayerImportLookup,
@@ -542,6 +543,8 @@ export const convertToPlayer = mutation({
       performedByName: getDisplayName(user),
       isSystemAction: false,
     });
+
+    await ensurePlayerEnrolledInReEval(ctx, args.playerId);
 
     return { success: true, epicUsername: player.epicUsername };
   },

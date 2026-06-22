@@ -7,6 +7,7 @@ import {
   enrichPlayerWithFemaleVerification,
 } from "./helpers/femaleVerification";
 import { scheduleGenderSheetRebuild } from "./helpers/genderSheetSchedule";
+import { ensurePlayerEnrolledInReEval } from "./bigSummerReEval/helpers";
 import {
   buildPublicMemberDirectory,
   schedulePublicMemberDirectoryRebuild,
@@ -634,6 +635,7 @@ export const acceptApplication = mutation({
 
     await schedulePublicMemberDirectoryRebuild(ctx);
     await scheduleGenderSheetRebuild(ctx);
+    await ensurePlayerEnrolledInReEval(ctx, playerId);
 
     return playerId;
   },
@@ -1213,6 +1215,10 @@ export const updateMemberStatus = mutation({
 
     await schedulePublicMemberDirectoryRebuild(ctx);
     await scheduleGenderSheetRebuild(ctx);
+
+    if (args.status === "accepted") {
+      await ensurePlayerEnrolledInReEval(ctx, args.playerId);
+    }
   },
 });
 

@@ -34,8 +34,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { compareTierField } from "@/lib/tier-sort.ts";
 import { DiscordSyncTools } from "./_components/discord-sync-tools.tsx";
 import { mobileActionRowClass } from "@/lib/mobile-buttons.ts";
+import BigSummerReEvalDashboard from "./_components/big-summer-reeval-dashboard.tsx";
 
-const ADMIN_TABS = ["applications", "accepted", "rejected", "former", "discord"];
+const ADMIN_TABS = ["applications", "accepted", "rejected", "former", "discord", "big-reeval"];
 const MOD_TABS = ["applications", "accepted", "former"];
 
 function resolveMemberManagementTab(
@@ -46,6 +47,7 @@ function resolveMemberManagementTab(
   const tab = tabFromPath || tabFromQuery || undefined;
   const allowed = isAdmin ? ADMIN_TABS : MOD_TABS;
   if (tab === "discord" && isAdmin) return "discord";
+  if (tab === "big-reeval" && isAdmin) return "big-reeval";
   if (tab && allowed.includes(tab)) return tab;
   return "applications";
 }
@@ -87,10 +89,12 @@ export default function MemberManagement() {
     if (!isRoleLoading && !roleResolved) {
       setRoleResolved(true);
       const tab = tabFromPath || searchParams.get("tab");
-      const adminTabs = ["applications", "accepted", "rejected", "former", "discord"];
+      const adminTabs = ["applications", "accepted", "rejected", "former", "discord", "big-reeval"];
       const modTabs = ["applications", "accepted", "former"];
       if (tab === "discord" && isAdmin) {
         setActiveTab("discord");
+      } else if (tab === "big-reeval" && isAdmin) {
+        setActiveTab("big-reeval");
       } else if (tab && (isAdmin ? adminTabs : modTabs).includes(tab)) {
         setActiveTab(tab);
       } else if (isAdmin || isModeratorOrAdmin) {
@@ -661,7 +665,7 @@ export default function MemberManagement() {
           <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
             <TabsList
               className={`inline-flex h-9 w-max min-w-0 gap-0.5 p-0.5 md:grid md:h-10 md:w-full md:gap-1 md:p-1 ${
-                isAdmin ? "md:grid-cols-5" : isModeratorOrAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
+                isAdmin ? "md:grid-cols-6" : isModeratorOrAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
               }`}
             >
               {isModeratorOrAdmin && (
@@ -673,6 +677,7 @@ export default function MemberManagement() {
               {isAdmin && <TabsTrigger value="rejected" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Rejected</TabsTrigger>}
               <TabsTrigger value="former" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Former</TabsTrigger>
               {isAdmin && <TabsTrigger value="discord" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Discord</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="big-reeval" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Summer Re-Eval</TabsTrigger>}
             </TabsList>
           </div>
           
@@ -1681,6 +1686,12 @@ export default function MemberManagement() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {isAdmin && (
+            <TabsContent value="big-reeval">
+              <BigSummerReEvalDashboard />
+            </TabsContent>
+          )}
         </Tabs>
         
         {/* Reject Dialog */}
