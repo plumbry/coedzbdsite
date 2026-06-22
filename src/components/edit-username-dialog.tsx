@@ -17,6 +17,10 @@ import { CheckCircle, XCircle, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce.ts";
 
+function canSetUsername(role: string | undefined): boolean {
+  return role === "admin" || role === "event_mod" || role === "analytics";
+}
+
 export default function EditUsernameDialog() {
   const currentUser = useQuery(api.users.getCurrentUser);
   const [open, setOpen] = useState(false);
@@ -70,7 +74,7 @@ export default function EditUsernameDialog() {
     }
   };
 
-  if (!currentUser) return null;
+  if (!currentUser || !canSetUsername(currentUser.role)) return null;
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>

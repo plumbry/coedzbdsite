@@ -21,8 +21,10 @@ export default function UserManagement() {
   const usersPagination = useClientPagination(users, {});
   const currentUser = useQuery(api.users.getCurrentUser);
   const updateUserRole = useMutation(api.users.updateUserRole);
+  const clearViewerUsernames = useMutation(api.users.clearViewerUsernames);
   const syncUsersFromClerk = useAction(api.userProvisioning.syncUsersFromClerk);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isClearingViewerUsernames, setIsClearingViewerUsernames] = useState(false);
   const [mergeGroupEmail, setMergeGroupEmail] = useState<string | null>(null);
   const [deleteUserId, setDeleteUserId] = useState<Id<"users"> | null>(null);
 
@@ -76,6 +78,21 @@ export default function UserManagement() {
   const eventModUsers = users.filter((u) => u.role === "event_mod");
   const analyticsUsers = users.filter((u) => u.role === "analytics");
   const viewerUsers = users.filter((u) => !u.role || u.role === "viewer");
+  const viewerUsersWithUsernames = viewerUsers.filter((u) => u.username);
+
+  const handleClearViewerUsernames = async () => {
+    setIsClearingViewerUsernames(true);
+    try {
+      const result = await clearViewerUsernames({});
+      toast.success(`Cleared ${result.cleared} viewer username${result.cleared === 1 ? "" : "s"}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to clear viewer usernames",
+      );
+    } finally {
+      setIsClearingViewerUsernames(false);
+    }
+  };
 
   return (
     <>
@@ -85,15 +102,26 @@ export default function UserManagement() {
           <CardDescription>
             {adminUsers.length} admin{adminUsers.length !== 1 ? "s" : ""}, {eventModUsers.length} mod{eventModUsers.length !== 1 ? "s" : ""}, {analyticsUsers.length} analytics, {viewerUsers.length} viewer{viewerUsers.length !== 1 ? "s" : ""}
           </CardDescription>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleSyncFromClerk}
-            disabled={isSyncing}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
-            Sync from Clerk
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleClearViewerUsernames}
+              disabled={isClearingViewerUsernames || viewerUsersWithUsernames.length === 0}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              Clear Viewer Usernames
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSyncFromClerk}
+              disabled={isSyncing}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+              Sync from Clerk
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>

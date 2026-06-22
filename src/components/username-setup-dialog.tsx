@@ -16,6 +16,10 @@ import { CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce.ts";
 
+function canSetUsername(role: string | undefined): boolean {
+  return role === "admin" || role === "event_mod" || role === "analytics";
+}
+
 export default function UsernameSetupDialog() {
   const { isAuthenticated } = useConvexAuth();
   const currentUser = useQuery(
@@ -36,8 +40,12 @@ export default function UsernameSetupDialog() {
       : "skip"
   );
 
-  // Only show when user exists but has no username
-  const isOpen = currentUser !== undefined && currentUser !== null && !currentUser.username;
+  // Only staff/analytics accounts choose a site username.
+  const isOpen =
+    currentUser !== undefined &&
+    currentUser !== null &&
+    canSetUsername(currentUser.role) &&
+    !currentUser.username;
 
   const isValidFormat = /^[a-zA-Z0-9_]+$/.test(username.trim());
   const isValidLength = username.trim().length >= 3 && username.trim().length <= 20;

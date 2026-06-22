@@ -16,6 +16,10 @@ function userLabel(user: Pick<Doc<"users">, "_id" | "username" | "name" | "email
   return user.username || user.name || user.email || user._id;
 }
 
+function canSetUsername(role: Doc<"users">["role"]): boolean {
+  return role === "admin" || role === "event_mod" || role === "analytics";
+}
+
 function assertDeletableUser(
   admin: Doc<"users">,
   target: Doc<"users">,
@@ -201,6 +205,13 @@ export const setUsername = mutation({
       });
     }
 
+    if (!canSetUsername(currentUser.role)) {
+      throw new ConvexError({
+        message: "Only admins, moderators, and analytics users can set a username",
+        code: "FORBIDDEN",
+      });
+    }
+
     if (existing && existing._id !== currentUser._id) {
       throw new ConvexError({
         message: "Username is already taken",
@@ -348,6 +359,7 @@ export const updateUserRole = mutation({
 
     await ctx.db.patch(args.userId, {
       role: args.role,
+      ...(canSetUsername(args.role) ? {} : { username: undefined }),
     });
 
     await logAudit(ctx, {
@@ -362,6 +374,37 @@ export const updateUserRole = mutation({
     });
 
     return { success: true };
+  },
+});
+
+export const clearViewerUsernames = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const currentUser = await requireAdmin(ctx);
+    const users = await ctx.db.query("users").collect();
+    let cleared = 0;
+
+    for (const user of users) {
+      if (!user.username || (user.role && user.role !== "viewer")) {
+        continue;
+      }
+
+      await ctx.db.patch(user._id, { username: undefined });
+      cleared++;
+    }
+
+    if (cleared > 0) {
+      await logAudit(ctx, {
+        userId: currentUser._id,
+        userName: getDisplayName(currentUser),
+        action: "viewer_usernames_cleared",
+        entityType: "user",
+        details: `Cleared usernames for ${cleared} viewer account${cleared === 1 ? "" : "s"}`,
+        newValue: String(cleared),
+      });
+    }
+
+    return { cleared };
   },
 });
 
