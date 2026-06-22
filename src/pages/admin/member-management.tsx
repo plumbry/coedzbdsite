@@ -627,14 +627,14 @@ export default function MemberManagement() {
       showSidebar={!!isModeratorOrAdmin}
       header={{
         actions: isAdmin ? (
-          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="grid w-full grid-cols-2 gap-1.5 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-2">
             <DiscordSyncTools compact />
             <Button
               size="sm"
               variant="secondary"
               onClick={handleSyncGirlRole}
               disabled={isSyncingGirlRole}
-              className="h-10 w-full justify-start touch-manipulation sm:h-9 sm:w-auto sm:justify-center"
+              className="h-8 w-full justify-center gap-1 px-1.5 text-[11px] leading-tight touch-manipulation sm:h-9 sm:w-auto sm:px-3 sm:text-sm"
               title={
                 girlRoleSyncStatus?.lastSyncedAt
                   ? `${girlRoleSyncStatus.count} verifications · last synced ${format(new Date(girlRoleSyncStatus.lastSyncedAt), "MMM d, yyyy h:mm a")}`
@@ -642,13 +642,13 @@ export default function MemberManagement() {
               }
             >
               {isSyncingGirlRole ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin sm:mr-1.5" />
               ) : (
-                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                <RefreshCw className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
               )}
-              Sync Girl Role
+              <span className="truncate">Girl Role</span>
               {girlRoleSyncStatus && girlRoleSyncStatus.count > 0 && !isSyncingGirlRole && (
-                <Badge variant="outline" className="ml-1.5 px-1.5 py-0 text-[10px] font-normal">
+                <Badge variant="outline" className="ml-0.5 shrink-0 px-1 py-0 text-[9px] font-normal sm:ml-1.5 sm:px-1.5 sm:text-[10px]">
                   {girlRoleSyncStatus.count}
                 </Badge>
               )}
@@ -660,19 +660,19 @@ export default function MemberManagement() {
       <Tabs value={activeTab} onValueChange={handleTabChange}>
           <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
             <TabsList
-              className={`inline-flex w-auto min-w-full md:grid md:w-full h-10 ${
+              className={`inline-flex h-9 w-max min-w-0 gap-0.5 p-0.5 md:grid md:h-10 md:w-full md:gap-1 md:p-1 ${
                 isAdmin ? "md:grid-cols-5" : isModeratorOrAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
               }`}
             >
               {isModeratorOrAdmin && (
-                <TabsTrigger value="applications" className="text-xs md:text-sm py-1.5 whitespace-nowrap">
+                <TabsTrigger value="applications" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">
                   Applications
                 </TabsTrigger>
               )}
-              <TabsTrigger value="accepted" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Accepted</TabsTrigger>
-              {isAdmin && <TabsTrigger value="rejected" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Rejected</TabsTrigger>}
-              <TabsTrigger value="former" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Former</TabsTrigger>
-              {isAdmin && <TabsTrigger value="discord" className="text-xs md:text-sm py-1.5 whitespace-nowrap">Discord</TabsTrigger>}
+              <TabsTrigger value="accepted" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Accepted</TabsTrigger>
+              {isAdmin && <TabsTrigger value="rejected" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Rejected</TabsTrigger>}
+              <TabsTrigger value="former" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Former</TabsTrigger>
+              {isAdmin && <TabsTrigger value="discord" className="h-8 px-2.5 text-xs whitespace-nowrap md:h-auto md:px-3 md:py-1.5 md:text-sm">Discord</TabsTrigger>}
             </TabsList>
           </div>
           
@@ -689,8 +689,12 @@ export default function MemberManagement() {
                     </CardDescription>
                   </div>
                   {isAdmin && (
-                    <Button onClick={() => setNewAppDialogOpen(true)} className="cursor-pointer w-full sm:w-auto">
-                      <Plus className="mr-2 h-4 w-4" />
+                    <Button
+                      size="sm"
+                      onClick={() => setNewAppDialogOpen(true)}
+                      className="h-8 w-full cursor-pointer touch-manipulation sm:h-9 sm:w-auto"
+                    >
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />
                       New Application
                     </Button>
                   )}
@@ -764,23 +768,23 @@ export default function MemberManagement() {
                               <ExternalLink className="h-3 w-3 shrink-0" />
                             </a>
                             {isAdmin && (
-                              <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:gap-1">
+                              <div className="grid grid-cols-4 gap-1 sm:flex sm:flex-wrap sm:gap-1">
                                 <Button
                                   onClick={() => setEditingApplicationId(app._id)}
                                   variant="secondary"
                                   size="sm"
-                                  className="h-9 cursor-pointer px-2 text-xs touch-manipulation sm:h-7"
+                                  className="h-8 w-full cursor-pointer justify-center px-1 text-[10px] touch-manipulation sm:h-7 sm:w-auto sm:px-2 sm:text-xs"
                                 >
-                                  <Edit className="mr-1 h-3 w-3" />
-                                  Edit
+                                  <Edit className="h-3 w-3 sm:mr-1" />
+                                  <span className="truncate">Edit</span>
                                 </Button>
                                 <Button
                                   onClick={() => handleAccept(app._id)}
                                   size="sm"
-                                  className="h-9 cursor-pointer px-2 text-xs touch-manipulation sm:h-7"
+                                  className="h-8 w-full cursor-pointer justify-center px-1 text-[10px] touch-manipulation sm:h-7 sm:w-auto sm:px-2 sm:text-xs"
                                 >
-                                  <UserCheck className="mr-1 h-3 w-3" />
-                                  Accept
+                                  <UserCheck className="h-3 w-3 sm:mr-1" />
+                                  <span className="truncate">Accept</span>
                                 </Button>
                                 <Button
                                   onClick={() => {
@@ -789,10 +793,10 @@ export default function MemberManagement() {
                                   }}
                                   variant="destructive"
                                   size="sm"
-                                  className="h-9 cursor-pointer px-2 text-xs touch-manipulation sm:h-7"
+                                  className="h-8 w-full cursor-pointer justify-center px-1 text-[10px] touch-manipulation sm:h-7 sm:w-auto sm:px-2 sm:text-xs"
                                 >
-                                  <UserX className="mr-1 h-3 w-3" />
-                                  Reject
+                                  <UserX className="h-3 w-3 sm:mr-1" />
+                                  <span className="truncate">Reject</span>
                                 </Button>
                                 <Button
                                   onClick={() => {
@@ -801,10 +805,10 @@ export default function MemberManagement() {
                                   }}
                                   variant="destructive"
                                   size="sm"
-                                  className="h-9 cursor-pointer px-2 text-xs touch-manipulation sm:h-7"
+                                  className="h-8 w-full cursor-pointer justify-center px-1 text-[10px] touch-manipulation sm:h-7 sm:w-auto sm:px-2 sm:text-xs"
                                 >
-                                  <Trash2 className="mr-1 h-3 w-3" />
-                                  Delete
+                                  <Trash2 className="h-3 w-3 sm:mr-1" />
+                                  <span className="truncate">Delete</span>
                                 </Button>
                               </div>
                             )}

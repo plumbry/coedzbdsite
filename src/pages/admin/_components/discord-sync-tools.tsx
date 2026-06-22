@@ -125,11 +125,15 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
       ? `${syncStatus.status} · ${format(new Date(syncStatus.lastSyncTime), "MMM d, yyyy h:mm a")}`
       : "No sync run yet";
 
+  const compactButtonClass =
+    "h-8 gap-1 px-1.5 text-[11px] leading-tight touch-manipulation sm:h-9 sm:px-3 sm:text-sm";
+
   const buttons = (
     <div
       className={cn(
-        "grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap",
-        compact && "max-sm:w-full",
+        compact
+          ? "contents sm:flex sm:w-auto sm:flex-wrap sm:gap-2"
+          : "flex flex-wrap gap-2",
       )}
     >
       <Button
@@ -137,45 +141,54 @@ export function DiscordSyncTools({ compact = false, featured = false }: DiscordS
         variant="secondary"
         disabled={isBusy || inProgress}
         onClick={() => setConfirmAcceptedOpen(true)}
-        className="h-10 w-full justify-start touch-manipulation sm:h-9 sm:w-auto sm:justify-center"
+        className={cn(
+          compactButtonClass,
+          compact && "w-full justify-center sm:w-auto sm:justify-center",
+        )}
       >
         {isSyncingAccepted || inProgress ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin sm:mr-1.5" />
         ) : (
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+          <RefreshCw className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
         )}
-        <span className="sm:hidden">Sync from Discord</span>
-        <span className="hidden sm:inline">Sync membership from Discord</span>
+        <span className="truncate sm:hidden">Discord sync</span>
+        <span className="hidden truncate sm:inline">Sync membership from Discord</span>
       </Button>
       <Button
         size="sm"
         variant="secondary"
         disabled={isBusy}
         onClick={handleSyncPendingRoles}
-        className="h-10 w-full justify-start touch-manipulation sm:h-9 sm:w-auto sm:justify-center"
+        className={cn(
+          compactButtonClass,
+          compact && "w-full justify-center sm:w-auto sm:justify-center",
+        )}
       >
         {isSyncingRoles ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin sm:mr-1.5" />
         ) : (
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+          <RefreshCw className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
         )}
-        <span className="sm:hidden">Sync pending roles</span>
-        <span className="hidden sm:inline">Sync pending role changes</span>
+        <span className="truncate sm:hidden">Role sync</span>
+        <span className="hidden truncate sm:inline">Sync pending role changes</span>
       </Button>
       <Button
         size="sm"
         variant="outline"
         disabled={isBusy}
         onClick={handleRebuildCache}
-        className="h-10 w-full justify-start touch-manipulation sm:h-9 sm:w-auto sm:justify-center"
+        className={cn(
+          compactButtonClass,
+          compact && "w-full justify-center sm:w-auto sm:justify-center",
+        )}
       >
         {isRebuildingCache ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin sm:mr-1.5" />
         ) : (
-          <RefreshCw className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+          <RefreshCw className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
         )}
-        <span className="sm:hidden">Rebuild cache</span>
-        <span className="hidden sm:inline">Rebuild sync cache</span>
+        <span className="truncate sm:hidden">Rebuild</span>
+        <span className="hidden truncate sm:inline">Rebuild sync cache</span>
       </Button>
     </div>
   );
