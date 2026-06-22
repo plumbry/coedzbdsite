@@ -8,7 +8,6 @@ import {
   QUEUE_ACTION_REASONS,
   RE_EVAL_STATUSES,
   TRACKER_STATUSES,
-  type FinalDecision,
   type ReEvalStatus,
   type TrackerStatus,
 } from "./constants";
@@ -19,13 +18,12 @@ import {
   hasActiveQueueItem,
   inferInitialTrackerStatus,
   memberResponseBlocksDeadline,
-  queueActionForDecision,
   startTrackerDeadline,
   trackerStillProblematic,
   writeReEvalAudit,
   writeSystemReEvalAudit,
-  decisionNeedsQueue,
-  hasCompletedQueueForDecision,
+  computeQueueCandidates,
+  queueReasonForAction,
 } from "./helpers";
 
 const trackerStatusValidator = v.union(
@@ -526,90 +524,102 @@ export const queueDiscordRoleChanges = mutation({
   args: {},
   handler: async (ctx) => {
     const admin = await requireAdmin(ctx);
-    const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
+    const candidates = await computeQueueCandidates(ctx);
     const now = Date.now();
 
-    let promotions = 0;
-    let demotions = 0;
-    let accessRemovals = 0;
-    let retirements = 0;
-    let queued = 0;
-    const tierOrder = ["S", "A", "B", "C", "D"];
-
-    for (const reEval of reEvalRows) {
-      if (!reEval.finalDecision) continue;
-      const decision = reEval.finalDecision as FinalDecision;
-      const player = await ctx.db.get(reEval.playerId);
-      if (!player) continue;
-
-      if (!decisionNeedsQueue(decision, player.tier)) continue;
-
-      const action = queueActionForDecision(decision);
-      const targetTier =
-        action === "change_tier" ? decision : undefined;
-
-      const activeQueue = await hasActiveQueueItem(ctx, player._id);
-      if (activeQueue) continue;
-
-      const alreadyCompleted = await hasCompletedQueueForDecision(
-        ctx,
-        player._id,
-        action,
-        targetTier,
-      );
-      if (alreadyCompleted) continue;
-
+    for (const candidate of candidates) {
       await ctx.db.insert("tierRoleChangeQueue", {
-        playerId: player._id,
-        discordId: player.discordUserId,
-        playerName: player.name || player.discordUsername,
-        currentTier: player.tier,
-        targetTier,
-        action,
-        reason:
-          action === "remove_access"
-            ? QUEUE_ACTION_REASONS.accessRemoval
-            : action === "retire"
-              ? QUEUE_ACTION_REASONS.retire
-              : QUEUE_ACTION_REASONS.tierChange,
+        playerId: candidate.playerId,
+        discordId: candidate.discordId,
+        playerName: candidate.playerName,
+        currentTier: candidate.currentTier,
+        targetTier: candidate.targetTier,
+        action: candidate.action,
+        reason: queueReasonForAction(candidate.action),
         requestedBy: admin._id,
         requestedByName: getDisplayName(admin),
         requestedAt: now,
         status: "pending",
-        reEvalId: reEval._id,
+        reEvalId: candidate.reEvalId,
       });
 
-      const newStatus: ReEvalStatus =
-        action === "remove_access"
-          ? "queued_for_access_removal"
-          : "tier_change_queued";
-
-      await ctx.db.patch(reEval._id, {
-        reEvalStatus: newStatus,
+      await ctx.db.patch(candidate.reEvalId, {
+        reEvalStatus: candidate.newReEvalStatus,
         lastUpdatedAt: now,
       });
+    }
 
-      if (action === "change_tier" && targetTier && player.tier) {
-        const oldIdx = tierOrder.indexOf(player.tier);
-        const newIdx = tierOrder.indexOf(targetTier);
-        if (newIdx < oldIdx) promotions += 1;
-        else if (newIdx > oldIdx) demotions += 1;
-      } else if (action === "remove_access") {
-        accessRemovals += 1;
-      } else if (action === "retire") {
-        retirements += 1;
+    const summary = {
+      promotions: 0,
+      demotions: 0,
+      accessRemovals: 0,
+      retirements: 0,
+      queued: candidates.length,
+    };
+    const tierOrder = ["S", "A", "B", "C", "D"];
+    for (const candidate of candidates) {
+      if (candidate.action === "change_tier" && candidate.targetTier && candidate.currentTier) {
+        const oldIdx = tierOrder.indexOf(candidate.currentTier);
+        const newIdx = tierOrder.indexOf(candidate.targetTier);
+        if (newIdx < oldIdx) summary.promotions += 1;
+        else if (newIdx > oldIdx) summary.demotions += 1;
+      } else if (candidate.action === "remove_access") {
+        summary.accessRemovals += 1;
+      } else if (candidate.action === "retire") {
+        summary.retirements += 1;
       }
-      queued += 1;
     }
 
     await writeReEvalAudit(ctx, {
       userId: admin._id,
       userName: getDisplayName(admin),
       action: "big_summer_reeval_queue_batch_created",
-      newValue: JSON.stringify({ promotions, demotions, accessRemovals, retirements, queued }),
+      newValue: JSON.stringify(summary),
     });
 
-    return { promotions, demotions, accessRemovals, retirements, queued };
+    return summary;
+  },
+});
+
+const STUCK_PROCESSING_MS = 15 * 60 * 1000;
+
+export const resetStuckProcessingQueueItems = mutation({
+  args: {
+    forceAll: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const now = Date.now();
+    const processing = await ctx.db
+      .query("tierRoleChangeQueue")
+      .withIndex("by_status", (q) => q.eq("status", "processing"))
+      .collect();
+
+    const toReset = processing.filter((item) => {
+      if (args.forceAll) return true;
+      const startedAt = item.processingStartedAt ?? item.requestedAt;
+      return now - startedAt >= STUCK_PROCESSING_MS;
+    });
+
+    for (const item of toReset) {
+      await ctx.db.patch(item._id, {
+        status: "pending",
+        processingStartedAt: undefined,
+        errorMessage: undefined,
+      });
+    }
+
+    await writeReEvalAudit(ctx, {
+      userId: admin._id,
+      userName: getDisplayName(admin),
+      action: "big_summer_reeval_stuck_queue_reset",
+      newValue: JSON.stringify({
+        resetCount: toReset.length,
+        forceAll: args.forceAll ?? false,
+      }),
+    });
+
+    return { resetCount: toReset.length };
   },
 });
 

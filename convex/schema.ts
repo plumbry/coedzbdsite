@@ -2200,6 +2200,7 @@ export default defineSchema({
     requestedByName: v.optional(v.string()),
     requestedAt: v.number(),
     processedAt: v.optional(v.number()),
+    processingStartedAt: v.optional(v.number()),
     status: v.union(
       v.literal("pending"),
       v.literal("processing"),

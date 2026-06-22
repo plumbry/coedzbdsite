@@ -84,6 +84,7 @@ export const QUEUE_ACTION_REASONS = {
 
 export type DashboardFilter =
   | "all"
+  | "needs_action"
   | "needs_tracker_link"
   | "private_tracker"
   | "missing_tracker"

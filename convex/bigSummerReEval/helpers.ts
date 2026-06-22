@@ -4,6 +4,7 @@ import { logAudit } from "../helpers/audit";
 import { getDisplayName } from "../auth_helpers";
 import {
   FIVE_DAYS_MS,
+  QUEUE_ACTION_REASONS,
   TRACKER_PROBLEM_STATUSES,
   type FinalDecision,
   type ReEvalStatus,
@@ -212,4 +213,135 @@ export async function getAdminDisplayName(
 ) {
   const user = await ctx.db.get(userId);
   return user ? getDisplayName(user) : "Unknown";
+}
+
+export function isNeedsAction(row: {
+  reEvalStatus: string;
+  queueStatus: string | null;
+}): boolean {
+  return (
+    row.reEvalStatus === "deadline_passed" ||
+    row.reEvalStatus === "extension_deadline_passed" ||
+    row.reEvalStatus === "tier_change_failed" ||
+    row.queueStatus === "failed"
+  );
+}
+
+export type QueueCandidate = {
+  reEvalId: Id<"bigSummerReEval">;
+  playerId: Id<"players">;
+  playerName: string;
+  discordId: string;
+  currentTier?: string;
+  targetTier?: string;
+  action: Doc<"tierRoleChangeQueue">["action"];
+  newReEvalStatus: ReEvalStatus;
+};
+
+export type QueuePreviewSummary = {
+  promotions: number;
+  demotions: number;
+  accessRemovals: number;
+  retirements: number;
+  queued: number;
+  players: Array<{
+    playerName: string;
+    currentTier?: string;
+    targetTier?: string;
+    action: Doc<"tierRoleChangeQueue">["action"];
+  }>;
+};
+
+const TIER_ORDER = ["S", "A", "B", "C", "D"];
+
+export async function computeQueueCandidates(
+  ctx: QueryCtx | MutationCtx,
+): Promise<QueueCandidate[]> {
+  const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
+  const candidates: QueueCandidate[] = [];
+
+  for (const reEval of reEvalRows) {
+    if (!reEval.finalDecision) continue;
+    const decision = reEval.finalDecision as FinalDecision;
+    const player = await ctx.db.get(reEval.playerId);
+    if (!player) continue;
+
+    if (!decisionNeedsQueue(decision, player.tier)) continue;
+
+    const action = queueActionForDecision(decision);
+    const targetTier = action === "change_tier" ? decision : undefined;
+
+    const activeQueue = await hasActiveQueueItem(ctx, player._id);
+    if (activeQueue) continue;
+
+    const alreadyCompleted = await hasCompletedQueueForDecision(
+      ctx,
+      player._id,
+      action,
+      targetTier,
+    );
+    if (alreadyCompleted) continue;
+
+    const newReEvalStatus: ReEvalStatus =
+      action === "remove_access" ? "queued_for_access_removal" : "tier_change_queued";
+
+    candidates.push({
+      reEvalId: reEval._id,
+      playerId: player._id,
+      playerName: player.name || player.discordUsername,
+      discordId: player.discordUserId,
+      currentTier: player.tier,
+      targetTier,
+      action,
+      newReEvalStatus,
+    });
+  }
+
+  return candidates;
+}
+
+export function summarizeQueueCandidates(
+  candidates: QueueCandidate[],
+): QueuePreviewSummary {
+  let promotions = 0;
+  let demotions = 0;
+  let accessRemovals = 0;
+  let retirements = 0;
+
+  const players = candidates.map((candidate) => {
+    if (candidate.action === "change_tier" && candidate.targetTier && candidate.currentTier) {
+      const oldIdx = TIER_ORDER.indexOf(candidate.currentTier);
+      const newIdx = TIER_ORDER.indexOf(candidate.targetTier);
+      if (newIdx < oldIdx) promotions += 1;
+      else if (newIdx > oldIdx) demotions += 1;
+    } else if (candidate.action === "remove_access") {
+      accessRemovals += 1;
+    } else if (candidate.action === "retire") {
+      retirements += 1;
+    }
+
+    return {
+      playerName: candidate.playerName,
+      currentTier: candidate.currentTier,
+      targetTier: candidate.targetTier,
+      action: candidate.action,
+    };
+  });
+
+  return {
+    promotions,
+    demotions,
+    accessRemovals,
+    retirements,
+    queued: candidates.length,
+    players,
+  };
+}
+
+export function queueReasonForAction(
+  action: Doc<"tierRoleChangeQueue">["action"],
+): string {
+  if (action === "remove_access") return QUEUE_ACTION_REASONS.accessRemoval;
+  if (action === "retire") return QUEUE_ACTION_REASONS.retire;
+  return QUEUE_ACTION_REASONS.tierChange;
 }

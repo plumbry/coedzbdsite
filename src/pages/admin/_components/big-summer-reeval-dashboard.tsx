@@ -80,6 +80,7 @@ type DashboardRow = {
 
 type DashboardFilter =
   | "all"
+  | "needs_action"
   | "needs_tracker_link"
   | "private_tracker"
   | "missing_tracker"
@@ -94,6 +95,7 @@ type DashboardFilter =
 
 const FILTER_LABELS: Record<DashboardFilter, string> = {
   all: "All Players",
+  needs_action: "Needs Action",
   needs_tracker_link: "Needs Tracker Link",
   private_tracker: "Private Tracker",
   missing_tracker: "Missing Tracker",
@@ -170,6 +172,15 @@ function formatReEvalStatus(status: string): string {
   return map[status] ?? status;
 }
 
+function isNeedsActionRow(row: { reEvalStatus: string; queueStatus: string | null }): boolean {
+  return (
+    row.reEvalStatus === "deadline_passed" ||
+    row.reEvalStatus === "extension_deadline_passed" ||
+    row.reEvalStatus === "tier_change_failed" ||
+    row.queueStatus === "failed"
+  );
+}
+
 export default function BigSummerReEvalDashboard() {
   const [filter, setFilter] = useState<DashboardFilter>("all");
   const [search, setSearch] = useState("");
@@ -177,14 +188,8 @@ export default function BigSummerReEvalDashboard() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [selectedId, setSelectedId] = useState<Id<"bigSummerReEval"> | null>(null);
   const [deadlineModalOpen, setDeadlineModalOpen] = useState(false);
-  const [queueSummaryOpen, setQueueSummaryOpen] = useState(false);
-  const [queueSummary, setQueueSummary] = useState<{
-    promotions: number;
-    demotions: number;
-    accessRemovals: number;
-    retirements: number;
-    queued: number;
-  } | null>(null);
+  const [queueConfirmOpen, setQueueConfirmOpen] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
   const [trackerLinkDraft, setTrackerLinkDraft] = useState("");
   const [epicIdDraft, setEpicIdDraft] = useState("");
@@ -201,6 +206,12 @@ export default function BigSummerReEvalDashboard() {
   const selectedDetail = useQuery(
     api.bigSummerReEval.queries.getPlayerDetail,
     selectedId ? { reEvalId: selectedId } : "skip",
+  );
+
+  const queueHealth = useQuery(api.bigSummerReEval.queries.getQueueHealth, {});
+  const queuePreview = useQuery(
+    api.bigSummerReEval.queries.previewQueueDiscordRoleChanges,
+    queueConfirmOpen ? {} : "skip",
   );
 
   const initialize = useMutation(api.bigSummerReEval.mutations.initializeForActivePlayers);
@@ -220,9 +231,11 @@ export default function BigSummerReEvalDashboard() {
   const markActive = useMutation(api.bigSummerReEval.mutations.markActive);
   const markRetired = useMutation(api.bigSummerReEval.mutations.markRetired);
   const queueDiscordRoleChanges = useMutation(api.bigSummerReEval.mutations.queueDiscordRoleChanges);
+  const resetStuckQueue = useMutation(api.bigSummerReEval.mutations.resetStuckProcessingQueueItems);
 
   const [isInitializing, setIsInitializing] = useState(false);
   const [isQueueing, setIsQueueing] = useState(false);
+  const [isResettingQueue, setIsResettingQueue] = useState(false);
 
   const sortedRows = useMemo((): DashboardRow[] => {
     if (!rows) return [];
@@ -282,16 +295,37 @@ export default function BigSummerReEvalDashboard() {
     );
   };
 
-  const handleQueueRoleChanges = async () => {
+  const handleOpenQueueConfirm = () => {
+    setQueueConfirmOpen(true);
+  };
+
+  const handleConfirmQueue = async () => {
     setIsQueueing(true);
     try {
-      const summary = await queueDiscordRoleChanges({});
-      setQueueSummary(summary);
-      setQueueSummaryOpen(true);
+      const result = await queueDiscordRoleChanges({});
+      toast.success(`Queued ${result.queued} Discord role change(s)`);
+      setQueueConfirmOpen(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to queue role changes");
     } finally {
       setIsQueueing(false);
+    }
+  };
+
+  const handleResetStuckQueue = async (forceAll: boolean) => {
+    setIsResettingQueue(true);
+    try {
+      const result = await resetStuckQueue({ forceAll });
+      if (result.resetCount === 0) {
+        toast.message("No stuck processing items to reset");
+      } else {
+        toast.success(`Reset ${result.resetCount} stuck queue item(s) to pending`);
+      }
+      setResetConfirmOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to reset queue");
+    } finally {
+      setIsResettingQueue(false);
     }
   };
 
@@ -337,10 +371,14 @@ export default function BigSummerReEvalDashboard() {
                   Initialize Active Players
                 </Button>
               )}
-              <Button size="sm" variant="secondary" onClick={handleQueueRoleChanges} disabled={isQueueing}>
-                {isQueueing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button size="sm" variant="secondary" onClick={handleOpenQueueConfirm}>
                 Queue Discord Role Changes
               </Button>
+              {(queueHealth?.stuckProcessing ?? 0) > 0 && (
+                <Button size="sm" variant="outline" onClick={() => setResetConfirmOpen(true)}>
+                  Reset Stuck Queue ({queueHealth?.stuckProcessing})
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -421,10 +459,7 @@ export default function BigSummerReEvalDashboard() {
                         <TableRow
                           key={row._id}
                           className={
-                            row.reEvalStatus === "deadline_passed" ||
-                            row.reEvalStatus === "extension_deadline_passed"
-                              ? "bg-red-500/5"
-                              : undefined
+                            isNeedsActionRow(row) ? "bg-red-500/5" : undefined
                           }
                         >
                           <TableCell className="font-medium whitespace-nowrap">
@@ -753,23 +788,95 @@ export default function BigSummerReEvalDashboard() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={queueSummaryOpen} onOpenChange={setQueueSummaryOpen}>
+      <Dialog open={queueConfirmOpen} onOpenChange={setQueueConfirmOpen}>
         <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Big Re-Eval Summary</DialogTitle>
-            <DialogDescription>Discord role changes queued for bot processing.</DialogDescription>
+            <DialogDescription>
+              Review pending Discord role changes before queuing them for the bot.
+            </DialogDescription>
           </DialogHeader>
-          {queueSummary && (
-            <div className="space-y-1 text-sm">
-              <p>Promotions: {queueSummary.promotions}</p>
-              <p>Demotions: {queueSummary.demotions}</p>
-              <p>Access Removals: {queueSummary.accessRemovals}</p>
-              <p>Retirements: {queueSummary.retirements}</p>
-              <p className="font-medium pt-2">Total queued: {queueSummary.queued}</p>
+          {queuePreview === undefined ? (
+            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Calculating changes...
+            </div>
+          ) : queuePreview.queued === 0 ? (
+            <p className="text-sm text-muted-foreground py-2">
+              No players need Discord role changes right now.
+            </p>
+          ) : (
+            <div className="space-y-3 text-sm">
+              <div className="space-y-1">
+                <p>Promotions: {queuePreview.promotions}</p>
+                <p>Demotions: {queuePreview.demotions}</p>
+                <p>Access Removals: {queuePreview.accessRemovals}</p>
+                <p>Retirements: {queuePreview.retirements}</p>
+                <p className="font-medium pt-1">Total: {queuePreview.queued}</p>
+              </div>
+              {queuePreview.players.length > 0 && (
+                <ul className="max-h-40 space-y-1 overflow-y-auto rounded border p-2 text-xs text-muted-foreground">
+                  {queuePreview.players.slice(0, 25).map((player) => (
+                    <li key={`${player.playerName}-${player.action}`}>
+                      {player.playerName}
+                      {player.currentTier ? ` (${player.currentTier}` : ""}
+                      {player.targetTier ? ` → ${player.targetTier})` : player.currentTier ? ")" : ""}
+                      {player.action === "remove_access" ? " — remove access" : ""}
+                      {player.action === "retire" ? " — retire" : ""}
+                    </li>
+                  ))}
+                  {queuePreview.players.length > 25 && (
+                    <li>…and {queuePreview.players.length - 25} more</li>
+                  )}
+                </ul>
+              )}
+              <p className="text-muted-foreground">Proceed?</p>
             </div>
           )}
           <DialogFooter>
-            <Button onClick={() => setQueueSummaryOpen(false)}>Done</Button>
+            <Button variant="outline" onClick={() => setQueueConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmQueue}
+              disabled={isQueueing || !queuePreview || queuePreview.queued === 0}
+            >
+              {isQueueing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Proceed
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>Reset Stuck Queue Items</DialogTitle>
+            <DialogDescription>
+              {queueHealth?.stuckProcessing ?? 0} item(s) have been processing for 15+ minutes.
+              Stop the Discord bot before resetting to avoid duplicate role changes.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              onClick={() => handleResetStuckQueue(false)}
+              disabled={isResettingQueue}
+            >
+              {isResettingQueue && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Reset stuck items (15+ min)
+            </Button>
+            {(queueHealth?.processing ?? 0) > (queueHealth?.stuckProcessing ?? 0) && (
+              <Button
+                variant="destructive"
+                onClick={() => handleResetStuckQueue(true)}
+                disabled={isResettingQueue}
+              >
+                Reset all processing ({queueHealth?.processing})
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setResetConfirmOpen(false)}>
+              Cancel
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

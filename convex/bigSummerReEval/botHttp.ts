@@ -17,7 +17,10 @@ export const claimPendingQueueItems = internalMutation({
     const claimed = [];
     const now = Date.now();
     for (const item of pending) {
-      await ctx.db.patch(item._id, { status: "processing" });
+      await ctx.db.patch(item._id, {
+        status: "processing",
+        processingStartedAt: now,
+      });
       claimed.push({
         id: item._id,
         playerId: item.playerId,
