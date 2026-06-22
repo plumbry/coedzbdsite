@@ -84,18 +84,6 @@ function memberRoles(
     .filter((role): role is { id: string; name: string } => role !== null);
 }
 
-async function fetchGuildRoleMap(
-  discordBotToken: string,
-  discordGuildId: string,
-): Promise<Map<string, string>> {
-  const guildRoles = await fetchGuildRoles(discordBotToken, discordGuildId);
-  const roleNameById = new Map<string, string>();
-  for (const role of guildRoles) {
-    roleNameById.set(role.id, role.name);
-  }
-  return roleNameById;
-}
-
 async function fetchGuildRoles(
   discordBotToken: string,
   discordGuildId: string,
