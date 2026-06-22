@@ -4,13 +4,13 @@ import type { QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { requireAdmin } from "../auth_helpers";
 import type { DashboardFilter } from "./constants";
+import { DASHBOARD_TIER_FILTERS } from "./constants";
 import {
   enrichPlayerRow,
   getAcceptedApplicationTrackerLink,
   getReEvalByPlayerId,
   computeQueueCandidates,
   summarizeQueueCandidates,
-  isNeedsAction,
   countActivePlayersForReEval,
   countEnrolledActivePlayers,
 } from "./helpers";
@@ -27,72 +27,10 @@ async function getLatestQueueStatus(ctx: QueryCtx, playerId: Id<"players">) {
 
 function matchesFilter(
   filter: DashboardFilter,
-  row: {
-    trackerStatus: string;
-    reEvalStatus: string;
-    fortniteTrackerLink?: string;
-    finalDecision?: string;
-    currentTier?: string;
-    queueStatus: string | null;
-  },
+  row: { currentTier?: string },
 ): boolean {
-  switch (filter) {
-    case "all":
-      return true;
-    case "needs_action":
-      return isNeedsAction(row);
-    case "needs_tracker_link":
-      return !row.fortniteTrackerLink?.trim();
-    case "private_tracker":
-      return row.trackerStatus === "private";
-    case "missing_tracker":
-      return row.trackerStatus === "missing";
-    case "waiting_for_public_tracker":
-      return (
-        row.trackerStatus === "waiting_for_public_tracker" ||
-        row.trackerStatus === "waiting_for_public_tracker_extended" ||
-        row.reEvalStatus === "waiting_initial_5_days" ||
-        row.reEvalStatus === "extended_final_5_days"
-      );
-    case "deadline_passed":
-      return (
-        row.reEvalStatus === "deadline_passed" ||
-        row.reEvalStatus === "extension_deadline_passed"
-      );
-    case "ready_to_review":
-      return row.reEvalStatus === "ready_to_review";
-    case "reviewed":
-      return row.reEvalStatus === "reviewed" || !!row.finalDecision;
-    case "no_change":
-      return (
-        row.finalDecision === "no_change" ||
-        (!!row.finalDecision &&
-          !!row.currentTier &&
-          row.finalDecision === row.currentTier)
-      );
-    case "tier_changes":
-      return (
-        row.reEvalStatus === "tier_change_queued" ||
-        row.reEvalStatus === "tier_change_complete" ||
-        row.reEvalStatus === "tier_change_failed" ||
-        row.finalDecision === "S" ||
-        row.finalDecision === "A" ||
-        row.finalDecision === "B" ||
-        row.finalDecision === "C"
-      );
-    case "access_removal_queue":
-      return (
-        row.reEvalStatus === "queued_for_access_removal" ||
-        row.queueStatus === "pending" ||
-        row.queueStatus === "processing"
-      ) && (row.finalDecision === "remove_access" || row.reEvalStatus === "queued_for_access_removal");
-    case "access_removed":
-      return row.reEvalStatus === "access_removed" || row.finalDecision === "remove_access";
-    case "retired":
-      return row.reEvalStatus === "retired" || row.finalDecision === "retired";
-    default:
-      return true;
-  }
+  if (filter === "all") return true;
+  return row.currentTier === filter;
 }
 
 export const listDashboard = query({
@@ -172,27 +110,15 @@ export const getFilterCounts = query({
   handler: async (ctx) => {
     await requireAdmin(ctx);
 
-    const filters: DashboardFilter[] = [
-      "all",
-      "needs_action",
-      "needs_tracker_link",
-      "private_tracker",
-      "missing_tracker",
-      "waiting_for_public_tracker",
-      "deadline_passed",
-      "ready_to_review",
-      "reviewed",
-      "no_change",
-      "tier_changes",
-      "access_removal_queue",
-      "access_removed",
-      "retired",
-    ];
+    const counts: Record<DashboardFilter, number> = {
+      all: 0,
+      S: 0,
+      A: 0,
+      B: 0,
+      C: 0,
+    };
 
     const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
-    const counts: Record<string, number> = Object.fromEntries(
-      filters.map((f) => [f, 0]),
-    );
 
     for (const reEval of reEvalRows) {
       const player = await ctx.db.get(reEval.playerId);
@@ -201,20 +127,10 @@ export const getFilterCounts = query({
         if (reEval.reEvalStatus !== "retired") continue;
       }
 
-      const appLink = await getAcceptedApplicationTrackerLink(ctx, player._id);
-      const trackerLink =
-        reEval.fortniteTrackerLink ??
-        appLink ??
-        (player.epicUsername
-          ? `https://fortnitetracker.com/profile/all/${encodeURIComponent(player.epicUsername)}`
-          : undefined);
-      const queueStatus = await getLatestQueueStatus(ctx, player._id);
-      const row = enrichPlayerRow(reEval, player, trackerLink, queueStatus);
-
-      for (const filter of filters) {
-        if (matchesFilter(filter, row)) {
-          counts[filter] += 1;
-        }
+      counts.all += 1;
+      const tier = player.tier as DashboardFilter | undefined;
+      if (tier && DASHBOARD_TIER_FILTERS.includes(tier)) {
+        counts[tier] += 1;
       }
     }
 

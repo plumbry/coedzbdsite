@@ -155,7 +155,7 @@ export const setTrackerStatus = mutation({
       patch.trackerStatus = "waiting_for_public_tracker";
     }
 
-    if (args.trackerStatus === "tracker_fixed") {
+    if (args.trackerStatus === "public") {
       if (
         reEval.reEvalStatus === "waiting_initial_5_days" ||
         reEval.reEvalStatus === "extended_final_5_days"
@@ -172,7 +172,7 @@ export const setTrackerStatus = mutation({
   },
 });
 
-export const markDmSent = mutation({
+export const markPlayerContacted = mutation({
   args: { reEvalId: v.id("bigSummerReEval") },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
@@ -187,28 +187,7 @@ export const markDmSent = mutation({
       patch.trackerStatus = "waiting_for_public_tracker";
     }
     await patchReEval(ctx, reEval._id, reEval.playerId, admin, patch, {
-      action: "big_summer_reeval_dm_sent",
-      newValue: new Date(now).toISOString(),
-    });
-  },
-});
-
-export const markTicketSent = mutation({
-  args: { reEvalId: v.id("bigSummerReEval") },
-  handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
-    const reEval = await ctx.db.get(args.reEvalId);
-    if (!reEval) throw new Error("Re-eval record not found");
-    const now = Date.now();
-    const patch: Record<string, unknown> = {
-      ticketSentAt: now,
-      ...startTrackerDeadline(now),
-    };
-    if (!reEval.trackerRequestSentAt) {
-      patch.trackerStatus = "waiting_for_public_tracker";
-    }
-    await patchReEval(ctx, reEval._id, reEval.playerId, admin, patch, {
-      action: "big_summer_reeval_ticket_sent",
+      action: "big_summer_reeval_player_contacted",
       newValue: new Date(now).toISOString(),
     });
   },

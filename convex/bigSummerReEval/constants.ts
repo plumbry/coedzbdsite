@@ -1,14 +1,14 @@
 export const TRACKER_STATUSES = [
   "public",
   "private",
-  "missing",
-  "mismatch",
   "waiting_for_public_tracker",
   "waiting_for_public_tracker_extended",
-  "tracker_fixed",
 ] as const;
 
 export type TrackerStatus = (typeof TRACKER_STATUSES)[number];
+
+/** Legacy tracker values still stored on older rows. */
+export const LEGACY_TRACKER_STATUSES = ["missing", "mismatch", "tracker_fixed"] as const;
 
 export const RE_EVAL_STATUSES = [
   "unchecked",
@@ -42,20 +42,13 @@ export type FinalDecision = (typeof FINAL_DECISIONS)[number];
 
 export const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 
-export const TRACKER_PROBLEM_STATUSES: TrackerStatus[] = [
-  "private",
-  "missing",
-  "mismatch",
-];
+export const TRACKER_PROBLEM_STATUSES = ["private", "missing", "mismatch"] as const;
 
-export const TRACKER_STATUS_LABELS: Record<TrackerStatus, string> = {
+export const TRACKER_STATUS_LABELS: Record<string, string> = {
   public: "Public",
   private: "Private",
-  missing: "Missing",
-  mismatch: "Mismatch",
   waiting_for_public_tracker: "Waiting For Public Tracker",
   waiting_for_public_tracker_extended: "Waiting For Public Tracker (Extended)",
-  tracker_fixed: "Tracker Fixed",
 };
 
 export const RE_EVAL_STATUS_LABELS: Record<ReEvalStatus, string> = {
@@ -82,18 +75,14 @@ export const QUEUE_ACTION_REASONS = {
   retire: "big_summer_reeval_retire",
 } as const;
 
-export type DashboardFilter =
-  | "all"
-  | "needs_action"
-  | "needs_tracker_link"
-  | "private_tracker"
-  | "missing_tracker"
-  | "waiting_for_public_tracker"
-  | "deadline_passed"
-  | "ready_to_review"
-  | "reviewed"
-  | "no_change"
-  | "tier_changes"
-  | "access_removal_queue"
-  | "access_removed"
-  | "retired";
+export type DashboardFilter = "all" | "S" | "A" | "B" | "C";
+
+export const DASHBOARD_TIER_FILTERS: DashboardFilter[] = ["all", "S", "A", "B", "C"];
+
+export const DASHBOARD_FILTER_LABELS: Record<DashboardFilter, string> = {
+  all: "All Players",
+  S: "S Tier",
+  A: "A Tier",
+  B: "B Tier",
+  C: "C Tier",
+};

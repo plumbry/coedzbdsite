@@ -78,37 +78,26 @@ type DashboardRow = {
   notes?: string;
 };
 
-type DashboardFilter =
-  | "all"
-  | "needs_action"
-  | "needs_tracker_link"
-  | "private_tracker"
-  | "missing_tracker"
-  | "waiting_for_public_tracker"
-  | "deadline_passed"
-  | "ready_to_review"
-  | "reviewed"
-  | "no_change"
-  | "tier_changes"
-  | "access_removal_queue"
-  | "access_removed"
-  | "retired";
+type DashboardFilter = "all" | "S" | "A" | "B" | "C";
+
+const FILTER_OPTIONS: DashboardFilter[] = ["all", "S", "A", "B", "C"];
 
 const FILTER_LABELS: Record<DashboardFilter, string> = {
   all: "All Players",
-  needs_action: "Needs Action",
-  needs_tracker_link: "Needs Tracker Link",
-  private_tracker: "Private Tracker",
-  missing_tracker: "Missing Tracker",
+  S: "S Tier",
+  A: "A Tier",
+  B: "B Tier",
+  C: "C Tier",
+};
+
+const TRACKER_STATUS_LABELS: Record<string, string> = {
+  public: "Public",
+  private: "Private",
   waiting_for_public_tracker: "Waiting For Public Tracker",
-  deadline_passed: "Deadline Passed",
-  ready_to_review: "Ready To Review",
-  reviewed: "Reviewed",
-  no_change: "No Change",
-  tier_changes: "Tier Changes",
-  access_removal_queue: "Access Removal Queue",
-  access_removed: "Access Removed",
-  retired: "Retired",
+  waiting_for_public_tracker_extended: "Waiting For Public Tracker (Extended)",
+  missing: "Private",
+  mismatch: "Private",
+  tracker_fixed: "Public",
 };
 
 function trackerBadgeClass(status: string): string {
@@ -130,7 +119,6 @@ function trackerBadgeClass(status: string): string {
 
 function reEvalBadgeClass(status: string): string {
   switch (status) {
-    case "tracker_fixed":
     case "reviewed":
     case "tier_change_complete":
       return "bg-emerald-600 hover:bg-emerald-600 text-white";
@@ -150,9 +138,7 @@ function reEvalBadgeClass(status: string): string {
 }
 
 function formatTrackerStatus(status: string): string {
-  return status
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return TRACKER_STATUS_LABELS[status] ?? status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function formatReEvalStatus(status: string): string {
@@ -218,8 +204,7 @@ export default function BigSummerReEvalDashboard() {
 
   const syncEnrolled = useMutation(api.bigSummerReEval.mutations.syncEnrolledPlayers);
   const setTrackerStatus = useMutation(api.bigSummerReEval.mutations.setTrackerStatus);
-  const markDmSent = useMutation(api.bigSummerReEval.mutations.markDmSent);
-  const markTicketSent = useMutation(api.bigSummerReEval.mutations.markTicketSent);
+  const markPlayerContacted = useMutation(api.bigSummerReEval.mutations.markPlayerContacted);
   const assignAdmin = useMutation(api.bigSummerReEval.mutations.assignAdmin);
   const setMemberResponse = useMutation(api.bigSummerReEval.mutations.setMemberResponse);
   const extendDeadline = useMutation(api.bigSummerReEval.mutations.extendDeadline);
@@ -394,21 +379,19 @@ export default function BigSummerReEvalDashboard() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(FILTER_LABELS) as DashboardFilter[]).map((key) => (
-              <Button
-                key={key}
-                size="sm"
-                variant={filter === key ? "default" : "outline"}
-                className="text-xs"
-                onClick={() => setFilter(key)}
-              >
-                {FILTER_LABELS[key]}
-                <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px]">
-                  {filterCounts[key] ?? 0}
-                </Badge>
-              </Button>
-            ))}
+          <div className="flex flex-wrap items-center gap-3">
+            <Select value={filter} onValueChange={(value) => setFilter(value as DashboardFilter)}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FILTER_OPTIONS.map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {FILTER_LABELS[key]} ({filterCounts[key] ?? 0})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="relative max-w-md">
@@ -539,24 +522,12 @@ export default function BigSummerReEvalDashboard() {
                                 <DropdownMenuItem onClick={() => runAction("Marked private", () => setTrackerStatus({ reEvalId: row._id, trackerStatus: "private" }))}>
                                   Mark Private
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => runAction("Marked missing", () => setTrackerStatus({ reEvalId: row._id, trackerStatus: "missing" }))}>
-                                  Mark Missing
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => runAction("Marked mismatch", () => setTrackerStatus({ reEvalId: row._id, trackerStatus: "mismatch" }))}>
-                                  Mark Mismatch
-                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => runAction("Waiting for tracker", () => setTrackerStatus({ reEvalId: row._id, trackerStatus: "waiting_for_public_tracker" }))}>
                                   Mark Waiting For Public Tracker
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => runAction("Tracker fixed", () => setTrackerStatus({ reEvalId: row._id, trackerStatus: "tracker_fixed" }))}>
-                                  Mark Tracker Fixed
-                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => runAction("DM sent", () => markDmSent({ reEvalId: row._id }))}>
-                                  Mark DM Sent
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => runAction("Ticket sent", () => markTicketSent({ reEvalId: row._id }))}>
-                                  Mark Ticket Sent
+                                <DropdownMenuItem onClick={() => runAction("Player contacted", () => markPlayerContacted({ reEvalId: row._id }))}>
+                                  Player Contacted
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => runAction("Ready to review", () => markReadyToReview({ reEvalId: row._id }))}>
