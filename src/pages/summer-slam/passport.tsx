@@ -4,6 +4,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import AuthGate from "@/components/auth-gate.tsx";
 import PageShell from "@/components/page-shell.tsx";
+import { CompactMobileButtonsOptOut } from "@/components/compact-mobile-buttons.tsx";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -316,13 +317,15 @@ function PassportContent() {
 export default function SummerSlamPassportPage() {
   const { isLoaded, isSignedIn } = useAuth();
 
-  if (!isLoaded) {
-    return <PassportLoader />;
-  }
-
-  if (!isSignedIn) {
-    return <LoginPrompt />;
-  }
-
-  return <PassportContent />;
+  return (
+    <CompactMobileButtonsOptOut>
+      {!isLoaded ? (
+        <PassportLoader />
+      ) : !isSignedIn ? (
+        <LoginPrompt />
+      ) : (
+        <PassportContent />
+      )}
+    </CompactMobileButtonsOptOut>
+  );
 }

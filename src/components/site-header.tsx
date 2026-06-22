@@ -9,7 +9,7 @@ import EditUsernameDialog from "@/components/edit-username-dialog.tsx";
 import { cn } from "@/lib/utils.ts";
 
 const navLinkClass =
-  "inline-flex min-h-10 items-center font-semibold text-foreground hover:text-primary transition-colors whitespace-nowrap text-sm px-1 py-2 touch-manipulation sm:min-h-0 sm:px-0 sm:py-0";
+  "inline-flex min-h-8 items-center font-semibold text-foreground hover:text-primary transition-colors whitespace-nowrap text-sm px-1 py-1.5 touch-manipulation sm:min-h-0 sm:px-0 sm:py-0";
 
 function NavLink({ to, children, className }: { to: string; children: React.ReactNode; className?: string }) {
   const { pathname } = useLocation();
@@ -60,7 +60,7 @@ export default function SiteHeader() {
                 variant="ghost"
                 size="sm"
                 onClick={() => signout()}
-                className="min-h-10 text-destructive hover:text-destructive px-2 sm:min-h-0 sm:px-3 touch-manipulation"
+                className="text-destructive hover:text-destructive px-2 sm:px-3 touch-manipulation"
               >
                 <LogOut className="h-4 w-4" />
                 <span className="hidden sm:inline ml-2">Sign Out</span>

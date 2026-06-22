@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
+import { mobilePageHeaderActionsClass } from "@/lib/mobile-buttons.ts";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -92,7 +93,7 @@ export default function PageHeader({
           </div>
         </div>
         {actions && (
-          <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:shrink-0 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className={cn(mobilePageHeaderActionsClass, "sm:w-auto sm:shrink-0")}>
             {actions}
           </div>
         )}

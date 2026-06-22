@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import PageShell from "@/components/page-shell.tsx";
+import { CompactMobileButtonsOptOut } from "@/components/compact-mobile-buttons.tsx";
 import PageHeader from "@/components/page-header.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -125,6 +126,7 @@ export default function SummerSlamAdminDemoPage() {
   };
 
   return (
+    <CompactMobileButtonsOptOut>
     <PageShell maxWidth="wide">
       <PageHeader
         title="Summer Slam Passport — Admin Demo"
@@ -570,5 +572,6 @@ export default function SummerSlamAdminDemoPage() {
         </AlertDialogContent>
       </AlertDialog>
     </PageShell>
+    </CompactMobileButtonsOptOut>
   );
 }

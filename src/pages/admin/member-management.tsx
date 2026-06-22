@@ -33,6 +33,7 @@ import FemaleVerifiedBadge from "@/components/female-verified-badge.tsx";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import { compareTierField } from "@/lib/tier-sort.ts";
 import { DiscordSyncTools } from "./_components/discord-sync-tools.tsx";
+import { mobileActionRowClass } from "@/lib/mobile-buttons.ts";
 
 const ADMIN_TABS = ["applications", "accepted", "rejected", "former", "discord"];
 const MOD_TABS = ["applications", "accepted", "former"];
@@ -627,14 +628,13 @@ export default function MemberManagement() {
       showSidebar={!!isModeratorOrAdmin}
       header={{
         actions: isAdmin ? (
-          <div className="grid w-full grid-cols-2 gap-1.5 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-2">
+          <>
             <DiscordSyncTools compact />
             <Button
               size="sm"
               variant="secondary"
               onClick={handleSyncGirlRole}
               disabled={isSyncingGirlRole}
-              className="h-8 w-full justify-center gap-1 px-1.5 text-[11px] leading-tight touch-manipulation sm:h-9 sm:w-auto sm:px-3 sm:text-sm"
               title={
                 girlRoleSyncStatus?.lastSyncedAt
                   ? `${girlRoleSyncStatus.count} verifications · last synced ${format(new Date(girlRoleSyncStatus.lastSyncedAt), "MMM d, yyyy h:mm a")}`
@@ -642,9 +642,9 @@ export default function MemberManagement() {
               }
             >
               {isSyncingGirlRole ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin sm:mr-1.5" />
+                <Loader2 className="shrink-0 animate-spin sm:mr-1.5" />
               ) : (
-                <RefreshCw className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
+                <RefreshCw className="shrink-0 sm:mr-1.5" />
               )}
               <span className="truncate">Girl Role</span>
               {girlRoleSyncStatus && girlRoleSyncStatus.count > 0 && !isSyncingGirlRole && (
@@ -653,7 +653,7 @@ export default function MemberManagement() {
                 </Badge>
               )}
             </Button>
-          </div>
+          </>
         ) : undefined,
       }}
     >
@@ -689,11 +689,7 @@ export default function MemberManagement() {
                     </CardDescription>
                   </div>
                   {isAdmin && (
-                    <Button
-                      size="sm"
-                      onClick={() => setNewAppDialogOpen(true)}
-                      className="h-8 w-full cursor-pointer touch-manipulation sm:h-9 sm:w-auto"
-                    >
+                    <Button size="sm" onClick={() => setNewAppDialogOpen(true)} className="w-full sm:w-auto">
                       <Plus className="mr-1.5 h-3.5 w-3.5" />
                       New Application
                     </Button>
@@ -768,22 +764,17 @@ export default function MemberManagement() {
                               <ExternalLink className="h-3 w-3 shrink-0" />
                             </a>
                             {isAdmin && (
-                              <div className="grid grid-cols-4 gap-1 sm:flex sm:flex-wrap sm:gap-1">
+                              <div className={mobileActionRowClass}>
                                 <Button
                                   onClick={() => setEditingApplicationId(app._id)}
                                   variant="secondary"
                                   size="sm"
-                                  className="h-8 w-full cursor-pointer justify-center px-1 text-[10px] touch-manipulation sm:h-7 sm:w-auto sm:px-2 sm:text-xs"
                                 >
-                                  <Edit className="h-3 w-3 sm:mr-1" />
+                                  <Edit className="sm:mr-1" />
                                   <span className="truncate">Edit</span>
                                 </Button>
-                                <Button
-                                  onClick={() => handleAccept(app._id)}
-                                  size="sm"
-                                  className="h-8 w-full cursor-pointer justify-center px-1 text-[10px] touch-manipulation sm:h-7 sm:w-auto sm:px-2 sm:text-xs"
-                                >
-                                  <UserCheck className="h-3 w-3 sm:mr-1" />
+                                <Button onClick={() => handleAccept(app._id)} size="sm">
+                                  <UserCheck className="sm:mr-1" />
                                   <span className="truncate">Accept</span>
                                 </Button>
                                 <Button
@@ -793,9 +784,8 @@ export default function MemberManagement() {
                                   }}
                                   variant="destructive"
                                   size="sm"
-                                  className="h-8 w-full cursor-pointer justify-center px-1 text-[10px] touch-manipulation sm:h-7 sm:w-auto sm:px-2 sm:text-xs"
                                 >
-                                  <UserX className="h-3 w-3 sm:mr-1" />
+                                  <UserX className="sm:mr-1" />
                                   <span className="truncate">Reject</span>
                                 </Button>
                                 <Button
@@ -805,9 +795,8 @@ export default function MemberManagement() {
                                   }}
                                   variant="destructive"
                                   size="sm"
-                                  className="h-8 w-full cursor-pointer justify-center px-1 text-[10px] touch-manipulation sm:h-7 sm:w-auto sm:px-2 sm:text-xs"
                                 >
-                                  <Trash2 className="h-3 w-3 sm:mr-1" />
+                                  <Trash2 className="sm:mr-1" />
                                   <span className="truncate">Delete</span>
                                 </Button>
                               </div>

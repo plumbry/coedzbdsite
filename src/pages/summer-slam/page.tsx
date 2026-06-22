@@ -4,6 +4,7 @@ import { useMutation, useQuery, useConvexAuth } from "convex/react";
 import { useAuth } from "@clerk/react";
 import { api } from "@/convex/_generated/api.js";
 import PageShell from "@/components/page-shell.tsx";
+import { CompactMobileButtonsOptOut } from "@/components/compact-mobile-buttons.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -172,6 +173,7 @@ export default function SummerSlamLandingPage() {
   };
 
   return (
+    <CompactMobileButtonsOptOut>
     <PageShell maxWidth="wide" className={ssPageBg}>
       <div className={ssPageContent}>
         <div className={ssPageContainer}>
@@ -328,5 +330,6 @@ export default function SummerSlamLandingPage() {
         </div>
       </div>
     </PageShell>
+    </CompactMobileButtonsOptOut>
   );
 }
