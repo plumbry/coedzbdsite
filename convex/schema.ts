@@ -2213,6 +2213,22 @@ export default defineSchema({
     evaluationStatusRaw: v.optional(v.string()),
     evaluationTargetTier: v.optional(v.string()),
     evaluatedAt: v.optional(v.number()),
+    triageOutcome: v.optional(
+      v.union(
+        v.literal("no_change"),
+        v.literal("needs_full_review"),
+        v.literal("private_tracker"),
+      ),
+    ),
+    triageSuggestedOutcome: v.optional(
+      v.union(
+        v.literal("no_change"),
+        v.literal("needs_full_review"),
+        v.literal("private_tracker"),
+      ),
+    ),
+    triageSuggestionReason: v.optional(v.string()),
+    triagedAt: v.optional(v.number()),
     summerScore: v.optional(v.object({
       thirdPartyExperience: v.number(),
       thirdPartyPerformance: v.number(),
@@ -2273,8 +2289,14 @@ export default defineSchema({
     evaluationStatusRaw: v.optional(v.string()),
     evaluationTargetTier: v.optional(v.string()),
     evaluatedAt: v.optional(v.number()),
+    triageOutcome: v.optional(v.string()),
+    triageSuggestedOutcome: v.optional(v.string()),
+    triageSuggestionReason: v.optional(v.string()),
+    triagedAt: v.optional(v.number()),
     summerTotalScore: v.optional(v.number()),
     summerTier: v.optional(v.string()),
+    eventsPlayedCount: v.optional(v.number()),
+    hasMatchData: v.optional(v.boolean()),
     appliedAt: v.optional(v.number()),
     appliedTier: v.optional(v.string()),
     notes: v.optional(v.string()),

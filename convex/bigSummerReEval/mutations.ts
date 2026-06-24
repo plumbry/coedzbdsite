@@ -6,7 +6,9 @@ import { getDisplayName } from "../auth_helpers";
 import {
   FINAL_DECISIONS,
   TRACKER_STATUSES,
+  TRIAGE_OUTCOMES,
   type FinalDecision,
+  type TriageOutcome,
 } from "./constants";
 import {
   writeReEvalAudit,
@@ -46,6 +48,9 @@ const trackerStatusValidator = v.union(
 const finalDecisionValidator = v.union(
   ...FINAL_DECISIONS.map((s) => v.literal(s)),
 );
+const triageOutcomeValidator = v.union(
+  ...TRIAGE_OUTCOMES.map((s) => v.literal(s)),
+);
 const summerScoreArgs = {
   thirdPartyExperience: v.number(),
   thirdPartyPerformance: v.number(),
@@ -71,6 +76,39 @@ function calculateTierFromScore(totalScore: number): FinalDecision {
   if (totalScore >= 850) return "A";
   if (totalScore >= 700) return "B";
   return "C";
+}
+
+function patchForTriageOutcome(
+  outcome: TriageOutcome,
+  admin: Awaited<ReturnType<typeof requireAdmin>>,
+): Record<string, unknown> {
+  const base = {
+    triageOutcome: outcome,
+    triagedAt: Date.now(),
+    assignedAdminId: admin._id,
+    assignedAdminName: getDisplayName(admin),
+  };
+  switch (outcome) {
+    case "no_change":
+      return {
+        ...base,
+        reEvalStatus: "reviewed",
+        finalDecision: "no_change",
+      };
+    case "needs_full_review":
+      return {
+        ...base,
+        reEvalStatus: "ready_to_review",
+        finalDecision: undefined,
+      };
+    case "private_tracker":
+      return {
+        ...base,
+        trackerStatus: "private",
+        reEvalStatus: "private_tracker",
+        finalDecision: undefined,
+      };
+  }
 }
 
 async function upsertLiveManualScore(
@@ -355,6 +393,8 @@ export const markPrivateTracker = mutation({
     await patchReEval(ctx, reEval._id, reEval.playerId, admin, {
       trackerStatus: "private",
       reEvalStatus: "private_tracker",
+      triageOutcome: "private_tracker",
+      triagedAt: Date.now(),
       assignedAdminId: admin._id,
       assignedAdminName: getDisplayName(admin),
       finalDecision: undefined,
@@ -367,6 +407,59 @@ export const markPrivateTracker = mutation({
       previousValue: reEval.reEvalStatus,
       newValue: "private_tracker",
     });
+  },
+});
+
+export const setTriageOutcome = mutation({
+  args: {
+    reEvalId: v.id("bigSummerReEval"),
+    outcome: triageOutcomeValidator,
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const reEval = await ctx.db.get(args.reEvalId);
+    if (!reEval) throw new Error("Re-eval record not found");
+    await patchReEval(
+      ctx,
+      reEval._id,
+      reEval.playerId,
+      admin,
+      patchForTriageOutcome(args.outcome, admin),
+      {
+        action: "big_summer_reeval_triage_set",
+        previousValue: reEval.triageOutcome,
+        newValue: args.outcome,
+      },
+    );
+  },
+});
+
+export const bulkSetTriageOutcome = mutation({
+  args: {
+    reEvalIds: v.array(v.id("bigSummerReEval")),
+    outcome: triageOutcomeValidator,
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    let updated = 0;
+    for (const reEvalId of args.reEvalIds) {
+      const reEval = await ctx.db.get(reEvalId);
+      if (!reEval) continue;
+      await patchReEval(
+        ctx,
+        reEval._id,
+        reEval.playerId,
+        admin,
+        patchForTriageOutcome(args.outcome, admin),
+        {
+          action: "big_summer_reeval_bulk_triage_set",
+          previousValue: reEval.triageOutcome,
+          newValue: args.outcome,
+        },
+      );
+      updated += 1;
+    }
+    return { updated };
   },
 });
 
@@ -473,6 +566,8 @@ export const saveSummerEvaluationScore = mutation({
     await patchReEval(ctx, reEval._id, reEval.playerId, admin, {
       trackerStatus: "public",
       reEvalStatus: "ready_to_review",
+      triageOutcome: "needs_full_review",
+      triagedAt: Date.now(),
       assignedAdminId: admin._id,
       assignedAdminName: getDisplayName(admin),
       finalDecision: tier,
@@ -492,40 +587,6 @@ export const saveSummerEvaluationScore = mutation({
     });
 
     return { tier, totalScore };
-  },
-});
-
-export const assignAdmin = mutation({
-  args: {
-    reEvalId: v.id("bigSummerReEval"),
-    assignedAdminId: v.optional(v.id("users")),
-  },
-  handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
-    const reEval = await ctx.db.get(args.reEvalId);
-    if (!reEval) throw new Error("Re-eval record not found");
-
-    let assignedAdminName: string | undefined;
-    if (args.assignedAdminId) {
-      const assigned = await ctx.db.get(args.assignedAdminId);
-      assignedAdminName = assigned ? getDisplayName(assigned) : undefined;
-    }
-
-    await patchReEval(
-      ctx,
-      reEval._id,
-      reEval.playerId,
-      admin,
-      {
-        assignedAdminId: args.assignedAdminId,
-        assignedAdminName,
-      },
-      {
-        action: "big_summer_reeval_admin_assigned",
-        previousValue: reEval.assignedAdminName,
-        newValue: assignedAdminName,
-      },
-    );
   },
 });
 
@@ -584,6 +645,8 @@ export const setFinalDecision = mutation({
     const patch: Record<string, unknown> = {
       finalDecision: args.finalDecision,
       reEvalStatus: "reviewed",
+      triageOutcome: args.finalDecision === "no_change" ? "no_change" : "needs_full_review",
+      triagedAt: reEval.triagedAt ?? Date.now(),
       assignedAdminId: admin._id,
       assignedAdminName: getDisplayName(admin),
     };

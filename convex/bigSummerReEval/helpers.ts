@@ -7,6 +7,7 @@ import {
   QUEUE_ACTION_REASONS,
   TRACKER_PROBLEM_STATUSES,
   type FinalDecision,
+  type TriageOutcome,
   type ReEvalStatus,
   type TrackerStatus,
 } from "./constants";
@@ -197,6 +198,10 @@ export function enrichPlayerRow(
     evaluationStatusRaw: reEval.evaluationStatusRaw,
     evaluationTargetTier: reEval.evaluationTargetTier,
     evaluatedAt: reEval.evaluatedAt,
+    triageOutcome: reEval.triageOutcome,
+    triageSuggestedOutcome: reEval.triageSuggestedOutcome,
+    triageSuggestionReason: reEval.triageSuggestionReason,
+    triagedAt: reEval.triagedAt,
     summerTotalScore: reEval.summerScore?.totalScore,
     summerTier: reEval.summerScore?.tier,
     appliedAt: reEval.appliedAt,
@@ -211,6 +216,48 @@ export function enrichPlayerRow(
     ticketSentAt: reEval.ticketSentAt,
     playerStatus: player.status,
     membershipStatus: player.currentMembershipStatus,
+    eventsPlayedCount: player.eventsPlayedCount ?? 0,
+    hasMatchData: player.hasMatchData ?? false,
+  };
+}
+
+function suggestTriageOutcome(
+  reEval: Doc<"bigSummerReEval">,
+  player: Doc<"players">,
+  trackerLink: string | undefined,
+): { outcome: TriageOutcome; reason: string } {
+  const eventsPlayed = player.eventsPlayedCount ?? 0;
+  if (reEval.trackerStatus === "private" || !trackerLink?.trim()) {
+    return {
+      outcome: "private_tracker",
+      reason: "Tracker unavailable.",
+    };
+  }
+  if (player.tier === "C" && eventsPlayed === 0) {
+    return {
+      outcome: "no_change",
+      reason: "Current C Tier with 0 ZBD events.",
+    };
+  }
+  if (
+    reEval.evaluationStatus?.includes("Promotion") ||
+    reEval.evaluationStatus?.includes("Demotion") ||
+    reEval.summerScore
+  ) {
+    return {
+      outcome: "needs_full_review",
+      reason: reEval.evaluationStatus ?? "Existing Summer evaluation needs manual review.",
+    };
+  }
+  if (player.hasMatchData || eventsPlayed >= 3) {
+    return {
+      outcome: "needs_full_review",
+      reason: "Player has ZBD/Yunite activity that may need manual judgement.",
+    };
+  }
+  return {
+    outcome: "no_change",
+    reason: "No evidence currently suggests a tier change.",
   };
 }
 
@@ -244,6 +291,7 @@ async function upsertDashboardCacheRow(
   trackerLink: string | undefined,
 ) {
   const row = enrichPlayerRow(reEval, player, trackerLink, null);
+  const triageSuggestion = suggestTriageOutcome(reEval, player, trackerLink);
   const isActiveAccepted =
     player.status === "active" && player.currentMembershipStatus === "accepted";
   const cachedAt = Date.now();
@@ -265,8 +313,14 @@ async function upsertDashboardCacheRow(
     evaluationStatusRaw: row.evaluationStatusRaw,
     evaluationTargetTier: row.evaluationTargetTier,
     evaluatedAt: row.evaluatedAt,
+    triageOutcome: row.triageOutcome,
+    triageSuggestedOutcome: row.triageSuggestedOutcome ?? triageSuggestion.outcome,
+    triageSuggestionReason: row.triageSuggestionReason ?? triageSuggestion.reason,
+    triagedAt: row.triagedAt,
     summerTotalScore: row.summerTotalScore,
     summerTier: row.summerTier,
+    eventsPlayedCount: row.eventsPlayedCount,
+    hasMatchData: row.hasMatchData,
     appliedAt: row.appliedAt,
     appliedTier: row.appliedTier,
     notes: row.notes,

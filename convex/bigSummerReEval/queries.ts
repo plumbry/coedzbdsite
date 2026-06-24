@@ -14,7 +14,6 @@ import {
 } from "./helpers";
 
 const WORKFLOW_STATE_KEY = "summer_reeval";
-const REVIEW_TIERS = ["S", "A", "B", "C"] as const;
 
 function matchesFilter(
   filter: DashboardFilter,
@@ -66,8 +65,14 @@ export const listDashboard = query({
         evaluationStatusRaw: row.evaluationStatusRaw,
         evaluationTargetTier: row.evaluationTargetTier,
         evaluatedAt: row.evaluatedAt,
+        triageOutcome: row.triageOutcome,
+        triageSuggestedOutcome: row.triageSuggestedOutcome,
+        triageSuggestionReason: row.triageSuggestionReason,
+        triagedAt: row.triagedAt,
         summerTotalScore: row.summerTotalScore,
         summerTier: row.summerTier,
+        eventsPlayedCount: row.eventsPlayedCount,
+        hasMatchData: row.hasMatchData,
         appliedAt: row.appliedAt,
         appliedTier: row.appliedTier,
         lastUpdatedAt: row.lastUpdatedAt,
@@ -138,24 +143,26 @@ export const listFinalReview = query({
         evaluationStatusRaw: row.evaluationStatusRaw,
         evaluationTargetTier: row.evaluationTargetTier,
         evaluatedAt: row.evaluatedAt,
+        triageOutcome: row.triageOutcome,
+        triageSuggestedOutcome: row.triageSuggestedOutcome,
+        triageSuggestionReason: row.triageSuggestionReason,
+        triagedAt: row.triagedAt,
         summerTotalScore: row.summerTotalScore,
         summerTier: row.summerTier,
+        eventsPlayedCount: row.eventsPlayedCount,
+        hasMatchData: row.hasMatchData,
         appliedAt: row.appliedAt,
         appliedTier: row.appliedTier,
         lastUpdatedAt: row.lastUpdatedAt,
         notes: row.notes,
       };
 
-      if (row.reEvalStatus === "private_tracker" || row.trackerStatus === "private") {
+      if (row.triageOutcome === "private_tracker" || row.reEvalStatus === "private_tracker" || row.trackerStatus === "private") {
         privateTrackers.push(dashboardRow);
         continue;
       }
 
-      if (
-        row.finalDecision &&
-        REVIEW_TIERS.includes(row.finalDecision as (typeof REVIEW_TIERS)[number]) &&
-        row.finalDecision !== row.currentTier
-      ) {
+      if (row.triageOutcome === "needs_full_review") {
         changedPlayers.push(dashboardRow);
       }
     }
@@ -284,35 +291,49 @@ export const getReEvalProgress = query({
       .withIndex("by_active_and_tier", (q) => q.eq("isActiveAccepted", true))
       .collect();
 
-    let enrolled = 0;
-    let withDecision = 0;
-    let noChange = 0;
-    let tierChanged = 0;
+    const breakdown = {
+      pending: 0,
+      noChange: 0,
+      needsFullReview: 0,
+      privateTracker: 0,
+    };
+    const byTier: Record<string, { total: number; completed: number }> = {
+      S: { total: 0, completed: 0 },
+      A: { total: 0, completed: 0 },
+      B: { total: 0, completed: 0 },
+      C: { total: 0, completed: 0 },
+    };
 
     for (const row of cacheRows) {
-      enrolled += 1;
-      if (!row.finalDecision) continue;
-      withDecision += 1;
-      if (
-        row.finalDecision === "no_change" ||
-        row.finalDecision === row.currentTier
-      ) {
-        noChange += 1;
-      } else if (
-        REVIEW_TIERS.includes(row.finalDecision as (typeof REVIEW_TIERS)[number]) &&
-        row.finalDecision !== row.currentTier
-      ) {
-        tierChanged += 1;
+      const tier = row.currentTier && byTier[row.currentTier] ? row.currentTier : undefined;
+      if (tier) byTier[tier].total += 1;
+      switch (row.triageOutcome) {
+        case "no_change":
+          breakdown.noChange += 1;
+          if (tier) byTier[tier].completed += 1;
+          break;
+        case "needs_full_review":
+          breakdown.needsFullReview += 1;
+          if (row.finalDecision && tier) byTier[tier].completed += 1;
+          break;
+        case "private_tracker":
+          breakdown.privateTracker += 1;
+          break;
+        default:
+          breakdown.pending += 1;
       }
     }
 
+    const total = cacheRows.length;
     return {
-      activeCount: enrolled,
-      enrolled,
-      withDecision,
-      pendingReview: Math.max(0, enrolled - withDecision),
-      noChange,
-      tierChanged,
+      activeCount: total,
+      enrolled: total,
+      withDecision: total - breakdown.pending,
+      pendingReview: breakdown.pending,
+      noChange: breakdown.noChange,
+      tierChanged: breakdown.needsFullReview,
+      breakdown,
+      byTier,
       needsDiscordUpdate: 0,
     };
   },

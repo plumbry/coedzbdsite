@@ -65,8 +65,14 @@ type DashboardRow = {
   evaluationStatusRaw?: string;
   evaluationTargetTier?: string;
   evaluatedAt?: number;
+  triageOutcome?: string;
+  triageSuggestedOutcome?: string;
+  triageSuggestionReason?: string;
+  triagedAt?: number;
   summerTotalScore?: number;
   summerTier?: string;
+  eventsPlayedCount?: number;
+  hasMatchData?: boolean;
   appliedAt?: number;
   appliedTier?: string;
   lastUpdatedAt: number;
@@ -74,6 +80,16 @@ type DashboardRow = {
 };
 
 type DashboardFilter = "all" | "S" | "A" | "B" | "C";
+type EventsFilter = "all" | "0" | "1-2" | "3+";
+type TriageFilter = "all" | "pending" | "no_change" | "needs_full_review" | "private_tracker";
+type YuniteFilter = "all" | "yes" | "no";
+
+const TRIAGE_LABELS: Record<string, string> = {
+  no_change: "No Change",
+  needs_full_review: "Needs Full Review",
+  private_tracker: "Private Tracker",
+  pending: "Pending",
+};
 
 const FILTER_OPTIONS: DashboardFilter[] = ["all", "S", "A", "B", "C"];
 
@@ -130,12 +146,16 @@ export default function BigSummerReEvalDashboard() {
   const [searchParams] = useSearchParams();
   const isFinalStageView = searchParams.get("stage") === "final";
   const [filter, setFilter] = useState<DashboardFilter>("all");
+  const [eventsFilter, setEventsFilter] = useState<EventsFilter>("all");
+  const [adminFilter, setAdminFilter] = useState("all");
+  const [triageFilter, setTriageFilter] = useState<TriageFilter>("all");
+  const [yuniteFilter, setYuniteFilter] = useState<YuniteFilter>("all");
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState("playerName");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [selectedId, setSelectedId] = useState<Id<"bigSummerReEval"> | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [scoreRow, setScoreRow] = useState<DashboardRow | null>(null);
-  const [actioningId, setActioningId] = useState<Id<"bigSummerReEval"> | null>(null);
   const [firstStageConfirmOpen, setFirstStageConfirmOpen] = useState(false);
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -157,11 +177,10 @@ export default function BigSummerReEvalDashboard() {
   );
 
   const saveSummerEvaluationScore = useMutation(api.bigSummerReEval.mutations.saveSummerEvaluationScore);
-  const markPrivateTracker = useMutation(api.bigSummerReEval.mutations.markPrivateTracker);
+  const setTriageOutcome = useMutation(api.bigSummerReEval.mutations.setTriageOutcome);
+  const bulkSetTriageOutcome = useMutation(api.bigSummerReEval.mutations.bulkSetTriageOutcome);
   const completeFirstStage = useMutation(api.bigSummerReEval.mutations.completeFirstStage);
   const completeReEval = useMutation(api.bigSummerReEval.mutations.completeReEval);
-  const assignAdmin = useMutation(api.bigSummerReEval.mutations.assignAdmin);
-  const setFinalDecision = useMutation(api.bigSummerReEval.mutations.setFinalDecision);
   const updateNotes = useMutation(api.bigSummerReEval.mutations.updateNotes);
   const updateTrackerLink = useMutation(api.bigSummerReEval.mutations.updateTrackerLink);
 
@@ -170,6 +189,15 @@ export default function BigSummerReEvalDashboard() {
     const searchTerm = search.trim().toLowerCase();
     const filtered = (rows as DashboardRow[]).filter((row) => {
       if (filter !== "all" && row.currentTier !== filter) return false;
+      const events = row.eventsPlayedCount ?? 0;
+      if (eventsFilter === "0" && events !== 0) return false;
+      if (eventsFilter === "1-2" && (events < 1 || events > 2)) return false;
+      if (eventsFilter === "3+" && events < 3) return false;
+      if (adminFilter !== "all" && (row.assignedAdminId ?? "unassigned") !== adminFilter) return false;
+      if (triageFilter === "pending" && row.triageOutcome) return false;
+      if (triageFilter !== "all" && triageFilter !== "pending" && row.triageOutcome !== triageFilter) return false;
+      if (yuniteFilter === "yes" && !row.hasMatchData) return false;
+      if (yuniteFilter === "no" && row.hasMatchData) return false;
       if (!searchTerm) return true;
       const haystack = [
         row.playerName,
@@ -177,6 +205,8 @@ export default function BigSummerReEvalDashboard() {
         row.discordId,
         row.epicUsername,
         row.currentTier,
+        row.triageOutcome ? TRIAGE_LABELS[row.triageOutcome] : "Pending",
+        row.triageSuggestedOutcome ? TRIAGE_LABELS[row.triageSuggestedOutcome] : undefined,
         row.assignedAdminName,
         row.notes,
       ]
@@ -201,11 +231,11 @@ export default function BigSummerReEvalDashboard() {
       }
       return String(av).localeCompare(String(bv)) * dir;
     });
-  }, [filter, rows, search, sortDirection, sortField]);
+  }, [adminFilter, eventsFilter, filter, rows, search, sortDirection, sortField, triageFilter, yuniteFilter]);
 
   const pagination = useClientPagination(sortedRows, {
     pageSize: 50,
-    resetDeps: [filter, search, sortField, sortDirection],
+    resetDeps: [filter, eventsFilter, adminFilter, triageFilter, yuniteFilter, search, sortField, sortDirection],
   });
 
   const toggleSort = (field: string) => {
@@ -226,22 +256,6 @@ export default function BigSummerReEvalDashboard() {
     }
   };
 
-  const runRowAction = async (
-    reEvalId: Id<"bigSummerReEval">,
-    label: string,
-    fn: () => Promise<unknown>,
-  ) => {
-    setActioningId(reEvalId);
-    try {
-      await fn();
-      toast.success(label);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Action failed");
-    } finally {
-      setActioningId(null);
-    }
-  };
-
   const openDetail = (id: Id<"bigSummerReEval">, row?: { notes?: string; fortniteTrackerLink?: string }) => {
     setSelectedId(id);
     setNotesDraft(row?.notes ?? "");
@@ -250,6 +264,48 @@ export default function BigSummerReEvalDashboard() {
 
   const openScoreDialog = (row: DashboardRow) => {
     setScoreRow(row);
+  };
+
+  const setTriage = async (
+    reEvalId: Id<"bigSummerReEval">,
+    outcome: "no_change" | "needs_full_review" | "private_tracker",
+  ) => {
+    await setTriageOutcome({ reEvalId, outcome });
+    setSelectedId(null);
+  };
+
+  const selectedReEvalIds = Array.from(selectedRows) as Id<"bigSummerReEval">[];
+
+  const toggleRowSelection = (id: string, checked: boolean) => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const setAllPageSelected = (checked: boolean) => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      for (const row of pagination.pageItems ?? []) {
+        if (checked) next.add(row._id);
+        else next.delete(row._id);
+      }
+      return next;
+    });
+  };
+
+  const runBulkTriage = async (
+    outcome: "no_change" | "needs_full_review" | "private_tracker",
+  ) => {
+    if (selectedReEvalIds.length === 0) {
+      toast.error("Select at least one player first");
+      return;
+    }
+    const result = await bulkSetTriageOutcome({ reEvalIds: selectedReEvalIds, outcome });
+    toast.success(`Updated ${result.updated} player(s)`);
+    setSelectedRows(new Set());
   };
 
   const handleCompleteFirstStage = async () => {
@@ -322,8 +378,8 @@ export default function BigSummerReEvalDashboard() {
                   Summer Re-Eval Final Review
                 </CardTitle>
                 <CardDescription className="max-w-2xl">
-                  Review Summer tier changes before applying them to the live player list.
-                  Private trackers can still be made public and re-evaluated here; any that
+                  Work through players marked Needs Full Review or Private Tracker before
+                  applying Summer decisions to the live player list. Private trackers can still be made public and re-evaluated here; any that
                   remain private when completed will be flagged for tier removal.
                 </CardDescription>
               </div>
@@ -353,7 +409,7 @@ export default function BigSummerReEvalDashboard() {
               <Tabs defaultValue="changed">
                 <TabsList>
                   <TabsTrigger value="changed">
-                    Tier Changed ({finalReview.changedPlayers.length})
+                    Needs Full Review ({finalReview.changedPlayers.length})
                   </TabsTrigger>
                   <TabsTrigger value="private">
                     Private Trackers ({finalReview.privateTrackers.length})
@@ -366,7 +422,7 @@ export default function BigSummerReEvalDashboard() {
                         <TableRow>
                           <TableHead>Player</TableHead>
                           <TableHead>Current Tier</TableHead>
-                          <TableHead>Summer Tier</TableHead>
+                              <TableHead>Summer Tier</TableHead>
                           <TableHead>Evaluation</TableHead>
                           <TableHead>Evaluated</TableHead>
                         </TableRow>
@@ -375,7 +431,7 @@ export default function BigSummerReEvalDashboard() {
                         {finalReview.changedPlayers.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                              No Summer tier changes yet.
+                              No players currently need full review.
                             </TableCell>
                           </TableRow>
                         ) : (
@@ -504,19 +560,24 @@ export default function BigSummerReEvalDashboard() {
                 results do not update the main player list or Discord roles.
               </CardDescription>
               {progress.enrolled > 0 && (
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                  <span>
-                    Reviewed: <strong className="text-foreground">{progress.withDecision}</strong> / {progress.enrolled}
-                  </span>
-                  <span>
-                    No change: <strong className="text-foreground">{progress.noChange}</strong>
-                  </span>
-                  <span>
-                    Tier changed: <strong className="text-foreground">{progress.tierChanged}</strong>
-                  </span>
-                  <span>
-                    Pending review: <strong className="text-foreground">{progress.pendingReview}</strong>
-                  </span>
+                <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    <span>Total Members: <strong className="text-foreground">{progress.enrolled}</strong></span>
+                    <span>Pending: <strong className="text-foreground">{progress.breakdown.pending}</strong></span>
+                    <span>No Change: <strong className="text-foreground">{progress.breakdown.noChange}</strong></span>
+                    <span>Needs Full Review: <strong className="text-foreground">{progress.breakdown.needsFullReview}</strong></span>
+                    <span>Private Tracker: <strong className="text-foreground">{progress.breakdown.privateTracker}</strong></span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {(["S", "A", "B", "C"] as const).map((tier) => (
+                      <span key={tier}>
+                        {tier} Tier:{" "}
+                        <strong className="text-foreground">
+                          {progress.byTier[tier].completed} / {progress.byTier[tier].total}
+                        </strong>
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -535,7 +596,7 @@ export default function BigSummerReEvalDashboard() {
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <Select value={filter} onValueChange={(value) => setFilter(value as DashboardFilter)}>
-              <SelectTrigger className="w-[220px]">
+              <SelectTrigger className="w-[180px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -546,7 +607,53 @@ export default function BigSummerReEvalDashboard() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={eventsFilter} onValueChange={(value) => setEventsFilter(value as EventsFilter)}>
+              <SelectTrigger className="w-[150px]"><SelectValue placeholder="Events" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Events</SelectItem>
+                <SelectItem value="0">0 Events</SelectItem>
+                <SelectItem value="1-2">1-2 Events</SelectItem>
+                <SelectItem value="3+">3+ Events</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={triageFilter} onValueChange={(value) => setTriageFilter(value as TriageFilter)}>
+              <SelectTrigger className="w-[190px]"><SelectValue placeholder="Triage" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Triage</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="no_change">No Change</SelectItem>
+                <SelectItem value="needs_full_review">Needs Full Review</SelectItem>
+                <SelectItem value="private_tracker">Private Tracker</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={adminFilter} onValueChange={setAdminFilter}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Admin" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Admins</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {admins?.map((admin: { _id: Id<"users">; name: string }) => (
+                  <SelectItem key={admin._id} value={admin._id}>{admin.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={yuniteFilter} onValueChange={(value) => setYuniteFilter(value as YuniteFilter)}>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Yunite Data" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Yunite</SelectItem>
+                <SelectItem value="yes">Yunite: Yes</SelectItem>
+                <SelectItem value="no">Yunite: No</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          {selectedRows.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 p-2 text-sm">
+              <span className="font-medium">{selectedRows.size} selected</span>
+              <Button size="sm" variant="outline" onClick={() => void runBulkTriage("no_change")}>Mark No Change</Button>
+              <Button size="sm" variant="outline" onClick={() => void runBulkTriage("needs_full_review")}>Needs Full Review</Button>
+              <Button size="sm" variant="outline" onClick={() => void runBulkTriage("private_tracker")}>Private Tracker</Button>
+            </div>
+          )}
 
           <div className="relative max-w-md">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -566,21 +673,29 @@ export default function BigSummerReEvalDashboard() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-8">
+                        <input
+                          type="checkbox"
+                          checked={(pagination.pageItems ?? []).length > 0 && (pagination.pageItems ?? []).every((row) => selectedRows.has(row._id))}
+                          onChange={(e) => setAllPageSelected(e.target.checked)}
+                        />
+                      </TableHead>
                       <TableHead>
                         <Button variant="ghost" size="sm" className="h-7 px-1" onClick={() => toggleSort("playerName")}>
                           Player <ArrowUpDown className="ml-1 h-3 w-3" />
                         </Button>
                       </TableHead>
-                      <TableHead>Discord ID</TableHead>
-                      <TableHead>Tracker</TableHead>
                       <TableHead>
                         <Button variant="ghost" size="sm" className="h-7 px-1" onClick={() => toggleSort("currentTier")}>
                           Tier <ArrowUpDown className="ml-1 h-3 w-3" />
                         </Button>
                       </TableHead>
-                      <TableHead>Re-Eval Status</TableHead>
+                      <TableHead>Events</TableHead>
+                      <TableHead>Tracker</TableHead>
+                      <TableHead>Suggested Outcome</TableHead>
+                      <TableHead>Triage Status</TableHead>
                       <TableHead>Admin</TableHead>
-                      <TableHead>Decision</TableHead>
+                      <TableHead>Final Decision</TableHead>
                       <TableHead>Updated</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -588,7 +703,7 @@ export default function BigSummerReEvalDashboard() {
                   <TableBody>
                     {pagination.pageItems && pagination.pageItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                           No players match this filter.
                         </TableCell>
                       </TableRow>
@@ -598,12 +713,22 @@ export default function BigSummerReEvalDashboard() {
                           key={row._id}
                           className={row.reEvalStatus === "private_tracker" ? "bg-amber-500/5" : undefined}
                         >
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              checked={selectedRows.has(row._id)}
+                              onChange={(e) => toggleRowSelection(row._id, e.target.checked)}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium whitespace-nowrap">
                             <PlayerProfileLink discordUsername={row.discordUsername}>
                               {row.playerName}
                             </PlayerProfileLink>
                           </TableCell>
-                          <TableCell className="font-mono text-xs">{row.discordId}</TableCell>
+                          <TableCell>
+                            {row.currentTier ?? "—"}/{row.summerTier ?? "-"}
+                          </TableCell>
+                          <TableCell>{row.eventsPlayedCount ?? 0}</TableCell>
                           <TableCell>
                             {row.fortniteTrackerLink ? (
                               <a
@@ -618,12 +743,17 @@ export default function BigSummerReEvalDashboard() {
                               "—"
                             )}
                           </TableCell>
-                          <TableCell>
-                            {row.currentTier ?? "—"}/{row.summerTier ?? "-"}
+                          <TableCell className="text-xs max-w-[220px]">
+                            <div className="font-medium">
+                              {row.triageSuggestedOutcome ? TRIAGE_LABELS[row.triageSuggestedOutcome] : "—"}
+                            </div>
+                            <div className="text-muted-foreground">
+                              {row.triageSuggestionReason ?? ""}
+                            </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={reEvalBadgeClass(row.reEvalStatus)}>
-                              {formatReEvalStatus(row.reEvalStatus)}
+                            <Badge className={row.triageOutcome ? reEvalBadgeClass(row.reEvalStatus) : ""}>
+                              {row.triageOutcome ? TRIAGE_LABELS[row.triageOutcome] : "Pending"}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs">{row.assignedAdminName ?? "—"}</TableCell>
@@ -638,10 +768,9 @@ export default function BigSummerReEvalDashboard() {
                               <Button
                                 size="sm"
                                 className="h-7 px-2 text-xs"
-                                disabled={actioningId === row._id}
                                 onClick={() => openDetail(row._id, row)}
                               >
-                                {actioningId === row._id ? "Working..." : "Review"}
+                                Review
                               </Button>
                             </div>
                           </TableCell>
@@ -670,7 +799,7 @@ export default function BigSummerReEvalDashboard() {
           <DialogHeader>
             <DialogTitle>{selectedDetail?.playerName ?? "Player"} — Re-Eval</DialogTitle>
             <DialogDescription>
-              Review tracker, assign admin, record decisions, and leave internal notes.
+              Triage this member quickly, or open the full Summer evaluation only when needed.
             </DialogDescription>
           </DialogHeader>
           {selectedDetail && (
@@ -684,6 +813,18 @@ export default function BigSummerReEvalDashboard() {
                 <div>
                   <span className="text-muted-foreground">Evaluated:</span>{" "}
                   {selectedDetail.evaluatedAt ? format(new Date(selectedDetail.evaluatedAt), "MMM d HH:mm") : "—"}
+                </div>
+              </div>
+
+              <div className="rounded-md border bg-muted/30 p-3">
+                <div className="text-sm text-muted-foreground">Suggested Outcome</div>
+                <div className="text-base font-semibold">
+                  {selectedDetail.triageSuggestedOutcome
+                    ? TRIAGE_LABELS[selectedDetail.triageSuggestedOutcome]
+                    : "—"}
+                </div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {selectedDetail.triageSuggestionReason ?? "No suggestion available."}
                 </div>
               </div>
 
@@ -705,70 +846,8 @@ export default function BigSummerReEvalDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3">
-                <div className="space-y-2">
-                  <Label>Assigned Admin</Label>
-                  <Select
-                    value={selectedDetail.assignedAdminId ?? "none"}
-                    onValueChange={(value) =>
-                      selectedId &&
-                      runAction("Admin assigned", () =>
-                        assignAdmin({
-                          reEvalId: selectedId,
-                          assignedAdminId: value === "none" ? undefined : (value as Id<"users">),
-                        }),
-                      )
-                    }
-                  >
-                    <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Unassigned</SelectItem>
-                      {admins?.map((admin: { _id: Id<"users">; name: string }) => (
-                        <SelectItem key={admin._id} value={admin._id}>{admin.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
               <div className="space-y-2">
-                <Label>Final Decision</Label>
-                <Select
-                  value={selectedDetail.finalDecision ?? "none"}
-                  onValueChange={(value) =>
-                    selectedId &&
-                    value !== "none" &&
-                    runAction("Decision saved", () =>
-                      setFinalDecision({
-                        reEvalId: selectedId,
-                        finalDecision: value as "S" | "A" | "B" | "C" | "no_change" | "remove_access",
-                      }),
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="No decision" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No decision yet</SelectItem>
-                    <SelectItem value="S">S</SelectItem>
-                    <SelectItem value="A">A</SelectItem>
-                    <SelectItem value="B">B</SelectItem>
-                    <SelectItem value="C">C</SelectItem>
-                    <SelectItem value="no_change">
-                      No Change{selectedDetail.evaluationTargetTier ? "" : " (suggested)"}
-                    </SelectItem>
-                    <SelectItem value="remove_access">Flag For Tier Removal</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Suggested decision: {selectedDetail.evaluationTargetTier ?? "No Change"}. Saving a
-                  final decision marks this player as reviewed.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Internal Notes</Label>
+                <Label>Previous Notes / Internal Notes</Label>
                 <Textarea value={notesDraft} onChange={(e) => setNotesDraft(e.target.value)} rows={3} />
                 <Button
                   size="sm"
@@ -786,18 +865,15 @@ export default function BigSummerReEvalDashboard() {
                 <Button
                   size="sm"
                   onClick={() => selectedDetail && openScoreDialog(selectedDetail as DashboardRow)}
-                  disabled={actioningId === selectedId}
                 >
-                  {actioningId === selectedId ? "Working..." : "Re-Evaluate"}
+                  Open Full Evaluation
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() =>
                     selectedId &&
-                    runAction("Marked no change", () =>
-                      setFinalDecision({ reEvalId: selectedId, finalDecision: "no_change" }),
-                    )
+                    runAction("Marked no change", () => setTriage(selectedId, "no_change"))
                   }
                 >
                   No Change
@@ -807,11 +883,20 @@ export default function BigSummerReEvalDashboard() {
                   variant="outline"
                   onClick={() =>
                     selectedId &&
-                    runRowAction(selectedId, "Marked private tracker", () =>
-                      markPrivateTracker({ reEvalId: selectedId }),
+                    runAction("Marked needs full review", () =>
+                      setTriage(selectedId, "needs_full_review"),
                     )
                   }
-                  disabled={actioningId === selectedId}
+                >
+                  Needs Full Review
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    selectedId &&
+                    runAction("Marked private tracker", () => setTriage(selectedId, "private_tracker"))
+                  }
                 >
                   Private Tracker
                 </Button>

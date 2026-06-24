@@ -41,6 +41,20 @@ export const FINAL_DECISIONS = [
 
 export type FinalDecision = (typeof FINAL_DECISIONS)[number];
 
+export const TRIAGE_OUTCOMES = [
+  "no_change",
+  "needs_full_review",
+  "private_tracker",
+] as const;
+
+export type TriageOutcome = (typeof TRIAGE_OUTCOMES)[number];
+
+export const TRIAGE_OUTCOME_LABELS: Record<TriageOutcome, string> = {
+  no_change: "No Change",
+  needs_full_review: "Needs Full Review",
+  private_tracker: "Private Tracker",
+};
+
 export const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 
 export const TRACKER_PROBLEM_STATUSES = ["private", "missing", "mismatch"] as const;
