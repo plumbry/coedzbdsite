@@ -372,15 +372,6 @@ export const getPlayerZBDPerformanceBundle = query({
       yuniteResults,
     );
 
-    if (!eligibility.statsEligible) {
-      return {
-        stats: null,
-        eligibility,
-        events,
-        killDiscrepancySummary,
-      };
-    }
-
     const { stats, statsByMode } = await buildZbdPerformanceStats(
       ctx,
       args.playerId,

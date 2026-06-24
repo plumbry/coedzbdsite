@@ -380,21 +380,17 @@ export default function ZBDPerformanceTab({ playerId, onAddEvent }: ZBDPerforman
     );
   }
 
-  const eligibility = bundle.eligibility;
   const allEvents = bundle.events ?? [];
   const statsByMode = bundle.statsByMode;
   const killDiscrepancySummary = bundle.killDiscrepancySummary;
 
   if (!statsByMode) {
-    const eventCount = eligibility?.eventCount ?? 0;
-    const required = eligibility?.requiredDisplayEvents ?? 3;
     return (
       <div className="space-y-4">
         <div className="rounded-lg border border-muted bg-muted/30 p-4">
           <p className="text-sm text-muted-foreground">
-            {eligibility?.hasCacheRow
-              ? `Displayed competitive stats require at least ${required} Yunite import events. This player has ${eventCount}.`
-              : `Displayed competitive stats require at least ${required} Yunite import events. Run the player stats cache backfill in Admin → Data Maintenance if this player has imported data.`}
+            No ZBD performance stats are available yet. Import Yunite data or add a
+            manual event to start tracking this player.
           </p>
         </div>
         {allEvents.length > 0 && <EventResultsGrouped events={allEvents} />}
