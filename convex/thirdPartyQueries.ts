@@ -82,10 +82,16 @@ export const getImportDetails = query({
       .query("thirdPartyResults")
       .withIndex("by_import", (q) => q.eq("importId", args.importId))
       .collect();
+
+    const matchStats = await ctx.db
+      .query("matchPlayerStats")
+      .withIndex("by_import", (q) => q.eq("importId", args.importId))
+      .collect();
     
     return {
       ...importRecord,
       results,
+      matchStats,
     };
   },
 });
