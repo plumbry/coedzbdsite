@@ -641,9 +641,9 @@ export default function BigSummerReEvalDashboard() {
                                 size="sm"
                                 className="h-7 px-2 text-xs"
                                 disabled={actioningId === row._id}
-                                onClick={() => openScoreDialog(row)}
+                                onClick={() => openDetail(row._id, row)}
                               >
-                                {actioningId === row._id ? "Working..." : "Re-Evaluate"}
+                                {actioningId === row._id ? "Working..." : "Review"}
                               </Button>
                               <Button
                                 size="sm"
