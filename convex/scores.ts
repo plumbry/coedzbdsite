@@ -3,7 +3,10 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
-import { getManualScoreForPlayer } from "./helpers/manualScores";
+import {
+  getManualScoreForPlayer,
+  pickCanonicalManualScore,
+} from "./helpers/manualScores";
 import { scheduleGenderSheetRebuild } from "./helpers/genderSheetSchedule";
 import { schedulePublicMemberDirectoryRebuildForPlayer } from "./helpers/publicMemberDirectory";
 import { updateTierEvalForPlayerIfEligible } from "./lib/stats/updateTierEvalForPlayer";
@@ -26,6 +29,40 @@ export const getPlayerScore = query({
 
     if (!score) return null;
     
+    // Default modifiers and seasonPerformance to 0 if not set
+    return {
+      ...score,
+      seasonPerformance: score.seasonPerformance ?? 0,
+      modifiers: score.modifiers ?? 0,
+    };
+  },
+});
+
+export const getApplicationScore = query({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, args) => {
+    // Only admins can view detailed scores
+    await requireAdmin(ctx);
+
+    const application = await ctx.db.get(args.applicationId);
+    if (!application) return null;
+
+    let score = application.playerId
+      ? await getManualScoreForPlayer(ctx, application.playerId)
+      : null;
+
+    if (!score) {
+      const applicationScores = await ctx.db
+        .query("manualScores")
+        .withIndex("by_application", (q) =>
+          q.eq("applicationId", args.applicationId),
+        )
+        .collect();
+      score = pickCanonicalManualScore(applicationScores);
+    }
+
+    if (!score) return null;
+
     // Default modifiers and seasonPerformance to 0 if not set
     return {
       ...score,
@@ -111,6 +148,7 @@ export const getAllScoresMap = query({
 export const createOrUpdateScore = mutation({
   args: {
     playerId: v.id("players"),
+    applicationId: v.optional(v.id("applications")),
     thirdPartyExperience: v.number(),
     thirdPartyPerformance: v.number(),
     inGameTourneyPerformance: v.number(),
@@ -194,13 +232,25 @@ export const createOrUpdateScore = mutation({
     const playerName = player.discordUsername || "Unknown Player";
     const previousTier = player.tier;
     
-    const existingScore = await getManualScoreForPlayer(ctx, args.playerId);
+    let existingScore = await getManualScoreForPlayer(ctx, args.playerId);
+
+    if (!existingScore && args.applicationId) {
+      const applicationScores = await ctx.db
+        .query("manualScores")
+        .withIndex("by_application", (q) =>
+          q.eq("applicationId", args.applicationId),
+        )
+        .collect();
+      existingScore = pickCanonicalManualScore(applicationScores);
+    }
     
     const isUpdate = !!existingScore;
     
     if (existingScore) {
       // Update existing score
       await ctx.db.patch(existingScore._id, {
+        playerId: args.playerId,
+        applicationId: args.applicationId,
         thirdPartyExperience: args.thirdPartyExperience,
         thirdPartyPerformance: args.thirdPartyPerformance,
         inGameTourneyPerformance: args.inGameTourneyPerformance,
@@ -225,6 +275,7 @@ export const createOrUpdateScore = mutation({
       // Create new score
       await ctx.db.insert("manualScores", {
         playerId: args.playerId,
+        applicationId: args.applicationId,
         thirdPartyExperience: args.thirdPartyExperience,
         thirdPartyPerformance: args.thirdPartyPerformance,
         inGameTourneyPerformance: args.inGameTourneyPerformance,

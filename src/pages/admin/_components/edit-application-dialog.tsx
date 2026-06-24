@@ -176,10 +176,11 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
   const createOrUpdateScore = useMutation(api.scores.createOrUpdateScore);
   const createPlayerForApplication = useMutation(api.memberManagement.createPlayerForApplication);
 
-  // Fetch existing scores if the application has a linked player
+  // Fetch existing scores by application so pending applications without a linked
+  // player can still hydrate their saved evaluation.
   const existingScore = useQuery(
-    api.scores.getPlayerScore,
-    application?.playerId ? { playerId: application.playerId } : "skip"
+    api.scores.getApplicationScore,
+    application ? { applicationId: application._id } : "skip",
   );
 
   const playerProfile = useQuery(
@@ -201,7 +202,11 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
 
   // Load existing scores when they become available
   useEffect(() => {
-    if (existingScore && !scoresLoaded) {
+    if (!application || scoresLoaded || existingScore === undefined) {
+      return;
+    }
+
+    if (existingScore) {
       setScores({
         thirdPartyExperience: existingScore.thirdPartyExperience ?? 0,
         thirdPartyPerformance: existingScore.thirdPartyPerformance ?? 0,
@@ -218,12 +223,11 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
         seasonPerformance: existingScore.seasonPerformance ?? 0,
         modifiers: existingScore.modifiers ?? 0,
       });
-      setScoresLoaded(true);
-    } else if ((existingScore === null || existingScore === undefined) && !scoresLoaded && application) {
-      // Reset to initial scores when no existing score found or query is skipped (no playerId)
+    } else {
+      // Reset to initial scores only after Convex confirms no saved score exists.
       setScores(INITIAL_SCORES);
-      setScoresLoaded(true);
     }
+    setScoresLoaded(true);
   }, [existingScore, scoresLoaded, application]);
 
   const totalScore = Object.values(scores).reduce<number>((sum, score) => sum + (typeof score === "number" ? score : 0), 0);
@@ -268,6 +272,7 @@ export default function EditApplicationDialog({ application, onClose }: EditAppl
 
         await createOrUpdateScore({
           playerId,
+          applicationId: application._id,
           thirdPartyExperience: typeof scores.thirdPartyExperience === "number" ? scores.thirdPartyExperience : 0,
           thirdPartyPerformance: typeof scores.thirdPartyPerformance === "number" ? scores.thirdPartyPerformance : 0,
           inGameTourneyPerformance: typeof scores.inGameTourneyPerformance === "number" ? scores.inGameTourneyPerformance : 0,
