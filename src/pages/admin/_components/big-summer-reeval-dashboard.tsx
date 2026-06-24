@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -24,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog.tsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import {
   Select,
   SelectContent,
@@ -31,14 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { useClientPagination } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
@@ -47,8 +41,6 @@ import { format } from "date-fns";
 import {
   ArrowUpDown,
   ExternalLink,
-  Loader2,
-  MoreHorizontal,
   Search,
   Sun,
 } from "lucide-react";
@@ -61,19 +53,19 @@ type DashboardRow = {
   playerName: string;
   discordId: string;
   discordUsername: string;
-  epicId?: string;
   epicUsername: string;
   fortniteTrackerLink?: string;
   currentTier?: string;
-  currentDiscordTierRole: string | null;
-  trackerStatus: string;
   reEvalStatus: string;
-  deadlineAt?: number;
   assignedAdminId?: Id<"users">;
   assignedAdminName?: string;
-  memberResponse: string;
   finalDecision?: string;
-  queueStatus: string | null;
+  evaluationStatus?: string;
+  evaluationStatusRaw?: string;
+  evaluationTargetTier?: string;
+  evaluatedAt?: number;
+  appliedAt?: number;
+  appliedTier?: string;
   lastUpdatedAt: number;
   notes?: string;
 };
@@ -90,33 +82,6 @@ const FILTER_LABELS: Record<DashboardFilter, string> = {
   C: "C Tier",
 };
 
-const TRACKER_STATUS_LABELS: Record<string, string> = {
-  public: "Public",
-  private: "Private",
-  waiting_for_public_tracker: "Waiting For Public Tracker",
-  waiting_for_public_tracker_extended: "Waiting For Public Tracker (Extended)",
-  missing: "Private",
-  mismatch: "Private",
-  tracker_fixed: "Public",
-};
-
-function trackerBadgeClass(status: string): string {
-  switch (status) {
-    case "public":
-    case "tracker_fixed":
-      return "bg-emerald-600 hover:bg-emerald-600 text-white";
-    case "private":
-    case "missing":
-    case "mismatch":
-      return "bg-red-600 hover:bg-red-600 text-white";
-    case "waiting_for_public_tracker":
-    case "waiting_for_public_tracker_extended":
-      return "bg-amber-500 hover:bg-amber-500 text-black";
-    default:
-      return "";
-  }
-}
-
 function reEvalBadgeClass(status: string): string {
   switch (status) {
     case "reviewed":
@@ -124,11 +89,11 @@ function reEvalBadgeClass(status: string): string {
       return "bg-emerald-600 hover:bg-emerald-600 text-white";
     case "waiting_initial_5_days":
     case "extended_final_5_days":
-    case "queued_for_access_removal":
-    case "tier_change_queued":
+    case "private_tracker":
       return "bg-amber-500 hover:bg-amber-500 text-black";
     case "deadline_passed":
     case "extension_deadline_passed":
+    case "tier_removal_flagged":
     case "tier_change_failed":
     case "access_removed":
       return "bg-red-600 hover:bg-red-600 text-white";
@@ -137,13 +102,11 @@ function reEvalBadgeClass(status: string): string {
   }
 }
 
-function formatTrackerStatus(status: string): string {
-  return TRACKER_STATUS_LABELS[status] ?? status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 function formatReEvalStatus(status: string): string {
   const map: Record<string, string> = {
     unchecked: "Unchecked",
+    private_tracker: "Private Tracker",
+    tier_removal_flagged: "Tier Removal Flagged",
     waiting_initial_5_days: "Waiting - Initial 5 Days",
     deadline_passed: "Deadline Passed",
     extended_final_5_days: "Extended - Final 5 Days",
@@ -160,28 +123,27 @@ function formatReEvalStatus(status: string): string {
   return map[status] ?? status;
 }
 
-function isNeedsActionRow(row: { reEvalStatus: string; queueStatus: string | null }): boolean {
-  return (
-    row.reEvalStatus === "deadline_passed" ||
-    row.reEvalStatus === "extension_deadline_passed" ||
-    row.reEvalStatus === "tier_change_failed" ||
-    row.queueStatus === "failed"
-  );
-}
-
 export default function BigSummerReEvalDashboard() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isFinalStageView = searchParams.get("stage") === "final";
   const [filter, setFilter] = useState<DashboardFilter>("all");
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState("playerName");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [selectedId, setSelectedId] = useState<Id<"bigSummerReEval"> | null>(null);
-  const [deadlineModalOpen, setDeadlineModalOpen] = useState(false);
-  const [queueConfirmOpen, setQueueConfirmOpen] = useState(false);
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [actioningId, setActioningId] = useState<Id<"bigSummerReEval"> | null>(null);
+  const [firstStageConfirmOpen, setFirstStageConfirmOpen] = useState(false);
+  const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
   const [trackerLinkDraft, setTrackerLinkDraft] = useState("");
-  const [epicIdDraft, setEpicIdDraft] = useState("");
 
+  const workflowState = useQuery(api.bigSummerReEval.queries.getWorkflowState, {});
+  const finalReview = useQuery(
+    api.bigSummerReEval.queries.listFinalReview,
+    isFinalStageView ? {} : "skip",
+  );
   const progress = useQuery(api.bigSummerReEval.queries.getReEvalProgress, {});
   const filterCounts = useQuery(api.bigSummerReEval.queries.getFilterCounts, {});
   const rows = useQuery(api.bigSummerReEval.queries.listDashboard, {
@@ -196,32 +158,16 @@ export default function BigSummerReEvalDashboard() {
     selectedId ? { reEvalId: selectedId } : "skip",
   );
 
-  const queueHealth = useQuery(api.bigSummerReEval.queries.getQueueHealth, {});
-  const queuePreview = useQuery(
-    api.bigSummerReEval.queries.previewQueueDiscordRoleChanges,
-    queueConfirmOpen ? {} : "skip",
-  );
-
   const syncEnrolled = useMutation(api.bigSummerReEval.mutations.syncEnrolledPlayers);
-  const setTrackerStatus = useMutation(api.bigSummerReEval.mutations.setTrackerStatus);
-  const markPlayerContacted = useMutation(api.bigSummerReEval.mutations.markPlayerContacted);
+  const reEvaluatePlayer = useMutation(api.bigSummerReEval.mutations.reEvaluatePlayer);
+  const markPrivateTracker = useMutation(api.bigSummerReEval.mutations.markPrivateTracker);
+  const completeFirstStage = useMutation(api.bigSummerReEval.mutations.completeFirstStage);
+  const completeReEval = useMutation(api.bigSummerReEval.mutations.completeReEval);
   const assignAdmin = useMutation(api.bigSummerReEval.mutations.assignAdmin);
-  const setMemberResponse = useMutation(api.bigSummerReEval.mutations.setMemberResponse);
-  const extendDeadline = useMutation(api.bigSummerReEval.mutations.extendDeadline);
-  const removeTierAccess = useMutation(api.bigSummerReEval.mutations.removeTierAccessFromDeadline);
-  const markReadyToReview = useMutation(api.bigSummerReEval.mutations.markReadyToReview);
-  const markReviewed = useMutation(api.bigSummerReEval.mutations.markReviewed);
   const setFinalDecision = useMutation(api.bigSummerReEval.mutations.setFinalDecision);
   const updateNotes = useMutation(api.bigSummerReEval.mutations.updateNotes);
   const updateTrackerLink = useMutation(api.bigSummerReEval.mutations.updateTrackerLink);
-  const updateEpicId = useMutation(api.bigSummerReEval.mutations.updateEpicId);
-  const markActive = useMutation(api.bigSummerReEval.mutations.markActive);
   const markRetired = useMutation(api.bigSummerReEval.mutations.markRetired);
-  const queueDiscordRoleChanges = useMutation(api.bigSummerReEval.mutations.queueDiscordRoleChanges);
-  const resetStuckQueue = useMutation(api.bigSummerReEval.mutations.resetStuckProcessingQueueItems);
-
-  const [isQueueing, setIsQueueing] = useState(false);
-  const [isResettingQueue, setIsResettingQueue] = useState(false);
 
   useEffect(() => {
     void syncEnrolled({});
@@ -258,67 +204,244 @@ export default function BigSummerReEvalDashboard() {
     }
   };
 
-  const handleOpenQueueConfirm = () => {
-    setQueueConfirmOpen(true);
-  };
-
-  const handleConfirmQueue = async () => {
-    setIsQueueing(true);
-    try {
-      const result = await queueDiscordRoleChanges({});
-      toast.success(`Queued ${result.queued} Discord role change(s)`);
-      setQueueConfirmOpen(false);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to queue role changes");
-    } finally {
-      setIsQueueing(false);
-    }
-  };
-
-  const handleMemberResponse = async (
+  const runRowAction = async (
     reEvalId: Id<"bigSummerReEval">,
-    response: "yes" | "no" | "unset",
-    currentStatus?: string,
+    label: string,
+    fn: () => Promise<unknown>,
   ) => {
-    if (response === "no" && currentStatus === "deadline_passed") {
-      setSelectedId(reEvalId);
-      setDeadlineModalOpen(true);
-      return;
-    }
-    await runAction("Response updated", () =>
-      setMemberResponse({ reEvalId, memberResponse: response }),
-    );
-  };
-
-  const handleResetStuckQueue = async (forceAll: boolean) => {
-    setIsResettingQueue(true);
+    setActioningId(reEvalId);
     try {
-      const result = await resetStuckQueue({ forceAll });
-      if (result.resetCount === 0) {
-        toast.message("No stuck processing items to reset");
-      } else {
-        toast.success(`Reset ${result.resetCount} stuck queue item(s) to pending`);
-      }
-      setResetConfirmOpen(false);
+      await fn();
+      toast.success(label);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to reset queue");
+      toast.error(error instanceof Error ? error.message : "Action failed");
     } finally {
-      setIsResettingQueue(false);
+      setActioningId(null);
     }
   };
 
-  const openDetail = (id: Id<"bigSummerReEval">, row?: { notes?: string; fortniteTrackerLink?: string; epicId?: string }) => {
+  const openDetail = (id: Id<"bigSummerReEval">, row?: { notes?: string; fortniteTrackerLink?: string }) => {
     setSelectedId(id);
     setNotesDraft(row?.notes ?? "");
     setTrackerLinkDraft(row?.fortniteTrackerLink ?? "");
-    setEpicIdDraft(row?.epicId ?? "");
   };
 
-  if (filterCounts === undefined || progress === undefined) {
+  const handleCompleteFirstStage = async () => {
+    setIsCompleting(true);
+    try {
+      await completeFirstStage({});
+      setFirstStageConfirmOpen(false);
+      toast.success("First stage completed");
+      navigate("/admin/member-management/big-reeval?stage=final");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to complete first stage");
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
+  const handleCompleteReEval = async () => {
+    setIsCompleting(true);
+    try {
+      const result = await completeReEval({});
+      setCompleteConfirmOpen(false);
+      toast.success(
+        `Re-eval completed: ${result.updated} tier change(s), ${result.flaggedForTierRemoval} private tracker(s) flagged`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to complete re-eval");
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
+  if (filterCounts === undefined || progress === undefined || workflowState === undefined) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (isFinalStageView) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Sun className="h-5 w-5 text-amber-500" />
+                  Summer Re-Eval Final Review
+                </CardTitle>
+                <CardDescription className="max-w-2xl">
+                  Review Summer tier changes before applying them to the live player list.
+                  Private trackers can still be made public and re-evaluated here; any that
+                  remain private when completed will be flagged for tier removal.
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate("/admin/member-management/big-reeval")}
+                >
+                  Back To First Stage
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setCompleteConfirmOpen(true)}
+                  disabled={workflowState.stage === "completed"}
+                >
+                  Complete Re-Eval
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!finalReview ? (
+              <Skeleton className="h-64 w-full" />
+            ) : (
+              <Tabs defaultValue="changed">
+                <TabsList>
+                  <TabsTrigger value="changed">
+                    Tier Changed ({finalReview.changedPlayers.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="private">
+                    Private Trackers ({finalReview.privateTrackers.length})
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="changed" className="mt-4">
+                  <div className="overflow-x-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Player</TableHead>
+                          <TableHead>Current Tier</TableHead>
+                          <TableHead>Summer Tier</TableHead>
+                          <TableHead>Evaluation</TableHead>
+                          <TableHead>Evaluated</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {finalReview.changedPlayers.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                              No Summer tier changes yet.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          finalReview.changedPlayers.map((row: DashboardRow) => (
+                            <TableRow key={row._id}>
+                              <TableCell className="font-medium">
+                                <PlayerProfileLink discordUsername={row.discordUsername}>
+                                  {row.playerName}
+                                </PlayerProfileLink>
+                              </TableCell>
+                              <TableCell>{row.currentTier ?? "—"}</TableCell>
+                              <TableCell>{row.finalDecision ?? "—"}</TableCell>
+                              <TableCell className="text-xs">{row.evaluationStatus ?? "—"}</TableCell>
+                              <TableCell className="text-xs whitespace-nowrap">
+                                {row.evaluatedAt ? format(new Date(row.evaluatedAt), "MMM d HH:mm") : "—"}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TabsContent>
+                <TabsContent value="private" className="mt-4">
+                  <div className="overflow-x-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Player</TableHead>
+                          <TableHead>Tracker</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {finalReview.privateTrackers.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                              No private trackers remain.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          finalReview.privateTrackers.map((row: DashboardRow) => (
+                            <TableRow key={row._id} className="bg-amber-500/5">
+                              <TableCell className="font-medium">
+                                <PlayerProfileLink discordUsername={row.discordUsername}>
+                                  {row.playerName}
+                                </PlayerProfileLink>
+                              </TableCell>
+                              <TableCell>
+                                {row.fortniteTrackerLink ? (
+                                  <a
+                                    href={row.fortniteTrackerLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center text-primary hover:underline text-xs"
+                                  >
+                                    Link <ExternalLink className="ml-1 h-3 w-3" />
+                                  </a>
+                                ) : (
+                                  "—"
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={reEvalBadgeClass(row.reEvalStatus)}>
+                                  {formatReEvalStatus(row.reEvalStatus)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  disabled={actioningId === row._id}
+                                  onClick={() =>
+                                    runRowAction(row._id, "Marked public and re-evaluated", () =>
+                                      reEvaluatePlayer({ reEvalId: row._id }),
+                                    )
+                                  }
+                                >
+                                  {actioningId === row._id ? "Working..." : "Mark Public + Re-Evaluate"}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            )}
+          </CardContent>
+        </Card>
+
+        <Dialog open={completeConfirmOpen} onOpenChange={setCompleteConfirmOpen}>
+          <DialogContent size="sm">
+            <DialogHeader>
+              <DialogTitle>Are you sure?</DialogTitle>
+              <DialogDescription>
+                This will update the live player list with Summer Re-Eval tier changes.
+                Any players still in Private Trackers will be flagged for tier removal.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCompleteConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleCompleteReEval} disabled={isCompleting}>
+                {isCompleting ? "Completing..." : "Complete Re-Eval"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -335,9 +458,8 @@ export default function BigSummerReEvalDashboard() {
               </CardTitle>
               <CardDescription className="max-w-2xl">
                 Member Management re-eval mode. All active members are automatically
-                included — review everyone and record a decision. Most members will be{" "}
-                <strong>No Change</strong>; Discord updates are only queued when a
-                decision differs from the member&apos;s current tier or access.
+                included — review everyone and record a Summer-only decision. These
+                results do not update the main player list or Discord roles.
               </CardDescription>
               {progress.enrolled > 0 && (
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
@@ -350,31 +472,18 @@ export default function BigSummerReEvalDashboard() {
                   <span>
                     Pending review: <strong className="text-foreground">{progress.pendingReview}</strong>
                   </span>
-                  <span>
-                    Need Discord update: <strong className="text-foreground">{progress.needsDiscordUpdate}</strong>
-                  </span>
                 </div>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
+                variant="destructive"
                 size="sm"
-                variant="secondary"
-                onClick={handleOpenQueueConfirm}
-                disabled={progress.needsDiscordUpdate === 0}
-                title={
-                  progress.needsDiscordUpdate === 0
-                    ? "No reviewed decisions require a Discord change"
-                    : undefined
-                }
+                onClick={() => setFirstStageConfirmOpen(true)}
+                disabled={workflowState.stage === "completed"}
               >
-                Queue Discord Updates ({progress.needsDiscordUpdate})
+                Complete First Stage
               </Button>
-              {(queueHealth?.stuckProcessing ?? 0) > 0 && (
-                <Button size="sm" variant="outline" onClick={() => setResetConfirmOpen(true)}>
-                  Reset Stuck Queue ({queueHealth?.stuckProcessing})
-                </Button>
-              )}
             </div>
           </div>
         </CardHeader>
@@ -418,33 +527,24 @@ export default function BigSummerReEvalDashboard() {
                         </Button>
                       </TableHead>
                       <TableHead>Discord ID</TableHead>
-                      <TableHead>Epic ID</TableHead>
                       <TableHead>Tracker</TableHead>
                       <TableHead>
                         <Button variant="ghost" size="sm" className="h-7 px-1" onClick={() => toggleSort("currentTier")}>
                           Tier <ArrowUpDown className="ml-1 h-3 w-3" />
                         </Button>
                       </TableHead>
-                      <TableHead>Discord Role</TableHead>
-                      <TableHead>Tracker Status</TableHead>
                       <TableHead>Re-Eval Status</TableHead>
-                      <TableHead>
-                        <Button variant="ghost" size="sm" className="h-7 px-1" onClick={() => toggleSort("deadlineAt")}>
-                          Deadline <ArrowUpDown className="ml-1 h-3 w-3" />
-                        </Button>
-                      </TableHead>
+                      <TableHead>Evaluation</TableHead>
                       <TableHead>Admin</TableHead>
-                      <TableHead>Response</TableHead>
                       <TableHead>Decision</TableHead>
-                      <TableHead>Queue</TableHead>
                       <TableHead>Updated</TableHead>
-                      <TableHead className="w-10" />
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pagination.pageItems && pagination.pageItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={15} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                           No players match this filter.
                         </TableCell>
                       </TableRow>
@@ -452,9 +552,7 @@ export default function BigSummerReEvalDashboard() {
                       pagination.pageItems?.map((row) => (
                         <TableRow
                           key={row._id}
-                          className={
-                            isNeedsActionRow(row) ? "bg-red-500/5" : undefined
-                          }
+                          className={row.reEvalStatus === "private_tracker" ? "bg-amber-500/5" : undefined}
                         >
                           <TableCell className="font-medium whitespace-nowrap">
                             <PlayerProfileLink discordUsername={row.discordUsername}>
@@ -462,9 +560,6 @@ export default function BigSummerReEvalDashboard() {
                             </PlayerProfileLink>
                           </TableCell>
                           <TableCell className="font-mono text-xs">{row.discordId}</TableCell>
-                          <TableCell className="font-mono text-xs max-w-[120px] truncate" title={row.epicId}>
-                            {row.epicId ?? "—"}
-                          </TableCell>
                           <TableCell>
                             {row.fortniteTrackerLink ? (
                               <a
@@ -480,64 +575,57 @@ export default function BigSummerReEvalDashboard() {
                             )}
                           </TableCell>
                           <TableCell>{row.currentTier ?? "—"}</TableCell>
-                          <TableCell className="text-xs">{row.currentDiscordTierRole ?? "—"}</TableCell>
-                          <TableCell>
-                            <Badge className={trackerBadgeClass(row.trackerStatus)}>
-                              {formatTrackerStatus(row.trackerStatus)}
-                            </Badge>
-                          </TableCell>
                           <TableCell>
                             <Badge className={reEvalBadgeClass(row.reEvalStatus)}>
                               {formatReEvalStatus(row.reEvalStatus)}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-xs whitespace-nowrap">
-                            {row.deadlineAt ? format(new Date(row.deadlineAt), "MMM d, yyyy") : "—"}
+                          <TableCell className="text-xs max-w-[180px]">
+                            {row.evaluationStatus ?? "—"}
                           </TableCell>
                           <TableCell className="text-xs">{row.assignedAdminName ?? "—"}</TableCell>
-                          <TableCell className="text-xs capitalize">{row.memberResponse}</TableCell>
                           <TableCell className="text-xs">
                             {row.finalDecision?.replace("_", " ") ?? "—"}
                           </TableCell>
-                          <TableCell className="text-xs capitalize">{row.queueStatus ?? "—"}</TableCell>
                           <TableCell className="text-xs whitespace-nowrap">
                             {format(new Date(row.lastUpdatedAt), "MMM d HH:mm")}
                           </TableCell>
                           <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => openDetail(row._id, row)}>
-                                  Open details
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => runAction("Marked public", () => setTrackerStatus({ reEvalId: row._id, trackerStatus: "public" }))}>
-                                  Mark Public
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => runAction("Marked private", () => setTrackerStatus({ reEvalId: row._id, trackerStatus: "private" }))}>
-                                  Mark Private
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => runAction("Waiting for tracker", () => setTrackerStatus({ reEvalId: row._id, trackerStatus: "waiting_for_public_tracker" }))}>
-                                  Mark Waiting For Public Tracker
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => runAction("Player contacted", () => markPlayerContacted({ reEvalId: row._id }))}>
-                                  Player Contacted
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => runAction("Ready to review", () => markReadyToReview({ reEvalId: row._id }))}>
-                                  Mark Ready To Review
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => runAction("Reviewed", () => markReviewed({ reEvalId: row._id }))}>
-                                  Mark Reviewed
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                disabled={actioningId === row._id}
+                                onClick={() =>
+                                  runRowAction(row._id, "Player re-evaluated", () =>
+                                    reEvaluatePlayer({ reEvalId: row._id }),
+                                  )
+                                }
+                              >
+                                {actioningId === row._id ? "Working..." : "Re-Evaluate"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs"
+                                disabled={actioningId === row._id}
+                                onClick={() =>
+                                  runRowAction(row._id, "Marked private tracker", () =>
+                                    markPrivateTracker({ reEvalId: row._id }),
+                                  )
+                                }
+                              >
+                                Private Tracker
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => openDetail(row._id, row)}
+                              >
+                                Details
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -573,23 +661,11 @@ export default function BigSummerReEvalDashboard() {
                 <div><span className="text-muted-foreground">Tier:</span> {selectedDetail.currentTier ?? "—"}</div>
                 <div><span className="text-muted-foreground">Events:</span> {selectedDetail.eventsPlayedCount ?? 0}</div>
                 <div><span className="text-muted-foreground">Yunite match data:</span> {selectedDetail.hasMatchData ? "Yes" : "No"}</div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Epic ID</Label>
-                <div className="flex gap-2">
-                  <Input value={epicIdDraft} onChange={(e) => setEpicIdDraft(e.target.value)} />
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      selectedId &&
-                      runAction("Epic ID updated", () =>
-                        updateEpicId({ reEvalId: selectedId, epicId: epicIdDraft }),
-                      )
-                    }
-                  >
-                    Save
-                  </Button>
+                <div><span className="text-muted-foreground">Evaluation:</span> {selectedDetail.evaluationStatus ?? "—"}</div>
+                <div><span className="text-muted-foreground">Suggested tier:</span> {selectedDetail.evaluationTargetTier ?? "—"}</div>
+                <div>
+                  <span className="text-muted-foreground">Evaluated:</span>{" "}
+                  {selectedDetail.evaluatedAt ? format(new Date(selectedDetail.evaluatedAt), "MMM d HH:mm") : "—"}
                 </div>
               </div>
 
@@ -611,7 +687,7 @@ export default function BigSummerReEvalDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3">
                 <div className="space-y-2">
                   <Label>Assigned Admin</Label>
                   <Select
@@ -635,56 +711,6 @@ export default function BigSummerReEvalDashboard() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Response From Member</Label>
-                  <Select
-                    value={selectedDetail.memberResponse}
-                    onValueChange={(value) =>
-                      selectedId &&
-                      handleMemberResponse(
-                        selectedId,
-                        value as "yes" | "no" | "unset",
-                        selectedDetail.reEvalStatus,
-                      )
-                    }
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unset">Unset</SelectItem>
-                      <SelectItem value="yes">Yes</SelectItem>
-                      <SelectItem value="no">No</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Final Decision</Label>
-                <Select
-                  value={selectedDetail.finalDecision ?? "none"}
-                  onValueChange={(value) =>
-                    selectedId &&
-                    value !== "none" &&
-                    runAction("Decision saved", () =>
-                      setFinalDecision({
-                        reEvalId: selectedId,
-                        finalDecision: value as "S" | "A" | "B" | "C" | "no_change" | "remove_access" | "retired",
-                      }),
-                    )
-                  }
-                >
-                  <SelectTrigger><SelectValue placeholder="No decision" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No decision</SelectItem>
-                    <SelectItem value="S">S — Promote</SelectItem>
-                    <SelectItem value="A">A — Promote</SelectItem>
-                    <SelectItem value="B">B</SelectItem>
-                    <SelectItem value="C">C — Demote</SelectItem>
-                    <SelectItem value="no_change">No Change — keep current tier</SelectItem>
-                    <SelectItem value="remove_access">Remove Access</SelectItem>
-                    <SelectItem value="retired">Retired</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="space-y-2">
@@ -703,8 +729,30 @@ export default function BigSummerReEvalDashboard() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => selectedId && runAction("Marked active", () => markActive({ reEvalId: selectedId }))}>
-                  Mark Active
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    selectedId &&
+                    runRowAction(selectedId, "Player re-evaluated", () =>
+                      reEvaluatePlayer({ reEvalId: selectedId }),
+                    )
+                  }
+                  disabled={actioningId === selectedId}
+                >
+                  {actioningId === selectedId ? "Working..." : "Re-Evaluate"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    selectedId &&
+                    runRowAction(selectedId, "Marked private tracker", () =>
+                      markPrivateTracker({ reEvalId: selectedId }),
+                    )
+                  }
+                  disabled={actioningId === selectedId}
+                >
+                  Private Tracker
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => selectedId && runAction("Marked retired", () => markRetired({ reEvalId: selectedId }))}>
                   Mark Retired
@@ -729,140 +777,26 @@ export default function BigSummerReEvalDashboard() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deadlineModalOpen} onOpenChange={setDeadlineModalOpen}>
+      <Dialog open={firstStageConfirmOpen} onOpenChange={setFirstStageConfirmOpen}>
         <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle>Tracker Deadline Reached</DialogTitle>
+            <DialogTitle>Are you sure?</DialogTitle>
             <DialogDescription>
-              This member has not responded or has not provided a public tracker. What would you like to do?
+              This will lock in the first-stage Summer Re-Eval review and move you to
+              the final review view.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
-            <Button
-              onClick={() =>
-                selectedId &&
-                runAction("Deadline extended", async () => {
-                  await extendDeadline({ reEvalId: selectedId });
-                  await setMemberResponse({ reEvalId: selectedId, memberResponse: "no" });
-                  setDeadlineModalOpen(false);
-                })
-              }
-            >
-              Extend 5 More Days
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() =>
-                selectedId &&
-                runAction("Access removal queued", async () => {
-                  await removeTierAccess({ reEvalId: selectedId });
-                  await setMemberResponse({ reEvalId: selectedId, memberResponse: "no" });
-                  setDeadlineModalOpen(false);
-                })
-              }
-            >
-              Remove Tier Access
-            </Button>
-            <Button variant="outline" onClick={() => setDeadlineModalOpen(false)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={queueConfirmOpen} onOpenChange={setQueueConfirmOpen}>
-        <DialogContent size="sm">
-          <DialogHeader>
-            <DialogTitle>Queue Discord Updates</DialogTitle>
-            <DialogDescription>
-              Only members whose final decision differs from their current tier or access
-              will be queued. Everyone else stays as-is on Discord.
-            </DialogDescription>
-          </DialogHeader>
-          {queuePreview === undefined ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Calculating changes...
-            </div>
-          ) : queuePreview.queued === 0 ? (
-            <p className="text-sm text-muted-foreground py-2">
-              No reviewed decisions require a Discord update right now.
-            </p>
-          ) : (
-            <div className="space-y-3 text-sm">
-              <div className="space-y-1">
-                <p>Promotions: {queuePreview.promotions}</p>
-                <p>Demotions: {queuePreview.demotions}</p>
-                <p>Access Removals: {queuePreview.accessRemovals}</p>
-                <p>Retirements: {queuePreview.retirements}</p>
-                <p className="font-medium pt-1">Total: {queuePreview.queued}</p>
-              </div>
-              {queuePreview.players.length > 0 && (
-                <ul className="max-h-40 space-y-1 overflow-y-auto rounded border p-2 text-xs text-muted-foreground">
-                  {queuePreview.players.slice(0, 25).map((player) => (
-                    <li key={`${player.playerName}-${player.action}`}>
-                      {player.playerName}
-                      {player.currentTier ? ` (${player.currentTier}` : ""}
-                      {player.targetTier ? ` → ${player.targetTier})` : player.currentTier ? ")" : ""}
-                      {player.action === "remove_access" ? " — remove access" : ""}
-                      {player.action === "retire" ? " — retire" : ""}
-                    </li>
-                  ))}
-                  {queuePreview.players.length > 25 && (
-                    <li>…and {queuePreview.players.length - 25} more</li>
-                  )}
-                </ul>
-              )}
-              <p className="text-muted-foreground">Proceed?</p>
-            </div>
-          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setQueueConfirmOpen(false)}>
+            <Button variant="outline" onClick={() => setFirstStageConfirmOpen(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={handleConfirmQueue}
-              disabled={isQueueing || !queuePreview || queuePreview.queued === 0}
-            >
-              {isQueueing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Proceed
+            <Button variant="destructive" onClick={handleCompleteFirstStage} disabled={isCompleting}>
+              {isCompleting ? "Completing..." : "Complete First Stage"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
-        <DialogContent size="sm">
-          <DialogHeader>
-            <DialogTitle>Reset Stuck Queue Items</DialogTitle>
-            <DialogDescription>
-              {queueHealth?.stuckProcessing ?? 0} item(s) have been processing for 15+ minutes.
-              Stop the Discord bot before resetting to avoid duplicate role changes.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
-            <Button
-              onClick={() => handleResetStuckQueue(false)}
-              disabled={isResettingQueue}
-            >
-              {isResettingQueue && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Reset stuck items (15+ min)
-            </Button>
-            {(queueHealth?.processing ?? 0) > (queueHealth?.stuckProcessing ?? 0) && (
-              <Button
-                variant="destructive"
-                onClick={() => handleResetStuckQueue(true)}
-                disabled={isResettingQueue}
-              >
-                Reset all processing ({queueHealth?.processing})
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => setResetConfirmOpen(false)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

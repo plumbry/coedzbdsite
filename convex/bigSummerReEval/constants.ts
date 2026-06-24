@@ -12,12 +12,14 @@ export const LEGACY_TRACKER_STATUSES = ["missing", "mismatch", "tracker_fixed"] 
 
 export const RE_EVAL_STATUSES = [
   "unchecked",
+  "private_tracker",
   "waiting_initial_5_days",
   "deadline_passed",
   "extended_final_5_days",
   "extension_deadline_passed",
   "ready_to_review",
   "reviewed",
+  "tier_removal_flagged",
   "queued_for_access_removal",
   "access_removed",
   "tier_change_queued",
@@ -53,12 +55,14 @@ export const TRACKER_STATUS_LABELS: Record<string, string> = {
 
 export const RE_EVAL_STATUS_LABELS: Record<ReEvalStatus, string> = {
   unchecked: "Unchecked",
+  private_tracker: "Private Tracker",
   waiting_initial_5_days: "Waiting - Initial 5 Days",
   deadline_passed: "Deadline Passed",
   extended_final_5_days: "Extended - Final 5 Days",
   extension_deadline_passed: "Extension Deadline Passed",
   ready_to_review: "Ready To Review",
   reviewed: "Reviewed",
+  tier_removal_flagged: "Tier Removal Flagged",
   queued_for_access_removal: "Queued For Access Removal",
   access_removed: "Access Removed",
   tier_change_queued: "Tier Change Queued",

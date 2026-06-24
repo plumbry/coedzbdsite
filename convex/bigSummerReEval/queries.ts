@@ -15,6 +15,9 @@ import {
   countEnrolledActivePlayers,
 } from "./helpers";
 
+const WORKFLOW_STATE_KEY = "summer_reeval";
+const REVIEW_TIERS = ["S", "A", "B", "C"] as const;
+
 async function getLatestQueueStatus(ctx: QueryCtx, playerId: Id<"players">) {
   const items = await ctx.db
     .query("tierRoleChangeQueue")
@@ -102,6 +105,66 @@ export const listDashboard = query({
     });
 
     return enriched;
+  },
+});
+
+export const getWorkflowState = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const state = await ctx.db
+      .query("bigSummerReEvalState")
+      .withIndex("by_key", (q) => q.eq("key", WORKFLOW_STATE_KEY))
+      .first();
+    return state ?? {
+      key: WORKFLOW_STATE_KEY,
+      stage: "first_stage" as const,
+      lastUpdatedAt: 0,
+    };
+  },
+});
+
+export const listFinalReview = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
+    const changedPlayers = [];
+    const privateTrackers = [];
+
+    for (const reEval of reEvalRows) {
+      const player = await ctx.db.get(reEval.playerId);
+      if (!player) continue;
+      const appLink = await getAcceptedApplicationTrackerLink(ctx, player._id);
+      const trackerLink =
+        reEval.fortniteTrackerLink ??
+        appLink ??
+        (player.epicUsername
+          ? `https://fortnitetracker.com/profile/all/${encodeURIComponent(player.epicUsername)}`
+          : undefined);
+      const row = enrichPlayerRow(reEval, player, trackerLink, null);
+
+      if (reEval.reEvalStatus === "private_tracker" || reEval.trackerStatus === "private") {
+        privateTrackers.push(row);
+        continue;
+      }
+
+      if (
+        reEval.finalDecision &&
+        REVIEW_TIERS.includes(reEval.finalDecision as (typeof REVIEW_TIERS)[number]) &&
+        reEval.finalDecision !== player.tier
+      ) {
+        changedPlayers.push(row);
+      }
+    }
+
+    changedPlayers.sort((a, b) => a.playerName.localeCompare(b.playerName));
+    privateTrackers.sort((a, b) => a.playerName.localeCompare(b.playerName));
+
+    return {
+      changedPlayers,
+      privateTrackers,
+    };
   },
 });
 

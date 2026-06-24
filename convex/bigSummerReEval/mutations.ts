@@ -4,24 +4,15 @@ import { requireAdmin } from "../auth_helpers";
 import { getDisplayName } from "../auth_helpers";
 import {
   FINAL_DECISIONS,
-  FIVE_DAYS_MS,
-  QUEUE_ACTION_REASONS,
-  RE_EVAL_STATUSES,
   TRACKER_STATUSES,
-  type ReEvalStatus,
-  type TrackerStatus,
+  type FinalDecision,
 } from "./constants";
 import {
-  hasActiveQueueItem,
-  memberResponseBlocksDeadline,
-  startTrackerDeadline,
-  trackerStillProblematic,
   writeReEvalAudit,
-  writeSystemReEvalAudit,
-  computeQueueCandidates,
-  queueReasonForAction,
   ensureAllActivePlayersEnrolled,
 } from "./helpers";
+import { updateTierEvalForPlayerIfEligible } from "../lib/stats/updateTierEvalForPlayer";
+import { updateStatsForPlayer } from "../lib/stats/updatePlayerStatsCache";
 
 export const ensureActivePlayersEnrolledInternal = internalMutation({
   args: {},
@@ -50,12 +41,40 @@ export const initializeForActivePlayers = mutation({
 const trackerStatusValidator = v.union(
   ...TRACKER_STATUSES.map((s) => v.literal(s)),
 );
-const reEvalStatusValidator = v.union(
-  ...RE_EVAL_STATUSES.map((s) => v.literal(s)),
-);
 const finalDecisionValidator = v.union(
   ...FINAL_DECISIONS.map((s) => v.literal(s)),
 );
+
+const TIER_ORDER = ["S", "A", "B", "C"];
+const WORKFLOW_STATE_KEY = "summer_reeval";
+
+function decisionFromEvaluation(
+  evaluationStatus: string,
+  currentTier: string | undefined,
+): { finalDecision: FinalDecision; targetTier?: string } {
+  const tierIndex = currentTier ? TIER_ORDER.indexOf(currentTier) : -1;
+
+  if (
+    (evaluationStatus === "Strong Promotion Outlier" ||
+      evaluationStatus === "Eligible for Promotion Evaluation") &&
+    tierIndex > 0
+  ) {
+    const targetTier = TIER_ORDER[tierIndex - 1];
+    return { finalDecision: targetTier as FinalDecision, targetTier };
+  }
+
+  if (
+    (evaluationStatus === "Strong Demotion Outlier" ||
+      evaluationStatus === "Eligible for Demotion Evaluation") &&
+    tierIndex >= 0 &&
+    tierIndex < TIER_ORDER.length - 1
+  ) {
+    const targetTier = TIER_ORDER[tierIndex + 1];
+    return { finalDecision: targetTier as FinalDecision, targetTier };
+  }
+
+  return { finalDecision: "no_change" };
+}
 
 async function patchReEval(
   ctx: Parameters<typeof writeReEvalAudit>[0],
@@ -79,36 +98,127 @@ async function patchReEval(
   });
 }
 
-export const updateEpicId = mutation({
-  args: {
-    reEvalId: v.id("bigSummerReEval"),
-    epicId: v.string(),
+async function upsertWorkflowState(
+  ctx: Parameters<typeof writeReEvalAudit>[0],
+  patch: {
+    stage: "first_stage" | "final_review" | "completed";
+    firstStageCompletedAt?: number;
+    firstStageCompletedBy?: Parameters<typeof writeReEvalAudit>[1]["userId"];
+    completedAt?: number;
+    completedBy?: Parameters<typeof writeReEvalAudit>[1]["userId"];
   },
-  handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
-    const reEval = await ctx.db.get(args.reEvalId);
-    if (!reEval) throw new Error("Re-eval record not found");
-    const player = await ctx.db.get(reEval.playerId);
-    if (!player) throw new Error("Player not found");
+) {
+  const existing = await ctx.db
+    .query("bigSummerReEvalState")
+    .withIndex("by_key", (q) => q.eq("key", WORKFLOW_STATE_KEY))
+    .first();
+  const next = {
+    key: WORKFLOW_STATE_KEY,
+    ...patch,
+    lastUpdatedAt: Date.now(),
+  };
+  if (existing) {
+    await ctx.db.patch(existing._id, next);
+    return existing._id;
+  }
+  return await ctx.db.insert("bigSummerReEvalState", next);
+}
 
-    const previous = player.epicId;
-    const previousEpicIds = player.previousEpicIds ?? [];
-    if (player.epicId && player.epicId !== args.epicId) {
-      previousEpicIds.push({
-        epicId: player.epicId,
-        changedAt: new Date().toISOString(),
+export const completeFirstStage = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const admin = await requireAdmin(ctx);
+    const now = Date.now();
+    await upsertWorkflowState(ctx, {
+      stage: "final_review",
+      firstStageCompletedAt: now,
+      firstStageCompletedBy: admin._id,
+    });
+    await writeReEvalAudit(ctx, {
+      userId: admin._id,
+      userName: getDisplayName(admin),
+      action: "big_summer_reeval_first_stage_completed",
+      newValue: "final_review",
+    });
+    return { stage: "final_review" as const };
+  },
+});
+
+export const completeReEval = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const admin = await requireAdmin(ctx);
+    const now = Date.now();
+    const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
+
+    let updated = 0;
+    let flaggedForTierRemoval = 0;
+    let skipped = 0;
+    for (const reEval of reEvalRows) {
+      if (reEval.reEvalStatus === "private_tracker" || reEval.trackerStatus === "private") {
+        await ctx.db.patch(reEval._id, {
+          reEvalStatus: "tier_removal_flagged",
+          finalDecision: "remove_access",
+          appliedAt: now,
+          appliedTier: undefined,
+          lastUpdatedAt: now,
+        });
+        flaggedForTierRemoval += 1;
+        continue;
+      }
+
+      if (!reEval.finalDecision || !TIER_ORDER.includes(reEval.finalDecision)) {
+        skipped += 1;
+        continue;
+      }
+      const player = await ctx.db.get(reEval.playerId);
+      if (!player) {
+        skipped += 1;
+        continue;
+      }
+      if (player.tier === reEval.finalDecision) {
+        skipped += 1;
+        continue;
+      }
+
+      const evaluation = await ctx.db
+        .query("tierReEvaluationCache")
+        .withIndex("by_player", (q) => q.eq("playerId", player._id))
+        .first();
+      const totalScore = evaluation?.holisticScore ?? player.totalScore ?? 0;
+
+      await ctx.db.patch(player._id, {
+        tier: reEval.finalDecision,
+        totalScore,
       });
+      await ctx.db.insert("tierHistory", {
+        playerId: player._id,
+        tier: reEval.finalDecision,
+        previousTier: player.tier,
+        totalScore,
+        changedBy: admin._id,
+      });
+      await ctx.db.patch(reEval._id, {
+        reEvalStatus: "tier_change_complete",
+        appliedAt: now,
+        appliedTier: reEval.finalDecision,
+        lastUpdatedAt: now,
+      });
+      updated += 1;
     }
 
-    await ctx.db.patch(player._id, {
-      epicId: args.epicId,
-      previousEpicIds,
+    await upsertWorkflowState(ctx, {
+      stage: "completed",
+      completedAt: now,
+      completedBy: admin._id,
     });
-    await patchReEval(ctx, reEval._id, player._id, admin, {}, {
-      action: "big_summer_reeval_epic_id_updated",
-      previousValue: previous,
-      newValue: args.epicId,
+    await writeReEvalAudit(ctx, {
+      userId: admin._id,
+      userName: getDisplayName(admin),
+      action: "big_summer_reeval_completed",
+      newValue: JSON.stringify({ updated, flaggedForTierRemoval, skipped }),
     });
+    return { updated, flaggedForTierRemoval, skipped, stage: "completed" as const };
   },
 });
 
@@ -147,24 +257,7 @@ export const setTrackerStatus = mutation({
     const reEval = await ctx.db.get(args.reEvalId);
     if (!reEval) throw new Error("Re-eval record not found");
 
-    const patch: Record<string, unknown> = { trackerStatus: args.trackerStatus };
-    const now = Date.now();
-
-    if (args.trackerStatus === "waiting_for_public_tracker") {
-      Object.assign(patch, startTrackerDeadline(now));
-      patch.trackerStatus = "waiting_for_public_tracker";
-    }
-
-    if (args.trackerStatus === "public") {
-      if (
-        reEval.reEvalStatus === "waiting_initial_5_days" ||
-        reEval.reEvalStatus === "extended_final_5_days"
-      ) {
-        patch.reEvalStatus = "ready_to_review";
-      }
-    }
-
-    await patchReEval(ctx, reEval._id, reEval.playerId, admin, patch, {
+    await patchReEval(ctx, reEval._id, reEval.playerId, admin, { trackerStatus: args.trackerStatus }, {
       action: "big_summer_reeval_tracker_status_changed",
       previousValue: reEval.trackerStatus,
       newValue: args.trackerStatus,
@@ -172,24 +265,98 @@ export const setTrackerStatus = mutation({
   },
 });
 
-export const markPlayerContacted = mutation({
+export const markPrivateTracker = mutation({
   args: { reEvalId: v.id("bigSummerReEval") },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
     const reEval = await ctx.db.get(args.reEvalId);
     if (!reEval) throw new Error("Re-eval record not found");
-    const now = Date.now();
-    const patch: Record<string, unknown> = {
-      dmSentAt: now,
-      ...startTrackerDeadline(now),
-    };
-    if (!reEval.trackerRequestSentAt) {
-      patch.trackerStatus = "waiting_for_public_tracker";
-    }
-    await patchReEval(ctx, reEval._id, reEval.playerId, admin, patch, {
-      action: "big_summer_reeval_player_contacted",
-      newValue: new Date(now).toISOString(),
+
+    await patchReEval(ctx, reEval._id, reEval.playerId, admin, {
+      trackerStatus: "private",
+      reEvalStatus: "private_tracker",
+      finalDecision: undefined,
+      evaluationStatus: undefined,
+      evaluationStatusRaw: undefined,
+      evaluationTargetTier: undefined,
+      evaluatedAt: undefined,
+    }, {
+      action: "big_summer_reeval_private_tracker",
+      previousValue: reEval.reEvalStatus,
+      newValue: "private_tracker",
     });
+  },
+});
+
+export const reEvaluatePlayer = mutation({
+  args: { reEvalId: v.id("bigSummerReEval") },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx);
+    const reEval = await ctx.db.get(args.reEvalId);
+    if (!reEval) throw new Error("Re-eval record not found");
+    const player = await ctx.db.get(reEval.playerId);
+    if (!player) throw new Error("Player not found");
+
+    await updateStatsForPlayer(ctx, player._id);
+    const result = await updateTierEvalForPlayerIfEligible(ctx, player._id);
+    if (!result.tierEvalUpdated) {
+      const finalDecision: FinalDecision = "no_change";
+      await patchReEval(ctx, reEval._id, player._id, admin, {
+        trackerStatus: "public",
+        reEvalStatus: "reviewed",
+        finalDecision,
+        evaluationStatus: result.reason === "below_reevaluation_threshold"
+          ? "Insufficient Data"
+          : "Unable to Evaluate",
+        evaluationStatusRaw: undefined,
+        evaluationTargetTier: undefined,
+        evaluatedAt: Date.now(),
+      }, {
+        action: "big_summer_reeval_player_re_evaluated",
+        previousValue: reEval.finalDecision,
+        newValue: finalDecision,
+      });
+      return {
+        finalDecision,
+        evaluationStatus: result.reason === "below_reevaluation_threshold"
+          ? "Insufficient Data"
+          : "Unable to Evaluate",
+        reason: result.reason,
+      };
+    }
+
+    const evaluation = await ctx.db
+      .query("tierReEvaluationCache")
+      .withIndex("by_player", (q) => q.eq("playerId", player._id))
+      .first();
+    if (!evaluation) {
+      throw new Error("Re-evaluation cache row was not created for this player");
+    }
+
+    const { finalDecision, targetTier } = decisionFromEvaluation(
+      evaluation.evaluationStatus,
+      player.tier,
+    );
+
+    await patchReEval(ctx, reEval._id, player._id, admin, {
+      trackerStatus: "public",
+      reEvalStatus: "reviewed",
+      finalDecision,
+      evaluationStatus: evaluation.evaluationStatus,
+      evaluationStatusRaw: evaluation.evaluationStatusRaw,
+      evaluationTargetTier: targetTier,
+      evaluatedAt: Date.now(),
+    }, {
+      action: "big_summer_reeval_player_re_evaluated",
+      previousValue: reEval.finalDecision,
+      newValue: finalDecision,
+    });
+
+    return {
+      finalDecision,
+      evaluationStatus: evaluation.evaluationStatus,
+      targetTier,
+    };
   },
 });
 
@@ -222,113 +389,6 @@ export const assignAdmin = mutation({
         action: "big_summer_reeval_admin_assigned",
         previousValue: reEval.assignedAdminName,
         newValue: assignedAdminName,
-      },
-    );
-  },
-});
-
-export const setMemberResponse = mutation({
-  args: {
-    reEvalId: v.id("bigSummerReEval"),
-    memberResponse: v.union(v.literal("yes"), v.literal("no"), v.literal("unset")),
-  },
-  handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
-    const reEval = await ctx.db.get(args.reEvalId);
-    if (!reEval) throw new Error("Re-eval record not found");
-
-    await patchReEval(
-      ctx,
-      reEval._id,
-      reEval.playerId,
-      admin,
-      { memberResponse: args.memberResponse },
-      {
-        action: "big_summer_reeval_member_response_set",
-        previousValue: reEval.memberResponse,
-        newValue: args.memberResponse,
-      },
-    );
-  },
-});
-
-export const extendDeadline = mutation({
-  args: { reEvalId: v.id("bigSummerReEval") },
-  handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
-    const reEval = await ctx.db.get(args.reEvalId);
-    if (!reEval) throw new Error("Re-eval record not found");
-
-    if (reEval.reEvalStatus !== "deadline_passed") {
-      throw new Error("Extension only allowed when status is Deadline Passed");
-    }
-    if ((reEval.extensionCount ?? 0) >= 1) {
-      throw new Error("Only one extension is allowed per player");
-    }
-
-    const now = Date.now();
-    await patchReEval(
-      ctx,
-      reEval._id,
-      reEval.playerId,
-      admin,
-      {
-        extensionGranted: true,
-        extensionCount: (reEval.extensionCount ?? 0) + 1,
-        extendedAt: now,
-        deadlineAt: now + FIVE_DAYS_MS,
-        reEvalStatus: "extended_final_5_days",
-        trackerStatus: "waiting_for_public_tracker_extended",
-      },
-      {
-        action: "big_summer_reeval_deadline_extended",
-        newValue: new Date(now + FIVE_DAYS_MS).toISOString(),
-      },
-    );
-  },
-});
-
-export const removeTierAccessFromDeadline = mutation({
-  args: { reEvalId: v.id("bigSummerReEval") },
-  handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
-    const reEval = await ctx.db.get(args.reEvalId);
-    if (!reEval) throw new Error("Re-eval record not found");
-    const player = await ctx.db.get(reEval.playerId);
-    if (!player) throw new Error("Player not found");
-
-    const existingQueue = await hasActiveQueueItem(ctx, player._id);
-    if (existingQueue) {
-      throw new Error("A pending queue item already exists for this player");
-    }
-
-    const now = Date.now();
-    await ctx.db.insert("tierRoleChangeQueue", {
-      playerId: player._id,
-      discordId: player.discordUserId,
-      playerName: player.name || player.discordUsername,
-      currentTier: player.tier,
-      action: "remove_access",
-      reason: QUEUE_ACTION_REASONS.trackerNotPublic,
-      requestedBy: admin._id,
-      requestedByName: getDisplayName(admin),
-      requestedAt: now,
-      status: "pending",
-      reEvalId: reEval._id,
-    });
-
-    await patchReEval(
-      ctx,
-      reEval._id,
-      player._id,
-      admin,
-      {
-        reEvalStatus: "queued_for_access_removal",
-        finalDecision: "remove_access",
-      },
-      {
-        action: "big_summer_reeval_access_removal_queued",
-        newValue: QUEUE_ACTION_REASONS.trackerNotPublic,
       },
     );
   },
@@ -425,33 +485,6 @@ export const updateNotes = mutation({
   },
 });
 
-export const markActive = mutation({
-  args: { reEvalId: v.id("bigSummerReEval") },
-  handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
-    const reEval = await ctx.db.get(args.reEvalId);
-    if (!reEval) throw new Error("Re-eval record not found");
-    const player = await ctx.db.get(reEval.playerId);
-    if (!player) throw new Error("Player not found");
-
-    await ctx.db.patch(player._id, {
-      status: "active",
-      currentMembershipStatus: "accepted",
-    });
-    await patchReEval(
-      ctx,
-      reEval._id,
-      player._id,
-      admin,
-      { reEvalStatus: reEval.reEvalStatus === "retired" ? "unchecked" : reEval.reEvalStatus },
-      {
-        action: "big_summer_reeval_marked_active",
-        newValue: "active",
-      },
-    );
-  },
-});
-
 export const markRetired = mutation({
   args: { reEvalId: v.id("bigSummerReEval") },
   handler: async (ctx, args) => {
@@ -477,186 +510,3 @@ export const markRetired = mutation({
   },
 });
 
-export const queueDiscordRoleChanges = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const admin = await requireAdmin(ctx);
-    const candidates = await computeQueueCandidates(ctx);
-    const now = Date.now();
-
-    for (const candidate of candidates) {
-      await ctx.db.insert("tierRoleChangeQueue", {
-        playerId: candidate.playerId,
-        discordId: candidate.discordId,
-        playerName: candidate.playerName,
-        currentTier: candidate.currentTier,
-        targetTier: candidate.targetTier,
-        action: candidate.action,
-        reason: queueReasonForAction(candidate.action),
-        requestedBy: admin._id,
-        requestedByName: getDisplayName(admin),
-        requestedAt: now,
-        status: "pending",
-        reEvalId: candidate.reEvalId,
-      });
-
-      await ctx.db.patch(candidate.reEvalId, {
-        reEvalStatus: candidate.newReEvalStatus,
-        lastUpdatedAt: now,
-      });
-    }
-
-    const summary = {
-      promotions: 0,
-      demotions: 0,
-      accessRemovals: 0,
-      retirements: 0,
-      queued: candidates.length,
-    };
-    const tierOrder = ["S", "A", "B", "C", "D"];
-    for (const candidate of candidates) {
-      if (candidate.action === "change_tier" && candidate.targetTier && candidate.currentTier) {
-        const oldIdx = tierOrder.indexOf(candidate.currentTier);
-        const newIdx = tierOrder.indexOf(candidate.targetTier);
-        if (newIdx < oldIdx) summary.promotions += 1;
-        else if (newIdx > oldIdx) summary.demotions += 1;
-      } else if (candidate.action === "remove_access") {
-        summary.accessRemovals += 1;
-      } else if (candidate.action === "retire") {
-        summary.retirements += 1;
-      }
-    }
-
-    await writeReEvalAudit(ctx, {
-      userId: admin._id,
-      userName: getDisplayName(admin),
-      action: "big_summer_reeval_queue_batch_created",
-      newValue: JSON.stringify(summary),
-    });
-
-    return summary;
-  },
-});
-
-const STUCK_PROCESSING_MS = 15 * 60 * 1000;
-
-export const resetStuckProcessingQueueItems = mutation({
-  args: {
-    forceAll: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx);
-    const now = Date.now();
-    const processing = await ctx.db
-      .query("tierRoleChangeQueue")
-      .withIndex("by_status", (q) => q.eq("status", "processing"))
-      .collect();
-
-    const toReset = processing.filter((item) => {
-      if (args.forceAll) return true;
-      const startedAt = item.processingStartedAt ?? item.requestedAt;
-      return now - startedAt >= STUCK_PROCESSING_MS;
-    });
-
-    for (const item of toReset) {
-      await ctx.db.patch(item._id, {
-        status: "pending",
-        processingStartedAt: undefined,
-        errorMessage: undefined,
-      });
-    }
-
-    await writeReEvalAudit(ctx, {
-      userId: admin._id,
-      userName: getDisplayName(admin),
-      action: "big_summer_reeval_stuck_queue_reset",
-      newValue: JSON.stringify({
-        resetCount: toReset.length,
-        forceAll: args.forceAll ?? false,
-      }),
-    });
-
-    return { resetCount: toReset.length };
-  },
-});
-
-export const processDeadlinesInternal = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    await ensureAllActivePlayersEnrolled(ctx);
-    const now = Date.now();
-    const waiting = await ctx.db
-      .query("bigSummerReEval")
-      .withIndex("by_re_eval_status", (q) => q.eq("reEvalStatus", "waiting_initial_5_days"))
-      .collect();
-    const extended = await ctx.db
-      .query("bigSummerReEval")
-      .withIndex("by_re_eval_status", (q) => q.eq("reEvalStatus", "extended_final_5_days"))
-      .collect();
-
-    for (const reEval of [...waiting, ...extended]) {
-      if (!reEval.deadlineAt || reEval.deadlineAt > now) continue;
-
-      if (reEval.reEvalStatus === "waiting_initial_5_days") {
-        if (
-          trackerStillProblematic(reEval.trackerStatus) &&
-          memberResponseBlocksDeadline(reEval.memberResponse)
-        ) {
-          await ctx.db.patch(reEval._id, {
-            reEvalStatus: "deadline_passed",
-            lastUpdatedAt: now,
-          });
-          await writeSystemReEvalAudit(ctx, {
-            action: "big_summer_reeval_deadline_passed",
-            playerId: reEval.playerId,
-            reEvalId: reEval._id,
-            newValue: "deadline_passed",
-          });
-        }
-        continue;
-      }
-
-      if (reEval.reEvalStatus === "extended_final_5_days") {
-        if (!trackerStillProblematic(reEval.trackerStatus)) continue;
-
-        const player = await ctx.db.get(reEval.playerId);
-        if (!player) continue;
-
-        const existingQueue = await hasActiveQueueItem(ctx, player._id);
-        if (existingQueue) {
-          await ctx.db.patch(reEval._id, {
-            reEvalStatus: "queued_for_access_removal",
-            lastUpdatedAt: now,
-          });
-          continue;
-        }
-
-        await ctx.db.insert("tierRoleChangeQueue", {
-          playerId: player._id,
-          discordId: player.discordUserId,
-          playerName: player.name || player.discordUsername,
-          currentTier: player.tier,
-          action: "remove_access",
-          reason: QUEUE_ACTION_REASONS.trackerNotPublicAfterExtension,
-          requestedAt: now,
-          status: "pending",
-          reEvalId: reEval._id,
-        });
-
-        await ctx.db.patch(reEval._id, {
-          reEvalStatus: "queued_for_access_removal",
-          finalDecision: "remove_access",
-          lastUpdatedAt: now,
-        });
-
-        await writeSystemReEvalAudit(ctx, {
-          action: "big_summer_reeval_auto_access_removal_queued",
-          playerId: reEval.playerId,
-          reEvalId: reEval._id,
-          newValue: QUEUE_ACTION_REASONS.trackerNotPublicAfterExtension,
-          details: "System queued access removal after extended tracker deadline passed",
-        });
-      }
-    }
-  },
-});

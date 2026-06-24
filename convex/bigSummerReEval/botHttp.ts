@@ -3,44 +3,10 @@ import { internalMutation, internalQuery } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { writeSystemReEvalAudit } from "./helpers";
 
-const MAX_CLAIM_BATCH = 25;
-
 export const claimPendingQueueItems = internalMutation({
   args: { limit: v.optional(v.number()) },
-  handler: async (ctx, args) => {
-    const limit = Math.min(args.limit ?? MAX_CLAIM_BATCH, MAX_CLAIM_BATCH);
-    const pending = await ctx.db
-      .query("tierRoleChangeQueue")
-      .withIndex("by_status", (q) => q.eq("status", "pending"))
-      .take(limit);
-
-    const claimed = [];
-    const now = Date.now();
-    for (const item of pending) {
-      await ctx.db.patch(item._id, {
-        status: "processing",
-        processingStartedAt: now,
-      });
-      claimed.push({
-        id: item._id,
-        playerId: item.playerId,
-        discordId: item.discordId,
-        playerName: item.playerName,
-        currentTier: item.currentTier,
-        targetTier: item.targetTier,
-        action: item.action,
-        reason: item.reason,
-        reEvalId: item.reEvalId,
-      });
-      if (item.reEvalId) {
-        const reEval = await ctx.db.get(item.reEvalId);
-        if (reEval && reEval.reEvalStatus === "tier_change_queued") {
-          // keep status while processing
-        }
-      }
-      void now;
-    }
-    return claimed;
+  handler: async () => {
+    return [];
   },
 });
 
@@ -118,12 +84,8 @@ export const completeQueueItems = internalMutation({
 
 export const getPendingCount = internalQuery({
   args: {},
-  handler: async (ctx) => {
-    const pending = await ctx.db
-      .query("tierRoleChangeQueue")
-      .withIndex("by_status", (q) => q.eq("status", "pending"))
-      .collect();
-    return pending.length;
+  handler: async () => {
+    return 0;
   },
 });
 

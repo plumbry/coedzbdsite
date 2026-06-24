@@ -2170,12 +2170,14 @@ export default defineSchema({
     ),
     reEvalStatus: v.union(
       v.literal("unchecked"),
+      v.literal("private_tracker"),
       v.literal("waiting_initial_5_days"),
       v.literal("deadline_passed"),
       v.literal("extended_final_5_days"),
       v.literal("extension_deadline_passed"),
       v.literal("ready_to_review"),
       v.literal("reviewed"),
+      v.literal("tier_removal_flagged"),
       v.literal("queued_for_access_removal"),
       v.literal("access_removed"),
       v.literal("tier_change_queued"),
@@ -2207,6 +2209,12 @@ export default defineSchema({
         v.literal("retired"),
       ),
     ),
+    evaluationStatus: v.optional(v.string()),
+    evaluationStatusRaw: v.optional(v.string()),
+    evaluationTargetTier: v.optional(v.string()),
+    evaluatedAt: v.optional(v.number()),
+    appliedAt: v.optional(v.number()),
+    appliedTier: v.optional(v.string()),
     notes: v.optional(v.string()),
     lastUpdatedAt: v.number(),
   })
@@ -2214,6 +2222,20 @@ export default defineSchema({
     .index("by_re_eval_status", ["reEvalStatus"])
     .index("by_tracker_status", ["trackerStatus"])
     .index("by_deadline", ["deadlineAt"]),
+
+  bigSummerReEvalState: defineTable({
+    key: v.string(),
+    stage: v.union(
+      v.literal("first_stage"),
+      v.literal("final_review"),
+      v.literal("completed"),
+    ),
+    firstStageCompletedAt: v.optional(v.number()),
+    firstStageCompletedBy: v.optional(v.id("users")),
+    completedAt: v.optional(v.number()),
+    completedBy: v.optional(v.id("users")),
+    lastUpdatedAt: v.number(),
+  }).index("by_key", ["key"]),
 
   tierRoleChangeQueue: defineTable({
     playerId: v.id("players"),
