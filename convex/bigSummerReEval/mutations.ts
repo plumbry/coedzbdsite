@@ -355,6 +355,8 @@ export const markPrivateTracker = mutation({
     await patchReEval(ctx, reEval._id, reEval.playerId, admin, {
       trackerStatus: "private",
       reEvalStatus: "private_tracker",
+      assignedAdminId: admin._id,
+      assignedAdminName: getDisplayName(admin),
       finalDecision: undefined,
       evaluationStatus: undefined,
       evaluationStatusRaw: undefined,
@@ -471,6 +473,8 @@ export const saveSummerEvaluationScore = mutation({
     await patchReEval(ctx, reEval._id, reEval.playerId, admin, {
       trackerStatus: "public",
       reEvalStatus: "ready_to_review",
+      assignedAdminId: admin._id,
+      assignedAdminName: getDisplayName(admin),
       finalDecision: tier,
       evaluationStatus: "Manual Summer Evaluation",
       evaluationStatusRaw: undefined,
@@ -580,6 +584,8 @@ export const setFinalDecision = mutation({
     const patch: Record<string, unknown> = {
       finalDecision: args.finalDecision,
       reEvalStatus: "reviewed",
+      assignedAdminId: admin._id,
+      assignedAdminName: getDisplayName(admin),
     };
 
     await patchReEval(ctx, reEval._id, reEval.playerId, admin, patch, {
