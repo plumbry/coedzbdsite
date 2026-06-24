@@ -242,11 +242,12 @@ export default function PotentialEventCalendarManager({
   }
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="space-y-3 md:space-y-6">
       <PageHeader
         title="Event Calendar"
         description="Plan potential events on a shared calendar. These entries are separate from the main events system."
         variant="compact"
+        className="space-y-2"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {readOnly && onEndViewSession && (
@@ -269,10 +270,10 @@ export default function PotentialEventCalendarManager({
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_1fr] lg:gap-6">
-        <Card className="mx-auto w-full max-w-sm lg:max-w-none">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-base font-medium">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,22rem)_1fr] lg:gap-6">
+        <Card className="mx-auto w-full max-w-sm gap-0 py-0 lg:max-w-none">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b px-3 py-2 lg:px-4">
+            <CardTitle className="text-sm font-medium lg:text-base">
               {format(month, "MMMM yyyy")}
             </CardTitle>
             <div className="flex items-center gap-1">
@@ -280,7 +281,7 @@ export default function PotentialEventCalendarManager({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-7 w-7 lg:h-8 lg:w-8"
                 onClick={() => setMonth((current) => subMonths(current, 1))}
                 aria-label="Previous month"
               >
@@ -290,6 +291,7 @@ export default function PotentialEventCalendarManager({
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="h-7 px-2 lg:h-8"
                 onClick={() => {
                   const today = startOfMonth(new Date());
                   setMonth(today);
@@ -302,7 +304,7 @@ export default function PotentialEventCalendarManager({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-7 w-7 lg:h-8 lg:w-8"
                 onClick={() => setMonth((current) => addMonths(current, 1))}
                 aria-label="Next month"
               >
@@ -310,16 +312,23 @@ export default function PotentialEventCalendarManager({
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="flex justify-center">
+          <CardContent className="flex justify-center px-2 py-2 lg:px-4 lg:py-3">
             <Calendar
               mode="single"
               month={month}
               onMonthChange={setMonth}
               selected={selectedDate}
               onSelect={(date) => date && handleDateSelect(date)}
-              className="p-0"
+              className="p-0 [--cell-size:--spacing(7)] lg:[--cell-size:--spacing(8)]"
               modifiers={{
                 hasEvent: (date) => (entriesByDay.get(toDateInputValue(date))?.length ?? 0) > 0,
+              }}
+              classNames={{
+                nav: "hidden",
+                month: "gap-2",
+                month_caption: "hidden",
+                week: "mt-1",
+                weekday: "text-[0.7rem] lg:text-[0.8rem]",
               }}
               components={{
                 DayButton: ({ day, modifiers, ...props }) => {
@@ -331,6 +340,7 @@ export default function PotentialEventCalendarManager({
                       {...props}
                       className={cn(
                         props.className,
+                        "gap-0.5 text-xs",
                         dayEntries.length > 0 && "font-semibold",
                       )}
                     >
@@ -353,16 +363,16 @@ export default function PotentialEventCalendarManager({
           </CardContent>
         </Card>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium">
+        <div className="space-y-3 lg:space-y-6">
+          <Card className="gap-0 py-0">
+            <CardHeader className="px-3 py-3 lg:px-4">
+              <CardTitle className="text-sm font-medium lg:text-base">
                 {selectedDate
                   ? format(selectedDate, "EEEE, MMMM d, yyyy")
                   : "Select a day"}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 px-3 pb-3 lg:px-4">
               {selectedDayEntries.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No potential events on this day.
@@ -394,8 +404,8 @@ export default function PotentialEventCalendarManager({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
+          <Card className="gap-0 py-0">
+            <CardHeader className="px-3 py-3 lg:px-4">
               <CardTitle className="flex items-center justify-between text-sm font-medium">
                 <span className="flex items-center gap-1.5">
                   <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
@@ -408,7 +418,7 @@ export default function PotentialEventCalendarManager({
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="px-3 pb-3 pt-0 lg:px-4">
               {upcomingEntries.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No upcoming events.</p>
               ) : (
@@ -745,11 +755,11 @@ function EntryCard({
   onDelete: () => void;
 }) {
   return (
-    <div className="rounded-md border p-4 space-y-2">
+    <div className="space-y-2 rounded-md border p-3 lg:p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-medium">{entry.title}</h3>
+          <div className="flex flex-wrap items-center gap-1.5 lg:gap-2">
+            <h3 className="font-medium leading-tight">{entry.title}</h3>
             <Badge variant={statusBadgeVariant(entry.status)} className={entryBadgeClass(entry)}>
               {entryStatusLabel(entry.status)}
             </Badge>
@@ -757,17 +767,17 @@ function EntryCard({
               <Badge variant="outline">Recurring</Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground lg:text-sm">
             {formatEntryDateRange(entry)}
             {entry.time ? ` · ${entry.time}` : ""}
           </p>
         </div>
         {canEdit && (
           <div className="flex shrink-0 items-center gap-1">
-            <Button type="button" variant="ghost" size="icon" onClick={onEdit}>
+            <Button type="button" variant="ghost" size="icon-sm" onClick={onEdit}>
               <Pencil className="h-4 w-4" />
             </Button>
-            <Button type="button" variant="ghost" size="icon" onClick={onDelete}>
+            <Button type="button" variant="ghost" size="icon-sm" onClick={onDelete}>
               <Trash2 className="h-4 w-4 text-destructive" />
             </Button>
           </div>

@@ -113,7 +113,7 @@ export default function Index() {
   const memberFilters = (
     <>
       <Select value={genderFilter} onValueChange={setGenderFilter}>
-        <SelectTrigger className="w-full sm:w-[140px]">
+        <SelectTrigger size="sm" className="w-full px-2 text-xs md:w-28 md:text-sm">
           <SelectValue placeholder="Gender" />
         </SelectTrigger>
         <SelectContent>
@@ -123,7 +123,7 @@ export default function Index() {
         </SelectContent>
       </Select>
       <Select value={tierFilter} onValueChange={setTierFilter}>
-        <SelectTrigger className="w-full sm:w-[140px]">
+        <SelectTrigger size="sm" className="w-full px-2 text-xs md:w-28 md:text-sm">
           <SelectValue placeholder="Tier" />
         </SelectTrigger>
         <SelectContent>
@@ -135,7 +135,7 @@ export default function Index() {
         </SelectContent>
       </Select>
       <Select value={statusFilter} onValueChange={setStatusFilter}>
-        <SelectTrigger className="w-full sm:w-[140px]">
+        <SelectTrigger size="sm" className="w-full px-2 text-xs md:w-28 md:text-sm">
           <SelectValue placeholder="Status" />
         </SelectTrigger>
         <SelectContent>
@@ -148,7 +148,8 @@ export default function Index() {
         placeholder="Search members..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        containerClassName="col-span-2 w-full sm:col-span-1 sm:w-64"
+        className="h-8 pl-8 text-sm"
+        containerClassName="col-span-2 w-full md:col-span-1 md:w-52"
       />
     </>
   );
@@ -212,8 +213,8 @@ export default function Index() {
       )}
 
       <Card className="gap-0 py-0">
-        <CardHeader className="border-b py-3 px-3 sm:px-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <CardHeader className="border-b px-3 py-2 sm:px-4 md:px-6">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <CardTitle>Active Members</CardTitle>
             <div className="md:hidden">
               <Collapsible defaultOpen={activeFilterCount > 0}>
@@ -221,7 +222,7 @@ export default function Index() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-10 w-full justify-between touch-manipulation"
+                    className="h-8 w-full justify-between px-2 text-sm touch-manipulation"
                   >
                     <span className="flex items-center gap-2">
                       <Filter className="h-4 w-4" />
@@ -236,13 +237,13 @@ export default function Index() {
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <PageToolbar className="mt-2 grid w-full grid-cols-2 gap-2">
+                  <PageToolbar className="mt-1.5 grid w-full grid-cols-2 gap-1.5">
                     {memberFilters}
                   </PageToolbar>
                 </CollapsibleContent>
               </Collapsible>
             </div>
-            <PageToolbar className="hidden w-full sm:w-auto md:flex">
+            <PageToolbar className="hidden w-full gap-1.5 md:flex md:w-auto md:gap-1.5">
               {memberFilters}
             </PageToolbar>
           </div>
