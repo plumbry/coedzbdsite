@@ -645,27 +645,6 @@ export default function BigSummerReEvalDashboard() {
                               >
                                 {actioningId === row._id ? "Working..." : "Review"}
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 px-2 text-xs"
-                                disabled={actioningId === row._id}
-                                onClick={() =>
-                                  runRowAction(row._id, "Marked private tracker", () =>
-                                    markPrivateTracker({ reEvalId: row._id }),
-                                  )
-                                }
-                              >
-                                Private Tracker
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2 text-xs"
-                                onClick={() => openDetail(row._id, row)}
-                              >
-                                Details
-                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
