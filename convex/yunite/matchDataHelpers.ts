@@ -14,6 +14,7 @@ const matchPlayerStatsRowValidator = v.object({
   knocks: v.number(),
   deaths: v.number(),
   teamTotalKills: v.number(),
+  score: v.optional(v.number()),
   teamKillDiscrepancy: v.optional(v.number()),
   deathTime: v.optional(v.number()),
   duoDeathTime: v.optional(v.number()),
@@ -32,6 +33,7 @@ type MatchPlayerStatsRow = {
   knocks: number;
   deaths: number;
   teamTotalKills: number;
+  score?: number;
   teamKillDiscrepancy?: number;
   deathTime?: number;
   duoDeathTime?: number;
@@ -49,6 +51,7 @@ function matchStatFieldsEqual(
     existing.knocks === incoming.knocks &&
     existing.deaths === incoming.deaths &&
     existing.teamTotalKills === incoming.teamTotalKills &&
+    (existing.score ?? undefined) === (incoming.score ?? undefined) &&
     (existing.teamKillDiscrepancy ?? undefined) ===
       (incoming.teamKillDiscrepancy ?? undefined) &&
     (existing.teamId ?? undefined) === (incoming.teamId ?? undefined) &&
@@ -175,6 +178,7 @@ export const bulkStoreMatchPlayerStats = internalMutation({
           knocks: row.knocks,
           deaths: row.deaths,
           teamTotalKills: row.teamTotalKills,
+          score: row.score,
           teamKillDiscrepancy: row.teamKillDiscrepancy,
           deathTime: row.deathTime,
           duoDeathTime: row.duoDeathTime,
@@ -195,6 +199,7 @@ export const bulkStoreMatchPlayerStats = internalMutation({
           knocks: row.knocks,
           deaths: row.deaths,
           teamTotalKills: row.teamTotalKills,
+          score: row.score,
           teamKillDiscrepancy: row.teamKillDiscrepancy,
           deathTime: row.deathTime,
           duoDeathTime: row.duoDeathTime,

@@ -995,129 +995,31 @@ export default function ImportThirdParty() {
       }
       
       const eventName = importDetails.eventName;
-      const matchStatsByPlayerId = new Map<string, typeof importDetails.matchStats>();
-      const matchStatsByDiscordId = new Map<string, typeof importDetails.matchStats>();
+      const resultByPlayerId = new Map(
+        importDetails.results
+          .filter((result) => result.playerId)
+          .map((result) => [result.playerId!, result]),
+      );
+      const resultByDiscordId = new Map(
+        importDetails.results
+          .filter((result) => result.discordId)
+          .map((result) => [result.discordId!, result]),
+      );
 
-      for (const matchStat of importDetails.matchStats) {
-        const playerMatches = matchStatsByPlayerId.get(matchStat.playerId) ?? [];
-        playerMatches.push(matchStat);
-        matchStatsByPlayerId.set(matchStat.playerId, playerMatches);
-
-        const discordMatches = matchStatsByDiscordId.get(matchStat.discordId) ?? [];
-        discordMatches.push(matchStat);
-        matchStatsByDiscordId.set(matchStat.discordId, discordMatches);
+      if (importDetails.matchStats.length > 0 && importDetails.matchStats.every((matchStat) => matchStat.score === undefined)) {
+        toast.warning("Match scores are missing. Re-sync match data for this import, then download again.");
       }
 
-      // Convert leaderboard results plus synced match-level score data to CSV.
-      const headers = [
-        "Import ID",
-        "Event Name",
-        "Event Date",
-        "Source",
-        "Leaderboard URL",
-        "Epic Username",
-        "Discord Username",
-        "Discord ID",
-        "Player ID",
-        "Matched",
-        "Manually Linked",
-        "Placement",
-        "Points",
-        "Eliminations",
-        "Team Kills",
-        "Damage",
-        "Deaths",
-        "Knocks",
-        "Wins",
-        "Matches Played",
-        "Average Placement",
-        "Average Seconds Survived",
-        "Team ID",
-        "Team Name",
-        "Team Members",
-        "Match Session ID",
-        "Match Team ID",
-        "Duo Discord ID",
-        "Match Placement",
-        "Match Eliminations",
-        "Match Knocks",
-        "Match Deaths",
-        "Match Team Total Kills",
-        "Match Team Kill Discrepancy",
-        "Death Time",
-        "Duo Death Time",
-        "Kills After Duo Death",
-        "Time Alive After Duo Death",
-      ];
-
-      const rows = importDetails.results.flatMap((result) => {
-        const matchStats =
-          (result.playerId ? matchStatsByPlayerId.get(result.playerId) : undefined) ??
-          (result.discordId ? matchStatsByDiscordId.get(result.discordId) : undefined) ??
-          [];
-        const resultFields = [
-          importDetails._id,
-          importDetails.eventName,
-          importDetails.eventDate ?? "",
-          importDetails.source,
-          importDetails.leaderboardUrl,
-          result.epicUsername,
-          result.discordUsername ?? "",
-          result.discordId ?? "",
-          result.playerId ?? "",
-          result.matched,
-          result.manuallyLinked ?? false,
-          result.placement,
-          result.points,
-          result.eliminations ?? "",
-          result.teamKills ?? "",
-          result.damage ?? "",
-          result.deaths ?? "",
-          result.knocks ?? "",
-          result.wins ?? "",
-          result.matchesPlayed ?? "",
-          result.averagePlacement ?? "",
-          result.averageSecondsSurvived ?? "",
-          result.teamId ?? "",
-          result.teamName ?? "",
-          result.teamMembers?.join("; ") ?? "",
-        ];
-
-        if (matchStats.length === 0) {
-          return [[
-            ...resultFields,
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-          ]];
-        }
-
-        return matchStats.map((matchStat) => [
-          ...resultFields,
+      const headers = ["Player", "Match", "Score"];
+      const rows = importDetails.matchStats.map((matchStat) => {
+        const result =
+          resultByPlayerId.get(matchStat.playerId) ??
+          resultByDiscordId.get(matchStat.discordId);
+        return [
+          result?.epicUsername ?? matchStat.discordId,
           matchStat.sessionId,
-          matchStat.teamId ?? "",
-          matchStat.duoDiscordId ?? "",
-          matchStat.placement,
-          matchStat.eliminations,
-          matchStat.knocks,
-          matchStat.deaths,
-          matchStat.teamTotalKills,
-          matchStat.teamKillDiscrepancy ?? "",
-          matchStat.deathTime ?? "",
-          matchStat.duoDeathTime ?? "",
-          matchStat.killsAfterDuoDeath ?? "",
-          matchStat.timeAliveAfterDuoDeath ?? "",
-        ]);
+          matchStat.score ?? "",
+        ];
       });
       
       // Create CSV content

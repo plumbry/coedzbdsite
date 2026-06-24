@@ -472,6 +472,7 @@ type PendingMatchPlayerStats = {
   knocks: number;
   deaths: number;
   teamTotalKills: number;
+  score?: number;
   teamKillDiscrepancy?: number;
   deathTime?: number;
   duoDeathTime?: number;
@@ -645,6 +646,7 @@ export const syncTournamentMatchDataInternal = internalAction({
           const killFeeds = (entry.killFeeds || {}) as Record<string, RawKillFeedEntry[]>;
           const deathLocations = entry.deathLocations || {};
           const teamKillsFromMatch = entry.kills || 0;
+          const score = entry.score;
           const placement = entry.placement;
           const teamId = entry.team?.id || entry.teamId;
           
@@ -755,6 +757,7 @@ export const syncTournamentMatchDataInternal = internalAction({
               knocks,
               deaths: deathCount,
               teamTotalKills: teamKillsFromMatch,
+              score,
               teamKillDiscrepancy:
                 teamKillDiscrepancy !== 0 ? teamKillDiscrepancy : undefined,
               deathTime,

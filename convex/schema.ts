@@ -956,6 +956,7 @@ export default defineSchema({
     knocks: v.number(), // Player's knocks (DBNOs without finish)
     deaths: v.number(), // Number of times player was eliminated in this match (0 only if placement=1, otherwise ≥1; assumes 1 death if kill feed data missing)
     teamTotalKills: v.number(), // Team's total kills in this match
+    score: v.optional(v.number()), // Team score/points for this match from Yunite
     /** API team kills minus sum of kill-feed player kills (non-zero = Yunite data gap). */
     teamKillDiscrepancy: v.optional(v.number()),
     deathTime: v.optional(v.number()), // Time of death (seconds since match start), null if survived
