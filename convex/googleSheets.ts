@@ -1592,6 +1592,7 @@ export const logBanToModLog = action({
     originalEvents: v.number(),
     reason: v.string(),
     moderatorTag: v.string(),
+    messageId: v.string(),
     offenseTrack: v.optional(v.string()),
     offenseNumber: v.optional(v.number()),
     date: v.string(),
@@ -1604,7 +1605,6 @@ export const logBanToModLog = action({
       const sheetsClient = await getGoogleSheetsClient();
 
       // Column order must match sync: Discord ID, Player Tag, Ban Type, Original Events, Remaining Events, Start Date, Last Updated, Reason, Moderator Tag, Message ID, Status
-      const messageId = `WEB_${Date.now()}`;
       const status = args.originalEvents === 0 ? "ENDED" : "ACTIVE";
 
       const row = [
@@ -1617,7 +1617,7 @@ export const logBanToModLog = action({
         args.date,               // G: Last Updated
         args.reason,             // H: Reason
         args.moderatorTag,       // I: Moderator Tag
-        messageId,               // J: Message ID
+        args.messageId,          // J: Message ID
         status,                  // K: Status
       ];
 

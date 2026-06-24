@@ -471,6 +471,7 @@ export const syncDiscordMembersInternal = internalAction({
   args: {},
   handler: async (ctx): Promise<void> => {
     await fetchAndSyncAllDiscordMembers(ctx, { allowMembershipAcceptance: true });
+    await ctx.runMutation(internal.bigSummerReEval.mutations.ensureActivePlayersEnrolledInternal, {});
   },
 });
 
@@ -479,7 +480,9 @@ export const syncAllGuildMembers = action({
   args: {},
   handler: async (ctx): Promise<SyncResult> => {
     await requireAdminAction(ctx);
-    return await fetchAndSyncAllDiscordMembers(ctx, { allowMembershipAcceptance: true });
+    const result = await fetchAndSyncAllDiscordMembers(ctx, { allowMembershipAcceptance: true });
+    await ctx.runMutation(internal.bigSummerReEval.mutations.ensureActivePlayersEnrolledInternal, {});
+    return result;
   },
 });
 
@@ -622,6 +625,7 @@ export const syncAcceptedMembers = action({
         recordsUpdated: updated,
         recordsArchived: Math.max(0, skipped),
       });
+      await ctx.runMutation(internal.bigSummerReEval.mutations.ensureActivePlayersEnrolledInternal, {});
 
       return {
         success: true,

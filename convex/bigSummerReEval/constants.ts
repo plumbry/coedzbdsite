@@ -37,7 +37,6 @@ export const FINAL_DECISIONS = [
   "C",
   "no_change",
   "remove_access",
-  "retired",
 ] as const;
 
 export type FinalDecision = (typeof FINAL_DECISIONS)[number];

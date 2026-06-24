@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import PlayerProfileLink from "@/components/player-profile-link.tsx";
 import { compareTierField } from "@/lib/tier-sort.ts";
+import ScorePlayerDialog from "@/pages/_components/score-player-dialog.tsx";
 
 type DashboardRow = {
   _id: Id<"bigSummerReEval">;
@@ -64,6 +65,8 @@ type DashboardRow = {
   evaluationStatusRaw?: string;
   evaluationTargetTier?: string;
   evaluatedAt?: number;
+  summerTotalScore?: number;
+  summerTier?: string;
   appliedAt?: number;
   appliedTier?: string;
   lastUpdatedAt: number;
@@ -118,7 +121,6 @@ function formatReEvalStatus(status: string): string {
     tier_change_queued: "Tier Change Queued",
     tier_change_complete: "Tier Change Complete",
     tier_change_failed: "Tier Change Failed",
-    retired: "Retired",
   };
   return map[status] ?? status;
 }
@@ -132,6 +134,7 @@ export default function BigSummerReEvalDashboard() {
   const [sortField, setSortField] = useState("playerName");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [selectedId, setSelectedId] = useState<Id<"bigSummerReEval"> | null>(null);
+  const [scoreRow, setScoreRow] = useState<DashboardRow | null>(null);
   const [actioningId, setActioningId] = useState<Id<"bigSummerReEval"> | null>(null);
   const [firstStageConfirmOpen, setFirstStageConfirmOpen] = useState(false);
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
@@ -146,20 +149,14 @@ export default function BigSummerReEvalDashboard() {
   );
   const progress = useQuery(api.bigSummerReEval.queries.getReEvalProgress, {});
   const filterCounts = useQuery(api.bigSummerReEval.queries.getFilterCounts, {});
-  const rows = useQuery(api.bigSummerReEval.queries.listDashboard, {
-    filter,
-    search: search.trim() || undefined,
-    sortField,
-    sortDirection,
-  });
+  const rows = useQuery(api.bigSummerReEval.queries.listDashboard, {});
   const admins = useQuery(api.bigSummerReEval.queries.getAdmins, {});
   const selectedDetail = useQuery(
     api.bigSummerReEval.queries.getPlayerDetail,
     selectedId ? { reEvalId: selectedId } : "skip",
   );
 
-  const syncEnrolled = useMutation(api.bigSummerReEval.mutations.syncEnrolledPlayers);
-  const reEvaluatePlayer = useMutation(api.bigSummerReEval.mutations.reEvaluatePlayer);
+  const saveSummerEvaluationScore = useMutation(api.bigSummerReEval.mutations.saveSummerEvaluationScore);
   const markPrivateTracker = useMutation(api.bigSummerReEval.mutations.markPrivateTracker);
   const completeFirstStage = useMutation(api.bigSummerReEval.mutations.completeFirstStage);
   const completeReEval = useMutation(api.bigSummerReEval.mutations.completeReEval);
@@ -167,19 +164,44 @@ export default function BigSummerReEvalDashboard() {
   const setFinalDecision = useMutation(api.bigSummerReEval.mutations.setFinalDecision);
   const updateNotes = useMutation(api.bigSummerReEval.mutations.updateNotes);
   const updateTrackerLink = useMutation(api.bigSummerReEval.mutations.updateTrackerLink);
-  const markRetired = useMutation(api.bigSummerReEval.mutations.markRetired);
-
-  useEffect(() => {
-    void syncEnrolled({});
-  }, [syncEnrolled]);
 
   const sortedRows = useMemo((): DashboardRow[] => {
     if (!rows) return [];
-    if (sortField !== "currentTier") return rows as DashboardRow[];
-    return [...(rows as DashboardRow[])].sort((a, b) => {
-      return compareTierField(a.currentTier, b.currentTier, sortDirection);
+    const searchTerm = search.trim().toLowerCase();
+    const filtered = (rows as DashboardRow[]).filter((row) => {
+      if (filter !== "all" && row.currentTier !== filter) return false;
+      if (!searchTerm) return true;
+      const haystack = [
+        row.playerName,
+        row.discordUsername,
+        row.discordId,
+        row.epicUsername,
+        row.currentTier,
+        row.assignedAdminName,
+        row.notes,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(searchTerm);
     });
-  }, [rows, sortField, sortDirection]);
+
+    return [...filtered].sort((a, b) => {
+      if (sortField === "currentTier") {
+        return compareTierField(a.currentTier, b.currentTier, sortDirection);
+      }
+      const dir = sortDirection === "asc" ? 1 : -1;
+      const av = (a as Record<string, unknown>)[sortField];
+      const bv = (b as Record<string, unknown>)[sortField];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === "number" && typeof bv === "number") {
+        return (av - bv) * dir;
+      }
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+  }, [filter, rows, search, sortDirection, sortField]);
 
   const pagination = useClientPagination(sortedRows, {
     pageSize: 50,
@@ -226,6 +248,10 @@ export default function BigSummerReEvalDashboard() {
     setTrackerLinkDraft(row?.fortniteTrackerLink ?? "");
   };
 
+  const openScoreDialog = (row: DashboardRow) => {
+    setScoreRow(row);
+  };
+
   const handleCompleteFirstStage = async () => {
     setIsCompleting(true);
     try {
@@ -263,6 +289,26 @@ export default function BigSummerReEvalDashboard() {
       </div>
     );
   }
+
+  const scoreDialog = scoreRow ? (
+    <ScorePlayerDialog
+      open={!!scoreRow}
+      onOpenChange={(open) => {
+        if (!open) setScoreRow(null);
+      }}
+      playerId={scoreRow.playerId}
+      title="Summer Re-Evaluation"
+      saveLabel="Save Summer Evaluation"
+      successMessage="Summer evaluation saved for review"
+      onSaveEvaluation={async ({ totalScore: _totalScore, tier: _tier, ...scores }) => {
+        await saveSummerEvaluationScore({
+          reEvalId: scoreRow._id,
+          ...scores,
+        });
+        openDetail(scoreRow._id, scoreRow);
+      }}
+    />
+  ) : null;
 
   if (isFinalStageView) {
     return (
@@ -401,14 +447,9 @@ export default function BigSummerReEvalDashboard() {
                               <TableCell>
                                 <Button
                                   size="sm"
-                                  disabled={actioningId === row._id}
-                                  onClick={() =>
-                                    runRowAction(row._id, "Marked public and re-evaluated", () =>
-                                      reEvaluatePlayer({ reEvalId: row._id }),
-                                    )
-                                  }
+                                  onClick={() => openScoreDialog(row)}
                                 >
-                                  {actioningId === row._id ? "Working..." : "Mark Public + Re-Evaluate"}
+                                  Mark Public + Re-Evaluate
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -442,6 +483,7 @@ export default function BigSummerReEvalDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        {scoreDialog}
       </div>
     );
   }
@@ -468,6 +510,9 @@ export default function BigSummerReEvalDashboard() {
                   </span>
                   <span>
                     No change: <strong className="text-foreground">{progress.noChange}</strong>
+                  </span>
+                  <span>
+                    Tier changed: <strong className="text-foreground">{progress.tierChanged}</strong>
                   </span>
                   <span>
                     Pending review: <strong className="text-foreground">{progress.pendingReview}</strong>
@@ -596,11 +641,7 @@ export default function BigSummerReEvalDashboard() {
                                 size="sm"
                                 className="h-7 px-2 text-xs"
                                 disabled={actioningId === row._id}
-                                onClick={() =>
-                                  runRowAction(row._id, "Player re-evaluated", () =>
-                                    reEvaluatePlayer({ reEvalId: row._id }),
-                                  )
-                                }
+                                onClick={() => openScoreDialog(row)}
                               >
                                 {actioningId === row._id ? "Working..." : "Re-Evaluate"}
                               </Button>
@@ -714,6 +755,42 @@ export default function BigSummerReEvalDashboard() {
               </div>
 
               <div className="space-y-2">
+                <Label>Final Decision</Label>
+                <Select
+                  value={selectedDetail.finalDecision ?? "none"}
+                  onValueChange={(value) =>
+                    selectedId &&
+                    value !== "none" &&
+                    runAction("Decision saved", () =>
+                      setFinalDecision({
+                        reEvalId: selectedId,
+                        finalDecision: value as "S" | "A" | "B" | "C" | "no_change" | "remove_access",
+                      }),
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="No decision" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No decision yet</SelectItem>
+                    <SelectItem value="S">S</SelectItem>
+                    <SelectItem value="A">A</SelectItem>
+                    <SelectItem value="B">B</SelectItem>
+                    <SelectItem value="C">C</SelectItem>
+                    <SelectItem value="no_change">
+                      No Change{selectedDetail.evaluationTargetTier ? "" : " (suggested)"}
+                    </SelectItem>
+                    <SelectItem value="remove_access">Flag For Tier Removal</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Suggested decision: {selectedDetail.evaluationTargetTier ?? "No Change"}. Saving a
+                  final decision marks this player as reviewed.
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label>Internal Notes</Label>
                 <Textarea value={notesDraft} onChange={(e) => setNotesDraft(e.target.value)} rows={3} />
                 <Button
@@ -731,15 +808,22 @@ export default function BigSummerReEvalDashboard() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
-                  onClick={() =>
-                    selectedId &&
-                    runRowAction(selectedId, "Player re-evaluated", () =>
-                      reEvaluatePlayer({ reEvalId: selectedId }),
-                    )
-                  }
+                  onClick={() => selectedDetail && openScoreDialog(selectedDetail as DashboardRow)}
                   disabled={actioningId === selectedId}
                 >
                   {actioningId === selectedId ? "Working..." : "Re-Evaluate"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    selectedId &&
+                    runAction("Marked no change", () =>
+                      setFinalDecision({ reEvalId: selectedId, finalDecision: "no_change" }),
+                    )
+                  }
+                >
+                  No Change
                 </Button>
                 <Button
                   size="sm"
@@ -753,9 +837,6 @@ export default function BigSummerReEvalDashboard() {
                   disabled={actioningId === selectedId}
                 >
                   Private Tracker
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => selectedId && runAction("Marked retired", () => markRetired({ reEvalId: selectedId }))}>
-                  Mark Retired
                 </Button>
               </div>
 
@@ -797,6 +878,7 @@ export default function BigSummerReEvalDashboard() {
         </DialogContent>
       </Dialog>
 
+      {scoreDialog}
     </div>
   );
 }

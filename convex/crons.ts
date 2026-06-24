@@ -21,13 +21,6 @@ crons.daily(
   internal.discord.sync.syncDiscordMembersInternal,
 );
 
-// Sync event bans from Google Sheet daily
-crons.daily(
-  "sync event bans",
-  { hourUTC: 7, minuteUTC: 0 }, // 7:00 AM UTC daily
-  internal.eventBans.sync.syncEventBansInternal,
-);
-
 // Refresh Osirion tournament cache for in-game earnings scans
 crons.daily(
   "refresh tournament scan cache",

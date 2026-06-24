@@ -15,6 +15,27 @@ interface ScorePlayerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   playerId: Id<"players">;
+  title?: string;
+  saveLabel?: string;
+  successMessage?: string;
+  onSaveEvaluation?: (scores: {
+    thirdPartyExperience: number;
+    thirdPartyPerformance: number;
+    inGameTourneyPerformance: number;
+    officialEarnings: number;
+    rankedPerformance: number;
+    hoursPlayed: number;
+    notorietyTeammates: number;
+    age: number;
+    gender: number;
+    ability: number;
+    region: number;
+    gameSense: number;
+    seasonPerformance: number;
+    modifiers: number;
+    totalScore: number;
+    tier: string;
+  }) => Promise<unknown>;
 }
 
 interface ScoreState {
@@ -159,7 +180,15 @@ const TIER_PRESETS: Record<"S" | "A" | "B" | "C", ScoreState> = {
   },
 };
 
-export default function ScorePlayerDialog({ open, onOpenChange, playerId }: ScorePlayerDialogProps) {
+export default function ScorePlayerDialog({
+  open,
+  onOpenChange,
+  playerId,
+  title = "Evaluate Player",
+  saveLabel = "Save Evaluation",
+  successMessage = "Player evaluation saved successfully!",
+  onSaveEvaluation,
+}: ScorePlayerDialogProps) {
   const player = useQuery(
     api.players.getPlayerProfile,
     open ? { id: playerId } : "skip",
@@ -190,7 +219,7 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
     setIsSubmitting(true);
     
     try {
-      await createOrUpdateScore({
+      const payload = {
         playerId,
         thirdPartyExperience: typeof scores.thirdPartyExperience === "number" ? scores.thirdPartyExperience : 0,
         thirdPartyPerformance: typeof scores.thirdPartyPerformance === "number" ? scores.thirdPartyPerformance : 0,
@@ -206,9 +235,21 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
         gameSense: typeof scores.gameSense === "number" ? scores.gameSense : 0,
         seasonPerformance: 0,
         modifiers: typeof scores.modifiers === "number" ? scores.modifiers : 0,
-      });
+      };
+
+      if (onSaveEvaluation) {
+        const { playerId: _ignoredPlayerId, ...scorePayload } = payload;
+        void _ignoredPlayerId;
+        await onSaveEvaluation({
+          ...scorePayload,
+          totalScore,
+          tier,
+        });
+      } else {
+        await createOrUpdateScore(payload);
+      }
       
-      toast.success("Player evaluation saved successfully!");
+      toast.success(successMessage);
       onOpenChange(false);
     } catch (error) {
       toast.error("Failed to save evaluation. Please try again.");
@@ -276,7 +317,7 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="lg" className="max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Evaluate Player</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {currentPlayer?.discordUsername} - Rate each category from 0-100
           </DialogDescription>
@@ -425,7 +466,7 @@ export default function ScorePlayerDialog({ open, onOpenChange, playerId }: Scor
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting || isLoadingScores}>
-            {isSubmitting ? "Saving..." : "Save Evaluation"}
+            {isSubmitting ? "Saving..." : saveLabel}
           </Button>
         </div>
       </DialogContent>

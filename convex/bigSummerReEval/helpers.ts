@@ -156,7 +156,7 @@ export function decisionNeedsQueue(
   currentTier: string | undefined,
 ): boolean {
   if (finalDecision === "no_change") return false;
-  if (finalDecision === "remove_access" || finalDecision === "retired") return true;
+  if (finalDecision === "remove_access") return true;
   return finalDecision !== currentTier;
 }
 
@@ -164,7 +164,6 @@ export function queueActionForDecision(
   finalDecision: FinalDecision,
 ): Doc<"tierRoleChangeQueue">["action"] {
   if (finalDecision === "remove_access") return "remove_access";
-  if (finalDecision === "retired") return "retire";
   if (finalDecision === "no_change") return "no_change";
   return "change_tier";
 }
@@ -198,6 +197,8 @@ export function enrichPlayerRow(
     evaluationStatusRaw: reEval.evaluationStatusRaw,
     evaluationTargetTier: reEval.evaluationTargetTier,
     evaluatedAt: reEval.evaluatedAt,
+    summerTotalScore: reEval.summerScore?.totalScore,
+    summerTier: reEval.summerScore?.tier,
     appliedAt: reEval.appliedAt,
     appliedTier: reEval.appliedTier,
     queueStatus,
@@ -211,6 +212,114 @@ export function enrichPlayerRow(
     playerStatus: player.status,
     membershipStatus: player.currentMembershipStatus,
   };
+}
+
+function searchTextForDashboardRow(row: {
+  playerName: string;
+  discordUsername: string;
+  discordId: string;
+  epicUsername: string;
+  currentTier?: string;
+  assignedAdminName?: string;
+  notes?: string;
+}) {
+  return [
+    row.playerName,
+    row.discordUsername,
+    row.discordId,
+    row.epicUsername,
+    row.currentTier,
+    row.assignedAdminName,
+    row.notes,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+async function upsertDashboardCacheRow(
+  ctx: MutationCtx,
+  reEval: Doc<"bigSummerReEval">,
+  player: Doc<"players">,
+  trackerLink: string | undefined,
+) {
+  const row = enrichPlayerRow(reEval, player, trackerLink, null);
+  const isActiveAccepted =
+    player.status === "active" && player.currentMembershipStatus === "accepted";
+  const cachedAt = Date.now();
+  const patch = {
+    reEvalId: reEval._id,
+    playerId: player._id,
+    playerName: row.playerName,
+    discordId: row.discordId,
+    discordUsername: row.discordUsername,
+    epicUsername: row.epicUsername,
+    fortniteTrackerLink: row.fortniteTrackerLink,
+    currentTier: row.currentTier,
+    trackerStatus: row.trackerStatus,
+    reEvalStatus: row.reEvalStatus,
+    assignedAdminId: row.assignedAdminId,
+    assignedAdminName: row.assignedAdminName,
+    finalDecision: row.finalDecision,
+    evaluationStatus: row.evaluationStatus,
+    evaluationStatusRaw: row.evaluationStatusRaw,
+    evaluationTargetTier: row.evaluationTargetTier,
+    evaluatedAt: row.evaluatedAt,
+    summerTotalScore: row.summerTotalScore,
+    summerTier: row.summerTier,
+    appliedAt: row.appliedAt,
+    appliedTier: row.appliedTier,
+    notes: row.notes,
+    searchText: searchTextForDashboardRow(row),
+    isActiveAccepted,
+    lastUpdatedAt: row.lastUpdatedAt,
+    cachedAt,
+  };
+
+  const existing = await ctx.db
+    .query("bigSummerReEvalDashboardCache")
+    .withIndex("by_re_eval", (q) => q.eq("reEvalId", reEval._id))
+    .first();
+  if (existing) {
+    await ctx.db.patch(existing._id, patch);
+  } else {
+    await ctx.db.insert("bigSummerReEvalDashboardCache", patch);
+  }
+}
+
+export async function syncDashboardCacheForReEval(
+  ctx: MutationCtx,
+  reEvalId: Id<"bigSummerReEval">,
+) {
+  const reEval = await ctx.db.get(reEvalId);
+  if (!reEval) return;
+  const player = await ctx.db.get(reEval.playerId);
+  if (!player) return;
+  const appLink = await getAcceptedApplicationTrackerLink(ctx, player._id);
+  const trackerLink =
+    reEval.fortniteTrackerLink ??
+    appLink ??
+    (player.epicUsername ? defaultTrackerLink(player.epicUsername) : undefined);
+  await upsertDashboardCacheRow(ctx, reEval, player, trackerLink);
+}
+
+export async function rebuildDashboardCache(
+  ctx: MutationCtx,
+): Promise<{ cached: number }> {
+  const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
+  let cached = 0;
+  for (const reEval of reEvalRows) {
+    const player = await ctx.db.get(reEval.playerId);
+    if (!player) continue;
+    const appLink = await getAcceptedApplicationTrackerLink(ctx, player._id);
+    const trackerLink =
+      reEval.fortniteTrackerLink ??
+      appLink ??
+      (player.epicUsername ? defaultTrackerLink(player.epicUsername) : undefined);
+    await upsertDashboardCacheRow(ctx, reEval, player, trackerLink);
+    cached += 1;
+  }
+  return { cached };
 }
 
 export async function getAdminDisplayName(
@@ -382,7 +491,7 @@ export async function ensurePlayerEnrolledInReEval(
 
 export async function ensureAllActivePlayersEnrolled(
   ctx: MutationCtx,
-): Promise<{ created: number; enrolled: number }> {
+): Promise<{ created: number; enrolled: number; cached: number }> {
   const activePlayers = await ctx.db
     .query("players")
     .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
@@ -396,7 +505,8 @@ export async function ensureAllActivePlayersEnrolled(
     const wasCreated = await ensurePlayerEnrolledInReEval(ctx, player._id);
     if (wasCreated) created += 1;
   }
-  return { created, enrolled };
+  const { cached } = await rebuildDashboardCache(ctx);
+  return { created, enrolled, cached };
 }
 
 export async function countActivePlayersForReEval(ctx: QueryCtx | MutationCtx) {

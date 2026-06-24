@@ -9,24 +9,12 @@ import {
   enrichPlayerRow,
   getAcceptedApplicationTrackerLink,
   getReEvalByPlayerId,
-  computeQueueCandidates,
-  summarizeQueueCandidates,
   countActivePlayersForReEval,
   countEnrolledActivePlayers,
 } from "./helpers";
 
 const WORKFLOW_STATE_KEY = "summer_reeval";
 const REVIEW_TIERS = ["S", "A", "B", "C"] as const;
-
-async function getLatestQueueStatus(ctx: QueryCtx, playerId: Id<"players">) {
-  const items = await ctx.db
-    .query("tierRoleChangeQueue")
-    .withIndex("by_player", (q) => q.eq("playerId", playerId))
-    .collect();
-  if (items.length === 0) return null;
-  items.sort((a, b) => b.requestedAt - a.requestedAt);
-  return items[0].status;
-}
 
 function matchesFilter(
   filter: DashboardFilter,
@@ -51,47 +39,43 @@ export const listDashboard = query({
     const sortField = args.sortField ?? "playerName";
     const sortDirection = args.sortDirection ?? "asc";
 
-    const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
-    const enriched = [];
+    const cacheRows = await ctx.db
+      .query("bigSummerReEvalDashboardCache")
+      .withIndex("by_active_and_tier", (q) => q.eq("isActiveAccepted", true))
+      .collect();
+    const filtered = [];
 
-    for (const reEval of reEvalRows) {
-      const player = await ctx.db.get(reEval.playerId);
-      if (!player) continue;
-      if (player.status !== "active" || player.currentMembershipStatus !== "accepted") {
-        if (reEval.reEvalStatus !== "retired") continue;
-      }
-
-      const appLink = await getAcceptedApplicationTrackerLink(ctx, player._id);
-      const trackerLink =
-        reEval.fortniteTrackerLink ??
-        appLink ??
-        (player.epicUsername
-          ? `https://fortnitetracker.com/profile/all/${encodeURIComponent(player.epicUsername)}`
-          : undefined);
-      const queueStatus = await getLatestQueueStatus(ctx, player._id);
-      const row = enrichPlayerRow(reEval, player, trackerLink, queueStatus);
-
+    for (const row of cacheRows) {
       if (!matchesFilter(filter, row)) continue;
-      if (search) {
-        const haystack = [
-          row.playerName,
-          row.discordUsername,
-          row.discordId,
-          row.epicUsername,
-          row.epicId,
-          row.currentTier,
-          row.assignedAdminName,
-          row.notes,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(search)) continue;
-      }
-      enriched.push(row);
+      if (search && !row.searchText.includes(search)) continue;
+      filtered.push({
+        _id: row.reEvalId,
+        playerId: row.playerId,
+        playerName: row.playerName,
+        discordId: row.discordId,
+        discordUsername: row.discordUsername,
+        epicUsername: row.epicUsername,
+        fortniteTrackerLink: row.fortniteTrackerLink,
+        currentTier: row.currentTier,
+        trackerStatus: row.trackerStatus,
+        reEvalStatus: row.reEvalStatus,
+        assignedAdminId: row.assignedAdminId,
+        assignedAdminName: row.assignedAdminName,
+        finalDecision: row.finalDecision,
+        evaluationStatus: row.evaluationStatus,
+        evaluationStatusRaw: row.evaluationStatusRaw,
+        evaluationTargetTier: row.evaluationTargetTier,
+        evaluatedAt: row.evaluatedAt,
+        summerTotalScore: row.summerTotalScore,
+        summerTier: row.summerTier,
+        appliedAt: row.appliedAt,
+        appliedTier: row.appliedTier,
+        lastUpdatedAt: row.lastUpdatedAt,
+        notes: row.notes,
+      });
     }
 
-    enriched.sort((a, b) => {
+    filtered.sort((a, b) => {
       const dir = sortDirection === "asc" ? 1 : -1;
       const av = (a as Record<string, unknown>)[sortField];
       const bv = (b as Record<string, unknown>)[sortField];
@@ -104,7 +88,7 @@ export const listDashboard = query({
       return String(av).localeCompare(String(bv)) * dir;
     });
 
-    return enriched;
+    return filtered;
   },
 });
 
@@ -128,33 +112,51 @@ export const listFinalReview = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
+    const cacheRows = await ctx.db
+      .query("bigSummerReEvalDashboardCache")
+      .withIndex("by_active_and_tier", (q) => q.eq("isActiveAccepted", true))
+      .collect();
     const changedPlayers = [];
     const privateTrackers = [];
 
-    for (const reEval of reEvalRows) {
-      const player = await ctx.db.get(reEval.playerId);
-      if (!player) continue;
-      const appLink = await getAcceptedApplicationTrackerLink(ctx, player._id);
-      const trackerLink =
-        reEval.fortniteTrackerLink ??
-        appLink ??
-        (player.epicUsername
-          ? `https://fortnitetracker.com/profile/all/${encodeURIComponent(player.epicUsername)}`
-          : undefined);
-      const row = enrichPlayerRow(reEval, player, trackerLink, null);
+    for (const row of cacheRows) {
+      const dashboardRow = {
+        _id: row.reEvalId,
+        playerId: row.playerId,
+        playerName: row.playerName,
+        discordId: row.discordId,
+        discordUsername: row.discordUsername,
+        epicUsername: row.epicUsername,
+        fortniteTrackerLink: row.fortniteTrackerLink,
+        currentTier: row.currentTier,
+        trackerStatus: row.trackerStatus,
+        reEvalStatus: row.reEvalStatus,
+        assignedAdminId: row.assignedAdminId,
+        assignedAdminName: row.assignedAdminName,
+        finalDecision: row.finalDecision,
+        evaluationStatus: row.evaluationStatus,
+        evaluationStatusRaw: row.evaluationStatusRaw,
+        evaluationTargetTier: row.evaluationTargetTier,
+        evaluatedAt: row.evaluatedAt,
+        summerTotalScore: row.summerTotalScore,
+        summerTier: row.summerTier,
+        appliedAt: row.appliedAt,
+        appliedTier: row.appliedTier,
+        lastUpdatedAt: row.lastUpdatedAt,
+        notes: row.notes,
+      };
 
-      if (reEval.reEvalStatus === "private_tracker" || reEval.trackerStatus === "private") {
-        privateTrackers.push(row);
+      if (row.reEvalStatus === "private_tracker" || row.trackerStatus === "private") {
+        privateTrackers.push(dashboardRow);
         continue;
       }
 
       if (
-        reEval.finalDecision &&
-        REVIEW_TIERS.includes(reEval.finalDecision as (typeof REVIEW_TIERS)[number]) &&
-        reEval.finalDecision !== player.tier
+        row.finalDecision &&
+        REVIEW_TIERS.includes(row.finalDecision as (typeof REVIEW_TIERS)[number]) &&
+        row.finalDecision !== row.currentTier
       ) {
-        changedPlayers.push(row);
+        changedPlayers.push(dashboardRow);
       }
     }
 
@@ -181,17 +183,14 @@ export const getFilterCounts = query({
       C: 0,
     };
 
-    const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
+    const cacheRows = await ctx.db
+      .query("bigSummerReEvalDashboardCache")
+      .withIndex("by_active_and_tier", (q) => q.eq("isActiveAccepted", true))
+      .collect();
 
-    for (const reEval of reEvalRows) {
-      const player = await ctx.db.get(reEval.playerId);
-      if (!player) continue;
-      if (player.status !== "active" || player.currentMembershipStatus !== "accepted") {
-        if (reEval.reEvalStatus !== "retired") continue;
-      }
-
+    for (const row of cacheRows) {
       counts.all += 1;
-      const tier = player.tier as DashboardFilter | undefined;
+      const tier = row.currentTier as DashboardFilter | undefined;
       if (tier && DASHBOARD_TIER_FILTERS.includes(tier)) {
         counts[tier] += 1;
       }
@@ -280,43 +279,41 @@ export const getReEvalProgress = query({
   handler: async (ctx) => {
     await requireAdmin(ctx);
 
-    const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
-    const candidates = await computeQueueCandidates(ctx);
+    const cacheRows = await ctx.db
+      .query("bigSummerReEvalDashboardCache")
+      .withIndex("by_active_and_tier", (q) => q.eq("isActiveAccepted", true))
+      .collect();
 
     let enrolled = 0;
     let withDecision = 0;
     let noChange = 0;
+    let tierChanged = 0;
 
-    for (const reEval of reEvalRows) {
-      const player = await ctx.db.get(reEval.playerId);
-      if (!player) continue;
-      if (player.status !== "active" || player.currentMembershipStatus !== "accepted") {
-        continue;
-      }
+    for (const row of cacheRows) {
       enrolled += 1;
-      if (!reEval.finalDecision) continue;
+      if (!row.finalDecision) continue;
       withDecision += 1;
       if (
-        reEval.finalDecision === "no_change" ||
-        reEval.finalDecision === player.tier
+        row.finalDecision === "no_change" ||
+        row.finalDecision === row.currentTier
       ) {
         noChange += 1;
+      } else if (
+        REVIEW_TIERS.includes(row.finalDecision as (typeof REVIEW_TIERS)[number]) &&
+        row.finalDecision !== row.currentTier
+      ) {
+        tierChanged += 1;
       }
     }
 
-    const activePlayers = await ctx.db
-      .query("players")
-      .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
-      .collect();
-    const activeCount = activePlayers.filter((p) => p.status === "active").length;
-
     return {
-      activeCount,
+      activeCount: enrolled,
       enrolled,
       withDecision,
       pendingReview: Math.max(0, enrolled - withDecision),
       noChange,
-      needsDiscordUpdate: candidates.length,
+      tierChanged,
+      needsDiscordUpdate: 0,
     };
   },
 });
@@ -325,8 +322,14 @@ export const previewQueueDiscordRoleChanges = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    const candidates = await computeQueueCandidates(ctx);
-    return summarizeQueueCandidates(candidates);
+    return {
+      promotions: 0,
+      demotions: 0,
+      accessRemovals: 0,
+      retirements: 0,
+      queued: 0,
+      players: [],
+    };
   },
 });
 

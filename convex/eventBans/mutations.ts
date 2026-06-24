@@ -448,6 +448,7 @@ export const createBan = mutation({
       originalEvents: args.originalEvents,
       reason: args.reason,
       moderatorTag,
+      messageId,
       offenseTrack: args.offenseTrack,
       offenseNumber: args.offenseNumber,
       date: todayStr,

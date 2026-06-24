@@ -3,7 +3,6 @@
 import { action, internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { v, ConvexError } from "convex/values";
-import type { ActionCtx } from "../_generated/server";
 import { sheets } from "@googleapis/sheets";
 import { JWT } from "google-auth-library";
 import { requiresDiscordRoleSync } from "../lib/eventBanDiscordRoles";
@@ -11,7 +10,7 @@ import { requiresDiscordRoleSync } from "../lib/eventBanDiscordRoles";
 const SPREADSHEET_ID = "1K5BcAIM-Of9buZVmBzdtGRvjJO2XP9ZAPbFIzE5j1ZM";
 const SHEET_NAME = "Event Bans";
 
-// Helper to authenticate with Google Sheets (read-only)
+// Helper to authenticate with Google Sheets for outbound row updates.
 async function getGoogleSheetsClient() {
   const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS;
 
@@ -41,7 +40,8 @@ async function getGoogleSheetsClient() {
   return sheets({ version: "v4", auth });
 }
 
-// Admin manual sync — daily cron uses syncEventBansInternal.
+// Event bans are authored in the app and written out to Google Sheets.
+// This action intentionally does not import rows back from the sheet.
 export const syncEventBans = action({
   args: {},
   handler: async (ctx): Promise<{ success: boolean; imported: number; updated: number; errors: number }> => {
@@ -57,137 +57,17 @@ export const syncEventBans = action({
       tokenIdentifier: identity.tokenIdentifier,
     });
 
-    return await performSync(ctx);
+    return { success: true, imported: 0, updated: 0, errors: 0 };
   },
 });
 
-// Internal action for cron job
+// Legacy no-op kept so old function references do not re-import sheet rows.
 export const syncEventBansInternal = internalAction({
   args: {},
-  handler: async (ctx): Promise<{ success: boolean; imported: number; updated: number; errors: number }> => {
-    return await performSync(ctx);
-  },
+  handler: async (): Promise<{ success: boolean; imported: number; updated: number; errors: number }> => (
+    { success: true, imported: 0, updated: 0, errors: 0 }
+  ),
 });
-
-async function performSync(ctx: ActionCtx): Promise<{ success: boolean; imported: number; updated: number; errors: number }> {
-  const sheetsClient = await getGoogleSheetsClient();
-
-  // Read all data from the Event Bans tab
-  let rows: string[][] | null | undefined;
-  try {
-    const response = await sheetsClient.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `'${SHEET_NAME}'!A:K`, // Columns A through K, quoted sheet name
-    });
-    rows = response.data.values as string[][] | null | undefined;
-    console.log(`Google Sheets returned ${rows?.length ?? 0} rows`);
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error("Google Sheets API error:", errorMsg);
-    throw new ConvexError({
-      message: `Failed to read Google Sheet: ${errorMsg}`,
-      code: "EXTERNAL_SERVICE_ERROR",
-    });
-  }
-
-  if (!rows || rows.length < 2) {
-    console.log("No data rows found in sheet");
-    return { success: true, imported: 0, updated: 0, errors: 0 };
-  }
-
-  // Parse all data rows (skip header at index 0)
-  const bans: Array<{
-    discordId: string;
-    playerTag: string;
-    banType: string;
-    originalEvents: number;
-    remainingEvents: number;
-    startDate: string;
-    lastUpdated: string;
-    reason: string;
-    moderatorTag: string;
-    messageId: string;
-    status: string;
-    offenseTrack: string | undefined;
-    offenseNumber: number | undefined;
-  }> = [];
-
-  let errors = 0;
-
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.length < 9) continue;
-
-    // Columns: Discord ID, Player Tag, Ban Type, Original Events, Remaining Events, Start Date, Last Updated, Reason, Moderator Tag, Message ID, Status
-    const discordId = row[0] || "";
-    const playerTag = row[1] || "";
-    const banType = row[2] || "";
-    const originalEvents = row[3] || "0";
-    const remainingEvents = row[4] || "0";
-    const startDate = row[5] || "";
-    const lastUpdated = row[6] || "";
-    const reason = row[7] || "";
-    const moderatorTag = row[8] || "";
-    const messageId = row[9] || `row_${i}`;
-    const statusCol = row[10] || "";
-
-    // Skip empty rows
-    if (!discordId.trim() || !playerTag.trim()) continue;
-
-    // Parse offense track and number from reason field: "[Minor offense #2] ..." or "[Major offense #1] ..."
-    let offenseTrack: string | undefined;
-    let offenseNumber: number | undefined;
-    const offenseMatch = reason.match(/\[(Minor|Major)\s+offense\s+#(\d+)\]/i);
-    if (offenseMatch) {
-      offenseTrack = offenseMatch[1].toLowerCase();
-      offenseNumber = parseInt(offenseMatch[2], 10);
-    } else {
-      // Also check banType column for "Minor Event Ban" or "Major Event Ban"
-      const banTypeLower = banType.trim().toLowerCase();
-      if (banTypeLower === "probation") {
-        offenseTrack = "probation";
-      } else if (banTypeLower.startsWith("minor")) {
-        offenseTrack = "minor";
-      } else if (banTypeLower.startsWith("major")) {
-        offenseTrack = "major";
-      }
-    }
-
-    try {
-      bans.push({
-        discordId: discordId.trim(),
-        playerTag: playerTag.trim(),
-        banType: banType.trim() || "All",
-        originalEvents: parseInt(originalEvents, 10) || 0,
-        remainingEvents: parseInt(remainingEvents, 10) || 0,
-        startDate: startDate.trim(),
-        lastUpdated: lastUpdated.trim(),
-        reason: reason.trim(),
-        moderatorTag: moderatorTag.trim(),
-        messageId: messageId.trim(),
-        status: statusCol.trim() === "ENDED" ? "ENDED" : "ACTIVE",
-        offenseTrack,
-        offenseNumber,
-      });
-    } catch (error) {
-      console.error(`Error parsing row ${i}:`, error);
-      errors++;
-    }
-  }
-
-  console.log(`Parsed ${bans.length} bans from sheet (${bans.filter(b => b.status === "ACTIVE").length} active, ${bans.filter(b => b.status === "ENDED").length} ended)`);
-
-  // Batch upsert all bans in a single mutation call
-  if (bans.length > 0) {
-    const result = await ctx.runMutation(
-      internal.eventBans.mutations.batchUpsertBans,
-      { bans }
-    );
-    return { success: true, imported: result.imported, updated: result.updated, errors };
-  }
-
-  return { success: true, imported: 0, updated: 0, errors };
-}
 
 // Update bans in Google Sheet to reflect ENDED status (called after eventPassed)
 export const updateSheetBansToEnded = internalAction({
