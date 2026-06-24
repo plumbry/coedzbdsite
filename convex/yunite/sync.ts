@@ -65,6 +65,18 @@ interface YuniteLeaderboardEntry {
   kdRatio?: number;
 }
 
+const YUNITE_TOURNAMENT_LOOKBACK_DAYS = 30;
+const YUNITE_TOURNAMENT_LOOKBACK_MS =
+  YUNITE_TOURNAMENT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+
+function isWithinYuniteTournamentLookback(
+  tournament: YuniteTournament,
+  cutoffMs: number,
+): boolean {
+  const startedAtMs = Date.parse(tournament.startedAt);
+  return Number.isFinite(startedAtMs) && startedAtMs >= cutoffMs;
+}
+
 export const syncYuniteTournaments = action({
   args: {
     tournamentIds: v.optional(v.array(v.string())),
@@ -137,6 +149,15 @@ export const syncYuniteTournaments = action({
         
         tournaments = await response.json();
         console.log("Fetched tournaments count:", tournaments.length);
+
+        const cutoffMs = Date.now() - YUNITE_TOURNAMENT_LOOKBACK_MS;
+        const beforeFilterCount = tournaments.length;
+        tournaments = tournaments.filter((tournament) =>
+          isWithinYuniteTournamentLookback(tournament, cutoffMs),
+        );
+        console.log(
+          `Filtered Yunite tournaments to last ${YUNITE_TOURNAMENT_LOOKBACK_DAYS} days: ${tournaments.length}/${beforeFilterCount}`,
+        );
       }
       
       let added = 0;
@@ -1085,8 +1106,15 @@ export const listRecentTournaments = action({
 
     const response = await yuniteFetchOrThrow(url, yuniteApiKey, {}, { skipSpacing: true });
 
-    const tournaments: YuniteTournament[] = await response.json();
-    console.log(`Fetched ${tournaments.length} tournaments from Yunite`);
+    const allTournaments: YuniteTournament[] = await response.json();
+    const cutoffMs = Date.now() - YUNITE_TOURNAMENT_LOOKBACK_MS;
+    const tournaments = allTournaments.filter((tournament) =>
+      isWithinYuniteTournamentLookback(tournament, cutoffMs),
+    );
+    console.log(`Fetched ${allTournaments.length} tournaments from Yunite`);
+    console.log(
+      `Filtered Yunite tournaments to last ${YUNITE_TOURNAMENT_LOOKBACK_DAYS} days: ${tournaments.length}/${allTournaments.length}`,
+    );
 
     // Sort by startedAt descending (most recent first)
     tournaments.sort((a, b) => {
