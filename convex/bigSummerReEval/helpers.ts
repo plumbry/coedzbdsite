@@ -13,6 +13,8 @@ import {
 } from "./constants";
 import { getDiscordTierRoleFromRoles } from "../lib/tierDiscordRoles";
 
+const RECENT_JOIN_MS = 30 * 24 * 60 * 60 * 1000;
+
 export function defaultTrackerLink(epicUsername: string): string {
   return `https://fortnitetracker.com/profile/all/${encodeURIComponent(epicUsername)}`;
 }
@@ -227,6 +229,15 @@ function suggestTriageOutcome(
   trackerLink: string | undefined,
 ): { outcome: TriageOutcome; reason: string } {
   const eventsPlayed = player.eventsPlayedCount ?? 0;
+  const joinedAt = Date.parse(player.serverJoinDate);
+  const recentlyJoined =
+    !Number.isNaN(joinedAt) && Date.now() - joinedAt <= RECENT_JOIN_MS;
+  if (recentlyJoined) {
+    return {
+      outcome: "no_change",
+      reason: "Recently joined member with limited activity history.",
+    };
+  }
   if (reEval.trackerStatus === "private" || !trackerLink?.trim()) {
     return {
       outcome: "private_tracker",
