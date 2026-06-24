@@ -579,7 +579,6 @@ export default function BigSummerReEvalDashboard() {
                         </Button>
                       </TableHead>
                       <TableHead>Re-Eval Status</TableHead>
-                      <TableHead>Evaluation</TableHead>
                       <TableHead>Admin</TableHead>
                       <TableHead>Decision</TableHead>
                       <TableHead>Updated</TableHead>
@@ -589,7 +588,7 @@ export default function BigSummerReEvalDashboard() {
                   <TableBody>
                     {pagination.pageItems && pagination.pageItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                           No players match this filter.
                         </TableCell>
                       </TableRow>
@@ -619,14 +618,13 @@ export default function BigSummerReEvalDashboard() {
                               "—"
                             )}
                           </TableCell>
-                          <TableCell>{row.currentTier ?? "—"}</TableCell>
+                          <TableCell>
+                            {row.currentTier ?? "—"}/{row.summerTier ?? "-"}
+                          </TableCell>
                           <TableCell>
                             <Badge className={reEvalBadgeClass(row.reEvalStatus)}>
                               {formatReEvalStatus(row.reEvalStatus)}
                             </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs max-w-[180px]">
-                            {row.evaluationStatus ?? "—"}
                           </TableCell>
                           <TableCell className="text-xs">{row.assignedAdminName ?? "—"}</TableCell>
                           <TableCell className="text-xs">
