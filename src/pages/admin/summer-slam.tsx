@@ -44,8 +44,12 @@ const CAMPAIGN_SLUG = "summer-slam";
 
 type Category = "traveller" | "competitor" | "summer_spirit" | "team_player" | "community";
 type CompletionMethod = "auto" | "manual" | "admin";
-type TeamFormat = "duos" | "trios" | "squads";
-type RuleType = "play_events" | "play_team_format" | "play_all_team_formats" | "reach_top" | "win_game";
+type RuleType =
+  | "play_events"
+  | "play_all_team_formats"
+  | "reach_top_5"
+  | "reach_top_3"
+  | "win_game";
 
 function timestampToDatetimeLocal(ts?: number): string {
   if (!ts) return "";
@@ -89,35 +93,20 @@ function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
   URL.revokeObjectURL(url);
 }
 
-function buildRule(args: {
-  ruleType: RuleType;
-  threshold: number;
-  placement: number;
-  eventCount: number;
-  teamFormat: TeamFormat;
-  useTeamFormat: boolean;
-}) {
+function buildRule(args: { ruleType: RuleType; threshold: number }) {
   if (args.ruleType === "play_events") {
     return { type: "play_events" as const, count: args.threshold };
-  }
-  if (args.ruleType === "play_team_format") {
-    return { type: "play_team_format" as const, teamFormat: args.teamFormat };
   }
   if (args.ruleType === "play_all_team_formats") {
     return { type: "play_all_team_formats" as const };
   }
-  if (args.ruleType === "reach_top") {
-    return {
-      type: "reach_top" as const,
-      placement: args.placement,
-      eventCount: args.eventCount,
-      ...(args.useTeamFormat ? { teamFormat: args.teamFormat } : {}),
-    };
+  if (args.ruleType === "reach_top_5") {
+    return { type: "reach_top_5" as const };
   }
-  return {
-    type: "win_game" as const,
-    ...(args.useTeamFormat ? { teamFormat: args.teamFormat } : {}),
-  };
+  if (args.ruleType === "reach_top_3") {
+    return { type: "reach_top_3" as const };
+  }
+  return { type: "win_game" as const };
 }
 
 export default function SummerSlamAdminPage() {
@@ -134,10 +123,6 @@ export default function SummerSlamAdminPage() {
   const [stampReward, setStampReward] = useState(1);
   const [ruleType, setRuleType] = useState<RuleType>("play_events");
   const [threshold, setThreshold] = useState(1);
-  const [placement, setPlacement] = useState(10);
-  const [eventCount, setEventCount] = useState(1);
-  const [teamFormat, setTeamFormat] = useState<TeamFormat>("trios");
-  const [useTeamFormat, setUseTeamFormat] = useState(false);
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("pending_review");
   const [filterText, setFilterText] = useState("");
   const [selectedReviewRow, setSelectedReviewRow] = useState<ReviewQueueRow | null>(null);
@@ -223,10 +208,6 @@ export default function SummerSlamAdminPage() {
     setStampReward(1);
     setRuleType("play_events");
     setThreshold(1);
-    setPlacement(10);
-    setEventCount(1);
-    setTeamFormat("trios");
-    setUseTeamFormat(false);
   };
 
   const handleEditQuest = (quest: NonNullable<typeof dashboard>["quests"][number]) => {
@@ -243,18 +224,35 @@ export default function SummerSlamAdminPage() {
     setStampReward(quest.stampReward);
     const rule = quest.qualificationRule;
     if (!rule) return;
-    setRuleType(rule.type);
-    if (rule.type === "play_events") setThreshold(rule.count);
-    if (rule.type === "play_team_format") setTeamFormat(rule.teamFormat);
-    if (rule.type === "reach_top") {
-      setPlacement(rule.placement);
-      setEventCount(rule.eventCount ?? 1);
-      setUseTeamFormat(!!rule.teamFormat);
-      if (rule.teamFormat) setTeamFormat(rule.teamFormat);
+    if (rule.type === "play_events") {
+      setRuleType("play_events");
+      setThreshold(rule.count);
+      return;
+    }
+    if (rule.type === "play_all_team_formats") {
+      setRuleType("play_all_team_formats");
+      return;
+    }
+    if (rule.type === "reach_top_5") {
+      setRuleType("reach_top_5");
+      return;
+    }
+    if (rule.type === "reach_top_3") {
+      setRuleType("reach_top_3");
+      return;
     }
     if (rule.type === "win_game") {
-      setUseTeamFormat(!!rule.teamFormat);
-      if (rule.teamFormat) setTeamFormat(rule.teamFormat);
+      setRuleType("win_game");
+      return;
+    }
+    // Legacy rules map to the closest current option when editing.
+    if (rule.type === "play_team_format") {
+      setRuleType("play_events");
+      setThreshold(1);
+      return;
+    }
+    if (rule.type === "reach_top") {
+      setRuleType(rule.placement <= 3 ? "reach_top_3" : "reach_top_5");
     }
   };
 
@@ -276,7 +274,7 @@ export default function SummerSlamAdminPage() {
         stampReward,
         qualificationRule:
           howToComplete === "auto"
-            ? buildRule({ ruleType, threshold, placement, eventCount, teamFormat, useTeamFormat })
+            ? buildRule({ ruleType, threshold })
             : undefined,
       });
       toast.success(editingQuestId ? "Quest updated." : "Quest created.");
@@ -617,51 +615,40 @@ export default function SummerSlamAdminPage() {
                       <Select value={ruleType} onValueChange={(value) => setRuleType(value as RuleType)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="play_events">Play X campaign events</SelectItem>
-                          <SelectItem value="play_team_format">Play a format</SelectItem>
+                          <SelectItem value="play_events">Play X Summer Slam Scrims</SelectItem>
                           <SelectItem value="play_all_team_formats">Play Duos, Trios and Squads</SelectItem>
-                          <SelectItem value="reach_top">Reach Top X</SelectItem>
+                          <SelectItem value="reach_top_5">Reach Top 5</SelectItem>
+                          <SelectItem value="reach_top_3">Reach Top 3</SelectItem>
                           <SelectItem value="win_game">Win a game</SelectItem>
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Placement rules use team results from Summer Slam tagged events after imports.
+                      </p>
                     </div>
                     {ruleType === "play_events" && (
                       <div className="space-y-1.5">
-                        <Label>Event Count</Label>
+                        <Label>Scrim Count</Label>
                         <Input type="number" min={1} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} />
                       </div>
                     )}
-                    {(ruleType === "play_team_format" || ruleType === "reach_top" || ruleType === "win_game") && (
-                      <div className="grid grid-cols-2 gap-3">
-                        {ruleType !== "play_team_format" && (
-                          <label className="flex items-center gap-2 text-sm">
-                            <Switch checked={useTeamFormat} onCheckedChange={setUseTeamFormat} />
-                            Limit to format
-                          </label>
-                        )}
-                        {(ruleType === "play_team_format" || useTeamFormat) && (
-                          <Select value={teamFormat} onValueChange={(value) => setTeamFormat(value as TeamFormat)}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="duos">Duos</SelectItem>
-                              <SelectItem value="trios">Trios</SelectItem>
-                              <SelectItem value="squads">Squads</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </div>
+                    {ruleType === "reach_top_5" && (
+                      <p className="text-sm text-muted-foreground">
+                        Auto-completes when the player finishes in the top 5 teams at any tagged
+                        Summer Slam scrim.
+                      </p>
                     )}
-                    {ruleType === "reach_top" && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label>Top Placement</Label>
-                          <Input type="number" min={1} value={placement} onChange={(event) => setPlacement(Number(event.target.value))} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label>Different Events</Label>
-                          <Input type="number" min={1} value={eventCount} onChange={(event) => setEventCount(Number(event.target.value))} />
-                        </div>
-                      </div>
+                    {ruleType === "reach_top_3" && (
+                      <p className="text-sm text-muted-foreground">
+                        Auto-completes when the player finishes in the top 3 teams at any tagged
+                        Summer Slam scrim.
+                      </p>
+                    )}
+                    {ruleType === "win_game" && (
+                      <p className="text-sm text-muted-foreground">
+                        Auto-completes when the player&apos;s team finishes 1st at any tagged Summer
+                        Slam scrim.
+                      </p>
                     )}
                   </div>
                 )}

@@ -706,6 +706,22 @@ export default defineSchema({
           count: v.number(),
         }),
         v.object({
+          type: v.literal("play_all_team_formats"),
+        }),
+        v.object({
+          type: v.literal("reach_top_5"),
+        }),
+        v.object({
+          type: v.literal("reach_top_3"),
+        }),
+        v.object({
+          type: v.literal("win_game"),
+          teamFormat: v.optional(
+            v.union(v.literal("duos"), v.literal("trios"), v.literal("squads")),
+          ),
+        }),
+        // Legacy rules for quests saved before rule simplification.
+        v.object({
           type: v.literal("play_team_format"),
           teamFormat: v.union(
             v.literal("duos"),
@@ -714,21 +730,12 @@ export default defineSchema({
           ),
         }),
         v.object({
-          type: v.literal("play_all_team_formats"),
-        }),
-        v.object({
           type: v.literal("reach_top"),
           placement: v.number(),
           teamFormat: v.optional(
             v.union(v.literal("duos"), v.literal("trios"), v.literal("squads")),
           ),
           eventCount: v.optional(v.number()),
-        }),
-        v.object({
-          type: v.literal("win_game"),
-          teamFormat: v.optional(
-            v.union(v.literal("duos"), v.literal("trios"), v.literal("squads")),
-          ),
         }),
       ),
     ),

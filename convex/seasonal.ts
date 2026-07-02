@@ -100,21 +100,28 @@ const qualificationRuleValidator = v.union(
     count: v.number(),
   }),
   v.object({
-    type: v.literal("play_team_format"),
-    teamFormat: teamFormatValidator,
+    type: v.literal("play_all_team_formats"),
   }),
   v.object({
-    type: v.literal("play_all_team_formats"),
+    type: v.literal("reach_top_5"),
+  }),
+  v.object({
+    type: v.literal("reach_top_3"),
+  }),
+  v.object({
+    type: v.literal("win_game"),
+    teamFormat: v.optional(teamFormatValidator),
+  }),
+  // Legacy rules kept so existing quests keep validating.
+  v.object({
+    type: v.literal("play_team_format"),
+    teamFormat: teamFormatValidator,
   }),
   v.object({
     type: v.literal("reach_top"),
     placement: v.number(),
     teamFormat: v.optional(teamFormatValidator),
     eventCount: v.optional(v.number()),
-  }),
-  v.object({
-    type: v.literal("win_game"),
-    teamFormat: v.optional(teamFormatValidator),
   }),
 );
 
@@ -416,6 +423,21 @@ function formatEventDate(event: Doc<"events">): string {
   return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 }
 
+function evaluateReachTop(
+  maxPlacement: number,
+  data: Awaited<ReturnType<typeof loadPlayerCampaignResults>>,
+) {
+  const match = data.results.find((result) => result.placement <= maxPlacement);
+  return {
+    qualifies: !!match,
+    current: match ? 1 : 0,
+    target: 1,
+    log: match
+      ? `Auto-approved: Reached Top ${maxPlacement} in ${match.teamFormat} on ${formatEventDate(match.event)}.`
+      : undefined,
+  };
+}
+
 function evaluateRule(
   rule: QualificationRule,
   data: Awaited<ReturnType<typeof loadPlayerCampaignResults>>,
@@ -426,24 +448,15 @@ function evaluateRule(
 
   const eventIds = new Set(data.results.map((result) => result.eventId));
   if (rule.type === "play_events") {
-    const target = requirePositiveInteger(rule.count, "Event count");
+    const target = requirePositiveInteger(rule.count, "Scrim count");
     return {
       qualifies: eventIds.size >= target,
       current: eventIds.size,
       target,
-      log: eventIds.size >= target ? `Auto-approved: Played ${target} campaign event${target === 1 ? "" : "s"}.` : undefined,
-    };
-  }
-
-  if (rule.type === "play_team_format") {
-    const played = data.results.find((result) => result.teamFormat === rule.teamFormat);
-    return {
-      qualifies: !!played,
-      current: played ? 1 : 0,
-      target: 1,
-      log: played
-        ? `Auto-approved: Played a campaign ${rule.teamFormat} event on ${formatEventDate(played.event)}.`
-        : undefined,
+      log:
+        eventIds.size >= target
+          ? `Auto-approved: Played ${target} Summer Slam scrim${target === 1 ? "" : "s"}.`
+          : undefined,
     };
   }
 
@@ -454,6 +467,43 @@ function evaluateRule(
       current: formats.size,
       target: 3,
       log: formats.size >= 3 ? "Auto-approved: Played Duos, Trios and Squads during the campaign." : undefined,
+    };
+  }
+
+  if (rule.type === "reach_top_5") {
+    return evaluateReachTop(5, data);
+  }
+
+  if (rule.type === "reach_top_3") {
+    return evaluateReachTop(3, data);
+  }
+
+  if (rule.type === "win_game") {
+    const win = data.results.find(
+      (result) =>
+        result.placement === 1 &&
+        (!rule.teamFormat || result.teamFormat === rule.teamFormat),
+    );
+    return {
+      qualifies: !!win,
+      current: win ? 1 : 0,
+      target: 1,
+      log: win
+        ? `Auto-approved: Finished 1st in ${win.teamFormat} on ${formatEventDate(win.event)}.`
+        : undefined,
+    };
+  }
+
+  // Legacy rule evaluation for quests saved before rule simplification.
+  if (rule.type === "play_team_format") {
+    const played = data.results.find((result) => result.teamFormat === rule.teamFormat);
+    return {
+      qualifies: !!played,
+      current: played ? 1 : 0,
+      target: 1,
+      log: played
+        ? `Auto-approved: Played a campaign ${rule.teamFormat} event on ${formatEventDate(played.event)}.`
+        : undefined,
     };
   }
 
@@ -475,26 +525,6 @@ function evaluateRule(
       log:
         uniqueEvents.size >= neededEvents && firstMatch
           ? `Auto-approved: Reached Top ${targetPlacement} in ${firstMatch.teamFormat} on ${formatEventDate(firstMatch.event)}.`
-          : undefined,
-    };
-  }
-
-  if (rule.type === "win_game") {
-    const leaderboardWin = data.results.find(
-      (result) =>
-        (!rule.teamFormat || result.teamFormat === rule.teamFormat) &&
-        ((result.wins ?? 0) > 0 || result.placement === 1),
-    );
-    const matchWin = data.matchStats.find((stat) => stat.placement === 1);
-    const qualifies = !!leaderboardWin || !!matchWin;
-    return {
-      qualifies,
-      current: qualifies ? 1 : 0,
-      target: 1,
-      log: leaderboardWin
-        ? `Auto-approved: Won a campaign game in ${leaderboardWin.teamFormat} on ${formatEventDate(leaderboardWin.event)}.`
-        : qualifies
-          ? "Auto-approved: Won a campaign game from match data."
           : undefined,
     };
   }

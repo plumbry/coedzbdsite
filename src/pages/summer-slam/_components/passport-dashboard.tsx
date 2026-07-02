@@ -13,7 +13,7 @@ import {
 } from "./passport-seal.ts";
 import { areSubmissionsOpen } from "./campaign-phase.ts";
 import type { CampaignPublic } from "./campaign-phase.ts";
-import { getQuestStatus, type QuestEntry } from "./passport-types.ts";
+import { CATEGORY_PAGES, getQuestStatus, type QuestEntry } from "./passport-types.ts";
 import type { PassportAvatarId } from "./passport-avatars.ts";
 import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
 

@@ -32,10 +32,12 @@ type Category = "traveller" | "competitor" | "summer_spirit" | "team_player" | "
 
 type QualificationRule =
   | { type: "play_events"; count: number }
-  | { type: "play_team_format"; teamFormat: string }
   | { type: "play_all_team_formats" }
-  | { type: "reach_top"; placement: number; eventCount?: number; teamFormat?: string }
-  | { type: "win_game"; teamFormat?: string };
+  | { type: "reach_top_5" }
+  | { type: "reach_top_3" }
+  | { type: "win_game"; teamFormat?: string }
+  | { type: "play_team_format"; teamFormat: string }
+  | { type: "reach_top"; placement: number; eventCount?: number; teamFormat?: string };
 
 type ReviewQueueRow = {
   submission: {
@@ -82,15 +84,19 @@ const categoryLabels: Record<Category, string> = {
 function formatQualificationRule(rule: QualificationRule): string {
   switch (rule.type) {
     case "play_events":
-      return `Play ${rule.count} campaign event${rule.count === 1 ? "" : "s"}`;
-    case "play_team_format":
-      return `Play a ${rule.teamFormat} event`;
+      return `Play ${rule.count} Summer Slam scrim${rule.count === 1 ? "" : "s"}`;
     case "play_all_team_formats":
       return "Play Duos, Trios, and Squads events";
-    case "reach_top":
-      return `Reach top ${rule.placement} in ${rule.eventCount ?? 1} event${(rule.eventCount ?? 1) === 1 ? "" : "s"}${rule.teamFormat ? ` (${rule.teamFormat})` : ""}`;
+    case "reach_top_5":
+      return "Reach Top 5 in a tagged Summer Slam scrim";
+    case "reach_top_3":
+      return "Reach Top 3 in a tagged Summer Slam scrim";
     case "win_game":
-      return `Win a game${rule.teamFormat ? ` in ${rule.teamFormat}` : ""}`;
+      return "Finish 1st in a tagged Summer Slam scrim";
+    case "play_team_format":
+      return `Play a ${rule.teamFormat} event (legacy)`;
+    case "reach_top":
+      return `Reach top ${rule.placement} in ${rule.eventCount ?? 1} event${(rule.eventCount ?? 1) === 1 ? "" : "s"}${rule.teamFormat ? ` (${rule.teamFormat})` : ""} (legacy)`;
     default:
       return "Auto-tracked quest";
   }
