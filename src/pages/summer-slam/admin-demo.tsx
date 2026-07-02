@@ -31,15 +31,17 @@ import {
 } from "./_components/passport-quest-meta.ts";
 import {
   ADMIN_CATEGORY_LABELS,
+  applyDemoReviewDecision,
   DEMO_CAMPAIGN,
   DEMO_COUNTS,
   DEMO_PASSPORTS,
-  DEMO_REVIEW_QUEUE,
   loadDemoAdminConfig,
   resetDemoAdminConfig,
   saveDemoAdminConfig,
   type AdminCategory,
   type DemoQuest,
+  type DemoQuestProgress,
+  type DemoReviewRow,
 } from "./_components/admin-mock-data.ts";
 
 type CompletionMethod = "auto" | "manual" | "admin";
@@ -50,6 +52,10 @@ const DEMO_NOTICE = "Saved to this browser's demo configuration.";
 export default function SummerSlamAdminDemoPage() {
   const initialConfig = useMemo(() => loadDemoAdminConfig(), []);
   const [quests, setQuests] = useState<DemoQuest[]>(initialConfig.quests);
+  const [questProgress, setQuestProgress] = useState<Record<string, DemoQuestProgress>>(
+    initialConfig.questProgress,
+  );
+  const [reviewQueue, setReviewQueue] = useState<DemoReviewRow[]>(initialConfig.reviewQueue);
   const [questPendingDelete, setQuestPendingDelete] = useState<DemoQuest | null>(null);
   const [editingQuestId, setEditingQuestId] = useState<string | undefined>();
   const [title, setTitle] = useState("");
@@ -75,7 +81,7 @@ export default function SummerSlamAdminDemoPage() {
 
   const filteredReviewQueue = useMemo(() => {
     const term = filterText.trim().toLowerCase();
-    const byStatus = DEMO_REVIEW_QUEUE.filter((row) => row.status === reviewStatus);
+    const byStatus = reviewQueue.filter((row) => row.status === reviewStatus);
     if (!term) return byStatus;
     return byStatus.filter(
       (row) =>
@@ -85,7 +91,12 @@ export default function SummerSlamAdminDemoPage() {
         ADMIN_CATEGORY_LABELS[row.category].toLowerCase().includes(term) ||
         row.evidenceTypes.some((type) => type.toLowerCase().includes(term)),
     );
-  }, [filterText, reviewStatus]);
+  }, [filterText, reviewQueue, reviewStatus]);
+
+  const pendingReviewCount = useMemo(
+    () => reviewQueue.filter((row) => row.status === "pending_review").length,
+    [reviewQueue],
+  );
 
   const howToComplete: HowToComplete =
     completionMethod === "manual" ? "submit" : "auto";
@@ -99,12 +110,46 @@ export default function SummerSlamAdminDemoPage() {
     bigWheelEntryEveryStamps: Math.max(1, bigWheelEvery || 1),
   });
 
-  const persistDemoConfig = (nextQuests = quests) => {
+  const persistDemoConfig = ({
+    nextQuests = quests,
+    nextQuestProgress = questProgress,
+    nextReviewQueue = reviewQueue,
+    showToast = true,
+  }: {
+    nextQuests?: DemoQuest[];
+    nextQuestProgress?: Record<string, DemoQuestProgress>;
+    nextReviewQueue?: DemoReviewRow[];
+    showToast?: boolean;
+  } = {}) => {
     saveDemoAdminConfig({
       campaign: buildCampaignConfig(),
       quests: nextQuests,
+      questProgress: nextQuestProgress,
+      reviewQueue: nextReviewQueue,
     });
-    toast.success(DEMO_NOTICE);
+    if (showToast) {
+      toast.success(DEMO_NOTICE);
+    }
+  };
+
+  const handleReviewDecision = (
+    submissionId: string,
+    decision: ReviewStatus,
+  ) => {
+    const result = applyDemoReviewDecision({
+      quests,
+      questProgress,
+      reviewQueue,
+      submissionId,
+      decision,
+      staffNote: reviewNote,
+    });
+    setQuestProgress(result.questProgress);
+    setReviewQueue(result.reviewQueue);
+    persistDemoConfig({
+      nextQuestProgress: result.questProgress,
+      nextReviewQueue: result.reviewQueue,
+    });
   };
 
   const resetQuestForm = () => {
@@ -138,11 +183,14 @@ export default function SummerSlamAdminDemoPage() {
   const handleDeleteQuest = () => {
     if (!questPendingDelete) return;
     const nextQuests = quests.filter((quest) => quest._id !== questPendingDelete._id);
+    const nextQuestProgress = { ...questProgress };
+    delete nextQuestProgress[questPendingDelete._id];
     setQuests(nextQuests);
+    setQuestProgress(nextQuestProgress);
     if (editingQuestId === questPendingDelete._id) {
       resetQuestForm();
     }
-    persistDemoConfig(nextQuests);
+    persistDemoConfig({ nextQuests, nextQuestProgress });
     setQuestPendingDelete(null);
   };
 
@@ -172,13 +220,15 @@ export default function SummerSlamAdminDemoPage() {
       : [...quests, quest];
 
     setQuests(nextQuests);
-    persistDemoConfig(nextQuests);
+    persistDemoConfig({ nextQuests });
     resetQuestForm();
   };
 
   const handleResetDemoConfig = () => {
     const next = resetDemoAdminConfig();
     setQuests(next.quests);
+    setQuestProgress(next.questProgress);
+    setReviewQueue(next.reviewQueue);
     setCampaignTitle(next.campaign.title);
     setCampaignDescription(next.campaign.description);
     setCampaignActive(next.campaign.isActive);
@@ -298,7 +348,7 @@ export default function SummerSlamAdminDemoPage() {
           <Card>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">Pending Reviews</p>
-              <p className="text-2xl font-bold">{DEMO_COUNTS.pendingSubmissions}</p>
+              <p className="text-2xl font-bold">{pendingReviewCount}</p>
             </CardContent>
           </Card>
           <Card>
@@ -517,9 +567,23 @@ export default function SummerSlamAdminDemoPage() {
                         <TableCell className="space-x-2 text-right">
                           {row.status === "pending_review" ? (
                             <>
-                              <Button size="sm" onClick={() => toast.info(DEMO_NOTICE)}>Approve</Button>
-                              <Button size="sm" variant="outline" onClick={() => toast.info(DEMO_NOTICE)}>Needs More</Button>
-                              <Button size="sm" variant="destructive" onClick={() => toast.info(DEMO_NOTICE)}>Reject</Button>
+                              <Button size="sm" onClick={() => handleReviewDecision(row.id, "approved")}>
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleReviewDecision(row.id, "needs_more_evidence")}
+                              >
+                                Needs More
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleReviewDecision(row.id, "rejected")}
+                              >
+                                Reject
+                              </Button>
                             </>
                           ) : (
                             <Badge variant="secondary">Reviewed</Badge>

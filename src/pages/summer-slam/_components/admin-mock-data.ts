@@ -1,11 +1,10 @@
-import { MOCK_CAMPAIGN, MOCK_QUEST_ENTRIES } from "./passport-mock-data.ts";
+import { MOCK_CAMPAIGN, MOCK_PLAYER, MOCK_QUEST_ENTRIES } from "./passport-mock-data.ts";
 import type { EvidenceInput } from "./passport-quest-meta.ts";
 import type { QuestEntry } from "./passport-types.ts";
 
 /**
- * Static mock dataset powering the read-only Summer Slam admin demo at
- * /summer-slam/admin/demo. Nothing here touches Convex — every action in the
- * demo page is a no-op that surfaces a toast instead of mutating data.
+ * Browser-local mock dataset for /summer-slam/admin/demo. Saved changes update
+ * /summer-slam/passport/demo in the same browser via localStorage.
  */
 
 export type AdminCategory =
@@ -66,9 +65,13 @@ export const DEMO_QUESTS: DemoQuest[] = MOCK_QUEST_ENTRIES.map((entry, index) =>
   isActive: true,
 }));
 
+export type DemoQuestProgress = NonNullable<QuestEntry["progress"]>;
+
 export type DemoAdminConfig = {
   campaign: DemoCampaignConfig;
   quests: DemoQuest[];
+  questProgress: Record<string, DemoQuestProgress>;
+  reviewQueue: DemoReviewRow[];
   updatedAt: number;
 };
 
@@ -78,10 +81,36 @@ function cloneDemoQuests(quests: DemoQuest[]) {
   return quests.map((quest) => ({ ...quest }));
 }
 
+function cloneDemoQuestProgress(progress: Record<string, DemoQuestProgress>) {
+  return Object.fromEntries(
+    Object.entries(progress).map(([questId, entry]) => [questId, { ...entry }]),
+  );
+}
+
+function cloneReviewQueue(queue: DemoReviewRow[]) {
+  return queue.map((row) => ({
+    ...row,
+    evidenceTypes: [...row.evidenceTypes],
+    evidenceUrls: [...row.evidenceUrls],
+  }));
+}
+
+export function getDefaultDemoQuestProgress(): Record<string, DemoQuestProgress> {
+  const progress: Record<string, DemoQuestProgress> = {};
+  for (const entry of MOCK_QUEST_ENTRIES) {
+    if (entry.progress) {
+      progress[entry.quest._id as string] = { ...entry.progress };
+    }
+  }
+  return progress;
+}
+
 export function getDefaultDemoAdminConfig(): DemoAdminConfig {
   return {
     campaign: { ...DEMO_CAMPAIGN },
     quests: cloneDemoQuests(DEMO_QUESTS),
+    questProgress: getDefaultDemoQuestProgress(),
+    reviewQueue: cloneReviewQueue(DEMO_REVIEW_QUEUE),
     updatedAt: Date.now(),
   };
 }
@@ -160,6 +189,92 @@ function normaliseDemoQuest(value: unknown, fallback?: DemoQuest): DemoQuest | n
   };
 }
 
+function normaliseDemoQuestProgress(value: unknown): Record<string, DemoQuestProgress> {
+  const fallback = getDefaultDemoQuestProgress();
+  if (!isRecord(value)) return fallback;
+
+  const next: Record<string, DemoQuestProgress> = { ...fallback };
+  for (const [questId, progress] of Object.entries(value)) {
+    if (!isRecord(progress) || typeof progress.status !== "string") continue;
+    next[questId] = {
+      status: progress.status,
+      progressCurrent:
+        typeof progress.progressCurrent === "number" ? progress.progressCurrent : undefined,
+      progressTarget:
+        typeof progress.progressTarget === "number" ? progress.progressTarget : undefined,
+      awardLog: typeof progress.awardLog === "string" ? progress.awardLog : undefined,
+      awardSource:
+        progress.awardSource === "auto" ||
+        progress.awardSource === "manual_review" ||
+        progress.awardSource === "admin"
+          ? progress.awardSource
+          : undefined,
+      approvedAt: typeof progress.approvedAt === "number" ? progress.approvedAt : undefined,
+      updatedAt: typeof progress.updatedAt === "number" ? progress.updatedAt : undefined,
+    };
+  }
+  return next;
+}
+
+function normaliseReviewRow(value: unknown, fallback?: DemoReviewRow): DemoReviewRow | null {
+  if (!isRecord(value)) return fallback ? { ...fallback } : null;
+  const id = typeof value.id === "string" ? value.id : fallback?.id;
+  const questId = typeof value.questId === "string" ? value.questId : fallback?.questId;
+  const discordUsername =
+    typeof value.discordUsername === "string" ? value.discordUsername : fallback?.discordUsername;
+  const epicUsername =
+    typeof value.epicUsername === "string" ? value.epicUsername : fallback?.epicUsername;
+  const questTitle = typeof value.questTitle === "string" ? value.questTitle : fallback?.questTitle;
+  const category = typeof value.category === "string" ? value.category : fallback?.category;
+  const status =
+    value.status === "pending_review" ||
+    value.status === "approved" ||
+    value.status === "rejected" ||
+    value.status === "needs_more_evidence"
+      ? value.status
+      : fallback?.status;
+
+  if (!id || !questId || !discordUsername || !epicUsername || !questTitle || !category || !status) {
+    return null;
+  }
+
+  const evidenceTypes = Array.isArray(value.evidenceTypes)
+    ? value.evidenceTypes.filter((type): type is string => typeof type === "string")
+    : fallback?.evidenceTypes ?? [];
+  const evidenceUrls = Array.isArray(value.evidenceUrls)
+    ? value.evidenceUrls.filter((url): url is string => typeof url === "string")
+    : fallback?.evidenceUrls ?? [];
+
+  return {
+    id,
+    questId,
+    discordUsername,
+    epicUsername,
+    questTitle,
+    category: category as AdminCategory,
+    evidenceTypes,
+    evidenceUrls,
+    notes: typeof value.notes === "string" ? value.notes : fallback?.notes,
+    status,
+  };
+}
+
+function normaliseReviewQueue(value: unknown): DemoReviewRow[] {
+  const fallbackById = new Map(DEMO_REVIEW_QUEUE.map((row) => [row.id, row]));
+  if (!Array.isArray(value)) return cloneReviewQueue(DEMO_REVIEW_QUEUE);
+
+  const parsed = value
+    .map((row) =>
+      normaliseReviewRow(
+        row,
+        isRecord(row) && typeof row.id === "string" ? fallbackById.get(row.id) : undefined,
+      ),
+    )
+    .filter((row): row is DemoReviewRow => row !== null);
+
+  return parsed.length > 0 ? parsed : cloneReviewQueue(DEMO_REVIEW_QUEUE);
+}
+
 export function loadDemoAdminConfig(): DemoAdminConfig {
   if (typeof window === "undefined") return getDefaultDemoAdminConfig();
   try {
@@ -185,6 +300,8 @@ export function loadDemoAdminConfig(): DemoAdminConfig {
     return {
       campaign: normaliseDemoCampaign(parsed.campaign),
       quests: parsedQuests.length > 0 ? parsedQuests : cloneDemoQuests(DEMO_QUESTS),
+      questProgress: normaliseDemoQuestProgress(parsed.questProgress),
+      reviewQueue: normaliseReviewQueue(parsed.reviewQueue),
       updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : Date.now(),
     };
   } catch {
@@ -196,6 +313,8 @@ export function saveDemoAdminConfig(config: Omit<DemoAdminConfig, "updatedAt">):
   const next = {
     campaign: { ...config.campaign },
     quests: cloneDemoQuests(config.quests),
+    questProgress: cloneDemoQuestProgress(config.questProgress),
+    reviewQueue: cloneReviewQueue(config.reviewQueue),
     updatedAt: Date.now(),
   };
   window.localStorage.setItem(DEMO_ADMIN_CONFIG_STORAGE_KEY, JSON.stringify(next));
@@ -211,7 +330,9 @@ export function resetDemoAdminConfig() {
 }
 
 export function buildDemoQuestEntries(config: DemoAdminConfig, baseEntries: QuestEntry[]) {
-  const progressByQuestId = new Map(baseEntries.map((entry) => [entry.quest._id as string, entry.progress]));
+  const fallbackProgress = new Map(
+    baseEntries.map((entry) => [entry.quest._id as string, entry.progress]),
+  );
   return config.quests
     .filter((quest) => quest.isActive)
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -227,12 +348,93 @@ export function buildDemoQuestEntries(config: DemoAdminConfig, baseEntries: Ques
         adminHint: quest.adminHint,
         stampReward: quest.stampReward,
       },
-      progress: progressByQuestId.get(quest._id) ?? null,
+      progress:
+        config.questProgress[quest._id] ??
+        fallbackProgress.get(quest._id) ??
+        null,
     }));
+}
+
+export type DemoReviewDecision = DemoReviewRow["status"];
+
+export function applyDemoReviewDecision({
+  quests,
+  questProgress,
+  reviewQueue,
+  submissionId,
+  decision,
+  staffNote,
+}: {
+  quests: DemoQuest[];
+  questProgress: Record<string, DemoQuestProgress>;
+  reviewQueue: DemoReviewRow[];
+  submissionId: string;
+  decision: DemoReviewDecision;
+  staffNote?: string;
+}): { questProgress: Record<string, DemoQuestProgress>; reviewQueue: DemoReviewRow[] } {
+  const row = reviewQueue.find((entry) => entry.id === submissionId);
+  if (!row) {
+    return { questProgress, reviewQueue };
+  }
+
+  const nextReviewQueue = reviewQueue.map((entry) =>
+    entry.id === submissionId ? { ...entry, status: decision } : entry,
+  );
+
+  if (row.discordUsername !== MOCK_PLAYER.discordUsername) {
+    return { questProgress, reviewQueue: nextReviewQueue };
+  }
+
+  const quest = quests.find((entry) => entry._id === row.questId);
+  const existing = questProgress[row.questId];
+  const now = Date.now();
+  const nextProgress = { ...questProgress };
+
+  if (decision === "approved") {
+    const awardSource =
+      quest?.completionMethod === "auto"
+        ? "auto"
+        : quest?.completionMethod === "admin"
+          ? "admin"
+          : "manual_review";
+    nextProgress[row.questId] = {
+      status: "approved",
+      progressCurrent: existing?.progressTarget ?? existing?.progressCurrent ?? 1,
+      progressTarget: existing?.progressTarget ?? 1,
+      awardSource,
+      awardLog:
+        staffNote?.trim() ||
+        existing?.awardLog ||
+        (awardSource === "auto" ? "Auto-approved in demo." : "Approved by staff in demo."),
+      approvedAt: now,
+      updatedAt: now,
+    };
+  } else if (decision === "needs_more_evidence") {
+    nextProgress[row.questId] = {
+      status: "needs_more_evidence",
+      progressCurrent: existing?.progressCurrent ?? 0,
+      progressTarget: existing?.progressTarget ?? 1,
+      awardLog:
+        staffNote?.trim() ||
+        "Please update your evidence and resubmit.",
+      updatedAt: now,
+    };
+  } else if (decision === "rejected") {
+    nextProgress[row.questId] = {
+      status: "rejected",
+      progressCurrent: existing?.progressCurrent ?? 0,
+      progressTarget: existing?.progressTarget ?? 1,
+      awardLog: staffNote?.trim() || "Submission rejected.",
+      updatedAt: now,
+    };
+  }
+
+  return { questProgress: nextProgress, reviewQueue: nextReviewQueue };
 }
 
 export type DemoReviewRow = {
   id: string;
+  questId: string;
   discordUsername: string;
   epicUsername: string;
   questTitle: string;
@@ -246,8 +448,9 @@ export type DemoReviewRow = {
 export const DEMO_REVIEW_QUEUE: DemoReviewRow[] = [
   {
     id: "demo_sub_1",
-    discordUsername: "PlumBry",
-    epicUsername: "PlumBry_FN",
+    questId: "mock_traveller_2",
+    discordUsername: MOCK_PLAYER.discordUsername,
+    epicUsername: MOCK_PLAYER.epicUsername,
     questTitle: "Road Trip Regular",
     category: "traveller",
     evidenceTypes: ["screenshot_link"],
@@ -257,6 +460,7 @@ export const DEMO_REVIEW_QUEUE: DemoReviewRow[] = [
   },
   {
     id: "demo_sub_2",
+    questId: "mock_competitor_1",
     discordUsername: "NovaByte",
     epicUsername: "Nova_FN",
     questTitle: "Top 10 Finish",
@@ -268,6 +472,7 @@ export const DEMO_REVIEW_QUEUE: DemoReviewRow[] = [
   },
   {
     id: "demo_sub_3",
+    questId: "mock_spirit_2",
     discordUsername: "ReefRunner",
     epicUsername: "Reef_FN",
     questTitle: "Beach Vibes Clip",
@@ -278,13 +483,14 @@ export const DEMO_REVIEW_QUEUE: DemoReviewRow[] = [
   },
   {
     id: "demo_sub_4",
-    discordUsername: "SoloQueen",
-    epicUsername: "SoloQ_FN",
+    questId: "mock_community_2",
+    discordUsername: MOCK_PLAYER.discordUsername,
+    epicUsername: MOCK_PLAYER.epicUsername,
     questTitle: "Community Screenshot",
     category: "community",
     evidenceTypes: ["image"],
-    evidenceUrls: ["https://example.com/soloqueen-community.png"],
-    status: "approved",
+    evidenceUrls: ["https://example.com/plumbry-community.png"],
+    status: "pending_review",
   },
 ];
 
