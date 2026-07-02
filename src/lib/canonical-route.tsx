@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import type { ReactElement } from "react";
 import { Navigate, Route, type RouteProps } from "react-router-dom";
 
 /** Trailing-slash variant of `path` for users who open `/foo/bar/`. */
@@ -7,21 +7,21 @@ export function trailingSlashPath(path: string): string {
   return `${path}/`;
 }
 
-type CanonicalRouteProps = Pick<RouteProps, "path" | "element">;
-
-/** Registers a route and a trailing-slash redirect to the same path. */
-export function CanonicalRoute({ path, element }: CanonicalRouteProps) {
-  if (!path || typeof path !== "string" || path === "/") {
-    return <Route path={path} element={element} />;
+/** Route elements for a path plus its trailing-slash redirect alias. */
+export function canonicalRouteElements(
+  path: string,
+  element: RouteProps["element"],
+): ReactElement[] {
+  if (!path || path === "/") {
+    return [<Route key={path} path={path} element={element} />];
   }
 
-  return (
-    <Fragment>
-      <Route path={path} element={element} />
-      <Route
-        path={trailingSlashPath(path)}
-        element={<Navigate to={path} replace />}
-      />
-    </Fragment>
-  );
+  return [
+    <Route key={path} path={path} element={element} />,
+    <Route
+      key={trailingSlashPath(path)}
+      path={trailingSlashPath(path)}
+      element={<Navigate to={path} replace />}
+    />,
+  ];
 }

@@ -1,5 +1,5 @@
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
-import { CanonicalRoute } from "@/lib/canonical-route.tsx";
+import { canonicalRouteElements } from "@/lib/canonical-route.tsx";
 import { DefaultProviders } from "./components/providers/default.tsx";
 import AdminLayout from "./components/admin-layout.tsx";
 import UsernameSetupDialog from "./components/username-setup-dialog.tsx";
@@ -118,12 +118,12 @@ export default function App() {
           <Route path="/scrim-series" element={<ScrimSeriesLandingPage />} />
           <Route path="/scrim-series/:slug" element={<ScrimSeriesLeaderboardPage />} />
           <Route path="/summer-slam" element={<SummerSlamLandingPage />} />
-          <CanonicalRoute path="/summer-slam/admin/demo" element={<SummerSlamAdminDemoPage />} />
-          <CanonicalRoute
-            path="/summer-slam/passport/demo/complete"
-            element={<SummerSlamPassportDemoCompletePage />}
-          />
-          <CanonicalRoute path="/summer-slam/passport/demo" element={<SummerSlamPassportDemoPage />} />
+          {canonicalRouteElements("/summer-slam/admin/demo", <SummerSlamAdminDemoPage />)}
+          {canonicalRouteElements(
+            "/summer-slam/passport/demo/complete",
+            <SummerSlamPassportDemoCompletePage />,
+          )}
+          {canonicalRouteElements("/summer-slam/passport/demo", <SummerSlamPassportDemoPage />)}
           <Route path="/summer-slam/passport" element={<SummerSlamPassportPage />} />
           <Route path="/spin/:eventId" element={<ScrimEventPage />} />
           <Route path="/tier-restrictions" element={<TierRestrictionsPage />} />
