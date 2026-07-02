@@ -155,10 +155,12 @@ function QuestListPage({
   seal,
   onOpenTask,
   onSubmitEvidence,
+  submissionsOpen,
 }: {
   seal: SealProgress;
   onOpenTask: (entry: QuestEntry) => void;
   onSubmitEvidence: (entry: QuestEntry) => void;
+  submissionsOpen: boolean;
 }) {
   const actionableEntry = getActionableEntry(seal);
   const isEarned = seal.state === "earned";
@@ -224,7 +226,7 @@ function QuestListPage({
             <Award className="mr-1 h-3 w-3" />
             Stamp earned
           </Button>
-        ) : actionableEntry ? (
+        ) : actionableEntry && submissionsOpen ? (
           <Button
             size="sm"
             className="h-7 w-full px-2 text-[10px] touch-manipulation"
@@ -232,6 +234,10 @@ function QuestListPage({
           >
             <Upload className="mr-1 h-3 w-3" />
             {seal.needsFix > 0 ? "Resubmit" : "Submit evidence"}
+          </Button>
+        ) : actionableEntry && !submissionsOpen ? (
+          <Button disabled size="sm" variant="outline" className="h-7 w-full px-2 text-[10px] touch-manipulation">
+            Submissions closed
           </Button>
         ) : isPending ? (
           <Button disabled size="sm" variant="outline" className="h-7 w-full px-2 text-[10px] touch-manipulation">
@@ -247,9 +253,11 @@ function QuestListPage({
 function CompactQuestPage({
   entry,
   onSubmitEvidence,
+  submissionsOpen,
 }: {
   entry: QuestEntry;
   onSubmitEvidence: () => void;
+  submissionsOpen: boolean;
 }) {
   const { quest, progress } = entry;
   const status = getQuestStatus(entry);
@@ -287,7 +295,7 @@ function CompactQuestPage({
           {progress.awardLog}
         </p>
       ) : null}
-      {(canSubmit || canResubmit) && (
+      {(canSubmit || canResubmit) && submissionsOpen && (
         <Button
           size="sm"
           className="mt-2 h-7 shrink-0 px-2 text-[10px] touch-manipulation"
@@ -297,6 +305,9 @@ function CompactQuestPage({
           {canResubmit ? "Resubmit evidence" : "Submit evidence"}
         </Button>
       )}
+      {(canSubmit || canResubmit) && !submissionsOpen ? (
+        <p className="mt-2 text-[10px] text-orange-800/60">Submissions are closed for this season.</p>
+      ) : null}
     </div>
   );
 }
@@ -309,6 +320,7 @@ export function PassportPageSpread({
   onOpenTask,
   onCloseQuest,
   onSubmitEvidence,
+  submissionsOpen = true,
   className,
 }: {
   seal: SealProgress;
@@ -318,6 +330,7 @@ export function PassportPageSpread({
   onOpenTask: (entry: QuestEntry) => void;
   onCloseQuest: () => void;
   onSubmitEvidence: (entry: QuestEntry) => void;
+  submissionsOpen?: boolean;
   className?: string;
 }) {
   const reduceMotion = useReducedMotion();
@@ -348,11 +361,17 @@ export function PassportPageSpread({
           <CompactQuestPage
             entry={selectedQuest}
             onSubmitEvidence={() => onSubmitEvidence(selectedQuest)}
+            submissionsOpen={submissionsOpen}
           />
         ) : (
           <>
             <LeftPage seal={seal} isBonus={isBonus} celebrating={celebrating} />
-            <QuestListPage seal={seal} onOpenTask={onOpenTask} onSubmitEvidence={onSubmitEvidence} />
+            <QuestListPage
+              seal={seal}
+              onOpenTask={onOpenTask}
+              onSubmitEvidence={onSubmitEvidence}
+              submissionsOpen={submissionsOpen}
+            />
           </>
         )}
       </div>

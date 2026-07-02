@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
+import { useUserRole } from "@/hooks/use-user-role.ts";
 import AuthGate from "@/components/auth-gate.tsx";
 import PageShell from "@/components/page-shell.tsx";
 import { CompactMobileButtonsOptOut } from "@/components/compact-mobile-buttons.tsx";
@@ -34,7 +35,7 @@ import {
   UPLOAD_FAILED_MESSAGE,
   type QuestEntry,
 } from "./_components/passport-types.ts";
-import { getCampaignPhase, isPassportAccessible } from "./_components/campaign-phase.ts";
+import { getCampaignPhase, isAdminPassportPreview, isPassportAccessible } from "./_components/campaign-phase.ts";
 
 function PassportLoader() {
   return (
@@ -105,6 +106,7 @@ function PassportContent() {
   const [passportError, setPassportError] = useState<string | null>(null);
   const [isEnsuringPassport, setIsEnsuringPassport] = useState(true);
   const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
+  const { isAdmin } = useUserRole();
 
   const ensureMyPassport = useMutation(api.seasonal.ensureMyPassport);
   const setPassportAvatar = useMutation(api.seasonal.setPassportAvatar);
@@ -134,6 +136,7 @@ function PassportContent() {
   }, [serverBirthplaceId]);
 
   const campaignPhase = getCampaignPhase(campaign ?? null);
+  const isAdminPreview = isAdminPassportPreview(campaign ?? null, isAdmin);
 
   useEffect(() => {
     if (!isConvexAuthenticated) {
@@ -237,7 +240,7 @@ function PassportContent() {
     );
   }
 
-  if (campaign !== undefined && !isPassportAccessible(campaign)) {
+  if (campaign !== undefined && !isPassportAccessible(campaign, Date.now(), { adminPreview: isAdmin })) {
     const phaseUnavailable =
       campaignPhase === "not_started"
         ? { title: CAMPAIGN_NOT_STARTED_TITLE, description: CAMPAIGN_NOT_STARTED_MESSAGE }
@@ -309,6 +312,7 @@ function PassportContent() {
       }}
       quests={quests}
       campaign={passport.campaign}
+      isAdminPreview={isAdminPreview}
       onSubmitEvidence={handleSubmitEvidence}
     />
   );

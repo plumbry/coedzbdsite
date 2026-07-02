@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useConvexAuth } from "convex/react";
 import { useAuth } from "@clerk/react";
 import { api } from "@/convex/_generated/api.js";
+import { useUserRole } from "@/hooks/use-user-role.ts";
 import PageShell from "@/components/page-shell.tsx";
 import { CompactMobileButtonsOptOut } from "@/components/compact-mobile-buttons.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -13,6 +14,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
 import {
   getCampaignPhase,
+  isAdminPassportPreview,
   isPassportAccessible,
   phaseMessage,
 } from "./_components/campaign-phase.ts";
@@ -132,6 +134,7 @@ export default function SummerSlamLandingPage() {
   const navigate = useNavigate();
   const { isLoaded, isSignedIn } = useAuth();
   const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
+  const { isAdmin } = useUserRole();
   const [isClaimingPassport, setIsClaimingPassport] = useState(false);
   const campaign = useQuery(api.seasonal.getCampaign, { slug: CAMPAIGN_SLUG });
   const passportStatus = useQuery(
@@ -141,8 +144,11 @@ export default function SummerSlamLandingPage() {
   const ensureMyPassport = useMutation(api.seasonal.ensureMyPassport);
 
   const phase = getCampaignPhase(campaign ?? null);
-  const statusMessage = phaseMessage(phase);
-  const canEnterPassport = isPassportAccessible(campaign ?? null);
+  const statusMessage = isAdminPassportPreview(campaign ?? null, isAdmin)
+    ? "Admin preview is available before the season starts. Claim a passport to verify quests and layout."
+    : phaseMessage(phase);
+  const canEnterPassport = isPassportAccessible(campaign ?? null, Date.now(), { adminPreview: isAdmin });
+  const isAdminPreview = isAdminPassportPreview(campaign ?? null, isAdmin);
   const hasPassport = Boolean(passportStatus?.passport);
   const isPassportStatusLoading =
     isSignedIn && (!isConvexAuthenticated || passportStatus === undefined);
@@ -196,7 +202,9 @@ export default function SummerSlamLandingPage() {
               ) : isSignedIn ? (
                   hasPassport ? (
                     <Button asChild className="min-h-10 touch-manipulation">
-                      <Link to="/summer-slam/passport">My Passport</Link>
+                      <Link to="/summer-slam/passport">
+                        {isAdminPreview ? "Preview Passport" : "My Passport"}
+                      </Link>
                     </Button>
                   ) : (
                     <Button
@@ -204,7 +212,11 @@ export default function SummerSlamLandingPage() {
                       disabled={isClaimingPassport}
                       onClick={() => void handleClaimPassport()}
                     >
-                      {isClaimingPassport ? "Claiming…" : "Claim Passport"}
+                      {isClaimingPassport
+                        ? "Claiming…"
+                        : isAdminPreview
+                          ? "Preview Passport"
+                          : "Claim Passport"}
                     </Button>
                   )
                 ) : (

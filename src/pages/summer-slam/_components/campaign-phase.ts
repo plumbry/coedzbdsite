@@ -2,6 +2,7 @@ export type CampaignPhase =
   | "not_configured"
   | "not_started"
   | "active"
+  | "submissions_closed"
   | "ended";
 
 export type CampaignPublic = {
@@ -21,20 +22,41 @@ export function getCampaignPhase(
   now = Date.now(),
 ): CampaignPhase {
   if (!campaign) return "not_configured";
-  if (campaign.startsAt && now < campaign.startsAt) return "not_started";
-  if (campaign.endsAt && now > campaign.endsAt) return "ended";
   if (!campaign.isActive) return "ended";
+  if (campaign.startsAt && now < campaign.startsAt) return "not_started";
+  if (campaign.endsAt && now > campaign.endsAt) return "submissions_closed";
   return "active";
 }
 
-/** Passport entry is only available once the campaign is live and has quests configured. */
-export function isPassportAccessible(
+/** Players can submit evidence only while the season is live. */
+export function areSubmissionsOpen(
   campaign: CampaignPublic | null | undefined,
   now = Date.now(),
 ): boolean {
+  return getCampaignPhase(campaign, now) === "active";
+}
+
+/** Passport entry is available once the campaign is live and has quests configured. */
+export function isPassportAccessible(
+  campaign: CampaignPublic | null | undefined,
+  now = Date.now(),
+  options?: { adminPreview?: boolean },
+): boolean {
   if (!campaign) return false;
-  if (getCampaignPhase(campaign, now) !== "active") return false;
+  const phase = getCampaignPhase(campaign, now);
+  if (phase === "not_configured" || phase === "ended") return false;
+  if (phase === "not_started" && !options?.adminPreview) return false;
   return (campaign.activeQuestCount ?? 0) > 0;
+}
+
+/** Admins can claim a passport before the season start date to verify setup. */
+export function isAdminPassportPreview(
+  campaign: CampaignPublic | null | undefined,
+  isAdmin: boolean,
+  now = Date.now(),
+): boolean {
+  if (!isAdmin || !campaign) return false;
+  return campaign.isActive && getCampaignPhase(campaign, now) === "not_started";
 }
 
 export function formatCampaignDateRange(
@@ -65,6 +87,8 @@ export function phaseMessage(phase: CampaignPhase) {
       return "Summer Slam is still being prepared. Staff are setting up quests and rewards — watch Discord for the official launch date.";
     case "not_started":
       return "The season hasn't started yet. Watch Discord for the official start date, then return here to open your passport.";
+    case "submissions_closed":
+      return "Submissions are closed for this season. You can still view your passport while staff finish reviewing evidence.";
     case "ended":
       return "Summer Slam is not currently active. Passport progress may be read-only until the next season begins.";
     default:
@@ -78,6 +102,8 @@ export function phaseBadge(phase: CampaignPhase) {
       return { label: "Live now", className: "bg-emerald-100 text-emerald-800" };
     case "not_started":
       return { label: "Coming soon", className: "bg-amber-100 text-amber-800" };
+    case "submissions_closed":
+      return { label: "Submissions closed", className: "bg-slate-200 text-slate-700" };
     case "ended":
       return { label: "Season closed", className: "bg-slate-200 text-slate-700" };
     default:

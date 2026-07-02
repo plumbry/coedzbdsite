@@ -33,7 +33,7 @@ export const CAMPAIGN_ENDED_TITLE = "Season Closed";
 
 export const CAMPAIGN_ENDED_MESSAGE = `Summer Slam has ended.
 
-Passport progress may be read-only until the next season begins.`;
+You can still view your passport progress, but new evidence submissions are closed.`;
 
 export const CAMPAIGN_NOT_READY_TITLE = "Coming Soon";
 
@@ -77,6 +77,10 @@ export const EVIDENCE_SUBMITTED_SUCCESS_MESSAGE =
 /** @deprecated Use UPLOAD_FAILED_MESSAGE */
 export const VIDEO_UPLOAD_ERROR = UPLOAD_FAILED_MESSAGE;
 
+export const SUBMISSIONS_CLOSED_MESSAGE = `The submission deadline has passed.
+
+Staff may still be reviewing evidence submitted before the season ended.`;
+
 export function getPassportErrorTitle(message: string) {
   if (message === CAMPAIGN_NOT_STARTED_MESSAGE) return CAMPAIGN_NOT_STARTED_TITLE;
   if (message === CAMPAIGN_ENDED_MESSAGE || message === INACTIVE_CAMPAIGN_MESSAGE) {
@@ -87,7 +91,9 @@ export function getPassportErrorTitle(message: string) {
 
 export function mapEnsurePassportError(message: string) {
   if (message.includes("Campaign has not started")) return CAMPAIGN_NOT_STARTED_MESSAGE;
-  if (message.includes("Campaign has ended")) return CAMPAIGN_ENDED_MESSAGE;
+  if (message.includes("Campaign has ended") || message.includes("Submissions are closed")) {
+    return SUBMISSIONS_CLOSED_MESSAGE;
+  }
   if (message.includes("Campaign is not active")) return INACTIVE_CAMPAIGN_MESSAGE;
   if (message.includes("Campaign not found")) return CAMPAIGN_NOT_READY_MESSAGE;
   if (

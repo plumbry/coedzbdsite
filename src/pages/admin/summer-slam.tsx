@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog.tsx";
 import { toast } from "sonner";
 import { Download, ExternalLink, Loader2, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   formatHowToCompleteLabel,
   type EvidenceInput,
@@ -410,12 +411,16 @@ export default function SummerSlamAdminPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Season end</Label>
+                  <Label>Season end (submission deadline)</Label>
                   <Input
                     type="datetime-local"
                     value={campaignEndsAt}
                     onChange={(event) => setCampaignEndsAt(event.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Last moment players can submit evidence. Staff can still review submissions after
+                    this date.
+                  </p>
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-3">
@@ -454,11 +459,20 @@ export default function SummerSlamAdminPage() {
                 <li>Activate the campaign and set season start/end dates in Campaign Settings.</li>
                 <li>Tag Summer Slam events in Events Manager and assign Duos, Trios, or Squads.</li>
                 <li>Configure manual and MVP auto quests in the Quests tab.</li>
-                <li>Test one linked player Passport at /summer-slam/passport.</li>
+                <li>
+                  Before launch, admins can claim a passport early at{" "}
+                  <Link to="/summer-slam/passport" className="font-medium text-primary underline">
+                    /summer-slam/passport
+                  </Link>{" "}
+                  to verify layout and quests.
+                </li>
                 <li>Test one manual submission, then approve/reject/request more evidence.</li>
                 <li>Run recalculation after imports, quest changes, or event tag changes.</li>
                 <li>Export Little Wheel and Big Wheel tickets from Recalculate & Exports.</li>
               </ol>
+              <Button asChild variant="outline" className="mt-4">
+                <Link to="/summer-slam/passport">Preview player passport</Link>
+              </Button>
             </CardContent>
           </Card>
         </div>

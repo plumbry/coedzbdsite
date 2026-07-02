@@ -11,7 +11,9 @@ import {
   buildSeals,
   summariseSeason,
 } from "./passport-seal.ts";
-import { CATEGORY_PAGES, getQuestStatus, type QuestEntry } from "./passport-types.ts";
+import { areSubmissionsOpen } from "./campaign-phase.ts";
+import type { CampaignPublic } from "./campaign-phase.ts";
+import { getQuestStatus, type QuestEntry } from "./passport-types.ts";
 import type { PassportAvatarId } from "./passport-avatars.ts";
 import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
 
@@ -42,6 +44,7 @@ export function PassportDashboard({
   onSaveBirthplace,
   quests,
   campaign,
+  isAdminPreview = false,
   onRequestEvidence,
 }: {
   campaignTitle: string;
@@ -51,12 +54,8 @@ export function PassportDashboard({
   onSaveAvatar?: (avatarId: PassportAvatarId) => Promise<void>;
   onSaveBirthplace?: (birthplaceId: PassportBirthplaceId) => Promise<void>;
   quests: QuestEntry[];
-  campaign: {
-    startsAt?: number;
-    endsAt?: number;
-    littleWheelEntryEveryStamps?: number;
-    bigWheelEntryEveryStamps?: number;
-  } | null | undefined;
+  campaign: CampaignPublic | null | undefined;
+  isAdminPreview?: boolean;
   seasonLabel?: string;
   onRequestEvidence: (entry: QuestEntry) => void;
 }) {
@@ -91,6 +90,7 @@ export function PassportDashboard({
 
   const littleEvery = campaign?.littleWheelEntryEveryStamps ?? 1;
   const bigEvery = campaign?.bigWheelEntryEveryStamps ?? 5;
+  const submissionsOpen = areSubmissionsOpen(campaign);
   const wheelTotals = useMemo(
     () => computeWheelTotals(quests, littleEvery, bigEvery),
     [quests, littleEvery, bigEvery],
@@ -115,6 +115,18 @@ export function PassportDashboard({
       <div className={ssPageContainer}>
         <PassportHero title={campaignTitle} />
 
+        {isAdminPreview ? (
+          <p className="rounded-lg border border-violet-200/80 bg-violet-50/70 px-3 py-2 text-sm text-violet-950/90">
+            Admin preview — the season has not started yet. Use this passport to verify quests and
+            layout before players can claim passports.
+          </p>
+        ) : !submissionsOpen ? (
+          <p className="rounded-lg border border-orange-200/70 bg-orange-50/60 px-3 py-2 text-sm text-orange-900/80">
+            Submissions are closed for this season. Your passport is read-only while staff finish
+            reviewing evidence.
+          </p>
+        ) : null}
+
         <div className={ssPassportGrid}>
           <div className={ssPassportMainColumn}>
             <PassportIdentitySection
@@ -130,6 +142,8 @@ export function PassportDashboard({
             onSaveAvatar={onSaveAvatar}
             onSaveBirthplace={onSaveBirthplace}
             onSubmitEvidence={onRequestEvidence}
+            submissionsOpen={submissionsOpen}
+            isAdminPreview={isAdminPreview}
             />
           </div>
 
@@ -152,6 +166,7 @@ export function PassportDashboard({
             <PassportEvidenceReviewPanel
               quests={quests}
               onUpdateEvidence={onRequestEvidence}
+              submissionsOpen={submissionsOpen}
             />
           </aside>
         </div>

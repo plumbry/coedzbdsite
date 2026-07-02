@@ -50,9 +50,11 @@ function buildOutstandingItems(quests: QuestEntry[]): OutstandingItem[] {
 function OutstandingRow({
   item,
   onUpdateEvidence,
+  submissionsOpen,
 }: {
   item: OutstandingItem;
   onUpdateEvidence: (entry: QuestEntry) => void;
+  submissionsOpen: boolean;
 }) {
   const dest = getDestination(item.category);
   const staffNote = item.entry.progress?.awardLog?.trim();
@@ -90,7 +92,7 @@ function OutstandingRow({
           ) : null}
         </div>
 
-        {canUpdate ? (
+        {canUpdate && submissionsOpen ? (
           <Button
             type="button"
             size="sm"
@@ -100,6 +102,10 @@ function OutstandingRow({
           >
             Update
           </Button>
+        ) : canUpdate && !submissionsOpen ? (
+          <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-slate-700 bg-slate-100 border border-slate-200">
+            Closed
+          </span>
         ) : (
           <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-800 bg-amber-50 border border-amber-100">
             Pending
@@ -113,10 +119,12 @@ function OutstandingRow({
 export function PassportEvidenceReviewPanel({
   quests,
   onUpdateEvidence,
+  submissionsOpen = true,
   className,
 }: {
   quests: QuestEntry[];
   onUpdateEvidence: (entry: QuestEntry) => void;
+  submissionsOpen?: boolean;
   className?: string;
 }) {
   const items = buildOutstandingItems(quests);
@@ -145,6 +153,7 @@ export function PassportEvidenceReviewPanel({
                 key={item.entry.quest._id}
                 item={item}
                 onUpdateEvidence={onUpdateEvidence}
+                submissionsOpen={submissionsOpen}
               />
             ))}
           </ul>

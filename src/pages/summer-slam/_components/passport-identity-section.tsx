@@ -34,6 +34,8 @@ export function PassportIdentitySection({
   onSaveBirthplace,
   onOpenTask,
   onSubmitEvidence,
+  submissionsOpen = true,
+  isAdminPreview = false,
   className,
 }: {
   playerName: string;
@@ -50,6 +52,8 @@ export function PassportIdentitySection({
   onSaveBirthplace?: (birthplaceId: PassportBirthplaceId) => Promise<void>;
   onOpenTask?: (entry: QuestEntry) => void;
   onSubmitEvidence?: (entry: QuestEntry) => void;
+  submissionsOpen?: boolean;
+  isAdminPreview?: boolean;
   className?: string;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -58,7 +62,8 @@ export function PassportIdentitySection({
   const [openPageId, setOpenPageId] = useState<PassportPageId | null>(null);
   const [selectedQuest, setSelectedQuest] = useState<QuestEntry | null>(null);
 
-  const canEditProfile = Boolean(onSaveAvatar && onSaveBirthplace);
+  const canEditProfile =
+    Boolean(onSaveAvatar && onSaveBirthplace) && (submissionsOpen || isAdminPreview);
   const bonusUnlocked = isBonusStampUnlocked(seals);
   const questPoints = useMemo(() => computeQuestPoints(quests), [quests]);
   const passportTier = useMemo(() => getPassportTier(questPoints), [questPoints]);
@@ -168,6 +173,7 @@ export function PassportIdentitySection({
             onOpenTask={handleOpenTask}
             onCloseQuest={() => setSelectedQuest(null)}
             onSubmitEvidence={handleSubmitFromPage}
+            submissionsOpen={submissionsOpen}
           />
         ) : null}
       </PassportIdentityCard>

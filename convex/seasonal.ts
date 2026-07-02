@@ -177,16 +177,39 @@ async function requireCampaign(ctx: QueryCtx | MutationCtx, slug: string) {
   return campaign;
 }
 
-function assertCampaignOpen(campaign: Doc<"seasonalCampaigns">, now = Date.now()) {
-  if (campaign.startsAt && now < campaign.startsAt) {
-    throw new ConvexError({ message: "Campaign has not started yet", code: "CAMPAIGN_NOT_STARTED" });
-  }
-  if (campaign.endsAt && now > campaign.endsAt) {
-    throw new ConvexError({ message: "Campaign has ended", code: "CAMPAIGN_ENDED" });
-  }
+function assertPassportAccessible(
+  campaign: Doc<"seasonalCampaigns">,
+  now = Date.now(),
+  options?: { allowAdminEarlyAccess?: boolean },
+) {
   if (!campaign.isActive) {
     throw new ConvexError({ message: "Campaign is not active", code: "CAMPAIGN_INACTIVE" });
   }
+  if (!options?.allowAdminEarlyAccess && campaign.startsAt && now < campaign.startsAt) {
+    throw new ConvexError({ message: "Campaign has not started yet", code: "CAMPAIGN_NOT_STARTED" });
+  }
+}
+
+function assertSubmissionsOpen(campaign: Doc<"seasonalCampaigns">, now = Date.now()) {
+  assertPassportAccessible(campaign, now);
+  if (campaign.endsAt && now > campaign.endsAt) {
+    throw new ConvexError({
+      message: "Submissions are closed for this season",
+      code: "SUBMISSIONS_CLOSED",
+    });
+  }
+}
+
+async function resolveCurrentAdmin(ctx: QueryCtx | MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) return null;
+
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+    .first();
+  if (!user || user.role !== "admin") return null;
+  return user;
 }
 
 async function resolveCurrentPlayer(ctx: QueryCtx | MutationCtx) {
@@ -624,7 +647,8 @@ export const ensureMyPassport = mutation({
   args: { slug: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
-    assertCampaignOpen(campaign);
+    const admin = await resolveCurrentAdmin(ctx);
+    assertPassportAccessible(campaign, Date.now(), { allowAdminEarlyAccess: !!admin });
     const { player, passportId } = await requireCurrentPassport(ctx, campaign);
     return {
       passportId,
@@ -921,9 +945,7 @@ export const generateEvidenceUploadUrl = mutation({
   args: { slug: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
-    if (!campaign.isActive) {
-      throw new ConvexError({ message: "Campaign is not active", code: "CAMPAIGN_INACTIVE" });
-    }
+    assertSubmissionsOpen(campaign);
     await requireCurrentPassport(ctx, campaign);
     return await ctx.storage.generateUploadUrl();
   },
@@ -1014,7 +1036,7 @@ export const submitEvidence = mutation({
   },
   handler: async (ctx, args) => {
     const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
-    assertCampaignOpen(campaign);
+    assertSubmissionsOpen(campaign);
     const { player } = await requireCurrentPassport(ctx, campaign);
     const quest = await ctx.db.get(args.questId);
     if (!quest || quest.campaignId !== campaign._id || !quest.isActive || quest.completionMethod !== "manual") {

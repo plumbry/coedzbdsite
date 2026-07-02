@@ -9,6 +9,7 @@ import { ssPageBg } from "./passport-dashboard-theme.ts";
 import type { PassportAvatarId } from "./passport-avatars.ts";
 import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
 import { UPLOAD_FAILED_MESSAGE, type EvidenceType, type QuestEntry } from "./passport-types.ts";
+import type { CampaignPublic } from "./campaign-phase.ts";
 
 export type PassportEvidenceSubmitPayload = {
   questId: Id<"seasonalQuests">;
@@ -27,6 +28,7 @@ export function PassportExperience({
   onSaveBirthplace,
   quests,
   campaign,
+  isAdminPreview = false,
   onSubmitEvidence,
 }: {
   campaignTitle: string;
@@ -36,12 +38,8 @@ export function PassportExperience({
   onSaveAvatar?: (avatarId: PassportAvatarId) => Promise<void>;
   onSaveBirthplace?: (birthplaceId: PassportBirthplaceId) => Promise<void>;
   quests: QuestEntry[];
-  campaign: {
-    startsAt?: number;
-    endsAt?: number;
-    littleWheelEntryEveryStamps?: number;
-    bigWheelEntryEveryStamps?: number;
-  } | null | undefined;
+  campaign: CampaignPublic | null | undefined;
+  isAdminPreview?: boolean;
   onSubmitEvidence: (payload: PassportEvidenceSubmitPayload) => Promise<void>;
 }) {
   const [evidenceQuestId, setEvidenceQuestId] = useState<Id<"seasonalQuests"> | null>(null);
@@ -148,6 +146,7 @@ export function PassportExperience({
         onSaveBirthplace={onSaveBirthplace}
         quests={quests}
         campaign={campaign}
+        isAdminPreview={isAdminPreview}
         onRequestEvidence={(entry) => setEvidenceQuestId(entry.quest._id)}
       />
 
