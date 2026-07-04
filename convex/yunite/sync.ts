@@ -8,6 +8,8 @@ import { matchPlayerForImport } from "../lib/playerIdentity";
 import type { PlayerMatchFields } from "../lib/playerIdentity";
 import type { Id } from "../_generated/dataModel.d.ts";
 import {
+  getYuniteTournamentStartIso,
+  getYuniteTournamentStartMs,
   normalizeYuniteLeaderboardPayload,
   yuniteTournamentHasImportableData,
 } from "../lib/yunite";
@@ -29,7 +31,9 @@ import {
 interface YuniteTournament {
   id: string;
   name: string;
-  startedAt: string;
+  /** Legacy; Yunite v3 uses `startDate`. */
+  startedAt?: string;
+  startDate?: string;
   status?: string;
   teamSize?: number;
   region?: string;
@@ -73,8 +77,8 @@ function isWithinYuniteTournamentLookback(
   tournament: YuniteTournament,
   cutoffMs: number,
 ): boolean {
-  const startedAtMs = Date.parse(tournament.startedAt);
-  return Number.isFinite(startedAtMs) && startedAtMs >= cutoffMs;
+  const startedAtMs = getYuniteTournamentStartMs(tournament);
+  return startedAtMs !== undefined && startedAtMs >= cutoffMs;
 }
 
 export const syncYuniteTournaments = action({
@@ -246,14 +250,17 @@ export const syncYuniteTournaments = action({
         // Parse tournament date safely
         let eventDate: string;
         try {
-          if (tournament.startedAt) {
-            eventDate = new Date(tournament.startedAt).toISOString().split('T')[0];
+          const tournamentStartIso = getYuniteTournamentStartIso(tournament);
+          if (tournamentStartIso) {
+            eventDate = new Date(tournamentStartIso).toISOString().split('T')[0];
           } else {
-            console.warn(`Tournament ${tournament.id} has no startedAt date, using today's date`);
+            console.warn(`Tournament ${tournament.id} has no start date, using today's date`);
             eventDate = new Date().toISOString().split('T')[0];
           }
         } catch (error) {
-          console.error(`Invalid date for tournament ${tournament.id}: ${tournament.startedAt}, using today's date`);
+          console.error(
+            `Invalid date for tournament ${tournament.id}: ${getYuniteTournamentStartIso(tournament) ?? "unknown"}, using today's date`,
+          );
           eventDate = new Date().toISOString().split('T')[0];
         }
         
@@ -1119,10 +1126,10 @@ export const listRecentTournaments = action({
       `Filtered Yunite tournaments to last ${YUNITE_TOURNAMENT_LOOKBACK_DAYS} days: ${tournaments.length}/${allTournaments.length}`,
     );
 
-    // Sort by startedAt descending (most recent first)
+    // Sort by start date descending (most recent first)
     tournaments.sort((a, b) => {
-      const dateA = a.startedAt ? new Date(a.startedAt).getTime() : 0;
-      const dateB = b.startedAt ? new Date(b.startedAt).getTime() : 0;
+      const dateA = getYuniteTournamentStartMs(a) ?? 0;
+      const dateB = getYuniteTournamentStartMs(b) ?? 0;
       return dateB - dateA;
     });
 
@@ -1156,7 +1163,7 @@ export const listRecentTournaments = action({
       results.push({
         id: t.id,
         name: t.name,
-        startedAt: t.startedAt,
+        startedAt: getYuniteTournamentStartIso(t) ?? "",
         status: t.status,
         teamSize: t.teamSize,
         region: t.region,

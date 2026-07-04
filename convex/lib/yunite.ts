@@ -62,11 +62,39 @@ export type YuniteLeaderboardEntryLike = {
 export type YuniteTournamentMetadataLike = {
   id?: string;
   name?: string;
+  /** Legacy field; Yunite v3 list/detail responses use `startDate` instead. */
   startedAt?: string;
+  startDate?: string;
 };
 
 function hasText(value: unknown): boolean {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+/** Prefer Yunite v3 `startDate`, fall back to legacy `startedAt`. */
+export function getYuniteTournamentStartIso(
+  tournament: YuniteTournamentMetadataLike,
+): string | undefined {
+  for (const candidate of [tournament.startDate, tournament.startedAt]) {
+    if (typeof candidate !== "string" || candidate.trim().length === 0) {
+      continue;
+    }
+    const trimmed = candidate.trim();
+    if (Number.isFinite(Date.parse(trimmed))) {
+      return trimmed;
+    }
+  }
+  return undefined;
+}
+
+export function getYuniteTournamentStartMs(
+  tournament: YuniteTournamentMetadataLike,
+): number | undefined {
+  const startIso = getYuniteTournamentStartIso(tournament);
+  if (!startIso) {
+    return undefined;
+  }
+  return Date.parse(startIso);
 }
 
 /** Normalize Yunite leaderboard JSON (array or `{ data: [...] }`). */
@@ -116,7 +144,7 @@ export function yuniteTournamentHasMetadata(
 ): boolean {
   return (
     hasText(tournament.id) &&
-    (hasText(tournament.name) || hasText(tournament.startedAt))
+    (hasText(tournament.name) || getYuniteTournamentStartIso(tournament) !== undefined)
   );
 }
 

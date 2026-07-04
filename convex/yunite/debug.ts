@@ -5,6 +5,7 @@ import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
 import type { Id } from "../_generated/dataModel.d.ts";
+import { getYuniteTournamentStartIso } from "../lib/yunite";
 import { yuniteFetch, yuniteFetchOrThrow } from "../lib/yuniteRateLimit";
 
 /**
@@ -100,7 +101,7 @@ export const fetchTournamentLeaderboard = action({
     return {
       tournamentId: args.tournamentId,
       tournamentName: tournament.name,
-      tournamentStartedAt: tournament.startedAt,
+      tournamentStartedAt: getYuniteTournamentStartIso(tournament),
       leaderboardUrl,
       totalEntries: leaderboard.length,
       leaderboard,

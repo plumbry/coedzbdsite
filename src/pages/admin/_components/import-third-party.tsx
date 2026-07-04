@@ -1117,10 +1117,14 @@ export default function ImportThirdParty() {
           if (raw.description && typeof raw.description === "string") {
             setCreateEventDescription(raw.description);
           }
-          // Use the real tournament startedAt date instead of the import upload date
-          if (raw.startedAt && typeof raw.startedAt === "string") {
+          // Use the real tournament start date instead of the import upload date
+          const tournamentStart =
+            (typeof raw.startDate === "string" && raw.startDate) ||
+            (typeof raw.startedAt === "string" && raw.startedAt) ||
+            "";
+          if (tournamentStart) {
             try {
-              const realDate = new Date(raw.startedAt).toISOString().split("T")[0];
+              const realDate = new Date(tournamentStart).toISOString().split("T")[0];
               setCreateEventStartDate(realDate);
               setCreateEventEndDate(realDate);
             } catch {
