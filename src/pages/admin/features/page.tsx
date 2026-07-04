@@ -13,6 +13,7 @@ import RelinkResultsButton from "../_components/relink-results-button.tsx";
 import GoogleSheetsManager from "../_components/google-sheets-manager.tsx";
 import TierSnapshotTool from "../_components/tier-snapshot-tool.tsx";
 import AltAccountsTool from "../_components/alt-accounts-tool.tsx";
+import PlayerTierExportCard from "../_components/player-tier-export-card.tsx";
 import { DiscordSyncTools } from "../_components/discord-sync-tools.tsx";
 
 function FeaturesContent() {
@@ -133,7 +134,9 @@ function FeaturesContent() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <PlayerTierExportCard />
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Export Player Evaluations</CardTitle>

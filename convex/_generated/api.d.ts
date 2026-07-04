@@ -152,6 +152,7 @@ import type * as playerEarnings from "../playerEarnings.js";
 import type * as playerStats from "../playerStats.js";
 import type * as playerStatsCache from "../playerStatsCache.js";
 import type * as playerStatsRebuild from "../playerStatsRebuild.js";
+import type * as playerTierExport from "../playerTierExport.js";
 import type * as players from "../players.js";
 import type * as players_fixPlaceholderIds from "../players/fixPlaceholderIds.js";
 import type * as players_importLookup from "../players/importLookup.js";
@@ -359,6 +360,7 @@ declare const fullApi: ApiFromModules<{
   playerStats: typeof playerStats;
   playerStatsCache: typeof playerStatsCache;
   playerStatsRebuild: typeof playerStatsRebuild;
+  playerTierExport: typeof playerTierExport;
   players: typeof players;
   "players/fixPlaceholderIds": typeof players_fixPlaceholderIds;
   "players/importLookup": typeof players_importLookup;
