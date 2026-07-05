@@ -1,6 +1,6 @@
 import { toPng } from "html-to-image";
 
-export const SCRIM_SERIES_EXPORT_LIMITS = [50, 75] as const;
+export const SCRIM_SERIES_EXPORT_LIMITS = [25, 50, 75] as const;
 export type ScrimSeriesLeaderboardExportLimit = (typeof SCRIM_SERIES_EXPORT_LIMITS)[number];
 
 export type ScrimSeriesLeaderboardExportOptions = {
