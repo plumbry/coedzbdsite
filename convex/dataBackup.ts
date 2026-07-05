@@ -48,6 +48,7 @@ export const getBackupResultsCount = query({
   handler: async (ctx) => {
     await requireAdmin(ctx);
 
+    // Expensive full-table scan — do not subscribe from admin UI on page load.
     let resultsCount = 0;
     let resultsCursor: string | null = null;
     let resultsDone = false;

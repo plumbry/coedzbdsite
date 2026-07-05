@@ -21,9 +21,6 @@ function DataBackupContent() {
   const { isAdmin } = useUserRole();
   const convex = useConvex();
   const smallTables = useQuery(api.dataBackup.getBackupSummarySmallTables, {});
-  const resultsCount = useQuery(api.dataBackup.getBackupResultsCount, {});
-  const matchStatsCount = useQuery(api.dataBackup.getBackupMatchStatsCount, {});
-  const eventResultsCount = useQuery(api.dataBackup.getBackupEventResultsCount, {});
   const [isCreatingBackup, setIsCreatingBackup] = useState(false);
 
   if (isAdmin === undefined) {
@@ -94,7 +91,7 @@ function DataBackupContent() {
 
   return (
     <div className="space-y-4">
-      {smallTables === undefined || resultsCount === undefined || matchStatsCount === undefined || eventResultsCount === undefined ? (
+      {smallTables === undefined ? (
         <Skeleton className="h-96 w-full" />
       ) : (
         <div className="space-y-6">
@@ -103,7 +100,8 @@ function DataBackupContent() {
             <CardHeader>
               <CardTitle>Backup Summary</CardTitle>
               <CardDescription>
-                Overview of all data available for backup
+                Overview of data available for backup. Large result tables are
+                omitted from live counts to keep this page fast.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -131,23 +129,23 @@ function DataBackupContent() {
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Results</div>
-                  <div className="text-2xl font-bold">{resultsCount.count}</div>
+                  <div className="text-2xl font-bold">—</div>
                   <div className="text-xs text-muted-foreground">
-                    {formatBytes(resultsCount.size)}
+                    Included in backup
                   </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Match Stats</div>
-                  <div className="text-2xl font-bold">{matchStatsCount.count}</div>
+                  <div className="text-2xl font-bold">—</div>
                   <div className="text-xs text-muted-foreground">
-                    {formatBytes(matchStatsCount.size)}
+                    Included in backup
                   </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Event Results</div>
-                  <div className="text-2xl font-bold">{eventResultsCount.count}</div>
+                  <div className="text-2xl font-bold">—</div>
                   <div className="text-xs text-muted-foreground">
-                    {formatBytes(eventResultsCount.size)}
+                    Included in backup
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -174,13 +172,15 @@ function DataBackupContent() {
               </div>
               <div className="mt-4 pt-4 border-t">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Total Backup Size</span>
+                  <span className="text-sm font-medium">Estimated core backup size</span>
                   <span className="text-lg font-bold">{formatBytes(
                     smallTables.sizes.players + smallTables.sizes.events + smallTables.sizes.imports +
-                    resultsCount.size + matchStatsCount.size + eventResultsCount.size +
                     smallTables.sizes.aggregateStatsCache + smallTables.sizes.tierReEvaluationCache + smallTables.sizes.tierMediansCache
                   )}</span>
                 </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Results, match stats, and event results add more data when you download a backup.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -303,7 +303,7 @@ function DataBackupContent() {
               <CardContent>
                 <div className="space-y-3">
                   <div className="text-sm text-muted-foreground">
-                    {smallTables.counts.imports + resultsCount.count + matchStatsCount.count} records
+                    {smallTables.counts.imports} imports (+ results &amp; match stats)
                   </div>
                   <Button
                     onClick={() => createAndDownloadBackup("results")}
