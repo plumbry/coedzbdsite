@@ -29,6 +29,7 @@ type MergePreviewPlayer = {
   totalScore?: number;
   discordRoles?: Array<{ id: string; name: string }>;
   _creationTime: number;
+  archiveReason?: string;
   evaluation?: {
     totalScore: number;
     tier: string;
@@ -98,7 +99,8 @@ function formatEvaluation(player: MergePreviewPlayer) {
 
 function formatProfile(player: MergePreviewPlayer) {
   const idLabel = isPlaceholderId(player.discordUserId) ? "placeholder ID" : player.discordUserId;
-  return `${player.discordUsername} · ${player.epicUsername} · ${idLabel}`;
+  const archiveLabel = player.archiveReason ? ` · ${player.archiveReason}` : "";
+  return `${player.discordUsername} · ${player.epicUsername} · ${idLabel}${archiveLabel}`;
 }
 
 function AspectChoice({

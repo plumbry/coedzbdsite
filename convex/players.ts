@@ -1247,8 +1247,10 @@ function buildProfileFieldsFromSource(
     matchConfidence?: "exact" | "username" | "fuzzy" | "manual";
     status?: "active" | "archived" | "rejected" | "discord_member";
     currentMembershipStatus?: "accepted" | "rejected" | "former";
+    archiveReason?: "left server" | "application incomplete" | "no tier role" | "banned" | "other";
+    hasLeftServer?: boolean;
   },
-  other: { discordUserId: string; epicId?: string; previousEpicIds?: Array<{ epicId: string; changedAt: string }>; platform?: "PC" | "PS4" | "XB1" | "SWITCH" | "MOBILE"; matchConfidence?: "exact" | "username" | "fuzzy" | "manual"; status?: "active" | "archived" | "rejected" | "discord_member"; currentMembershipStatus?: "accepted" | "rejected" | "former" },
+  other: { discordUserId: string; epicId?: string; previousEpicIds?: Array<{ epicId: string; changedAt: string }>; platform?: "PC" | "PS4" | "XB1" | "SWITCH" | "MOBILE"; matchConfidence?: "exact" | "username" | "fuzzy" | "manual"; status?: "active" | "archived" | "rejected" | "discord_member"; currentMembershipStatus?: "accepted" | "rejected" | "former"; archiveReason?: "left server" | "application incomplete" | "no tier role" | "banned" | "other"; hasLeftServer?: boolean },
 ) {
   return {
     discordUsername: profile.discordUsername,
@@ -1270,6 +1272,8 @@ function buildProfileFieldsFromSource(
     status: profile.status ?? other.status,
     currentMembershipStatus:
       profile.currentMembershipStatus ?? other.currentMembershipStatus,
+    archiveReason: profile.archiveReason ?? other.archiveReason,
+    hasLeftServer: profile.hasLeftServer ?? other.hasLeftServer,
   };
 }
 
@@ -1298,6 +1302,7 @@ export const getPlayersMergePreview = query({
         tier: player.tier,
         totalScore: player.totalScore,
         discordRoles: player.discordRoles,
+        archiveReason: player.archiveReason,
         _creationTime: player._creationTime,
         evaluation: score
           ? {
@@ -1386,6 +1391,13 @@ export const mergePlayers = mutation({
         tier: primaryPlayer.tier || secondaryPlayer.tier,
         totalScore: primaryPlayer.totalScore ?? secondaryPlayer.totalScore,
         status: primaryPlayer.status || secondaryPlayer.status,
+        currentMembershipStatus:
+          primaryPlayer.currentMembershipStatus ??
+          secondaryPlayer.currentMembershipStatus,
+        archiveReason:
+          primaryPlayer.archiveReason ?? secondaryPlayer.archiveReason,
+        hasLeftServer:
+          primaryPlayer.hasLeftServer ?? secondaryPlayer.hasLeftServer,
       };
     } else {
       const profilePlayer =
