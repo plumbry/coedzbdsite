@@ -5,7 +5,11 @@ import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
 import type { Id } from "../_generated/dataModel.d.ts";
-import { getYuniteTournamentStartIso } from "../lib/yunite";
+import {
+  getYuniteTournamentStartIso,
+  normalizeTournamentStartedAt,
+  yuniteStartFieldsFromIso,
+} from "../lib/yunite";
 import { yuniteFetch, yuniteFetchOrThrow } from "../lib/yuniteRateLimit";
 
 /**
@@ -152,18 +156,10 @@ export const saveTournamentImport = action({
       throw new Error("Admin access required: Only administrators can use the manual import tool");
     }
     
-    // Parse tournament date
-    let eventDate: string;
-    try {
-      if (args.tournamentStartedAt && args.tournamentStartedAt.trim()) {
-        eventDate = new Date(args.tournamentStartedAt).toISOString().split('T')[0];
-      } else {
-        eventDate = new Date().toISOString().split('T')[0];
-      }
-    } catch (error) {
-      console.warn("Failed to parse tournament date, using current date:", error);
-      eventDate = new Date().toISOString().split('T')[0];
-    }
+    const tournamentStartedAt = normalizeTournamentStartedAt(
+      args.tournamentStartedAt,
+    );
+    const { eventDate } = yuniteStartFieldsFromIso(tournamentStartedAt);
     
     const tournamentPageUrl = `https://yunite.xyz/leaderboard/${args.tournamentId}`;
     const leaderboardId = `yunite-${args.tournamentId}`;
@@ -280,6 +276,7 @@ export const saveTournamentImport = action({
       leaderboardId,
       eventName: args.tournamentName,
       eventDate,
+      tournamentStartedAt,
       source: "Yunite",
       importMethod: "manual",
       totalPlayers: args.leaderboard.length,

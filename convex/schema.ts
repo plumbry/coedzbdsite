@@ -335,6 +335,8 @@ export default defineSchema({
     leaderboardId: v.string(),
     eventName: v.string(),
     eventDate: v.optional(v.string()), // Optional event date
+    /** Full ISO timestamp from Yunite `startDate` / `startedAt` at import time. */
+    tournamentStartedAt: v.optional(v.string()),
     organizer: v.optional(v.string()), // Optional organizer/guild
     source: v.string(), // "Yunite", "CSV", "Yunite API"
     importMethod: v.optional(v.string()), // "api" or "csv"

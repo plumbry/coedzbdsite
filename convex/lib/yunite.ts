@@ -97,6 +97,43 @@ export function getYuniteTournamentStartMs(
   return Date.parse(startIso);
 }
 
+/** Derive stored `eventDate` and `tournamentStartedAt` from a Yunite start ISO. */
+export function yuniteStartFieldsFromIso(startIso: string | undefined): {
+  eventDate: string;
+  tournamentStartedAt?: string;
+} {
+  if (startIso && Number.isFinite(Date.parse(startIso))) {
+    const parsed = new Date(startIso);
+    return {
+      eventDate: parsed.toISOString().split("T")[0],
+      tournamentStartedAt: parsed.toISOString(),
+    };
+  }
+  return {
+    eventDate: new Date().toISOString().split("T")[0],
+  };
+}
+
+export function yuniteStartFieldsFromTournament(
+  tournament: YuniteTournamentMetadataLike,
+): { eventDate: string; tournamentStartedAt?: string } {
+  return yuniteStartFieldsFromIso(getYuniteTournamentStartIso(tournament));
+}
+
+/** Normalize an arbitrary date string to ISO for storage. */
+export function normalizeTournamentStartedAt(
+  value: string | undefined,
+): string | undefined {
+  if (!value || !value.trim()) {
+    return undefined;
+  }
+  const parsed = Date.parse(value.trim());
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  return new Date(parsed).toISOString();
+}
+
 /** Normalize Yunite leaderboard JSON (array or `{ data: [...] }`). */
 export function normalizeYuniteLeaderboardPayload(
   raw: unknown,

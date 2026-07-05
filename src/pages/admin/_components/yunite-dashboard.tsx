@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { sortByTier } from "@/lib/tier-sort.ts";
+import YuniteCacheExportCard from "./yunite-cache-export-card.tsx";
 
 function PlayerMatchDataSyncTool() {
   const players = useQuery(api.players.getPlayers, {});
@@ -501,6 +502,8 @@ export default function YuniteDashboard({
         </Card>
       )}
       
+      <YuniteCacheExportCard compact />
+
       {/* Batch Player Match Data Sync */}
       {tournaments.length > 0 && (
         <Card>

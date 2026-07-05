@@ -15,6 +15,7 @@ import { useUserRole } from "@/hooks/use-user-role.ts";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import RoleGate from "@/components/role-gate.tsx";
 import { toast } from "sonner";
+import YuniteCacheExportCard from "./_components/yunite-cache-export-card.tsx";
 
 function DataBackupContent() {
   const { isAdmin } = useUserRole();
@@ -234,6 +235,8 @@ function DataBackupContent() {
               </div>
             </CardContent>
           </Card>
+
+          <YuniteCacheExportCard />
 
           {/* Partial Backups */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

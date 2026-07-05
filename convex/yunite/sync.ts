@@ -11,6 +11,7 @@ import {
   getYuniteTournamentStartIso,
   getYuniteTournamentStartMs,
   normalizeYuniteLeaderboardPayload,
+  yuniteStartFieldsFromTournament,
   yuniteTournamentHasImportableData,
 } from "../lib/yunite";
 import {
@@ -247,21 +248,10 @@ export const syncYuniteTournaments = action({
           }
         }
         
-        // Parse tournament date safely
-        let eventDate: string;
-        try {
-          const tournamentStartIso = getYuniteTournamentStartIso(tournament);
-          if (tournamentStartIso) {
-            eventDate = new Date(tournamentStartIso).toISOString().split('T')[0];
-          } else {
-            console.warn(`Tournament ${tournament.id} has no start date, using today's date`);
-            eventDate = new Date().toISOString().split('T')[0];
-          }
-        } catch (error) {
-          console.error(
-            `Invalid date for tournament ${tournament.id}: ${getYuniteTournamentStartIso(tournament) ?? "unknown"}, using today's date`,
-          );
-          eventDate = new Date().toISOString().split('T')[0];
+        const { eventDate, tournamentStartedAt } =
+          yuniteStartFieldsFromTournament(tournament);
+        if (!tournamentStartedAt) {
+          console.warn(`Tournament ${tournament.id} has no start date, using today's date`);
         }
         
         // Create thirdPartyImport record for this tournament
@@ -293,6 +283,7 @@ export const syncYuniteTournaments = action({
           leaderboardId,
           eventName: tournament.name,
           eventDate,
+          tournamentStartedAt,
           source: "Yunite",
           importMethod: "api",
           totalPlayers: leaderboard.length,
