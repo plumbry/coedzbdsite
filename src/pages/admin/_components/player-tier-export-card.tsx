@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useConvex } from "convex/react";
+import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -7,13 +7,15 @@ import { Download } from "lucide-react";
 import { toast } from "sonner";
 
 export default function PlayerTierExportCard() {
-  const convex = useConvex();
+  const exportPlayersAndTierHistory = useAction(
+    api.playerTierExport.exportPlayersAndTierHistory,
+  );
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const data = await convex.query(api.playerTierExport.exportPlayersAndTierHistory, {});
+      const data = await exportPlayersAndTierHistory({});
       const filename = `player-tier-history-export-${new Date().toISOString().slice(0, 10)}.json`;
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -29,7 +31,9 @@ export default function PlayerTierExportCard() {
       );
     } catch (error) {
       console.error("Player tier export error:", error);
-      toast.error("Failed to export player and tier history data");
+      const message =
+        error instanceof Error ? error.message : "Failed to export player and tier history data";
+      toast.error(message);
     } finally {
       setIsExporting(false);
     }
