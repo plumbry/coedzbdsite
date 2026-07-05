@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAction } from "convex/react";
+import { useConvex, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -7,15 +7,19 @@ import { Download } from "lucide-react";
 import { toast } from "sonner";
 
 export default function PlayerTierExportCard() {
-  const exportPlayersAndTierHistory = useAction(
-    api.playerTierExport.exportPlayersAndTierHistory,
-  );
+  const convex = useConvex();
+  const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async () => {
+    if (!isAuthenticated) {
+      toast.error("Sign in is required before exporting");
+      return;
+    }
+
     setIsExporting(true);
     try {
-      const data = await exportPlayersAndTierHistory({});
+      const data = await convex.query(api.playerTierExport.exportPlayersAndTierHistory, {});
       const filename = `player-tier-history-export-${new Date().toISOString().slice(0, 10)}.json`;
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -49,7 +53,11 @@ export default function PlayerTierExportCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="py-3">
-        <Button size="sm" onClick={handleExport} disabled={isExporting}>
+        <Button
+          size="sm"
+          onClick={handleExport}
+          disabled={isExporting || isAuthLoading || !isAuthenticated}
+        >
           <Download className="mr-2 h-3 w-3" />
           {isExporting ? "Exporting..." : "Download JSON Export"}
         </Button>
