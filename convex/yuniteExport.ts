@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
 import { query } from "./_generated/server";
 import { requireAdmin } from "./auth_helpers";
 import { isImportFinalized } from "./lib/importPipeline";
@@ -33,33 +32,7 @@ function filterYuniteImports(
   });
 }
 
-async function countRowsForImports(
-  ctx: QueryCtx,
-  table: "thirdPartyResults" | "matchPlayerStats" | "matchEliminationOverrides",
-  yuniteImportIds: Set<string>,
-): Promise<number> {
-  let count = 0;
-  let cursor: string | null = null;
-  let isDone = false;
-
-  while (!isDone) {
-    const page = await ctx.db.query(table).paginate({
-      numItems: PAGE_SIZE,
-      cursor,
-    });
-    for (const row of page.page) {
-      if (yuniteImportIds.has(row.importId as string)) {
-        count += 1;
-      }
-    }
-    isDone = page.isDone;
-    cursor = page.continueCursor;
-  }
-
-  return count;
-}
-
-/** Summary counts for a Yunite cache export scope. */
+/** Lightweight summary for the export card — import metadata only. */
 export const getYuniteExportSummary = query({
   args: { scope: exportScope },
   handler: async (ctx, args) => {
@@ -67,16 +40,6 @@ export const getYuniteExportSummary = query({
 
     const imports = await ctx.db.query("thirdPartyImports").collect();
     const yuniteImports = filterYuniteImports(imports, args.scope);
-    const yuniteImportIds = new Set(
-      yuniteImports.map((importRecord) => importRecord._id as string),
-    );
-
-    const [resultsCount, matchStatsCount, eliminationOverridesCount] =
-      await Promise.all([
-        countRowsForImports(ctx, "thirdPartyResults", yuniteImportIds),
-        countRowsForImports(ctx, "matchPlayerStats", yuniteImportIds),
-        countRowsForImports(ctx, "matchEliminationOverrides", yuniteImportIds),
-      ]);
 
     const withMatchData = yuniteImports.filter(
       (importRecord) => importRecord.matchDataSynced,
@@ -87,9 +50,6 @@ export const getYuniteExportSummary = query({
       imports: yuniteImports.length,
       withMatchData,
       finalized,
-      results: resultsCount,
-      matchStats: matchStatsCount,
-      eliminationOverrides: eliminationOverridesCount,
     };
   },
 });

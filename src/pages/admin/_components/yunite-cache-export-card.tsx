@@ -261,22 +261,18 @@ export default function YuniteCacheExportCard({
         </div>
 
         {summary ? (
-          <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+          <div className="grid grid-cols-3 gap-3 text-sm">
             <div>
               <div className="text-muted-foreground">Tournaments</div>
               <div className="font-semibold">{summary.imports}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Leaderboard rows</div>
-              <div className="font-semibold">{summary.results}</div>
+              <div className="text-muted-foreground">With match data</div>
+              <div className="font-semibold">{summary.withMatchData}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Match stat rows</div>
-              <div className="font-semibold">{summary.matchStats}</div>
-            </div>
-            <div>
-              <div className="text-muted-foreground">Elim overrides</div>
-              <div className="font-semibold">{summary.eliminationOverrides}</div>
+              <div className="text-muted-foreground">Finalized</div>
+              <div className="font-semibold">{summary.finalized}</div>
             </div>
           </div>
         ) : (
