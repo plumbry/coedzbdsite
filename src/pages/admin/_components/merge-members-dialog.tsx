@@ -30,6 +30,7 @@ type MergePreviewPlayer = {
   discordRoles?: Array<{ id: string; name: string }>;
   _creationTime: number;
   archiveReason?: string;
+  alternateDiscordUserIds?: string[];
   evaluation?: {
     totalScore: number;
     tier: string;
@@ -99,8 +100,47 @@ function formatEvaluation(player: MergePreviewPlayer) {
 
 function formatProfile(player: MergePreviewPlayer) {
   const idLabel = isPlaceholderId(player.discordUserId) ? "placeholder ID" : player.discordUserId;
+  const alternateLabel =
+    player.alternateDiscordUserIds && player.alternateDiscordUserIds.length > 0
+      ? ` (+${player.alternateDiscordUserIds.join(", ")})`
+      : "";
   const archiveLabel = player.archiveReason ? ` · ${player.archiveReason}` : "";
-  return `${player.discordUsername} · ${player.epicUsername} · ${idLabel}${archiveLabel}`;
+  return `${player.discordUsername} · ${player.epicUsername} · ${idLabel}${alternateLabel}${archiveLabel}`;
+}
+
+function collectDiscordIds(player: MergePreviewPlayer): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  const add = (id: string | undefined) => {
+    if (!id || isPlaceholderId(id) || seen.has(id)) return;
+    seen.add(id);
+    ids.push(id);
+  };
+  add(player.discordUserId);
+  for (const alt of player.alternateDiscordUserIds ?? []) {
+    add(alt);
+  }
+  return ids;
+}
+
+function previewMergedDiscordIds(
+  profileSource: MergePreviewPlayer,
+  other: MergePreviewPlayer,
+): { primary: string; alternates: string[] } {
+  const allIds = [...new Set([...collectDiscordIds(profileSource), ...collectDiscordIds(other)])];
+  let primary = profileSource.discordUserId;
+  if (isPlaceholderId(primary) && !isPlaceholderId(other.discordUserId)) {
+    primary = other.discordUserId;
+  }
+  const alternates = allIds.filter((id) => id !== primary).slice(0, 2);
+  return { primary, alternates };
+}
+
+function formatMergedDiscordIds(primary: string, alternates: string[]) {
+  if (alternates.length === 0) {
+    return isPlaceholderId(primary) ? "placeholder ID" : primary;
+  }
+  return `${primary} (primary), ${alternates.join(", ")} (alternate${alternates.length > 1 ? "s" : ""})`;
 }
 
 function AspectChoice({
@@ -227,13 +267,20 @@ export default function MergeMembersDialog({
               players.find((p) => p._id === evaluationSourceId) ?? players[0];
             const removedPlayer =
               players.find((p) => p._id !== survivingId) ?? players[1];
+            const profileOther =
+              players.find((p) => p._id !== profileSource._id) ?? players[1];
+            const mergedDiscordIds = previewMergedDiscordIds(
+              profileSource,
+              profileOther,
+            );
             return (
           <div className="space-y-4">
             <div className="flex items-start gap-2 p-3 border rounded-md bg-amber-50 dark:bg-amber-950/20 text-sm">
               <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
               <p className="text-amber-900 dark:text-amber-100">
                 This cannot be undone. Tier history from the removed record is still copied to
-                the surviving record.
+                the surviving record. Different Discord IDs from both records are kept as primary
+                and alternate IDs on the surviving player.
               </p>
             </div>
 
@@ -248,7 +295,7 @@ export default function MergeMembersDialog({
 
             <AspectChoice
               title="Profile & identity"
-              description="Discord username, Epic name, Discord ID, social links, roles, and join date."
+              description="Discord username, Epic name, primary Discord ID, social links, roles, and join date. The other record's Discord ID is kept as an alternate when it differs."
               value={profileSourceId}
               onValueChange={(id) => setProfileSourceId(id as Id<"players">)}
               players={players}
@@ -269,6 +316,13 @@ export default function MergeMembersDialog({
               <p>
                 <span className="text-muted-foreground">Profile:</span>{" "}
                 {profileSource.discordUsername} / {profileSource.epicUsername}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Discord IDs:</span>{" "}
+                {formatMergedDiscordIds(
+                  mergedDiscordIds.primary,
+                  mergedDiscordIds.alternates,
+                )}
               </p>
               <p>
                 <span className="text-muted-foreground">Evaluation:</span>{" "}

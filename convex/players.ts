@@ -24,6 +24,8 @@ import {
   syncPlayerImportLookupForPlayer,
   upsertPlayerImportLookup,
 } from "./helpers/playerImportLookup";
+import { syncPlayerDiscordAliases } from "./helpers/playerDiscordAliases";
+import { relinkEventResultsForPlayer } from "./helpers/playerResults";
 
 export const getPlayers = query({
   args: {},
@@ -1227,6 +1229,49 @@ function resolveDiscordUserId(
   return profile.discordUserId;
 }
 
+const MAX_MERGE_ALTERNATE_DISCORD_IDS = 2;
+
+function collectDiscordUserIdsFromPlayer(player: {
+  discordUserId: string;
+  alternateDiscordUserIds?: string[];
+}): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  const add = (id: string | undefined) => {
+    if (!id || isPlaceholderDiscordId(id) || seen.has(id)) return;
+    seen.add(id);
+    ids.push(id);
+  };
+  add(player.discordUserId);
+  for (const alt of player.alternateDiscordUserIds ?? []) {
+    add(alt);
+  }
+  return ids;
+}
+
+function mergePlayerDiscordIdsFromSources(
+  resolvedPrimaryId: string,
+  ...players: Array<{ discordUserId: string; alternateDiscordUserIds?: string[] }>
+): { discordUserId: string; alternateDiscordUserIds?: string[] } {
+  const uniqueIds = [
+    ...new Set(players.flatMap(collectDiscordUserIdsFromPlayer)),
+  ];
+
+  let primary = resolvedPrimaryId;
+  if (isPlaceholderDiscordId(primary)) {
+    primary = uniqueIds[0] ?? primary;
+  }
+
+  const alternates = uniqueIds
+    .filter((id) => id !== primary)
+    .slice(0, MAX_MERGE_ALTERNATE_DISCORD_IDS);
+
+  return {
+    discordUserId: primary,
+    ...(alternates.length > 0 ? { alternateDiscordUserIds: alternates } : {}),
+  };
+}
+
 function buildProfileFieldsFromSource(
   profile: {
     discordUsername: string;
@@ -1250,15 +1295,22 @@ function buildProfileFieldsFromSource(
     archiveReason?: "left server" | "application incomplete" | "no tier role" | "banned" | "other";
     hasLeftServer?: boolean;
   },
-  other: { discordUserId: string; epicId?: string; previousEpicIds?: Array<{ epicId: string; changedAt: string }>; platform?: "PC" | "PS4" | "XB1" | "SWITCH" | "MOBILE"; matchConfidence?: "exact" | "username" | "fuzzy" | "manual"; status?: "active" | "archived" | "rejected" | "discord_member"; currentMembershipStatus?: "accepted" | "rejected" | "former"; archiveReason?: "left server" | "application incomplete" | "no tier role" | "banned" | "other"; hasLeftServer?: boolean },
+  other: { discordUserId: string; alternateDiscordUserIds?: string[]; epicId?: string; previousEpicIds?: Array<{ epicId: string; changedAt: string }>; platform?: "PC" | "PS4" | "XB1" | "SWITCH" | "MOBILE"; matchConfidence?: "exact" | "username" | "fuzzy" | "manual"; status?: "active" | "archived" | "rejected" | "discord_member"; currentMembershipStatus?: "accepted" | "rejected" | "former"; archiveReason?: "left server" | "application incomplete" | "no tier role" | "banned" | "other"; hasLeftServer?: boolean },
 ) {
+  const resolvedPrimaryId = resolveDiscordUserId(profile, other);
+  const discordIds = mergePlayerDiscordIdsFromSources(
+    resolvedPrimaryId,
+    profile,
+    other,
+  );
+
   return {
     discordUsername: profile.discordUsername,
     nickname: profile.nickname,
     name: profile.name,
     avatarUrl: profile.avatarUrl,
-    discordUserId: resolveDiscordUserId(profile, other),
-    alternateDiscordUserIds: profile.alternateDiscordUserIds,
+    discordUserId: discordIds.discordUserId,
+    alternateDiscordUserIds: discordIds.alternateDiscordUserIds,
     serverJoinDate: profile.serverJoinDate,
     epicUsername: profile.epicUsername,
     epicId: profile.epicId ?? other.epicId,
@@ -1297,6 +1349,7 @@ export const getPlayersMergePreview = query({
         discordUsername: player.discordUsername,
         epicUsername: player.epicUsername,
         discordUserId: player.discordUserId,
+        alternateDiscordUserIds: player.alternateDiscordUserIds,
         nickname: player.nickname,
         serverJoinDate: player.serverJoinDate,
         tier: player.tier,
@@ -1373,14 +1426,21 @@ export const mergePlayers = mutation({
 
     if (!args.selections) {
       const isPlaceholderId = isPlaceholderDiscordId;
+      const resolvedPrimaryId =
+        isPlaceholderId(primaryPlayer.discordUserId) &&
+        !isPlaceholderId(secondaryPlayer.discordUserId)
+          ? secondaryPlayer.discordUserId
+          : primaryPlayer.discordUserId;
+      const discordIds = mergePlayerDiscordIdsFromSources(
+        resolvedPrimaryId,
+        primaryPlayer,
+        secondaryPlayer,
+      );
       mergedData = {
         discordUsername: primaryPlayer.discordUsername,
         nickname: primaryPlayer.nickname || secondaryPlayer.nickname,
-        discordUserId:
-          isPlaceholderId(primaryPlayer.discordUserId) &&
-          !isPlaceholderId(secondaryPlayer.discordUserId)
-            ? secondaryPlayer.discordUserId
-            : primaryPlayer.discordUserId,
+        discordUserId: discordIds.discordUserId,
+        alternateDiscordUserIds: discordIds.alternateDiscordUserIds,
         serverJoinDate: primaryPlayer.serverJoinDate || secondaryPlayer.serverJoinDate,
         epicUsername: primaryPlayer.epicUsername,
         twitterUsername: primaryPlayer.twitterUsername || secondaryPlayer.twitterUsername,
@@ -1425,6 +1485,12 @@ export const mergePlayers = mutation({
     }
     
     await ctx.db.patch(args.primaryPlayerId, mergedData);
+
+    const mergedPlayer = await ctx.db.get(args.primaryPlayerId);
+    if (mergedPlayer) {
+      await syncPlayerDiscordAliases(ctx, mergedPlayer);
+      await relinkEventResultsForPlayer(ctx, args.primaryPlayerId);
+    }
     
     const primaryScore = await ctx.db
       .query("manualScores")
@@ -1491,6 +1557,14 @@ export const mergePlayers = mutation({
     
     for (const history of secondaryTierHistory) {
       await ctx.db.delete(history._id);
+    }
+
+    const secondaryAliases = await ctx.db
+      .query("playerDiscordAliases")
+      .withIndex("by_player", (q) => q.eq("playerId", args.secondaryPlayerId))
+      .collect();
+    for (const alias of secondaryAliases) {
+      await ctx.db.delete(alias._id);
     }
     
     await ctx.db.delete(args.secondaryPlayerId);
