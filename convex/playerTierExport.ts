@@ -4,18 +4,19 @@ import { query } from "./_generated/server";
 import { requireAdmin } from "./auth_helpers";
 import { isYuniteImport } from "./lib/importSource";
 
+export type ExportPlayerTierChange = {
+  previousTier?: string;
+  newTier: string;
+  date: string;
+};
+
 export type ExportPlayer = {
   discordIds: string[];
   discordUsername: string;
   epicUsername: string;
   status: "active" | "former";
-};
-
-export type ExportTierHistoryRecord = {
-  discordIds: string[];
-  previousTier?: string;
-  newTier: string;
-  date: string;
+  currentTier?: string;
+  tierHistory: ExportPlayerTierChange[];
 };
 
 type TierHistoryRow = {
@@ -167,50 +168,44 @@ export const getPlayersExportBatch = query({
         discordUsername: player.discordUsername,
         epicUsername: player.epicUsername,
         status: mapExportStatus(player),
+        ...(player.tier ? { currentTier: player.tier } : {}),
+        tierHistory: [],
       });
     }
     return players;
   },
 });
 
-/** One paginated page of tier history for exported participants. */
-export const scanTierHistoryPage = query({
-  args: {
-    cursor: v.union(v.string(), v.null()),
-    participantIds: v.array(v.id("players")),
-  },
-  handler: async (
-    ctx,
-    args,
-  ): Promise<{
-    records: TierHistoryRow[];
-    continueCursor: string;
-    isDone: boolean;
-  }> => {
+/** Tier history rows for a batch of participant IDs. */
+export const getTierHistoryBatch = query({
+  args: { playerIds: v.array(v.id("players")) },
+  handler: async (ctx, args): Promise<TierHistoryRow[]> => {
     await requireAdmin(ctx);
 
-    const participantIds = new Set(args.participantIds.map((id) => id as string));
-    const page = await ctx.db
-      .query("tierHistory")
-      .paginate({ numItems: PAGE_SIZE, cursor: args.cursor });
-
     const records: TierHistoryRow[] = [];
-    for (const record of page.page) {
-      if (!participantIds.has(record.playerId as string)) {
-        continue;
+    for (const playerId of args.playerIds) {
+      const history = await ctx.db
+        .query("tierHistory")
+        .withIndex("by_player", (q) => q.eq("playerId", playerId))
+        .collect();
+      for (const record of history) {
+        records.push({
+          playerId,
+          ...(record.previousTier ? { previousTier: record.previousTier } : {}),
+          newTier: record.tier,
+          date: formatExportDate(record._creationTime),
+        });
       }
-      records.push({
-        playerId: record.playerId,
-        ...(record.previousTier ? { previousTier: record.previousTier } : {}),
-        newTier: record.tier,
-        date: formatExportDate(record._creationTime),
-      });
     }
 
-    return {
-      records,
-      continueCursor: page.continueCursor,
-      isDone: page.isDone,
-    };
+    records.sort((a, b) => {
+      const dateCompare = a.date.localeCompare(b.date);
+      if (dateCompare !== 0) {
+        return dateCompare;
+      }
+      return (a.playerId as string).localeCompare(b.playerId as string);
+    });
+
+    return records;
   },
 });

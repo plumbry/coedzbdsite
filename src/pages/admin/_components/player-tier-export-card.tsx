@@ -7,18 +7,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 
+type ExportPlayerTierChange = {
+  previousTier?: string;
+  newTier: string;
+  date: string;
+};
+
 type ExportPlayer = {
   discordIds: string[];
   discordUsername: string;
   epicUsername: string;
   status: "active" | "former";
-};
-
-type ExportTierHistoryRecord = {
-  discordIds: string[];
-  previousTier?: string;
-  newTier: string;
-  date: string;
+  currentTier?: string;
+  tierHistory: ExportPlayerTierChange[];
 };
 
 async function scanAllPages<T>(
@@ -94,8 +95,7 @@ export default function PlayerTierExportCard() {
         thirdPartyParticipantIds,
       );
 
-      const players: ExportPlayer[] = [];
-      const discordIdsByPlayerId = new Map<string, string[]>();
+      const playersById = new Map<string, ExportPlayer>();
       for (let index = 0; index < participantIds.length; index += 200) {
         const batch = participantIds.slice(index, index + 200);
         const batchPlayers = await convex.query(api.playerTierExport.getPlayersExportBatch, {
@@ -103,47 +103,38 @@ export default function PlayerTierExportCard() {
         });
         for (const row of batchPlayers) {
           const { playerId, ...player } = row;
-          players.push(player);
-          if (player.discordIds.length > 0) {
-            discordIdsByPlayerId.set(playerId as string, player.discordIds);
+          playersById.set(playerId as string, player);
+        }
+
+        const tierHistoryRows = await convex.query(api.playerTierExport.getTierHistoryBatch, {
+          playerIds: batch,
+        });
+        for (const record of tierHistoryRows) {
+          const player = playersById.get(record.playerId as string);
+          if (!player) {
+            continue;
           }
+          player.tierHistory.push({
+            ...(record.previousTier ? { previousTier: record.previousTier } : {}),
+            newTier: record.newTier,
+            date: record.date,
+          });
         }
       }
 
-      players.sort((a, b) => a.discordUsername.localeCompare(b.discordUsername));
+      const players = [...playersById.values()]
+        .map((player) => ({
+          ...player,
+          tierHistory: [...player.tierHistory].sort((a, b) => a.date.localeCompare(b.date)),
+        }))
+        .sort((a, b) => a.discordUsername.localeCompare(b.discordUsername));
 
-      const tierHistory: ExportTierHistoryRecord[] = [];
-      await scanAllPages(
-        (cursor) =>
-          convex.query(api.playerTierExport.scanTierHistoryPage, {
-            cursor,
-            participantIds,
-          }),
-        (page) => {
-          for (const record of page.records) {
-            const discordIds = discordIdsByPlayerId.get(record.playerId as string);
-            if (!discordIds || discordIds.length === 0) {
-              continue;
-            }
-            tierHistory.push({
-              discordIds,
-              ...(record.previousTier ? { previousTier: record.previousTier } : {}),
-              newTier: record.newTier,
-              date: record.date,
-            });
-          }
-        },
+      const tierHistoryCount = players.reduce(
+        (total, player) => total + player.tierHistory.length,
+        0,
       );
 
-      tierHistory.sort((a, b) => {
-        const dateCompare = a.date.localeCompare(b.date);
-        if (dateCompare !== 0) {
-          return dateCompare;
-        }
-        return (a.discordIds[0] ?? "").localeCompare(b.discordIds[0] ?? "");
-      });
-
-      const data = { players, tierHistory };
+      const data = { players };
       const filename = `player-tier-history-export-${new Date().toISOString().slice(0, 10)}.json`;
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -155,7 +146,7 @@ export default function PlayerTierExportCard() {
       document.body.removeChild(anchor);
       URL.revokeObjectURL(url);
       toast.success(
-        `Exported ${data.players.length} players and ${data.tierHistory.length} tier history records`,
+        `Exported ${players.length} players with ${tierHistoryCount} tier history records`,
       );
     } catch (error) {
       console.error("Player tier export error:", error);
