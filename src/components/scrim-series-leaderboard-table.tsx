@@ -41,7 +41,7 @@ export default function ScrimSeriesLeaderboardTable({
   gamesPerSession: number[];
 }) {
   const [showDetails, setShowDetails] = useState(false);
-  const [minGamesOnly, setMinGamesOnly] = useState(false);
+  const [minGamesOnly, setMinGamesOnly] = useState(true);
   const [minParticipationOnly, setMinParticipationOnly] = useState(false);
 
   const displayedEntries = useMemo(

@@ -450,7 +450,7 @@ function PlayerManagement({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
 function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
   const series = useQuery(api.scrimSeries.queries.getSeries, { seriesId });
   const leaderboard = useQuery(api.scrimSeries.queries.getLeaderboard, { seriesId });
-  const [minGamesOnly, setMinGamesOnly] = useState(false);
+  const [minGamesOnly, setMinGamesOnly] = useState(true);
   const [minParticipationOnly, setMinParticipationOnly] = useState(false);
 
   const displayedLeaderboard = useMemo(() => {
