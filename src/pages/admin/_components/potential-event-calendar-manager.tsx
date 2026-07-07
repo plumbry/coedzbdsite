@@ -26,8 +26,15 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.tsx";
 import PageHeader from "@/components/page-header.tsx";
-import ConfirmDialog from "@/components/confirm-dialog.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import PotentialEventCalendarEntryDialog from "./potential-event-calendar-entry-dialog.tsx";
 import PotentialEventCalendarExportDialog from "./potential-event-calendar-export-dialog.tsx";
@@ -137,6 +144,12 @@ export default function PotentialEventCalendarManager({
 
   const entries = useQuery(api.potentialEventCalendar.queries.listEntries, queryArgs);
   const deleteEntry = useMutation(api.potentialEventCalendar.mutations.deleteEntry);
+  const deleteEntriesByTitle = useMutation(api.potentialEventCalendar.mutations.deleteEntriesByTitle);
+  const matchingTitleCount = useQuery(
+    api.potentialEventCalendar.queries.countEntriesByTitle,
+    deleteTarget ? { title: deleteTarget.title } : "skip",
+  );
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const entriesByDay = useMemo(() => {
     const map = new Map<string, CalendarEntry[]>();
@@ -226,14 +239,35 @@ export default function PotentialEventCalendarManager({
     setGridView(view);
   };
 
-  const handleDelete = async () => {
+  const handleDeleteSingle = async () => {
     if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
       await deleteEntry({ id: deleteTarget._id as Id<"potentialEventCalendarEntries"> });
       toast.success("Event removed");
       setDeleteTarget(null);
     } catch {
       toast.error("Could not remove event");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteByTitle = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const result = await deleteEntriesByTitle({ title: deleteTarget.title });
+      toast.success(
+        result.deletedCount === 1
+          ? "Event removed"
+          : `Removed ${result.deletedCount} events named "${deleteTarget.title}"`,
+      );
+      setDeleteTarget(null);
+    } catch {
+      toast.error("Could not remove events");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -518,18 +552,14 @@ export default function PotentialEventCalendarManager({
         viewerToken={viewerToken}
       />
 
-      <ConfirmDialog
+      <DeleteEventDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Remove potential event?"
-        description={
-          deleteTarget
-            ? `"${deleteTarget.title}" will be permanently removed from the calendar.`
-            : undefined
-        }
-        confirmLabel="Remove"
-        variant="destructive"
-        onConfirm={handleDelete}
+        entry={deleteTarget}
+        matchingTitleCount={matchingTitleCount}
+        isDeleting={isDeleting}
+        onDeleteSingle={handleDeleteSingle}
+        onDeleteByTitle={handleDeleteByTitle}
       />
     </div>
   );
@@ -740,6 +770,73 @@ function PeriodCalendarGrid({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function DeleteEventDialog({
+  open,
+  onOpenChange,
+  entry,
+  matchingTitleCount,
+  isDeleting,
+  onDeleteSingle,
+  onDeleteByTitle,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  entry: CalendarEntry | null;
+  matchingTitleCount: number | undefined;
+  isDeleting: boolean;
+  onDeleteSingle: () => void | Promise<void>;
+  onDeleteByTitle: () => void | Promise<void>;
+}) {
+  const showBulkOption = matchingTitleCount !== undefined && matchingTitleCount > 1;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="sm">
+        <DialogHeader>
+          <DialogTitle className="text-destructive">Remove potential event?</DialogTitle>
+          <DialogDescription asChild>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              {entry && (
+                <>
+                  <p>
+                    &quot;{entry.title}&quot; on {formatEntryDateRange(entry)} will be permanently
+                    removed from the calendar.
+                  </p>
+                  {showBulkOption && (
+                    <p>
+                      There are {matchingTitleCount} events with this name across the calendar. You
+                      can remove just this one or delete all of them.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className={cn(showBulkOption && "flex-col gap-2 sm:flex-col")}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isDeleting}>
+            Cancel
+          </Button>
+          {showBulkOption ? (
+            <>
+              <Button variant="destructive" onClick={onDeleteSingle} disabled={isDeleting}>
+                Remove this event only
+              </Button>
+              <Button variant="destructive" onClick={onDeleteByTitle} disabled={isDeleting}>
+                Remove all {matchingTitleCount} events named &quot;{entry?.title}&quot;
+              </Button>
+            </>
+          ) : (
+            <Button variant="destructive" onClick={onDeleteSingle} disabled={isDeleting}>
+              Remove
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

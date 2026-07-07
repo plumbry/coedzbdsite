@@ -1868,6 +1868,7 @@ export default defineSchema({
     recurrenceSeriesId: v.optional(v.string()),
   })
     .index("by_date", ["date"])
+    .index("by_title", ["title"])
     .index("by_recurrence_series", ["recurrenceSeriesId"]),
 
   potentialEventCalendarViewerSessions: defineTable({

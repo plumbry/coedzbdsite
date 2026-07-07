@@ -197,3 +197,28 @@ export const deleteEntry = mutation({
     await ctx.db.delete(args.id);
   },
 });
+
+export const deleteEntriesByTitle = mutation({
+  args: { title: v.string() },
+  handler: async (ctx, args) => {
+    await requireEventBanAccess(ctx);
+    const title = args.title.trim();
+    if (!title) {
+      throw new ConvexError({
+        message: "Title is required",
+        code: "INVALID_ARGUMENT",
+      });
+    }
+
+    const entries = await ctx.db
+      .query("potentialEventCalendarEntries")
+      .withIndex("by_title", (q) => q.eq("title", title))
+      .collect();
+
+    for (const entry of entries) {
+      await ctx.db.delete(entry._id);
+    }
+
+    return { deletedCount: entries.length };
+  },
+});

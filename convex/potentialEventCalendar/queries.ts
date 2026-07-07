@@ -1,6 +1,7 @@
 import { query } from "../_generated/server";
 import { v } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
+import { requireEventBanAccess } from "../auth_helpers";
 import { requireCalendarReadAccess, viewerTokenArg } from "./viewerAuth";
 
 function entryEndDate(entry: Doc<"potentialEventCalendarEntries">): string {
@@ -14,6 +15,22 @@ function entryOverlapsRange(
 ): boolean {
   return entry.date <= rangeEnd && entryEndDate(entry) >= rangeStart;
 }
+
+export const countEntriesByTitle = query({
+  args: { title: v.string() },
+  handler: async (ctx, args) => {
+    await requireEventBanAccess(ctx);
+    const title = args.title.trim();
+    if (!title) return 0;
+
+    const entries = await ctx.db
+      .query("potentialEventCalendarEntries")
+      .withIndex("by_title", (q) => q.eq("title", title))
+      .collect();
+
+    return entries.length;
+  },
+});
 
 export const listEntries = query({
   args: {
