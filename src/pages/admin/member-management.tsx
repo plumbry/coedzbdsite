@@ -1617,6 +1617,12 @@ export default function MemberManagement() {
                             currentSort={formerSort} 
                             onSort={() => setFormerSort(toggleSort(formerSort, "archiveReason"))} 
                           />
+                          <SortableHeader 
+                            label="Archived" 
+                            field="archivedAt" 
+                            currentSort={formerSort} 
+                            onSort={() => setFormerSort(toggleSort(formerSort, "archivedAt"))} 
+                          />
                           {isAdmin && <TableHead>Actions</TableHead>}
                         </TableRow>
                       </TableHeader>
@@ -1662,6 +1668,11 @@ export default function MemberManagement() {
                                   {member.archiveReason}
                                 </Badge>
                               )}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                              {member.archivedAt
+                                ? format(new Date(member.archivedAt), "MMM d, yyyy")
+                                : "—"}
                             </TableCell>
                             {isAdmin && (
                             <TableCell>
@@ -1723,6 +1734,11 @@ export default function MemberManagement() {
                               <span className="truncate">{member.epicUsername}</span>
                               {member.archiveReason && (
                                 <span className="truncate">{member.archiveReason}</span>
+                              )}
+                              {member.archivedAt && (
+                                <span className="truncate whitespace-nowrap">
+                                  {format(new Date(member.archivedAt), "MMM d, yyyy")}
+                                </span>
                               )}
                             </div>
                           </div>

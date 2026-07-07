@@ -979,11 +979,27 @@ export const getFormerMembers = query({
       .collect();
 
     const verificationLookup = await loadFemaleVerificationLookup(ctx);
-    return sortPlayersForList(
-      formerPlayers.map((player) =>
-        enrichPlayerWithFemaleVerification(player, verificationLookup),
-      ),
+
+    // Resolve when each player was moved into "former" status from the status
+    // event audit log (most recent "former" transition wins).
+    const withArchivedAt = await Promise.all(
+      formerPlayers.map(async (player) => {
+        const events = await ctx.db
+          .query("statusEvents")
+          .withIndex("by_entity", (q) =>
+            q.eq("entityType", "member").eq("entityId", player._id),
+          )
+          .order("desc")
+          .collect();
+        const formerEvent = events.find((event) => event.newStatus === "former");
+        return {
+          ...enrichPlayerWithFemaleVerification(player, verificationLookup),
+          archivedAt: formerEvent?._creationTime,
+        };
+      }),
     );
+
+    return sortPlayersForList(withArchivedAt);
   },
 });
 
