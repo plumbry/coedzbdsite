@@ -5,8 +5,6 @@ export type CampaignPhase =
   | "submissions_closed"
   | "ended";
 
-export type BonusQuestId = "bonus_complete_all" | "bonus_major_event" | "bonus_season_finale";
-
 export type CampaignPublic = {
   title: string;
   description?: string;
@@ -17,7 +15,6 @@ export type CampaignPublic = {
   littleWheelEntryEveryStamps: number;
   bigWheelEntryEveryStamps: number;
   activeQuestCount?: number;
-  bonusQuestId?: BonusQuestId;
 };
 
 export function getCampaignPhase(

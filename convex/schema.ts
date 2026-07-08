@@ -613,17 +613,6 @@ export default defineSchema({
     stampName: v.string(),
     littleWheelEntryEveryStamps: v.number(),
     bigWheelEntryEveryStamps: v.number(),
-    /**
-     * Which single bonus quest definition to show on the hidden "Summer Legend"
-     * stamp page after the main season stamps are earned.
-     */
-    bonusQuestId: v.optional(
-      v.union(
-        v.literal("bonus_complete_all"),
-        v.literal("bonus_major_event"),
-        v.literal("bonus_season_finale"),
-      ),
-    ),
     createdBy: v.id("users"),
     updatedBy: v.optional(v.id("users")),
     updatedAt: v.optional(v.number()),
@@ -695,6 +684,7 @@ export default defineSchema({
       v.literal("summer_spirit"),
       v.literal("team_player"),
       v.literal("community"),
+      v.literal("summer_legend"),
     ),
     description: v.string(),
     evidenceInstructions: v.optional(v.string()),

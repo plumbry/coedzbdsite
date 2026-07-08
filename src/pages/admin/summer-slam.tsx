@@ -33,10 +33,6 @@ import {
   type EvidenceInput,
   type HowToComplete,
 } from "@/pages/summer-slam/_components/passport-quest-meta.ts";
-import {
-  BONUS_QUEST_DEFINITIONS,
-  type BonusQuestId,
-} from "@/pages/summer-slam/_components/passport-bonus-stamp.ts";
 import { SummerSlamReviewGuidance } from "@/pages/admin/_components/summer-slam-review-guidance.tsx";
 import {
   SummerSlamReviewSheet,
@@ -46,7 +42,7 @@ import {
 
 const CAMPAIGN_SLUG = "summer-slam";
 
-type Category = "traveller" | "competitor" | "summer_spirit" | "team_player" | "community";
+type Category = "traveller" | "competitor" | "summer_spirit" | "team_player" | "community" | "summer_legend";
 type CompletionMethod = "auto" | "manual" | "admin";
 type RuleType =
   | "play_events"
@@ -75,6 +71,7 @@ const categoryLabels: Record<Category, string> = {
   summer_spirit: "Summer Spirit",
   team_player: "Team Player",
   community: "Community",
+  summer_legend: "Bonus",
 };
 
 function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
@@ -139,7 +136,6 @@ export default function SummerSlamAdminPage() {
   const [stampName, setStampName] = useState("Passport Stamp");
   const [littleWheelEvery, setLittleWheelEvery] = useState(1);
   const [bigWheelEvery, setBigWheelEvery] = useState(5);
-  const [bonusQuestId, setBonusQuestId] = useState<BonusQuestId>("bonus_complete_all");
   const [isSavingQuest, setIsSavingQuest] = useState(false);
   const [isSavingCampaign, setIsSavingCampaign] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
@@ -178,7 +174,6 @@ export default function SummerSlamAdminPage() {
     setStampName(dashboard.campaign.stampName);
     setLittleWheelEvery(dashboard.campaign.littleWheelEntryEveryStamps);
     setBigWheelEvery(dashboard.campaign.bigWheelEntryEveryStamps);
-    setBonusQuestId(((dashboard.campaign as { bonusQuestId?: BonusQuestId }).bonusQuestId ?? "bonus_complete_all") as BonusQuestId);
   }, [dashboard?.campaign]);
 
   const filteredReviewQueue = useMemo(() => {
@@ -364,8 +359,7 @@ export default function SummerSlamAdminPage() {
         stampName,
         littleWheelEntryEveryStamps: littleWheelEvery,
         bigWheelEntryEveryStamps: bigWheelEvery,
-        bonusQuestId,
-      } as any);
+      });
       toast.success(campaignActive ? "Campaign saved." : "Campaign archived.");
     } catch (error) {
       console.error(error);
@@ -401,24 +395,6 @@ export default function SummerSlamAdminPage() {
                   <Label>Stamp Name</Label>
                   <Input value={stampName} onChange={(event) => setStampName(event.target.value)} />
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Bonus Quest</Label>
-                <Select value={bonusQuestId} onValueChange={(value) => setBonusQuestId(value as BonusQuestId)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BONUS_QUEST_DEFINITIONS.map((def) => (
-                      <SelectItem key={def.id} value={def.id}>
-                        {def.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Controls which bonus-quest checklist is shown on the hidden “Summer Legend” stamp page.
-                </p>
               </div>
               <div className="space-y-1.5">
                 <Label>Description</Label>
@@ -481,7 +457,7 @@ export default function SummerSlamAdminPage() {
               <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
                 <li>Activate the campaign and set season start/end dates in Campaign Settings.</li>
                 <li>Tag Summer Slam events in Events Manager and assign Duos, Trios, or Squads.</li>
-                <li>Configure manual and MVP auto quests in the Quests tab.</li>
+                <li>Configure manual and MVP auto quests in the Quests tab. Use the Bonus category for secret end-of-season quests.</li>
                 <li>
                   Before launch, admins can claim a passport early at{" "}
                   <Link to="/summer-slam/passport" className="font-medium text-primary underline">
@@ -575,6 +551,12 @@ export default function SummerSlamAdminPage() {
                     </Select>
                   </div>
                 </div>
+                {category === "summer_legend" && (
+                  <p className="text-sm text-muted-foreground">
+                    Bonus quests stay hidden on player passports until all five main stamps are earned.
+                    They then appear on the Summer Legend bonus stamp page.
+                  </p>
+                )}
                 {howToComplete === "submit" && (
                   <div className="space-y-1.5">
                     <Label>Submit as</Label>

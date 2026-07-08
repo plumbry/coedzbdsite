@@ -9,9 +9,7 @@ import {
   type PassportPageId,
 } from "./passport-page-spread.tsx";
 import {
-  buildBonusQuestEntries,
   isBonusStampUnlocked,
-  type BonusQuestId,
 } from "./passport-bonus-stamp.ts";
 import { computeQuestPoints, getPassportTier } from "./passport-levels.ts";
 import { ssPassportStretchCard, ssPassportStretchMain } from "./passport-dashboard-theme.ts";
@@ -37,7 +35,7 @@ export function PassportIdentitySection({
   onSubmitEvidence,
   submissionsOpen = true,
   isAdminPreview = false,
-  bonusQuestId,
+  bonusQuestEntries = [],
   className,
 }: {
   playerName: string;
@@ -45,6 +43,7 @@ export function PassportIdentitySection({
   birthplaceId: PassportBirthplaceId | null | undefined;
   seals: SealProgress[];
   quests: QuestEntry[];
+  bonusQuestEntries?: QuestEntry[];
   completionPercent: number;
   seasonStartsAt?: number;
   seasonEndsAt?: number;
@@ -56,7 +55,6 @@ export function PassportIdentitySection({
   onSubmitEvidence?: (entry: QuestEntry) => void;
   submissionsOpen?: boolean;
   isAdminPreview?: boolean;
-  bonusQuestId?: BonusQuestId;
   className?: string;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -68,15 +66,12 @@ export function PassportIdentitySection({
   const canEditProfile =
     Boolean(onSaveAvatar && onSaveBirthplace) && (submissionsOpen || isAdminPreview);
   const bonusUnlocked = isBonusStampUnlocked(seals);
+  const hasBonusQuests = bonusQuestEntries.length > 0;
   const questPoints = useMemo(() => computeQuestPoints(quests), [quests]);
   const passportTier = useMemo(() => getPassportTier(questPoints), [questPoints]);
   const pagesCompleted = seals.filter((seal) => seal.state === "earned").length;
   const totalPages = seals.length;
 
-  const bonusQuestEntries = useMemo(
-    () => buildBonusQuestEntries(seals, bonusQuestId),
-    [seals, bonusQuestId],
-  );
   const bonusSeal = useMemo(() => buildBonusSealProgress(bonusQuestEntries), [bonusQuestEntries]);
 
   const openSeal = useMemo(() => {
@@ -156,6 +151,7 @@ export function PassportIdentitySection({
         totalPages={totalPages}
         bonusUnlocked={bonusUnlocked}
         bonusSeal={bonusSeal}
+        hasBonusQuests={hasBonusQuests}
         seasonStartsAt={seasonStartsAt}
         seasonEndsAt={seasonEndsAt}
         celebratingSealIds={celebratingSealIds}

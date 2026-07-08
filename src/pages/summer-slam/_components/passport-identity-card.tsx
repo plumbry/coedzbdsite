@@ -251,6 +251,7 @@ function StampCollectionPanel({
   celebratingSealIds,
   bonusSeal,
   bonusUnlocked,
+  hasBonusQuests,
   onSelectSeal,
   onSelectBonus,
 }: {
@@ -258,6 +259,7 @@ function StampCollectionPanel({
   celebratingSealIds: string[];
   bonusSeal: SealProgress;
   bonusUnlocked: boolean;
+  hasBonusQuests: boolean;
   onSelectSeal: (seal: SealProgress) => void;
   onSelectBonus: () => void;
 }) {
@@ -281,13 +283,15 @@ function StampCollectionPanel({
           />
         ))}
       </div>
-      <div className="flex w-full justify-center pt-1 lg:pt-2">
-        <BonusSealButton
-          bonusSeal={bonusSeal}
-          bonusUnlocked={bonusUnlocked}
-          onSelect={onSelectBonus}
-        />
-      </div>
+      {hasBonusQuests ? (
+        <div className="flex w-full justify-center pt-1 lg:pt-2">
+          <BonusSealButton
+            bonusSeal={bonusSeal}
+            bonusUnlocked={bonusUnlocked}
+            onSelect={onSelectBonus}
+          />
+        </div>
+      ) : null}
       <p className="text-[9px] text-center text-orange-800/45 sm:text-[11px] max-sm:hidden">Tap a stamp to open its passport page</p>
     </section>
   );
@@ -347,6 +351,7 @@ export function PassportIdentityCard({
   totalPages,
   bonusUnlocked,
   bonusSeal,
+  hasBonusQuests = false,
   seasonStartsAt,
   seasonEndsAt,
   celebratingSealIds,
@@ -370,6 +375,7 @@ export function PassportIdentityCard({
   totalPages: number;
   bonusUnlocked: boolean;
   bonusSeal: SealProgress;
+  hasBonusQuests?: boolean;
   seasonStartsAt?: number;
   seasonEndsAt?: number;
   celebratingSealIds: string[];
@@ -583,6 +589,7 @@ export function PassportIdentityCard({
                 celebratingSealIds={celebratingSealIds}
                 bonusSeal={bonusSeal}
                 bonusUnlocked={bonusUnlocked}
+                hasBonusQuests={hasBonusQuests}
                 onSelectSeal={onSelectSeal}
                 onSelectBonus={onSelectBonus}
               />

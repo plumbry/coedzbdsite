@@ -33,6 +33,7 @@ const categoryValidator = v.union(
   v.literal("summer_spirit"),
   v.literal("team_player"),
   v.literal("community"),
+  v.literal("summer_legend"),
 );
 
 const completionMethodValidator = v.union(
@@ -41,11 +42,13 @@ const completionMethodValidator = v.union(
   v.literal("admin"),
 );
 
-const bonusQuestIdValidator = v.union(
-  v.literal("bonus_complete_all"),
-  v.literal("bonus_major_event"),
-  v.literal("bonus_season_finale"),
-);
+const MAIN_QUEST_CATEGORIES = new Set([
+  "traveller",
+  "competitor",
+  "summer_spirit",
+  "team_player",
+  "community",
+]);
 
 const evidenceInputValidator = v.union(v.literal("image"), v.literal("link"));
 
@@ -559,7 +562,6 @@ export const ensureSummerSlamCampaign = mutation({
       stampName: "Passport Stamp",
       littleWheelEntryEveryStamps: 1,
       bigWheelEntryEveryStamps: 5,
-      bonusQuestId: "bonus_complete_all",
       createdBy: admin._id,
       updatedAt: Date.now(),
     });
@@ -585,7 +587,7 @@ export const getCampaign = query({
           q.eq("campaignId", campaign._id).eq("isActive", true),
         )
         .collect()
-    ).length;
+    ).filter((quest) => MAIN_QUEST_CATEGORIES.has(quest.category)).length;
     const publicCampaign = { ...campaign, activeQuestCount };
     if (campaign.description === LEGACY_CAMPAIGN_DESCRIPTION) {
       return { ...publicCampaign, description: DEFAULT_CAMPAIGN_DESCRIPTION };
@@ -644,7 +646,6 @@ export const updateCampaign = mutation({
     stampName: v.string(),
     littleWheelEntryEveryStamps: v.number(),
     bigWheelEntryEveryStamps: v.number(),
-    bonusQuestId: bonusQuestIdValidator,
   },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
@@ -673,7 +674,6 @@ export const updateCampaign = mutation({
         args.bigWheelEntryEveryStamps,
         "Big wheel stamp interval",
       ),
-      bonusQuestId: args.bonusQuestId,
       updatedBy: admin._id,
       updatedAt: Date.now(),
     });
@@ -1222,7 +1222,9 @@ export const getAdminDashboard = query({
       quests: quests.sort((a, b) => a.sortOrder - b.sortOrder),
       counts: {
         taggedEvents: tags.length,
-        activeQuests: quests.filter((quest) => quest.isActive).length,
+        activeQuests: quests.filter(
+          (quest) => quest.isActive && MAIN_QUEST_CATEGORIES.has(quest.category),
+        ).length,
         pendingSubmissions: submissions.filter((submission) => submission.status === "pending_review").length,
         approvedStamps: progress
           .filter((row) => row.status === "approved")

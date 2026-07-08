@@ -14,6 +14,7 @@ import {
 import { areSubmissionsOpen } from "./campaign-phase.ts";
 import type { CampaignPublic } from "./campaign-phase.ts";
 import { CATEGORY_PAGES, getQuestStatus, type QuestEntry } from "./passport-types.ts";
+import { isBonusQuestCategory, isBonusStampUnlocked } from "./passport-bonus-stamp.ts";
 import type { PassportAvatarId } from "./passport-avatars.ts";
 import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
 
@@ -62,18 +63,36 @@ export function PassportDashboard({
   const [celebratingSealIds, setCelebratingSealIds] = useState<string[]>([]);
   const reduceMotion = useReducedMotion();
 
+  const { mainQuests, bonusQuestEntries } = useMemo(() => {
+    const main: QuestEntry[] = [];
+    const bonus: QuestEntry[] = [];
+    for (const entry of quests) {
+      if (isBonusQuestCategory(entry.quest.category)) {
+        bonus.push(entry);
+      } else {
+        main.push(entry);
+      }
+    }
+    return { mainQuests: main, bonusQuestEntries: bonus };
+  }, [quests]);
+
   const questsByCategory = useMemo(() => {
     const groups = new Map<string, QuestEntry[]>();
     for (const page of CATEGORY_PAGES) groups.set(page.id, []);
-    for (const entry of quests) {
+    for (const entry of mainQuests) {
       const key = entry.quest.category;
       groups.set(key, [...(groups.get(key) ?? []), entry]);
     }
     return groups;
-  }, [quests]);
+  }, [mainQuests]);
 
   const seals = useMemo(() => buildSeals(questsByCategory), [questsByCategory]);
   const season = useMemo(() => summariseSeason(seals, campaign), [seals, campaign]);
+  const bonusUnlocked = useMemo(() => isBonusStampUnlocked(seals), [seals]);
+  const visibleQuests = useMemo(
+    () => (bonusUnlocked ? quests : mainQuests),
+    [bonusUnlocked, mainQuests, quests],
+  );
 
   useEffect(() => {
     if (reduceMotion) return;
@@ -134,11 +153,11 @@ export function PassportDashboard({
             avatarId={avatarId}
             birthplaceId={birthplaceId}
             seals={seals}
-            quests={quests}
+            quests={mainQuests}
+            bonusQuestEntries={bonusQuestEntries}
             completionPercent={season.questPercent}
             seasonStartsAt={campaign?.startsAt}
             seasonEndsAt={campaign?.endsAt}
-            bonusQuestId={campaign?.bonusQuestId}
             celebratingSealIds={celebratingSealIds}
             onSaveAvatar={onSaveAvatar}
             onSaveBirthplace={onSaveBirthplace}
@@ -165,7 +184,7 @@ export function PassportDashboard({
             />
 
             <PassportEvidenceReviewPanel
-              quests={quests}
+              quests={visibleQuests}
               onUpdateEvidence={onRequestEvidence}
               submissionsOpen={submissionsOpen}
             />
