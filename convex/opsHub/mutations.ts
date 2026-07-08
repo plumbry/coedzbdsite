@@ -42,6 +42,18 @@ const ruleTypeValidator = v.union(
   v.literal("drop_spot"),
 );
 
+const discordMarkdownModeValidator = v.union(
+  v.literal("duos"),
+  v.literal("trios"),
+  v.literal("squads"),
+  v.literal("duos_into_squads"),
+);
+
+const discordMarkdownVariantValidator = v.union(
+  v.literal("zb"),
+  v.literal("reload"),
+);
+
 const todoPriorityValidator = v.union(
   v.literal("low"),
   v.literal("medium"),
@@ -158,6 +170,41 @@ export const deleteEventRule = mutation({
   },
 });
 
+export const upsertDiscordMarkdownTemplate = mutation({
+  args: {
+    viewerToken: viewerTokenArg,
+    mode: discordMarkdownModeValidator,
+    variant: discordMarkdownVariantValidator,
+    markdown: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const access = await requireOpsHubWriteAccess(ctx);
+    const now = Date.now();
+    const markdown = args.markdown.trim();
+    const existing = await ctx.db
+      .query("opsHubDiscordMarkdownTemplates")
+      .withIndex("by_mode_and_variant", (q) =>
+        q.eq("mode", args.mode).eq("variant", args.variant),
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        markdown,
+        ...updateAuditFields(access, now),
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("opsHubDiscordMarkdownTemplates", {
+      mode: args.mode,
+      variant: args.variant,
+      markdown,
+      ...auditFields(access, now),
+    });
+  },
+});
+
 // ─── Kill Caps ──────────────────────────────────────────────────────────────
 
 export const createKillCap = mutation({
@@ -204,6 +251,52 @@ export const deleteKillCap = mutation({
   args: { viewerToken: viewerTokenArg, id: v.id("opsHubKillCaps") },
   handler: async (ctx, args) => {
     await requireOpsHubWriteAccess(ctx);
+    await ctx.db.delete(args.id);
+  },
+});
+
+export const generateKillCapFileUploadUrl = mutation({
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx) => {
+    await requireOpsHubWriteAccess(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const createKillCapFile = mutation({
+  args: {
+    viewerToken: viewerTokenArg,
+    fileName: v.string(),
+    storageId: v.id("_storage"),
+    contentType: v.optional(v.string()),
+    size: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const access = await requireOpsHubWriteAccess(ctx);
+    const now = Date.now();
+    const fileName = args.fileName.trim();
+    if (!fileName) {
+      throw new ConvexError({
+        message: "File name is required",
+        code: "INVALID_ARGUMENT",
+      });
+    }
+    const { viewerToken: _, ...fields } = args;
+    return await ctx.db.insert("opsHubKillCapFiles", {
+      ...fields,
+      fileName,
+      ...auditFields(access, now),
+    });
+  },
+});
+
+export const deleteKillCapFile = mutation({
+  args: { viewerToken: viewerTokenArg, id: v.id("opsHubKillCapFiles") },
+  handler: async (ctx, args) => {
+    await requireOpsHubWriteAccess(ctx);
+    const row = await ctx.db.get(args.id);
+    if (!row) return;
+    await ctx.storage.delete(row.storageId);
     await ctx.db.delete(args.id);
   },
 });

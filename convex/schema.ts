@@ -2008,6 +2008,27 @@ export default defineSchema({
     ),
   }).index("by_rule_type", ["ruleType"]),
 
+  opsHubDiscordMarkdownTemplates: defineTable({
+    mode: v.union(
+      v.literal("duos"),
+      v.literal("trios"),
+      v.literal("squads"),
+      v.literal("duos_into_squads"),
+    ),
+    variant: v.union(v.literal("zb"), v.literal("reload")),
+    markdown: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  }).index("by_mode_and_variant", ["mode", "variant"]),
+
   opsHubKillCaps: defineTable({
     mode: v.string(),
     lobbyType: v.string(),
@@ -2025,6 +2046,25 @@ export default defineSchema({
       v.union(v.literal("admin"), v.literal("password")),
     ),
   }).index("by_mode", ["mode"]),
+
+  opsHubKillCapFiles: defineTable({
+    fileName: v.string(),
+    storageId: v.id("_storage"),
+    contentType: v.optional(v.string()),
+    size: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  })
+    .index("by_created_at", ["createdAt"])
+    .index("by_storage", ["storageId"]),
 
   opsHubModDetails: defineTable({
     modName: v.string(),

@@ -1,217 +1,170 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import type { Doc, Id } from "@/convex/_generated/dataModel.js";
-import { OpsDataTable } from "./ops-data-table.tsx";
-import {
-  OpsFormDialog,
-  emptyFormValues,
-  rowToFormValues,
-  type OpsFormField,
-} from "./ops-form-dialog.tsx";
 import { opsMutationArgs, opsQueryArgs, type OpsHubTabProps } from "./types.ts";
-import { Badge } from "@/components/ui/badge.tsx";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button.tsx";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import { Label } from "@/components/ui/label.tsx";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog.tsx";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
+import { Textarea } from "@/components/ui/textarea.tsx";
+import { Check, Copy, Save } from "lucide-react";
+import { toast } from "sonner";
 
-const RULE_TYPE_LABELS: Record<string, string> = {
-  rule_set: "Rule set",
-  event_override: "Event override",
-  prize: "Prize rules",
-  lobby: "Lobby rules",
-  drop_spot: "Drop spot / contest",
-};
+const MODE_OPTIONS = [
+  { value: "duos", label: "Duos" },
+  { value: "trios", label: "Trios" },
+  { value: "squads", label: "Squads" },
+  { value: "duos_into_squads", label: "Duos into Squads" },
+] as const;
 
-const FIELDS: OpsFormField[] = [
-  { key: "name", label: "Name", type: "text", required: true },
-  {
-    key: "ruleType",
-    label: "Type",
-    type: "select",
-    required: true,
-    options: Object.entries(RULE_TYPE_LABELS).map(([value, label]) => ({ value, label })),
-  },
-  { key: "eventName", label: "Event (for overrides)", type: "text" },
-  { key: "content", label: "Rules content", type: "textarea", required: true },
-  { key: "notes", label: "Notes", type: "textarea" },
-];
+const VARIANT_OPTIONS = [
+  { value: "zb", label: "ZB" },
+  { value: "reload", label: "Reload" },
+] as const;
+
+type TemplateMode = (typeof MODE_OPTIONS)[number]["value"];
+type TemplateVariant = (typeof VARIANT_OPTIONS)[number]["value"];
 
 export default function EventRulesTab({ viewerToken, canEdit = false }: OpsHubTabProps) {
-  const data = useQuery(api.opsHub.queries.listEventRules, opsQueryArgs(viewerToken));
-  const create = useMutation(api.opsHub.mutations.createEventRule);
-  const update = useMutation(api.opsHub.mutations.updateEventRule);
-  const remove = useMutation(api.opsHub.mutations.deleteEventRule);
+  const templates = useQuery(
+    api.opsHub.queries.listDiscordMarkdownTemplates,
+    opsQueryArgs(viewerToken),
+  );
+  const upsertTemplate = useMutation(api.opsHub.mutations.upsertDiscordMarkdownTemplate);
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Doc<"opsHubEventRules"> | null>(null);
-  const [values, setValues] = useState(() => emptyFormValues(FIELDS));
-  const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Doc<"opsHubEventRules"> | null>(null);
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [mode, setMode] = useState<TemplateMode>("duos");
+  const [variant, setVariant] = useState<TemplateVariant>("zb");
+  const [markdownText, setMarkdownText] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const filteredData =
-    data && typeFilter !== "all"
-      ? data.filter((r) => r.ruleType === typeFilter)
-      : data;
+  const selectedTemplate = useMemo(
+    () => templates?.find((t) => t.mode === mode && t.variant === variant),
+    [templates, mode, variant],
+  );
 
-  const openCreate = () => {
-    setEditing(null);
-    setValues({ ...emptyFormValues(FIELDS), ruleType: "rule_set" });
-    setDialogOpen(true);
-  };
-
-  const openEdit = (row: Doc<"opsHubEventRules">) => {
-    setEditing(row);
-    setValues(rowToFormValues(row, FIELDS));
-    setDialogOpen(true);
-  };
+  useEffect(() => {
+    setMarkdownText(selectedTemplate?.markdown ?? "");
+  }, [selectedTemplate?._id, selectedTemplate?.markdown]);
 
   const handleSave = async () => {
-    if (!values.name.trim() || !values.content.trim()) {
-      toast.error("Name and content are required");
-      return;
-    }
-    setSaving(true);
+    if (!canEdit) return;
+    setIsSaving(true);
     try {
-      const payload = {
-        name: values.name.trim(),
-        ruleType: values.ruleType as Doc<"opsHubEventRules">["ruleType"],
-        eventName: values.eventName.trim() || undefined,
-        content: values.content.trim(),
-        notes: values.notes.trim() || undefined,
-      };
-      if (editing) {
-        await update(opsMutationArgs(viewerToken, { id: editing._id, ...payload }));
-        toast.success("Rule updated");
-      } else {
-        await create(opsMutationArgs(viewerToken, payload));
-        toast.success("Rule added");
-      }
-      setDialogOpen(false);
+      await upsertTemplate(
+        opsMutationArgs(viewerToken, {
+          mode,
+          variant,
+          markdown: markdownText,
+        }),
+      );
+      toast.success("Discord markdown saved");
     } catch {
-      toast.error("Failed to save");
+      toast.error("Failed to save markdown");
     } finally {
-      setSaving(false);
+      setIsSaving(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
+  const handleCopy = async () => {
     try {
-      await remove(
-        opsMutationArgs(viewerToken, { id: deleteTarget._id as Id<"opsHubEventRules"> }),
-      );
-      toast.success("Deleted");
+      await navigator.clipboard.writeText(markdownText);
+      setCopied(true);
+      toast.success("Copied to clipboard");
+      window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      toast.error("Failed to delete");
-    } finally {
-      setDeleteTarget(null);
+      toast.error("Failed to copy");
     }
   };
+
+  const selectedModeLabel = MODE_OPTIONS.find((item) => item.value === mode)?.label ?? "Mode";
+  const selectedVariantLabel =
+    VARIANT_OPTIONS.find((item) => item.value === variant)?.label ?? "Variant";
 
   return (
-    <>
-      <div className="flex flex-wrap gap-2 mb-3">
-        <button
-          type="button"
-          className={`text-xs px-2.5 py-1 rounded-full border cursor-pointer ${
-            typeFilter === "all" ? "bg-primary text-primary-foreground" : ""
-          }`}
-          onClick={() => setTypeFilter("all")}
-        >
-          All
-        </button>
-        {Object.entries(RULE_TYPE_LABELS).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            className={`text-xs px-2.5 py-1 rounded-full border cursor-pointer ${
-              typeFilter === value ? "bg-primary text-primary-foreground" : ""
-            }`}
-            onClick={() => setTypeFilter(value)}
+    <Card>
+      <CardHeader>
+        <CardTitle>Discord Markdown Templates</CardTitle>
+        <CardDescription>
+          Select mode + variant to load the Discord-ready markdown for that event format.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Mode</Label>
+            <Select value={mode} onValueChange={(value) => setMode(value as TemplateMode)}>
+              <SelectTrigger className="cursor-pointer">
+                <SelectValue placeholder="Select mode" />
+              </SelectTrigger>
+              <SelectContent>
+                {MODE_OPTIONS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Variant</Label>
+            <Select value={variant} onValueChange={(value) => setVariant(value as TemplateVariant)}>
+              <SelectTrigger className="cursor-pointer">
+                <SelectValue placeholder="Select variant" />
+              </SelectTrigger>
+              <SelectContent>
+                {VARIANT_OPTIONS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>
+            Markdown Text ({selectedModeLabel} · {selectedVariantLabel})
+          </Label>
+          <Textarea
+            value={markdownText}
+            onChange={(event) => setMarkdownText(event.target.value)}
+            rows={14}
+            placeholder="Paste Discord markdown template here..."
+            readOnly={!canEdit}
+            className="font-mono text-xs"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {canEdit && (
+            <Button
+              onClick={() => void handleSave()}
+              disabled={isSaving}
+              className="cursor-pointer"
+            >
+              <Save className="h-4 w-4 mr-1.5" />
+              {isSaving ? "Saving..." : "Save Template"}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => void handleCopy()}
+            className="cursor-pointer"
+            disabled={!markdownText.trim()}
           >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <OpsDataTable
-        title="Event Rules"
-        description="Reusable rule sets, event overrides, prize/lobby/drop rules."
-        data={filteredData}
-        searchPlaceholder="Search rules…"
-        onAdd={canEdit ? openCreate : undefined}
-        onEdit={canEdit ? openEdit : undefined}
-        onDelete={canEdit ? setDeleteTarget : undefined}
-        columns={[
-          {
-            key: "name",
-            header: "Name",
-            searchValue: (r) => r.name,
-            render: (r) => <span className="font-medium">{r.name}</span>,
-          },
-          {
-            key: "type",
-            header: "Type",
-            render: (r) => (
-              <Badge variant="secondary" className="text-xs">
-                {RULE_TYPE_LABELS[r.ruleType]}
-              </Badge>
-            ),
-          },
-          {
-            key: "event",
-            header: "Event",
-            searchValue: (r) => r.eventName ?? "",
-            render: (r) => r.eventName ?? "—",
-          },
-          {
-            key: "content",
-            header: "Content",
-            searchValue: (r) => r.content,
-            render: (r) => (
-              <span className="line-clamp-2 text-xs max-w-xs">{r.content}</span>
-            ),
-          },
-        ]}
-      />
-
-      <OpsFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        title={editing ? "Edit rule" : "Add rule"}
-        fields={FIELDS}
-        values={values}
-        onChange={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
-        onSubmit={handleSave}
-        isSubmitting={saving}
-      />
-
-      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete rule?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes &quot;{deleteTarget?.name}&quot;.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
-            <AlertDialogAction className="cursor-pointer" onClick={handleDelete}>
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+            {copied ? <Check className="h-4 w-4 mr-1.5" /> : <Copy className="h-4 w-4 mr-1.5" />}
+            {copied ? "Copied" : "Copy for Discord"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

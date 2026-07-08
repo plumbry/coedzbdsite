@@ -36,6 +36,7 @@ function ResourcesPasswordContent({
           viewerToken={viewer.token}
           accessLabel="Password access"
           canEdit={false}
+          canUploadFiles={false}
           showLock
           onLock={handleLock}
         />
@@ -74,6 +75,7 @@ function ResourcesStaffContent() {
         />
         <ResourcesHubTabs
           canEdit={isAdmin}
+          canUploadFiles={isAdmin}
           accessLabel={isAdmin ? "Admin" : "Staff"}
         />
       </AdminMain>

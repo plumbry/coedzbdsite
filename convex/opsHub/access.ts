@@ -41,6 +41,24 @@ async function hasModOrAdminReadAccess(ctx: QueryCtx): Promise<boolean> {
   return user?.role === "admin" || user?.role === "event_mod";
 }
 
+export async function requireOpsHubStaffReadAccess(
+  ctx: QueryCtx,
+): Promise<OpsHubAccess> {
+  const admin = await hasAdminAccess(ctx);
+  if (admin) {
+    return { method: "admin", actorLabel: admin.actorLabel };
+  }
+
+  if (await hasModOrAdminReadAccess(ctx)) {
+    return { method: "password", actorLabel: "Staff access" };
+  }
+
+  throw new ConvexError({
+    message: "Staff access required",
+    code: "FORBIDDEN",
+  });
+}
+
 /** View access: site admins, event mods, or a valid password session. */
 export async function requireOpsHubReadAccess(
   ctx: QueryCtx,

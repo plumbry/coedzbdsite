@@ -35,6 +35,7 @@ const LEGACY_TAB_ALIASES: Record<string, (typeof VALID_TABS)[number]> = {
 type ResourcesHubTabsProps = {
   viewerToken?: string;
   canEdit?: boolean;
+  canUploadFiles?: boolean;
   accessLabel?: string;
   showLock?: boolean;
   onLock?: () => void;
@@ -51,6 +52,7 @@ function resolveTab(tabParam: string | null): (typeof VALID_TABS)[number] {
 export default function ResourcesHubTabs({
   viewerToken,
   canEdit = false,
+  canUploadFiles = false,
   accessLabel,
   showLock,
   onLock,
@@ -114,7 +116,7 @@ export default function ResourcesHubTabs({
               Sponsor Log
             </TabsTrigger>
             <TabsTrigger value="rules-kill-caps" className="cursor-pointer">
-              Rules & Kill Caps
+              Rules & Point Systems
             </TabsTrigger>
             <TabsTrigger value="tickets" className="cursor-pointer">
               Useful Info
@@ -141,7 +143,11 @@ export default function ResourcesHubTabs({
           <SponsorLogTab viewerToken={viewerToken} canEdit={canEdit} />
         </TabsContent>
         <TabsContent value="rules-kill-caps" className="mt-4">
-          <RulesKillCapsTab viewerToken={viewerToken} canEdit={canEdit} />
+          <RulesKillCapsTab
+            viewerToken={viewerToken}
+            canEdit={canEdit}
+            canUploadFiles={canUploadFiles}
+          />
         </TabsContent>
         <TabsContent value="tickets" className="mt-4">
           <TextAndLinksTab viewerToken={viewerToken} canEdit={canEdit} />

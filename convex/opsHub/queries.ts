@@ -1,5 +1,8 @@
 import { query } from "../_generated/server";
-import { requireOpsHubReadAccess, viewerTokenArg } from "./access";
+import {
+  requireOpsHubReadAccess,
+  viewerTokenArg,
+} from "./access";
 
 export const listSponsorLogs = query({
   args: { viewerToken: viewerTokenArg },
@@ -17,11 +20,33 @@ export const listEventRules = query({
   },
 });
 
+export const listDiscordMarkdownTemplates = query({
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx, args) => {
+    await requireOpsHubReadAccess(ctx, args.viewerToken);
+    return await ctx.db.query("opsHubDiscordMarkdownTemplates").collect();
+  },
+});
+
 export const listKillCaps = query({
   args: { viewerToken: viewerTokenArg },
   handler: async (ctx, args) => {
     await requireOpsHubReadAccess(ctx, args.viewerToken);
     return await ctx.db.query("opsHubKillCaps").order("desc").collect();
+  },
+});
+
+export const listKillCapFiles = query({
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx, args) => {
+    await requireOpsHubReadAccess(ctx, args.viewerToken);
+    const rows = await ctx.db.query("opsHubKillCapFiles").order("desc").collect();
+    return await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        downloadUrl: await ctx.storage.getUrl(row.storageId),
+      })),
+    );
   },
 });
 

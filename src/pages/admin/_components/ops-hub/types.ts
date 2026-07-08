@@ -1,6 +1,7 @@
 export type OpsHubTabProps = {
   viewerToken?: string;
   canEdit?: boolean;
+  canUploadFiles?: boolean;
 };
 
 export function opsQueryArgs(viewerToken?: string) {
