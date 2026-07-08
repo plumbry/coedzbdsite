@@ -18,7 +18,7 @@ export const BONUS_STAMP_META = {
   hiddenLabel: "???",
 } as const;
 
-/** Three legendary bonus quests — revealed only after all five main stamps are earned. */
+/** Bonus quest variants — revealed only after all five main stamps are earned. */
 export const BONUS_QUEST_DEFINITIONS = [
   {
     id: "bonus_complete_all",
@@ -40,31 +40,36 @@ export const BONUS_QUEST_DEFINITIONS = [
   },
 ] as const;
 
+export type BonusQuestId = (typeof BONUS_QUEST_DEFINITIONS)[number]["id"];
+export const DEFAULT_BONUS_QUEST_ID: BonusQuestId = "bonus_complete_all";
+
 const q = (id: string) => id as Id<"seasonalQuests">;
 
-/** Build bonus quest entries for UI — progress is derived from main passport state. */
+/**
+ * Build bonus quest entries for UI — progress is derived from main passport
+ * state. We render exactly one bonus quest (admin-selected variant) on the
+ * hidden stamp page.
+ */
 export function buildBonusQuestEntries(
   mainSeals: SealProgress[],
-  allMainQuestsApproved: boolean,
+  bonusQuestId?: BonusQuestId,
 ): QuestEntry[] {
-  const mainComplete = mainSeals.every((seal) => seal.state === "earned");
+  const resolvedBonusQuestId = bonusQuestId ?? DEFAULT_BONUS_QUEST_ID;
+  const selected =
+    BONUS_QUEST_DEFINITIONS.find((def) => def.id === resolvedBonusQuestId) ?? BONUS_QUEST_DEFINITIONS[0]!;
 
-  return BONUS_QUEST_DEFINITIONS.map((def, index) => {
-    let status: string = "not_started";
-    if (def.id === "bonus_complete_all" && mainComplete) {
-      status = "approved";
-    } else if (def.id === "bonus_season_finale" && allMainQuestsApproved && mainComplete) {
-      status = "not_started";
-    }
+  const mainComplete = mainSeals.length > 0 && mainSeals.every((seal) => seal.state === "earned");
+  const status = mainComplete ? "approved" : "not_started";
 
-    return {
+  return [
+    {
       quest: {
-        _id: q(`mock_bonus_${index + 1}`),
-        title: def.title,
-        description: def.description,
+        _id: q(`mock_bonus_${selected.id}`),
+        title: selected.title,
+        description: selected.description,
         category: BONUS_STAMP_ID,
         completionMethod: "manual" as const,
-        stampReward: def.stampReward,
+        stampReward: selected.stampReward,
       },
       progress:
         status === "approved"
@@ -74,8 +79,8 @@ export function buildBonusQuestEntries(
               approvedAt: Date.now(),
             }
           : null,
-    };
-  });
+    },
+  ];
 }
 
 export function isBonusStampUnlocked(mainSeals: SealProgress[]): boolean {

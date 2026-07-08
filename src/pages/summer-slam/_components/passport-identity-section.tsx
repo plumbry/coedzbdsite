@@ -11,6 +11,7 @@ import {
 import {
   buildBonusQuestEntries,
   isBonusStampUnlocked,
+  type BonusQuestId,
 } from "./passport-bonus-stamp.ts";
 import { computeQuestPoints, getPassportTier } from "./passport-levels.ts";
 import { ssPassportStretchCard, ssPassportStretchMain } from "./passport-dashboard-theme.ts";
@@ -36,6 +37,7 @@ export function PassportIdentitySection({
   onSubmitEvidence,
   submissionsOpen = true,
   isAdminPreview = false,
+  bonusQuestId,
   className,
 }: {
   playerName: string;
@@ -54,6 +56,7 @@ export function PassportIdentitySection({
   onSubmitEvidence?: (entry: QuestEntry) => void;
   submissionsOpen?: boolean;
   isAdminPreview?: boolean;
+  bonusQuestId?: BonusQuestId;
   className?: string;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -71,8 +74,8 @@ export function PassportIdentitySection({
   const totalPages = seals.length;
 
   const bonusQuestEntries = useMemo(
-    () => buildBonusQuestEntries(seals, false),
-    [seals],
+    () => buildBonusQuestEntries(seals, bonusQuestId),
+    [seals, bonusQuestId],
   );
   const bonusSeal = useMemo(() => buildBonusSealProgress(bonusQuestEntries), [bonusQuestEntries]);
 

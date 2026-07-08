@@ -90,7 +90,7 @@ export function PassportDashboard({
 
   const littleEvery = campaign?.littleWheelEntryEveryStamps ?? 1;
   const bigEvery = campaign?.bigWheelEntryEveryStamps ?? 5;
-  const submissionsOpen = areSubmissionsOpen(campaign);
+  const submissionsOpen = areSubmissionsOpen(campaign, Date.now(), { adminPreview: isAdminPreview });
   const wheelTotals = useMemo(
     () => computeWheelTotals(quests, littleEvery, bigEvery),
     [quests, littleEvery, bigEvery],
@@ -138,6 +138,7 @@ export function PassportDashboard({
             completionPercent={season.questPercent}
             seasonStartsAt={campaign?.startsAt}
             seasonEndsAt={campaign?.endsAt}
+            bonusQuestId={campaign?.bonusQuestId}
             celebratingSealIds={celebratingSealIds}
             onSaveAvatar={onSaveAvatar}
             onSaveBirthplace={onSaveBirthplace}

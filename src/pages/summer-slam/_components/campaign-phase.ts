@@ -5,6 +5,8 @@ export type CampaignPhase =
   | "submissions_closed"
   | "ended";
 
+export type BonusQuestId = "bonus_complete_all" | "bonus_major_event" | "bonus_season_finale";
+
 export type CampaignPublic = {
   title: string;
   description?: string;
@@ -15,6 +17,7 @@ export type CampaignPublic = {
   littleWheelEntryEveryStamps: number;
   bigWheelEntryEveryStamps: number;
   activeQuestCount?: number;
+  bonusQuestId?: BonusQuestId;
 };
 
 export function getCampaignPhase(
@@ -32,8 +35,12 @@ export function getCampaignPhase(
 export function areSubmissionsOpen(
   campaign: CampaignPublic | null | undefined,
   now = Date.now(),
+  options?: { adminPreview?: boolean },
 ): boolean {
-  return getCampaignPhase(campaign, now) === "active";
+  const phase = getCampaignPhase(campaign, now);
+  if (phase === "active") return true;
+  if (phase === "not_started") return Boolean(options?.adminPreview);
+  return false;
 }
 
 /** Passport entry is available once the campaign is live and has quests configured. */

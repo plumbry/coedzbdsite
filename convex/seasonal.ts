@@ -41,6 +41,12 @@ const completionMethodValidator = v.union(
   v.literal("admin"),
 );
 
+const bonusQuestIdValidator = v.union(
+  v.literal("bonus_complete_all"),
+  v.literal("bonus_major_event"),
+  v.literal("bonus_season_finale"),
+);
+
 const evidenceInputValidator = v.union(v.literal("image"), v.literal("link"));
 
 const statusValidator = v.union(
@@ -197,8 +203,14 @@ function assertPassportAccessible(
   }
 }
 
-function assertSubmissionsOpen(campaign: Doc<"seasonalCampaigns">, now = Date.now()) {
-  assertPassportAccessible(campaign, now);
+function assertSubmissionsOpen(
+  campaign: Doc<"seasonalCampaigns">,
+  now = Date.now(),
+  options?: { allowAdminEarlyAccess?: boolean },
+) {
+  assertPassportAccessible(campaign, now, {
+    allowAdminEarlyAccess: options?.allowAdminEarlyAccess,
+  });
   if (campaign.endsAt && now > campaign.endsAt) {
     throw new ConvexError({
       message: "Submissions are closed for this season",
@@ -547,6 +559,7 @@ export const ensureSummerSlamCampaign = mutation({
       stampName: "Passport Stamp",
       littleWheelEntryEveryStamps: 1,
       bigWheelEntryEveryStamps: 5,
+      bonusQuestId: "bonus_complete_all",
       createdBy: admin._id,
       updatedAt: Date.now(),
     });
@@ -631,6 +644,7 @@ export const updateCampaign = mutation({
     stampName: v.string(),
     littleWheelEntryEveryStamps: v.number(),
     bigWheelEntryEveryStamps: v.number(),
+    bonusQuestId: bonusQuestIdValidator,
   },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
@@ -659,6 +673,7 @@ export const updateCampaign = mutation({
         args.bigWheelEntryEveryStamps,
         "Big wheel stamp interval",
       ),
+      bonusQuestId: args.bonusQuestId,
       updatedBy: admin._id,
       updatedAt: Date.now(),
     });
@@ -975,7 +990,8 @@ export const generateEvidenceUploadUrl = mutation({
   args: { slug: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
-    assertSubmissionsOpen(campaign);
+    const admin = await resolveCurrentAdmin(ctx);
+    assertSubmissionsOpen(campaign, Date.now(), { allowAdminEarlyAccess: !!admin });
     await requireCurrentPassport(ctx, campaign);
     return await ctx.storage.generateUploadUrl();
   },
@@ -1066,7 +1082,8 @@ export const submitEvidence = mutation({
   },
   handler: async (ctx, args) => {
     const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
-    assertSubmissionsOpen(campaign);
+    const admin = await resolveCurrentAdmin(ctx);
+    assertSubmissionsOpen(campaign, Date.now(), { allowAdminEarlyAccess: !!admin });
     const { player } = await requireCurrentPassport(ctx, campaign);
     const quest = await ctx.db.get(args.questId);
     if (!quest || quest.campaignId !== campaign._id || !quest.isActive || quest.completionMethod !== "manual") {
