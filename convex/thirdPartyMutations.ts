@@ -670,6 +670,10 @@ export const updateImportDetails = mutation({
     eventDate: v.optional(v.string()),
     organizer: v.optional(v.string()),
     leaderboardUrl: v.optional(v.string()),
+    summerSlamEnabled: v.optional(v.boolean()),
+    summerSlamTeamFormat: v.optional(
+      v.union(v.literal("duos"), v.literal("trios"), v.literal("squads"), v.null()),
+    ),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
@@ -690,12 +694,33 @@ export const updateImportDetails = mutation({
       eventDate?: string;
       organizer?: string;
       leaderboardUrl?: string;
+      seasonalCampaignSlug?: string;
+      seasonalTeamFormat?: "duos" | "trios" | "squads";
     } = {};
     
     if (args.eventName !== undefined) updates.eventName = args.eventName;
     if (args.eventDate !== undefined) updates.eventDate = args.eventDate;
     if (args.organizer !== undefined) updates.organizer = args.organizer;
     if (args.leaderboardUrl !== undefined) updates.leaderboardUrl = args.leaderboardUrl;
+
+    let seasonalTagChanged = false;
+    if (args.summerSlamEnabled !== undefined || args.summerSlamTeamFormat !== undefined) {
+      const enabled =
+        args.summerSlamEnabled ??
+        Boolean(importRecord.seasonalCampaignSlug === "summer-slam");
+      if (enabled) {
+        const teamFormat = args.summerSlamTeamFormat ?? importRecord.seasonalTeamFormat;
+        if (!teamFormat) {
+          throw new Error("Choose Duos, Trios, or Squads for Summer Slam imports");
+        }
+        updates.seasonalCampaignSlug = "summer-slam";
+        updates.seasonalTeamFormat = teamFormat;
+      } else {
+        updates.seasonalCampaignSlug = undefined;
+        updates.seasonalTeamFormat = undefined;
+      }
+      seasonalTagChanged = true;
+    }
     
     // Update the import
     await ctx.db.patch(args.importId, updates);
@@ -753,6 +778,12 @@ export const updateImportDetails = mutation({
           updates,
           oldEventName: importRecord.eventName,
         }),
+      });
+    }
+
+    if (seasonalTagChanged) {
+      await ctx.scheduler.runAfter(0, internal.seasonal.recalculatePlayerForImport, {
+        importId: args.importId,
       });
     }
     

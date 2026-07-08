@@ -363,12 +363,18 @@ export default defineSchema({
     finalizedAt: v.optional(v.number()),
     finalizedBy: v.optional(v.id("users")),
     pipelineLocked: v.optional(v.boolean()),
+    /** When set, this import counts toward auto quest progress for the campaign slug. */
+    seasonalCampaignSlug: v.optional(v.string()),
+    seasonalTeamFormat: v.optional(
+      v.union(v.literal("duos"), v.literal("trios"), v.literal("squads")),
+    ),
   })    .index("by_leaderboard_id", ["leaderboardId"])
     .index("by_event", ["eventId"])
     .index("by_manual", ["isManualImport"])
     .index("by_source", ["source"])
     .index("by_import_method", ["importMethod"])
-    .index("by_pipeline_status", ["pipelineStatus"]),
+    .index("by_pipeline_status", ["pipelineStatus"])
+    .index("by_seasonal_campaign_slug", ["seasonalCampaignSlug"]),
 
   importProcessingJobs: defineTable({
     importId: v.id("thirdPartyImports"),

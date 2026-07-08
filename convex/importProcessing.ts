@@ -58,6 +58,17 @@ async function loadJobContext(ctx: MutationCtx, jobId: Id<"importProcessingJobs"
   return { job, imp };
 }
 
+async function findRunningJobForImport(
+  ctx: MutationCtx,
+  importId: Id<"thirdPartyImports">,
+) {
+  return await ctx.db
+    .query("importProcessingJobs")
+    .withIndex("by_import", (q) => q.eq("importId", importId))
+    .filter((q) => q.eq(q.field("status"), "running"))
+    .first();
+}
+
 const INITIAL_JOB_METRICS = {
   rowsProcessed: 0,
   batchesProcessed: 0,
@@ -572,13 +583,9 @@ export const startProcessImport = mutation({
       throw new Error("Import is finalized. Unlock or reprocess to run again.");
     }
 
-    const running = await ctx.db
-      .query("importProcessingJobs")
-      .withIndex("by_import", (q) => q.eq("importId", args.importId))
-      .filter((q) => q.eq(q.field("status"), "running"))
-      .first();
+    const running = await findRunningJobForImport(ctx, args.importId);
     if (running) {
-      throw new Error("Import processing is already running.");
+      return { jobId: running._id, alreadyRunning: true as const };
     }
 
     const now = Date.now();
@@ -606,7 +613,7 @@ export const startProcessImport = mutation({
       jobId,
     });
 
-    return { jobId };
+    return { jobId, alreadyRunning: false as const };
   },
 });
 
@@ -628,13 +635,9 @@ export const startProcessImportInternal = internalMutation({
       throw new Error("Import is finalized. Unlock or reprocess to run again.");
     }
 
-    const running = await ctx.db
-      .query("importProcessingJobs")
-      .withIndex("by_import", (q) => q.eq("importId", args.importId))
-      .filter((q) => q.eq(q.field("status"), "running"))
-      .first();
+    const running = await findRunningJobForImport(ctx, args.importId);
     if (running) {
-      throw new Error("Import processing is already running.");
+      return { jobId: running._id, alreadyRunning: true as const };
     }
 
     const now = Date.now();
@@ -673,7 +676,7 @@ export const startProcessImportInternal = internalMutation({
       jobId,
     });
 
-    return { jobId };
+    return { jobId, alreadyRunning: false as const };
   },
 });
 
@@ -766,13 +769,9 @@ export const reprocessImport = mutation({
       throw new Error("Import not found");
     }
 
-    const running = await ctx.db
-      .query("importProcessingJobs")
-      .withIndex("by_import", (q) => q.eq("importId", args.importId))
-      .filter((q) => q.eq(q.field("status"), "running"))
-      .first();
+    const running = await findRunningJobForImport(ctx, args.importId);
     if (running) {
-      throw new Error("Import processing is already running.");
+      return { jobId: running._id, alreadyRunning: true as const };
     }
 
     await ctx.db.patch(args.importId, {
@@ -814,7 +813,7 @@ export const reprocessImport = mutation({
       jobId,
     });
 
-    return { jobId };
+    return { jobId, alreadyRunning: false as const };
   },
 });
 

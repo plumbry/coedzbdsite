@@ -402,13 +402,76 @@ async function loadCampaignEventContext(ctx: QueryCtx | MutationCtx, campaignId:
   return { tags, eventById, teamFormatByEvent };
 }
 
+type CampaignEventMeta = Pick<Doc<"events">, "_id" | "name" | "startDate">;
+
+type CampaignPlayerResult = Doc<"thirdPartyResults"> & {
+  importId: Id<"thirdPartyImports">;
+  eventId: Id<"events">;
+  teamFormat: TeamFormat;
+  event: CampaignEventMeta;
+};
+
+function eventMetaFromImport(
+  importRecord: Doc<"thirdPartyImports">,
+  event: Doc<"events"> | null,
+): CampaignEventMeta {
+  if (event) {
+    return { _id: event._id, name: event.name, startDate: event.startDate };
+  }
+  return {
+    _id: (importRecord.eventId ?? importRecord._id) as Id<"events">,
+    name: importRecord.eventName,
+    startDate: importRecord.eventDate ?? importRecord.tournamentStartedAt?.slice(0, 10) ?? "",
+  };
+}
+
+async function appendImportResultsForPlayer(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    importRecord: Doc<"thirdPartyImports">;
+    playerId: Id<"players">;
+    teamFormat: TeamFormat;
+    event: CampaignEventMeta;
+    importIds: Set<Id<"thirdPartyImports">>;
+    results: CampaignPlayerResult[];
+  },
+) {
+  if (args.importIds.has(args.importRecord._id)) return;
+  args.importIds.add(args.importRecord._id);
+
+  const importResults = await ctx.db
+    .query("thirdPartyResults")
+    .withIndex("by_import", (q) => q.eq("importId", args.importRecord._id))
+    .collect();
+
+  for (const result of importResults) {
+    if (result.playerId !== args.playerId) continue;
+    args.results.push({
+      ...result,
+      importId: args.importRecord._id,
+      eventId: args.event._id,
+      teamFormat: args.teamFormat,
+      event: args.event,
+    });
+  }
+}
+
 async function loadPlayerCampaignResults(
   ctx: QueryCtx | MutationCtx,
   campaignId: Id<"seasonalCampaigns">,
   playerId: Id<"players">,
 ) {
+  const campaign = await ctx.db.get(campaignId);
+  if (!campaign) {
+    return {
+      results: [] as CampaignPlayerResult[],
+      matchStats: [] as Doc<"matchPlayerStats">[],
+      teamFormatByEvent: new Map<Id<"events">, TeamFormat>(),
+    };
+  }
+
   const { tags, eventById, teamFormatByEvent } = await loadCampaignEventContext(ctx, campaignId);
-  const results: Array<Doc<"thirdPartyResults"> & { eventId: Id<"events">; teamFormat: TeamFormat; event: Doc<"events"> }> = [];
+  const results: CampaignPlayerResult[] = [];
   const importIds = new Set<Id<"thirdPartyImports">>();
 
   for (const tag of tags) {
@@ -419,17 +482,33 @@ async function loadPlayerCampaignResults(
       .withIndex("by_event", (q) => q.eq("eventId", tag.eventId))
       .collect();
     for (const importRecord of imports) {
-      importIds.add(importRecord._id);
-      const importResults = await ctx.db
-        .query("thirdPartyResults")
-        .withIndex("by_import", (q) => q.eq("importId", importRecord._id))
-        .collect();
-      for (const result of importResults) {
-        if (result.playerId === playerId) {
-          results.push({ ...result, eventId: tag.eventId, teamFormat: tag.teamFormat, event });
-        }
-      }
+      await appendImportResultsForPlayer(ctx, {
+        importRecord,
+        playerId,
+        teamFormat: tag.teamFormat,
+        event,
+        importIds,
+        results,
+      });
     }
+  }
+
+  const taggedImports = await ctx.db
+    .query("thirdPartyImports")
+    .withIndex("by_seasonal_campaign_slug", (q) => q.eq("seasonalCampaignSlug", campaign.slug))
+    .collect();
+
+  for (const importRecord of taggedImports) {
+    if (!importRecord.seasonalTeamFormat) continue;
+    const linkedEvent = importRecord.eventId ? await ctx.db.get(importRecord.eventId) : null;
+    await appendImportResultsForPlayer(ctx, {
+      importRecord,
+      playerId,
+      teamFormat: importRecord.seasonalTeamFormat,
+      event: eventMetaFromImport(importRecord, linkedEvent),
+      importIds,
+      results,
+    });
   }
 
   const playerMatchStats = await ctx.db
@@ -440,9 +519,9 @@ async function loadPlayerCampaignResults(
   return { results, matchStats, teamFormatByEvent };
 }
 
-function formatEventDate(event: Doc<"events">): string {
+function formatEventDate(event: CampaignEventMeta): string {
   const parsed = new Date(event.startDate);
-  if (Number.isNaN(parsed.getTime())) return event.startDate;
+  if (Number.isNaN(parsed.getTime())) return event.name || event.startDate || "Summer Slam scrim";
   return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 }
 
@@ -469,15 +548,15 @@ function evaluateRule(
     return { qualifies: false, current: 0, target: 1, log: undefined };
   }
 
-  const eventIds = new Set(data.results.map((result) => result.eventId));
+  const scrimsPlayed = new Set(data.results.map((result) => result.importId));
   if (rule.type === "play_events") {
     const target = requirePositiveInteger(rule.count, "Scrim count");
     return {
-      qualifies: eventIds.size >= target,
-      current: eventIds.size,
+      qualifies: scrimsPlayed.size >= target,
+      current: scrimsPlayed.size,
       target,
       log:
-        eventIds.size >= target
+        scrimsPlayed.size >= target
           ? `Auto-approved: Played ${target} Summer Slam scrim${target === 1 ? "" : "s"}.`
           : undefined,
     };
@@ -1507,14 +1586,30 @@ export const recalculatePlayerForImport = internalMutation({
   args: { importId: v.id("thirdPartyImports") },
   handler: async (ctx, args) => {
     const importRecord = await ctx.db.get(args.importId);
-    if (!importRecord?.eventId) return;
-    const tags = await ctx.db
-      .query("seasonalCampaignEvents")
-      .withIndex("by_event", (q) => q.eq("eventId", importRecord.eventId!))
-      .collect();
-    for (const tag of tags) {
+    if (!importRecord) return;
+
+    const campaignIds = new Set<Id<"seasonalCampaigns">>();
+
+    if (importRecord.eventId) {
+      const tags = await ctx.db
+        .query("seasonalCampaignEvents")
+        .withIndex("by_event", (q) => q.eq("eventId", importRecord.eventId!))
+        .collect();
+      for (const tag of tags) {
+        campaignIds.add(tag.campaignId);
+      }
+    }
+
+    if (importRecord.seasonalCampaignSlug) {
+      const campaign = await getCampaignBySlug(ctx, importRecord.seasonalCampaignSlug);
+      if (campaign) {
+        campaignIds.add(campaign._id);
+      }
+    }
+
+    for (const campaignId of campaignIds) {
       await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
-        campaignId: tag.campaignId,
+        campaignId,
         cursor: null,
       });
     }

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
+import { Switch } from "@/components/ui/switch.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip.tsx";
@@ -154,6 +155,8 @@ export default function ImportThirdParty() {
   const [editOrganizer, setEditOrganizer] = useState("");
   const [editLeaderboardUrl, setEditLeaderboardUrl] = useState("");
   const [editLinkedEventId, setEditLinkedEventId] = useState<string>("none");
+  const [editSummerSlam, setEditSummerSlam] = useState(false);
+  const [editSummerSlamFormat, setEditSummerSlamFormat] = useState<"duos" | "trios" | "squads">("squads");
   const [isUpdating, setIsUpdating] = useState(false);
   const [replaceFile, setReplaceFile] = useState<File | null>(null);
   const [isReplacingCSV, setIsReplacingCSV] = useState(false);
@@ -669,8 +672,12 @@ export default function ImportThirdParty() {
   const handleProcessImport = async (importId: Id<"thirdPartyImports">) => {
     setProcessingImportId(importId);
     try {
-      await startProcessImport({ importId });
-      toast.success("Process Import started — progress will continue in the background.");
+      const result = await startProcessImport({ importId });
+      toast.success(
+        result.alreadyRunning
+          ? "Process Import is already running — showing live progress."
+          : "Process Import started — progress will continue in the background.",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to start Process Import");
       setProcessingImportId(null);
@@ -726,7 +733,10 @@ export default function ImportThirdParty() {
         setProcessingImportId(imp._id);
 
         try {
-          await startProcessImport({ importId: imp._id });
+          const result = await startProcessImport({ importId: imp._id });
+          if (result.alreadyRunning) {
+            toast.info(`${imp.eventName}: already running, waiting for current job.`);
+          }
         } catch (error) {
           failCount += 1;
           toast.error(
@@ -886,13 +896,24 @@ export default function ImportThirdParty() {
     }
   };
   
-  const openEditDialog = (importRecord: { _id: Id<"thirdPartyImports">; eventName: string; eventDate?: string; organizer?: string; leaderboardUrl?: string; eventId?: Id<"events"> }) => {
+  const openEditDialog = (importRecord: {
+    _id: Id<"thirdPartyImports">;
+    eventName: string;
+    eventDate?: string;
+    organizer?: string;
+    leaderboardUrl?: string;
+    eventId?: Id<"events">;
+    seasonalCampaignSlug?: string;
+    seasonalTeamFormat?: "duos" | "trios" | "squads";
+  }) => {
     setEditingImport(importRecord._id);
     setEditEventName(importRecord.eventName);
     setEditEventDate(importRecord.eventDate || "");
     setEditOrganizer(importRecord.organizer || "");
     setEditLeaderboardUrl(importRecord.leaderboardUrl || "");
     setEditLinkedEventId(importRecord.eventId || "none");
+    setEditSummerSlam(importRecord.seasonalCampaignSlug === "summer-slam");
+    setEditSummerSlamFormat(importRecord.seasonalTeamFormat ?? "squads");
     setReplaceFile(null);
   };
   
@@ -907,6 +928,8 @@ export default function ImportThirdParty() {
         eventDate: editEventDate.trim() || undefined,
         organizer: editOrganizer.trim() || undefined,
         leaderboardUrl: editLeaderboardUrl.trim() || undefined,
+        summerSlamEnabled: editSummerSlam,
+        summerSlamTeamFormat: editSummerSlam ? editSummerSlamFormat : null,
       });
       
       // Update event link separately
@@ -1803,6 +1826,11 @@ export default function ImportThirdParty() {
                               <Badge variant="outline" className="h-4 px-1 text-[10px] font-normal">
                                 {imp.source}
                               </Badge>
+                              {imp.seasonalCampaignSlug === "summer-slam" ? (
+                                <Badge variant="secondary" className="h-4 px-1 text-[10px] font-normal">
+                                  Summer Slam{imp.seasonalTeamFormat ? ` · ${imp.seasonalTeamFormat}` : ""}
+                                </Badge>
+                              ) : null}
                             </div>
                           </div>
                         </TableCell>
@@ -2129,6 +2157,42 @@ export default function ImportThirdParty() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="edit-summer-slam">Summer Slam import</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Count this import toward Summer Slam auto-complete quests after you run recalculation.
+                  </p>
+                </div>
+                <Switch
+                  id="edit-summer-slam"
+                  checked={editSummerSlam}
+                  onCheckedChange={setEditSummerSlam}
+                />
+              </div>
+              {editSummerSlam ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-summer-slam-format">Team format</Label>
+                  <Select
+                    value={editSummerSlamFormat}
+                    onValueChange={(value) =>
+                      setEditSummerSlamFormat(value as "duos" | "trios" | "squads")
+                    }
+                  >
+                    <SelectTrigger id="edit-summer-slam-format">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="duos">Duos</SelectItem>
+                      <SelectItem value="trios">Trios</SelectItem>
+                      <SelectItem value="squads">Squads</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
             </div>
             
             <div className="space-y-2 border-t pt-4">
