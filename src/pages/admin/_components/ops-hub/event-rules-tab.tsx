@@ -23,12 +23,19 @@ const MODE_OPTIONS = [
   { value: "duos_into_squads", label: "Duos into Squads" },
 ] as const;
 
+const EVENT_FORMAT_OPTIONS = [
+  { value: "standard", label: "Standard" },
+  { value: "scrim_series", label: "Scrim Series" },
+  { value: "showdown", label: "Showdown" },
+] as const;
+
 const VARIANT_OPTIONS = [
   { value: "zb", label: "ZB" },
   { value: "reload", label: "Reload" },
 ] as const;
 
 type TemplateMode = (typeof MODE_OPTIONS)[number]["value"];
+type TemplateEventFormat = (typeof EVENT_FORMAT_OPTIONS)[number]["value"];
 type TemplateVariant = (typeof VARIANT_OPTIONS)[number]["value"];
 
 export default function EventRulesTab({ viewerToken, canEdit = false }: OpsHubTabProps) {
@@ -39,14 +46,18 @@ export default function EventRulesTab({ viewerToken, canEdit = false }: OpsHubTa
   const upsertTemplate = useMutation(api.opsHub.mutations.upsertDiscordMarkdownTemplate);
 
   const [mode, setMode] = useState<TemplateMode>("duos");
+  const [eventFormat, setEventFormat] = useState<TemplateEventFormat>("standard");
   const [variant, setVariant] = useState<TemplateVariant>("zb");
   const [markdownText, setMarkdownText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const selectedTemplate = useMemo(
-    () => templates?.find((t) => t.mode === mode && t.variant === variant),
-    [templates, mode, variant],
+    () =>
+      templates?.find(
+        (t) => t.mode === mode && t.eventFormat === eventFormat && t.variant === variant,
+      ),
+    [templates, mode, eventFormat, variant],
   );
 
   useEffect(() => {
@@ -60,6 +71,7 @@ export default function EventRulesTab({ viewerToken, canEdit = false }: OpsHubTa
       await upsertTemplate(
         opsMutationArgs(viewerToken, {
           mode,
+          eventFormat,
           variant,
           markdown: markdownText,
         }),
@@ -84,6 +96,8 @@ export default function EventRulesTab({ viewerToken, canEdit = false }: OpsHubTa
   };
 
   const selectedModeLabel = MODE_OPTIONS.find((item) => item.value === mode)?.label ?? "Mode";
+  const selectedEventFormatLabel =
+    EVENT_FORMAT_OPTIONS.find((item) => item.value === eventFormat)?.label ?? "Format";
   const selectedVariantLabel =
     VARIANT_OPTIONS.find((item) => item.value === variant)?.label ?? "Variant";
 
@@ -92,11 +106,11 @@ export default function EventRulesTab({ viewerToken, canEdit = false }: OpsHubTa
       <CardHeader>
         <CardTitle>Discord Markdown Templates</CardTitle>
         <CardDescription>
-          Select mode + variant to load the Discord-ready markdown for that event format.
+          Select mode, format, and variant to load the Discord-ready markdown for that event type.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-2">
             <Label>Mode</Label>
             <Select value={mode} onValueChange={(value) => setMode(value as TemplateMode)}>
@@ -105,6 +119,24 @@ export default function EventRulesTab({ viewerToken, canEdit = false }: OpsHubTa
               </SelectTrigger>
               <SelectContent>
                 {MODE_OPTIONS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Format</Label>
+            <Select
+              value={eventFormat}
+              onValueChange={(value) => setEventFormat(value as TemplateEventFormat)}
+            >
+              <SelectTrigger className="cursor-pointer">
+                <SelectValue placeholder="Select format" />
+              </SelectTrigger>
+              <SelectContent>
+                {EVENT_FORMAT_OPTIONS.map((item) => (
                   <SelectItem key={item.value} value={item.value}>
                     {item.label}
                   </SelectItem>
@@ -131,7 +163,7 @@ export default function EventRulesTab({ viewerToken, canEdit = false }: OpsHubTa
 
         <div className="space-y-2">
           <Label>
-            Markdown Text ({selectedModeLabel} · {selectedVariantLabel})
+            Markdown Text ({selectedModeLabel} · {selectedEventFormatLabel} · {selectedVariantLabel})
           </Label>
           <Textarea
             value={markdownText}

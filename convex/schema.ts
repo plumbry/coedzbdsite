@@ -2015,6 +2015,11 @@ export default defineSchema({
       v.literal("squads"),
       v.literal("duos_into_squads"),
     ),
+    eventFormat: v.union(
+      v.literal("standard"),
+      v.literal("scrim_series"),
+      v.literal("showdown"),
+    ),
     variant: v.union(v.literal("zb"), v.literal("reload")),
     markdown: v.string(),
     createdAt: v.number(),
@@ -2027,7 +2032,11 @@ export default defineSchema({
     updatedAccessMethod: v.optional(
       v.union(v.literal("admin"), v.literal("password")),
     ),
-  }).index("by_mode_and_variant", ["mode", "variant"]),
+  }).index("by_mode_and_variant_and_event_format", [
+    "mode",
+    "variant",
+    "eventFormat",
+  ]),
 
   opsHubKillCaps: defineTable({
     mode: v.string(),

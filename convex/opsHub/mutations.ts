@@ -54,6 +54,12 @@ const discordMarkdownVariantValidator = v.union(
   v.literal("reload"),
 );
 
+const discordMarkdownEventFormatValidator = v.union(
+  v.literal("standard"),
+  v.literal("scrim_series"),
+  v.literal("showdown"),
+);
+
 const todoPriorityValidator = v.union(
   v.literal("low"),
   v.literal("medium"),
@@ -174,6 +180,7 @@ export const upsertDiscordMarkdownTemplate = mutation({
   args: {
     viewerToken: viewerTokenArg,
     mode: discordMarkdownModeValidator,
+    eventFormat: discordMarkdownEventFormatValidator,
     variant: discordMarkdownVariantValidator,
     markdown: v.string(),
   },
@@ -183,8 +190,11 @@ export const upsertDiscordMarkdownTemplate = mutation({
     const markdown = args.markdown.trim();
     const existing = await ctx.db
       .query("opsHubDiscordMarkdownTemplates")
-      .withIndex("by_mode_and_variant", (q) =>
-        q.eq("mode", args.mode).eq("variant", args.variant),
+      .withIndex("by_mode_and_variant_and_event_format", (q) =>
+        q
+          .eq("mode", args.mode)
+          .eq("variant", args.variant)
+          .eq("eventFormat", args.eventFormat),
       )
       .unique();
 
@@ -198,6 +208,7 @@ export const upsertDiscordMarkdownTemplate = mutation({
 
     return await ctx.db.insert("opsHubDiscordMarkdownTemplates", {
       mode: args.mode,
+      eventFormat: args.eventFormat,
       variant: args.variant,
       markdown,
       ...auditFields(access, now),
