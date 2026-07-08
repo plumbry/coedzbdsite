@@ -39,6 +39,7 @@ import {
   type ReviewQueueRow,
   type ReviewStatus,
 } from "@/pages/admin/_components/summer-slam-review-sheet.tsx";
+import { getCampaignPhase } from "@/pages/summer-slam/_components/campaign-phase.ts";
 
 const CAMPAIGN_SLUG = "summer-slam";
 
@@ -192,6 +193,12 @@ export default function SummerSlamAdminPage() {
     });
   }, [filterText, reviewQueue]);
 
+  const isPreLaunchPreview = useMemo(() => {
+    const campaign = dashboard?.campaign;
+    if (!campaign) return false;
+    return getCampaignPhase(campaign) === "not_started";
+  }, [dashboard?.campaign]);
+
   const howToComplete: HowToComplete =
     completionMethod === "manual" ? "submit" : "auto";
 
@@ -327,7 +334,12 @@ export default function SummerSlamAdminPage() {
       setSelectedReviewRow(null);
     } catch (error) {
       console.error(error);
-      toast.error("Could not review submission.");
+      const message = String(
+        (error as { data?: { message?: string } })?.data?.message ||
+          (error as Error)?.message ||
+          "",
+      );
+      toast.error(message || "Could not review submission.");
     } finally {
       setIsReviewing(false);
     }
@@ -465,7 +477,7 @@ export default function SummerSlamAdminPage() {
                   </Link>{" "}
                   to verify layout and quests.
                 </li>
-                <li>Test one manual submission, then approve/reject/request more evidence.</li>
+                <li>Test one manual submission, then approve/reject/request more evidence in Review Queue (works before launch).</li>
                 <li>Run recalculation after imports, quest changes, or event tag changes.</li>
                 <li>Export Little Wheel and Big Wheel tickets from Recalculate & Exports.</li>
               </ol>
@@ -719,6 +731,12 @@ export default function SummerSlamAdminPage() {
           </TabsContent>
 
           <TabsContent value="review" className="mt-4 space-y-4">
+            {isPreLaunchPreview ? (
+              <p className="rounded-lg border border-violet-200/80 bg-violet-50/70 px-3 py-2 text-sm text-violet-950/90">
+                Pre-launch testing — the season has not started yet. You can review submissions here,
+                including your own test evidence from the passport preview.
+              </p>
+            ) : null}
             <SummerSlamReviewGuidance />
             <div className="flex flex-wrap gap-3">
               <Input className="max-w-sm" placeholder="Filter by player, quest, category, evidence..." value={filterText} onChange={(event) => setFilterText(event.target.value)} />

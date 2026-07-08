@@ -28,7 +28,7 @@ import {
 
 type ReviewStatus = "pending_review" | "approved" | "rejected" | "needs_more_evidence";
 
-type Category = "traveller" | "competitor" | "summer_spirit" | "team_player" | "community";
+type Category = "traveller" | "competitor" | "summer_spirit" | "team_player" | "community" | "summer_legend";
 
 type QualificationRule =
   | { type: "play_events"; count: number }
@@ -79,6 +79,7 @@ const categoryLabels: Record<Category, string> = {
   summer_spirit: "Summer Spirit",
   team_player: "Team Player",
   community: "Community",
+  summer_legend: "Bonus",
 };
 
 function formatQualificationRule(rule: QualificationRule): string {

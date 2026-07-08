@@ -222,6 +222,14 @@ function assertSubmissionsOpen(
   }
 }
 
+/** Admins can test passport flows before the season start date. */
+function isAdminCampaignPreview(
+  campaign: Doc<"seasonalCampaigns">,
+  now = Date.now(),
+): boolean {
+  return campaign.isActive && !!campaign.startsAt && now < campaign.startsAt;
+}
+
 async function resolveCurrentAdmin(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
@@ -1329,8 +1337,13 @@ export const reviewSubmission = mutation({
     if (!quest) {
       throw new ConvexError({ message: "Quest not found", code: "NOT_FOUND" });
     }
+    const campaign = await ctx.db.get(submission.campaignId);
+    if (!campaign) {
+      throw new ConvexError({ message: "Campaign not found", code: "NOT_FOUND" });
+    }
     const { player: reviewerPlayer } = await resolveCurrentPlayer(ctx);
-    if (reviewerPlayer?._id === submission.playerId) {
+    const allowSelfReviewForTesting = isAdminCampaignPreview(campaign);
+    if (reviewerPlayer?._id === submission.playerId && !allowSelfReviewForTesting) {
       throw new ConvexError({ message: "Admins cannot review their own submissions", code: "FORBIDDEN" });
     }
 
