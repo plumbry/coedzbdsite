@@ -159,38 +159,51 @@ export default function SponsorLogTab({ viewerToken, canEdit = false }: OpsHubTa
         onAdd={canEdit ? openCreate : undefined}
         onEdit={canEdit ? openEdit : undefined}
         onDelete={canEdit ? setDeleteTarget : undefined}
+        footer={(rows) => {
+          const total = rows.reduce((sum, r) => sum + r.amount, 0);
+          return {
+            sponsor: "Total",
+            amount: `$${total.toFixed(2)}`,
+          };
+        }}
         columns={[
           {
             key: "sponsor",
             header: "Sponsor",
             searchValue: (r) => r.sponsorName,
+            sortValue: (r) => r.sponsorName,
             render: (r) => <span className="font-medium">{r.sponsorName}</span>,
           },
           {
             key: "amount",
             header: "Amount",
+            sortValue: (r) => r.amount,
             render: (r) => `$${r.amount.toFixed(2)}`,
           },
           {
             key: "date",
             header: "Received",
+            sortValue: (r) => r.dateReceived ?? null,
             render: (r) => r.dateReceived ?? "—",
           },
           {
             key: "event",
             header: "Event",
             searchValue: (r) => r.intendedEvent ?? "",
+            sortValue: (r) => r.intendedEvent ?? null,
             render: (r) => r.intendedEvent ?? "—",
           },
           {
             key: "source",
             header: "Source",
             searchValue: (r) => r.paymentSource ?? "",
+            sortValue: (r) => r.paymentSource ?? null,
             render: (r) => r.paymentSource ?? "—",
           },
           {
             key: "status",
             header: "Status",
+            sortValue: (r) => r.status,
             render: (r) =>
               canEdit ? (
                 <Select

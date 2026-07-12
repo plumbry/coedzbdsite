@@ -5,19 +5,38 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 
 export type OpsTableColumn<T> = {
   key: string;
   header: string;
   render: (row: T) => React.ReactNode;
   searchValue?: (row: T) => string;
+  /** Used for sorting; falls back to searchValue when omitted. */
+  sortValue?: (row: T) => string | number | null | undefined;
   className?: string;
+  sortable?: boolean;
+};
+
+type SortDirection = "asc" | "desc";
+
+type SortState = {
+  key: string;
+  direction: SortDirection;
 };
 
 type OpsDataTableProps<T extends { _id: string }> = {
@@ -31,7 +50,32 @@ type OpsDataTableProps<T extends { _id: string }> = {
   onDelete?: (row: T) => void;
   addLabel?: string;
   emptyMessage?: string;
+  /** Footer cells keyed by column key; computed from the currently filtered rows. */
+  footer?: (rows: T[]) => Partial<Record<string, React.ReactNode>>;
 };
+
+function compareSortValues(
+  a: string | number | null | undefined,
+  b: string | number | null | undefined,
+): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function getColumnSortValue<T>(
+  row: T,
+  col: OpsTableColumn<T>,
+): string | number | null | undefined {
+  if (col.sortValue) return col.sortValue(row);
+  if (col.searchValue) return col.searchValue(row);
+  return null;
+}
 
 export function OpsDataTable<T extends { _id: string }>({
   title,
@@ -44,20 +88,58 @@ export function OpsDataTable<T extends { _id: string }>({
   onDelete,
   addLabel = "Add",
   emptyMessage = "No entries yet.",
+  footer,
 }: OpsDataTableProps<T>) {
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortState | null>(null);
 
   const filtered = useMemo(() => {
     if (!data) return undefined;
     const q = search.trim().toLowerCase();
-    if (!q) return data;
-    return data.filter((row) =>
-      columns.some((col) => {
-        const value = col.searchValue?.(row) ?? String(col.render(row) ?? "");
-        return value.toLowerCase().includes(q);
-      }),
+    let rows = data;
+    if (q) {
+      rows = data.filter((row) =>
+        columns.some((col) => {
+          const value = col.searchValue?.(row) ?? String(col.render(row) ?? "");
+          return value.toLowerCase().includes(q);
+        }),
+      );
+    }
+    if (!sort) return rows;
+    const col = columns.find((c) => c.key === sort.key);
+    if (!col || col.sortable === false) return rows;
+    return [...rows].sort((a, b) => {
+      const cmp = compareSortValues(
+        getColumnSortValue(a, col),
+        getColumnSortValue(b, col),
+      );
+      return sort.direction === "asc" ? cmp : -cmp;
+    });
+  }, [data, search, columns, sort]);
+
+  const footerCells = useMemo(() => {
+    if (!footer || !filtered || filtered.length === 0) return undefined;
+    return footer(filtered);
+  }, [footer, filtered]);
+
+  const handleSort = (key: string) => {
+    setSort((prev) => {
+      if (prev?.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return null;
+    });
+  };
+
+  const sortIcon = (key: string) => {
+    if (sort?.key !== key) {
+      return <ArrowUpDown className="ml-1.5 h-3.5 w-3.5 opacity-40" />;
+    }
+    return sort.direction === "asc" ? (
+      <ArrowUp className="ml-1.5 h-3.5 w-3.5" />
+    ) : (
+      <ArrowDown className="ml-1.5 h-3.5 w-3.5" />
     );
-  }, [data, search, columns]);
+  };
 
   return (
     <div className="space-y-3">
@@ -99,7 +181,18 @@ export function OpsDataTable<T extends { _id: string }>({
               <TableRow>
                 {columns.map((col) => (
                   <TableHead key={col.key} className={col.className}>
-                    {col.header}
+                    {col.sortable === false ? (
+                      col.header
+                    ) : (
+                      <button
+                        type="button"
+                        className="inline-flex items-center cursor-pointer select-none hover:text-foreground"
+                        onClick={() => handleSort(col.key)}
+                      >
+                        {col.header}
+                        {sortIcon(col.key)}
+                      </button>
+                    )}
                   </TableHead>
                 ))}
                 {(onEdit || onDelete) && (
@@ -144,6 +237,18 @@ export function OpsDataTable<T extends { _id: string }>({
                 </TableRow>
               ))}
             </TableBody>
+            {footerCells && (
+              <TableFooter>
+                <TableRow>
+                  {columns.map((col) => (
+                    <TableCell key={col.key} className={col.className}>
+                      {footerCells[col.key] ?? null}
+                    </TableCell>
+                  ))}
+                  {(onEdit || onDelete) && <TableCell />}
+                </TableRow>
+              </TableFooter>
+            )}
           </Table>
         </div>
       )}
