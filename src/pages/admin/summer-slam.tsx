@@ -789,17 +789,40 @@ export default function SummerSlamAdminPage() {
                           })}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
+                          <div className="flex max-w-[240px] flex-col gap-1">
                             {row.images[0]?.url ? (
-                              <img
-                                src={row.images[0].url}
-                                alt=""
-                                className="h-10 w-14 rounded border object-cover"
-                              />
+                              <a
+                                href={row.images[0].url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="w-fit"
+                                title="Open uploaded image"
+                              >
+                                <img
+                                  src={row.images[0].url}
+                                  alt=""
+                                  className="h-10 w-14 rounded border object-cover"
+                                />
+                              </a>
                             ) : null}
-                            <span className="text-xs text-muted-foreground">
-                              {row.submission.evidenceTypes.join(", ")}
-                            </span>
+                            {row.submission.evidenceUrls?.length ? (
+                              row.submission.evidenceUrls.map((url) => (
+                                <a
+                                  key={url}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="truncate text-xs text-primary underline"
+                                  title={url}
+                                >
+                                  {url}
+                                </a>
+                              ))
+                            ) : !row.images[0]?.url ? (
+                              <span className="text-xs text-muted-foreground">
+                                {row.submission.evidenceTypes.join(", ") || "No evidence"}
+                              </span>
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell className="space-x-2 text-right">
