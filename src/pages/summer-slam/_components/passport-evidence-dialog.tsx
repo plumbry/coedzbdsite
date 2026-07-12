@@ -29,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea.tsx";
 import { useIsMobile } from "@/hooks/use-mobile.ts";
 import {
   CLIP_LINK_HELPER,
-  IMAGE_UPLOAD_HELPER,
+  SCREENSHOT_LINK_HELPER,
   type EvidenceType,
 } from "./passport-types.ts";
 
@@ -44,25 +44,21 @@ function EvidenceFormFields({
   evidenceType,
   evidenceUrl,
   notes,
-  selectedFiles,
   onEvidenceTypeChange,
   onEvidenceUrlChange,
   onNotesChange,
-  onFilesChange,
 }: {
   quest: QuestForDialog | undefined;
   evidenceType: EvidenceType;
   evidenceUrl: string;
   notes: string;
-  selectedFiles: File[];
   onEvidenceTypeChange: (type: EvidenceType) => void;
   onEvidenceUrlChange: (url: string) => void;
   onNotesChange: (notes: string) => void;
-  onFilesChange: (files: FileList | null) => void;
 }) {
   const lockedInput = quest?.evidenceInput;
-  const showImageUpload = !lockedInput || lockedInput === "image";
-  const showLinkInput = !lockedInput || lockedInput === "link";
+  const showScreenshotHelper =
+    lockedInput === "image" || evidenceType === "screenshot_link" || evidenceType === "image";
 
   return (
     <div className="space-y-4">
@@ -77,14 +73,13 @@ function EvidenceFormFields({
         <div className="space-y-2">
           <Label>Evidence Type</Label>
           <Select
-            value={evidenceType}
+            value={evidenceType === "image" ? "screenshot_link" : evidenceType}
             onValueChange={(value) => onEvidenceTypeChange(value as EvidenceType)}
           >
             <SelectTrigger className="min-h-11 touch-manipulation">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="image">Screenshot Upload</SelectItem>
               <SelectItem value="screenshot_link">Screenshot Link</SelectItem>
               <SelectItem value="clip_link">Clip Link</SelectItem>
               <SelectItem value="yunite_link">Yunite Link</SelectItem>
@@ -98,34 +93,28 @@ function EvidenceFormFields({
         </div>
       ) : null}
 
-      {showImageUpload && (lockedInput === "image" || evidenceType === "image") ? (
-        <div className="space-y-2">
-          <Label>Screenshot Upload</Label>
-          <Input
-            type="file"
-            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-            multiple
-            className="min-h-11 touch-manipulation"
-            onChange={(event) => onFilesChange(event.target.files)}
-          />
-          <p className="text-xs text-muted-foreground">{IMAGE_UPLOAD_HELPER}</p>
-          {selectedFiles.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {selectedFiles.map((file) => file.name).join(", ")}
-            </p>
-          )}
-        </div>
-      ) : showLinkInput ? (
-        <div className="space-y-2">
-          <Label>Evidence Link</Label>
-          <Input
-            value={evidenceUrl}
-            onChange={(event) => onEvidenceUrlChange(event.target.value)}
-            placeholder="https://..."
-            className="min-h-11 touch-manipulation"
-          />
-        </div>
-      ) : null}
+      <div className="space-y-2">
+        <Label>{lockedInput === "image" ? "Screenshot Link" : "Evidence Link"}</Label>
+        <Input
+          value={evidenceUrl}
+          onChange={(event) => onEvidenceUrlChange(event.target.value)}
+          placeholder="https://..."
+          className="min-h-11 touch-manipulation"
+        />
+        {showScreenshotHelper ? (
+          <p className="text-xs text-muted-foreground">
+            {SCREENSHOT_LINK_HELPER}{" "}
+            <a
+              href="https://postimages.org/"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-primary underline"
+            >
+              Open Postimages
+            </a>
+          </p>
+        ) : null}
+      </div>
 
       <div className="space-y-2">
         <Label>Notes (optional)</Label>
@@ -145,12 +134,10 @@ export function PassportEvidenceDialog({
   evidenceType,
   evidenceUrl,
   notes,
-  selectedFiles,
   isSubmitting,
   onEvidenceTypeChange,
   onEvidenceUrlChange,
   onNotesChange,
-  onFilesChange,
   onClose,
   onSubmit,
 }: {
@@ -159,12 +146,10 @@ export function PassportEvidenceDialog({
   evidenceType: EvidenceType;
   evidenceUrl: string;
   notes: string;
-  selectedFiles: File[];
   isSubmitting: boolean;
   onEvidenceTypeChange: (type: EvidenceType) => void;
   onEvidenceUrlChange: (url: string) => void;
   onNotesChange: (notes: string) => void;
-  onFilesChange: (files: FileList | null) => void;
   onClose: () => void;
   onSubmit: () => void;
 }) {
@@ -195,11 +180,9 @@ export function PassportEvidenceDialog({
             evidenceType={evidenceType}
             evidenceUrl={evidenceUrl}
             notes={notes}
-            selectedFiles={selectedFiles}
             onEvidenceTypeChange={onEvidenceTypeChange}
             onEvidenceUrlChange={onEvidenceUrlChange}
             onNotesChange={onNotesChange}
-            onFilesChange={onFilesChange}
           />
           <DrawerFooter className="gap-2 px-0">{actions}</DrawerFooter>
         </DrawerContent>
@@ -219,11 +202,9 @@ export function PassportEvidenceDialog({
           evidenceType={evidenceType}
           evidenceUrl={evidenceUrl}
           notes={notes}
-          selectedFiles={selectedFiles}
           onEvidenceTypeChange={onEvidenceTypeChange}
           onEvidenceUrlChange={onEvidenceUrlChange}
           onNotesChange={onNotesChange}
-          onFilesChange={onFilesChange}
         />
         <DialogFooter>{actions}</DialogFooter>
       </DialogContent>

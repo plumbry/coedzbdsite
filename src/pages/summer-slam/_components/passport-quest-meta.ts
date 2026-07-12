@@ -19,7 +19,7 @@ export function formatHowToCompleteLabel(
 ): string {
   if (completionMethod === "auto") return "Auto Complete";
   if (completionMethod === "admin") return "Staff Awarded";
-  if (evidenceInput === "image") return "Submit · Image";
+  if (evidenceInput === "image") return "Submit · Screenshot Link";
   if (evidenceInput === "link") return "Submit · Link";
   return "Submit";
 }
@@ -49,19 +49,19 @@ export function getQuestTypeInfo(
       };
     default:
       return {
-        emoji: evidenceInput === "image" ? "🖼️" : "🔗",
-        label: evidenceInput === "image" ? "Submit Image" : "Submit Link",
+        emoji: "🔗",
+        label: evidenceInput === "image" ? "Submit Screenshot Link" : "Submit Link",
         shortLabel: "Submit",
         requiresSubmission: true,
         summary:
           evidenceInput === "image"
-            ? "Upload an image for staff review."
+            ? "Paste a public screenshot link for staff review."
             : evidenceInput === "link"
               ? "Paste a link for staff review."
               : "Evidence must be submitted for staff review.",
         detail:
           evidenceInput === "image"
-            ? "Upload your screenshot or photo below. Staff will review it before you earn your stamp."
+            ? "Host your screenshot on postimages.org (or similar), then paste the link below. Staff will review it before you earn your stamp."
             : evidenceInput === "link"
               ? "Paste your evidence link below. Staff will review it before you earn your stamp."
               : "Submit proof below. Staff will review it before you earn your stamp.",
@@ -94,13 +94,13 @@ export function textToBullets(text: string): string[] {
 }
 
 export function getEvidenceSubmitOptions(instructions?: string): string[] {
-  const defaults = ["Screenshot or image", "Clip link", "Match or Yunite link"];
+  const defaults = ["Screenshot link (Postimages)", "Clip link", "Match or Yunite link"];
   if (!instructions?.trim()) return defaults;
 
   const lower = instructions.toLowerCase();
   const options: string[] = [];
-  if (lower.includes("screenshot") || lower.includes("image") || lower.includes("photo")) {
-    options.push("Screenshot or image");
+  if (lower.includes("screenshot") || lower.includes("image") || lower.includes("photo") || lower.includes("postimages")) {
+    options.push("Screenshot link (Postimages)");
   }
   if (lower.includes("clip") || lower.includes("video")) {
     options.push("Clip link");

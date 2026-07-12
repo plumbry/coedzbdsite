@@ -578,10 +578,15 @@ export default function SummerSlamAdminPage() {
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="image">Image</SelectItem>
-                        <SelectItem value="link">Link</SelectItem>
+                        <SelectItem value="image">Screenshot link</SelectItem>
+                        <SelectItem value="link">Link (clip / other)</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {evidenceInput === "image"
+                        ? "Players paste a public screenshot URL (recommend postimages.org). Files are not uploaded to our servers."
+                        : "Players paste a clip, Yunite, or other evidence link."}
+                    </p>
                   </div>
                 )}
                 {completionMethod === "admin" && (
@@ -598,7 +603,7 @@ export default function SummerSlamAdminPage() {
                   <Textarea
                     value={evidenceInstructions}
                     onChange={(event) => setEvidenceInstructions(event.target.value)}
-                    placeholder="Video evidence should be submitted as a link. Please upload clips to YouTube, Twitch, TikTok, Medal, Streamable, Discord, etc. and paste the link here."
+                    placeholder="Upload screenshots to https://postimages.org/ and paste the link. Video clips: YouTube, Twitch, TikTok, Medal, Streamable, Discord, etc."
                   />
                 </div>
                 <div className="space-y-1.5">

@@ -8,10 +8,10 @@ import {
 import { Button } from "@/components/ui/button.tsx";
 
 const ACCEPTED_EXAMPLES = [
-  "Screenshot clearly showing the required in-game result, with the player's Epic name visible.",
+  "Public screenshot link (e.g. Postimages) clearly showing the required in-game result, with the player's Epic name visible.",
   "Public clip link (YouTube, Medal, Twitch, etc.) showing the full moment that satisfies the quest.",
   "Yunite or match link when the quest specifically asks for tournament or event proof.",
-  "Image or link that matches the quest's stated game mode and format (Duos, Trios, Squads).",
+  "Link that matches the quest's stated game mode and format (Duos, Trios, Squads).",
 ];
 
 const REJECTED_EXAMPLES = [

@@ -57,9 +57,9 @@ This is not a problem with your account.
 
 Watch Discord for the Summer Slam launch announcement.`;
 
-export const UPLOAD_FAILED_MESSAGE = `Try a smaller image (under 5MB), JPG, PNG or WEBP format, or a clip link instead.
+export const UPLOAD_FAILED_MESSAGE = `Host your screenshot on a public image site (we recommend postimages.org), then paste the direct link.
 
-Video files cannot be uploaded directly.`;
+Video clips should also be submitted as a link (Medal, YouTube, Twitch, etc.).`;
 
 export const SUBMISSION_ALREADY_SUBMITTED_MESSAGE = `This quest already has evidence waiting for staff review.
 
@@ -67,7 +67,7 @@ You cannot submit additional evidence until staff have responded.`;
 
 export const SUBMISSION_FAILED_MESSAGE = `We couldn't submit your evidence.
 
-Check your link or images and try again.
+Check your link and try again.
 
 If the problem continues, contact support and include a screenshot.`;
 
@@ -109,8 +109,11 @@ export function mapEnsurePassportError(message: string) {
 export const CLIP_LINK_HELPER =
   "Upload your clip to Discord, Medal, YouTube, Twitch, TikTok, Streamable or another hosting platform, then paste the link below.";
 
-export const IMAGE_UPLOAD_HELPER =
-  "Images only — up to 3 files, 5MB each. JPG, PNG or WEBP. For video, paste a clip link instead.";
+export const SCREENSHOT_LINK_HELPER =
+  "Upload your screenshot to Postimages or another public image host, then paste the direct link below.";
+
+/** @deprecated Use SCREENSHOT_LINK_HELPER — direct image uploads are no longer supported. */
+export const IMAGE_UPLOAD_HELPER = SCREENSHOT_LINK_HELPER;
 
 export type EvidenceType =
   | "image"

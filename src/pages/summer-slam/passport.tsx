@@ -111,7 +111,6 @@ function PassportContent() {
   const ensureMyPassport = useMutation(api.seasonal.ensureMyPassport);
   const setPassportAvatar = useMutation(api.seasonal.setPassportAvatar);
   const setPassportBirthplace = useMutation(api.seasonal.setPassportBirthplace);
-  const generateEvidenceUploadUrl = useMutation(api.seasonal.generateEvidenceUploadUrl);
   const submitEvidence = useMutation(api.seasonal.submitEvidence);
   const campaign = useQuery(
     api.seasonal.getCampaign,
@@ -178,31 +177,15 @@ function PassportContent() {
   const quests = (passport?.quests ?? []) as QuestEntry[];
 
   const handleSubmitEvidence = async (payload: PassportEvidenceSubmitPayload) => {
-    const { questId, evidenceType: submissionType, evidenceUrl: trimmedUrl, notes: trimmedNotes, selectedFiles } =
+    const { questId, evidenceType: submissionType, evidenceUrl: trimmedUrl, notes: trimmedNotes } =
       payload;
     try {
-      const images = [];
-      for (const file of submissionType === "image" ? selectedFiles : []) {
-        const uploadUrl = await generateEvidenceUploadUrl({ slug: CAMPAIGN_SLUG });
-        const response = await fetch(uploadUrl, {
-          method: "POST",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-        if (!response.ok) {
-          throw new Error("UPLOAD_FAILED");
-        }
-        const { storageId } = await response.json();
-        images.push({ storageId, fileName: file.name });
-      }
-
       await submitEvidence({
         slug: CAMPAIGN_SLUG,
         questId,
         evidenceTypes: [submissionType, ...(trimmedNotes ? ["notes" as const] : [])],
         evidenceUrls: trimmedUrl ? [trimmedUrl] : undefined,
         notes: trimmedNotes || undefined,
-        images,
       });
       toast.success(EVIDENCE_SUBMITTED_SUCCESS_MESSAGE);
     } catch (error) {
@@ -218,8 +201,8 @@ function PassportContent() {
         message.includes("already has a pending")
       ) {
         toast.error("Already Submitted", { description: SUBMISSION_ALREADY_SUBMITTED_MESSAGE });
-      } else if (message === "UPLOAD_FAILED" || message.includes("Video")) {
-        toast.error("Upload Failed", { description: UPLOAD_FAILED_MESSAGE });
+      } else if (message.includes("Image uploads") || message.includes("postimages")) {
+        toast.error("Link Required", { description: UPLOAD_FAILED_MESSAGE });
       } else if (message) {
         toast.error("Submission Failed", { description: message });
       } else {

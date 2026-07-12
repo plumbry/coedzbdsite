@@ -8,7 +8,7 @@ import { PassportEvidenceDialog } from "./passport-evidence-dialog.tsx";
 import { ssPageBg } from "./passport-dashboard-theme.ts";
 import type { PassportAvatarId } from "./passport-avatars.ts";
 import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
-import { UPLOAD_FAILED_MESSAGE, type EvidenceType, type QuestEntry } from "./passport-types.ts";
+import { type EvidenceType, type QuestEntry } from "./passport-types.ts";
 import type { CampaignPublic } from "./campaign-phase.ts";
 
 export type PassportEvidenceSubmitPayload = {
@@ -16,7 +16,6 @@ export type PassportEvidenceSubmitPayload = {
   evidenceType: EvidenceType;
   evidenceUrl: string;
   notes: string;
-  selectedFiles: File[];
 };
 
 export function PassportExperience({
@@ -43,7 +42,6 @@ export function PassportExperience({
   onSubmitEvidence: (payload: PassportEvidenceSubmitPayload) => Promise<void>;
 }) {
   const [evidenceQuestId, setEvidenceQuestId] = useState<Id<"seasonalQuests"> | null>(null);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [evidenceType, setEvidenceType] = useState<EvidenceType>("screenshot_link");
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [notes, setNotes] = useState("");
@@ -53,48 +51,15 @@ export function PassportExperience({
 
   useEffect(() => {
     if (!evidenceQuest) return;
-    if (evidenceQuest.evidenceInput === "image") {
-      setEvidenceType("image");
-      setEvidenceUrl("");
-      setSelectedFiles([]);
-      return;
-    }
-    if (evidenceQuest.evidenceInput === "link") {
+    // "image" quests now require a public screenshot link (e.g. Postimages), not a file upload.
+    if (evidenceQuest.evidenceInput === "image" || evidenceQuest.evidenceInput === "link") {
       setEvidenceType("screenshot_link");
       setEvidenceUrl("");
-      setSelectedFiles([]);
     }
   }, [evidenceQuest?._id, evidenceQuest?.evidenceInput]);
 
-  const handleFiles = (files: FileList | null) => {
-    const incoming = [...(files ?? [])];
-    const video = incoming.find(
-      (file) =>
-        file.type.startsWith("video/") || /\.(mp4|mov|avi|webm|mkv|m4v)$/i.test(file.name),
-    );
-    if (video) {
-      toast.error("Upload Failed", { description: UPLOAD_FAILED_MESSAGE });
-      return;
-    }
-    if (incoming.length > 3) {
-      toast.error("Maximum 3 images per submission. Remove one and try again.");
-      return;
-    }
-    const next = incoming.slice(0, 3);
-    const invalid = next.find(
-      (file) => !["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type),
-    );
-    const oversized = next.find((file) => file.size > 5 * 1024 * 1024);
-    if (invalid || oversized) {
-      toast.error("Upload Failed", { description: UPLOAD_FAILED_MESSAGE });
-      return;
-    }
-    setSelectedFiles(next);
-  };
-
   const resetSubmission = () => {
     setEvidenceQuestId(null);
-    setSelectedFiles([]);
     setEvidenceType("screenshot_link");
     setEvidenceUrl("");
     setNotes("");
@@ -105,16 +70,10 @@ export function PassportExperience({
     const trimmedUrl = evidenceUrl.trim();
     const trimmedNotes = notes.trim();
     const submissionType =
-      evidenceQuest.evidenceInput === "image"
-        ? "image"
-        : evidenceQuest.evidenceInput === "link"
-          ? "screenshot_link"
-          : evidenceType;
-    if (submissionType === "image" && selectedFiles.length === 0) {
-      toast.error("Choose at least one image before submitting.");
-      return;
-    }
-    if (submissionType !== "image" && submissionType !== "other" && !trimmedUrl) {
+      evidenceQuest.evidenceInput === "image" || evidenceQuest.evidenceInput === "link"
+        ? "screenshot_link"
+        : evidenceType;
+    if (submissionType !== "other" && !trimmedUrl) {
       toast.error("Paste your evidence link before submitting.");
       return;
     }
@@ -126,7 +85,6 @@ export function PassportExperience({
         evidenceType: submissionType,
         evidenceUrl: trimmedUrl,
         notes: trimmedNotes,
-        selectedFiles: submissionType === "image" ? selectedFiles : [],
       });
       resetSubmission();
     } finally {
@@ -138,37 +96,32 @@ export function PassportExperience({
     <CompactMobileButtonsOptOut>
       <PageShell maxWidth="wide" className={ssPageBg}>
         <PassportDashboard
-        campaignTitle={campaignTitle}
-        playerName={playerName}
-        avatarId={avatarId}
-        birthplaceId={birthplaceId}
-        onSaveAvatar={onSaveAvatar}
-        onSaveBirthplace={onSaveBirthplace}
-        quests={quests}
-        campaign={campaign}
-        isAdminPreview={isAdminPreview}
-        onRequestEvidence={(entry) => setEvidenceQuestId(entry.quest._id)}
-      />
+          campaignTitle={campaignTitle}
+          playerName={playerName}
+          avatarId={avatarId}
+          birthplaceId={birthplaceId}
+          onSaveAvatar={onSaveAvatar}
+          onSaveBirthplace={onSaveBirthplace}
+          quests={quests}
+          campaign={campaign}
+          isAdminPreview={isAdminPreview}
+          onRequestEvidence={(entry) => setEvidenceQuestId(entry.quest._id)}
+        />
 
-      <PassportEvidenceDialog
-        open={!!evidenceQuestId}
-        quest={evidenceQuest}
-        evidenceType={evidenceType}
-        evidenceUrl={evidenceUrl}
-        notes={notes}
-        selectedFiles={selectedFiles}
-        isSubmitting={isSubmitting}
-        onEvidenceTypeChange={(type) => {
-          setEvidenceType(type);
-          if (type !== "image") setSelectedFiles([]);
-        }}
-        onEvidenceUrlChange={setEvidenceUrl}
-        onNotesChange={setNotes}
-        onFilesChange={handleFiles}
-        onClose={resetSubmission}
-        onSubmit={handleSubmitEvidence}
-      />
-    </PageShell>
+        <PassportEvidenceDialog
+          open={!!evidenceQuestId}
+          quest={evidenceQuest}
+          evidenceType={evidenceType}
+          evidenceUrl={evidenceUrl}
+          notes={notes}
+          isSubmitting={isSubmitting}
+          onEvidenceTypeChange={setEvidenceType}
+          onEvidenceUrlChange={setEvidenceUrl}
+          onNotesChange={setNotes}
+          onClose={resetSubmission}
+          onSubmit={handleSubmitEvidence}
+        />
+      </PageShell>
     </CompactMobileButtonsOptOut>
   );
 }

@@ -11,15 +11,6 @@ const DEFAULT_CAMPAIGN_TITLE = "Summer Slam Passport";
 const DEFAULT_CAMPAIGN_DESCRIPTION =
   "Complete quests during scrims, submit evidence, earn a place on the prize wheel!";
 const LEGACY_CAMPAIGN_DESCRIPTION = "Configurable seasonal quest campaign.";
-const MAX_IMAGES_PER_SUBMISSION = 3;
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const ALLOWED_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-  "image/webp",
-]);
-const VIDEO_FILE_EXTENSIONS = /\.(mp4|mov|avi|webm|mkv|m4v|wmv|flv|mpeg|mpg|3gp)$/i;
 
 const teamFormatValidator = v.union(
   v.literal("duos"),
@@ -172,10 +163,6 @@ function validateHttpUrl(url: string): string {
   } catch {
     throw new ConvexError({ message: "Evidence links must be valid http(s) URLs", code: "BAD_REQUEST" });
   }
-}
-
-function isVideoUpload(contentType: string, fileName: string): boolean {
-  return contentType.toLowerCase().startsWith("video/") || VIDEO_FILE_EXTENSIONS.test(fileName);
 }
 
 async function getCampaignBySlug(ctx: QueryCtx | MutationCtx, slug: string) {
@@ -1075,12 +1062,12 @@ export const deleteQuest = mutation({
 
 export const generateEvidenceUploadUrl = mutation({
   args: { slug: v.optional(v.string()) },
-  handler: async (ctx, args) => {
-    const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
-    const admin = await resolveCurrentAdmin(ctx);
-    assertSubmissionsOpen(campaign, Date.now(), { allowAdminEarlyAccess: !!admin });
-    await requireCurrentPassport(ctx, campaign);
-    return await ctx.storage.generateUploadUrl();
+  handler: async () => {
+    throw new ConvexError({
+      message:
+        "Image uploads are no longer supported. Host your screenshot on https://postimages.org/ and paste the link instead.",
+      code: "BAD_REQUEST",
+    });
   },
 });
 
@@ -1189,55 +1176,30 @@ export const submitEvidence = mutation({
     }
 
     const images = args.images ?? [];
-    if (images.length > MAX_IMAGES_PER_SUBMISSION) {
-      throw new ConvexError({ message: "Maximum 3 images per submission", code: "BAD_REQUEST" });
-    }
-    if (quest.evidenceInput === "image" && images.length === 0) {
-      throw new ConvexError({ message: "This quest requires an image upload", code: "BAD_REQUEST" });
-    }
-    if (quest.evidenceInput === "link" && images.length > 0) {
-      throw new ConvexError({ message: "This quest requires a link, not an image upload", code: "BAD_REQUEST" });
+    if (images.length > 0) {
+      throw new ConvexError({
+        message:
+          "Image uploads are no longer supported. Host your screenshot on https://postimages.org/ and paste the link instead.",
+        code: "BAD_REQUEST",
+      });
     }
 
     const evidenceUrls = (args.evidenceUrls ?? []).map(validateHttpUrl);
     const notes = sanitizeText(args.notes, 2000);
-    if (quest.evidenceInput === "link" && evidenceUrls.length === 0) {
-      throw new ConvexError({ message: "This quest requires an evidence link", code: "BAD_REQUEST" });
-    }
-    if (images.length === 0 && evidenceUrls.length === 0 && !notes) {
-      throw new ConvexError({ message: "Add at least one image, link, or note", code: "BAD_REQUEST" });
-    }
-
-    const imageMetadata: Array<{ storageId: Id<"_storage">; fileName: string; contentType: string; size: number }> = [];
-    for (const image of images) {
-      const metadata = await ctx.db.system.get("_storage", image.storageId);
-      if (!metadata) {
-        throw new ConvexError({ message: "Uploaded image not found", code: "BAD_REQUEST" });
-      }
-      const contentType = metadata.contentType ?? "";
-      const fileName = sanitizeText(image.fileName, 200) ?? "evidence";
-      if (isVideoUpload(contentType, fileName)) {
-        throw new ConvexError({
-          message: "Video files are not supported. Submit video evidence as a link instead.",
-          code: "BAD_REQUEST",
-        });
-      }
-      if (!ALLOWED_IMAGE_TYPES.has(contentType)) {
-        throw new ConvexError({ message: "Images must be jpg, jpeg, png, or webp", code: "BAD_REQUEST" });
-      }
-      if (metadata.size > MAX_IMAGE_BYTES) {
-        throw new ConvexError({ message: "Images must be 5MB or smaller", code: "BAD_REQUEST" });
-      }
-      imageMetadata.push({
-        storageId: image.storageId,
-        fileName,
-        contentType,
-        size: metadata.size,
+    if ((quest.evidenceInput === "link" || quest.evidenceInput === "image") && evidenceUrls.length === 0) {
+      throw new ConvexError({
+        message:
+          quest.evidenceInput === "image"
+            ? "This quest requires a screenshot link. Upload to https://postimages.org/ and paste the URL."
+            : "This quest requires an evidence link",
+        code: "BAD_REQUEST",
       });
+    }
+    if (evidenceUrls.length === 0 && !notes) {
+      throw new ConvexError({ message: "Add at least one link or note", code: "BAD_REQUEST" });
     }
 
     const evidenceTypes = new Set(args.evidenceTypes);
-    if (images.length > 0) evidenceTypes.add("image");
     if (notes) evidenceTypes.add("notes");
 
     const submissionId = await ctx.db.insert("seasonalQuestSubmissions", {
@@ -1250,17 +1212,6 @@ export const submitEvidence = mutation({
       notes,
       submittedAt: Date.now(),
     });
-
-    for (const image of imageMetadata) {
-      await ctx.db.insert("seasonalSubmissionImages", {
-        submissionId,
-        storageId: image.storageId,
-        fileName: image.fileName,
-        contentType: image.contentType,
-        size: image.size,
-        uploadedByPlayerId: player._id,
-      });
-    }
 
     await setProgress(ctx, {
       campaignId: campaign._id,

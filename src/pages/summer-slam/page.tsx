@@ -52,7 +52,7 @@ const STEPS = [
   {
     icon: Upload,
     title: "Submit evidence",
-    body: "For manual quests, upload an image or paste a clip link. Only submit when you meet the quest requirements.",
+    body: "For manual quests, paste a public evidence link (screenshots via postimages.org, clips via Medal/YouTube/etc.). Only submit when you meet the quest requirements.",
   },
   {
     icon: UserCheck,
