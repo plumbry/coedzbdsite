@@ -270,14 +270,14 @@ function CompactQuestPage({
     (status === "rejected" || status === "needs_more_evidence");
 
   return (
-    <div className={cn(PAGE_SURFACE, PAGE_PAD, "col-span-full flex min-h-0 flex-1 flex-col lg:col-span-2")}>
-      <p className={ssLabel}>{quest.category.replace(/_/g, " ")}</p>
-      <h2 className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-orange-950">
+    <div className={cn(PAGE_SURFACE, PAGE_PAD, "col-span-full flex min-h-0 flex-1 flex-col items-center text-center lg:col-span-2")}>
+      <p className={cn(ssLabel, "text-xs sm:text-[11px]")}>{quest.category.replace(/_/g, " ")}</p>
+      <h2 className="mt-1 line-clamp-2 text-xl font-semibold leading-snug text-orange-950 sm:text-2xl">
         {quest.title}
       </h2>
       <p
         className={cn(
-          "mt-1 inline-flex w-fit rounded-full px-2 py-px text-[9px] font-semibold uppercase",
+          "mt-2 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase sm:text-[11px]",
           status === "approved" && "bg-teal-100 text-teal-800",
           status === "pending_review" && "bg-amber-100 text-amber-800",
           (status === "rejected" || status === "needs_more_evidence") && "bg-orange-100 text-orange-800",
@@ -287,26 +287,26 @@ function CompactQuestPage({
       >
         {statusLabel(status)}
       </p>
-      <p className="mt-1.5 line-clamp-3 flex-1 text-[10px] leading-snug text-orange-900/60">
+      <p className="mt-3 line-clamp-4 max-w-md flex-1 text-sm leading-snug text-orange-900/60 sm:text-[13px]">
         {quest.description}
       </p>
       {progress?.awardLog && (status === "rejected" || status === "needs_more_evidence") ? (
-        <p className="mt-1 line-clamp-2 rounded border border-orange-100 bg-orange-50/60 px-2 py-1 text-[10px] text-orange-900/70">
+        <p className="mt-2 line-clamp-3 w-full max-w-md rounded border border-orange-100 bg-orange-50/60 px-2.5 py-1.5 text-xs text-orange-900/70">
           {progress.awardLog}
         </p>
       ) : null}
       {(canSubmit || canResubmit) && submissionsOpen && (
         <Button
           size="sm"
-          className="mt-2 h-7 shrink-0 px-2 text-[10px] touch-manipulation"
+          className="mt-3 h-9 w-full max-w-md shrink-0 px-3 text-xs touch-manipulation sm:h-8"
           onClick={onSubmitEvidence}
         >
-          <Upload className="mr-1 h-3 w-3" />
+          <Upload className="mr-1.5 h-3.5 w-3.5" />
           {canResubmit ? "Resubmit evidence" : "Submit evidence"}
         </Button>
       )}
       {(canSubmit || canResubmit) && !submissionsOpen ? (
-        <p className="mt-2 text-[10px] text-orange-800/60">Submissions are closed for this season.</p>
+        <p className="mt-3 text-xs text-orange-800/60">Submissions are closed for this season.</p>
       ) : null}
     </div>
   );

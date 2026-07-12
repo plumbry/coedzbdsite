@@ -357,27 +357,26 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
     }
 
     if (hasEventBanAccess) {
-      result.push({
-        id: "mods",
-        label: "Mods",
-        items: [
-          { path: "/admin/event-bans", label: "Event Bans", icon: Ban },
-          {
-            path: "/admin/potential-event-calendar",
-            label: "Event Calendar",
-            icon: CalendarDays,
-          },
-          { path: "/admin/resources", label: "Resources", icon: BookOpen },
-          { path: "/spin", label: "Spin Page", icon: Dices },
-          { path: "/admin/spin-moderation", label: "Spin Moderation", icon: KeyRound },
-        ],
-      });
+      const modsItems: NavItem[] = [
+        { path: "/admin/event-bans", label: "Event Bans", icon: Ban },
+        {
+          path: "/admin/potential-event-calendar",
+          label: "Event Calendar",
+          icon: CalendarDays,
+        },
+        { path: "/admin/resources", label: "Resources", icon: BookOpen },
+        { path: "/spin", label: "Spin Page", icon: Dices },
+        { path: "/admin/spin-moderation", label: "Spin Moderation", icon: KeyRound },
+      ];
+      if (isAdmin) {
+        modsItems.push({ path: "/admin/summer-slam", label: "Summer Slam", icon: Trophy });
+      }
+      result.push({ id: "mods", label: "Mods", items: modsItems });
     }
 
     if (isAdmin) {
       const adminItems: NavItem[] = [];
       adminItems.push({ path: "/admin/features", label: "Features", icon: Zap });
-      adminItems.push({ path: "/admin/summer-slam", label: "Summer Slam", icon: Trophy });
       if (isModeratorOrAdmin) {
         adminItems.push({ path: "/admin/support", label: "Support", icon: MessageSquare });
       }
@@ -451,6 +450,90 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
 
   const showNav = isModeratorOrAdmin || isEventMod || hasAnalyticsHubAccess;
   const effectiveCollapsed = inSheet ? false : collapsed;
+
+  const navContent = (
+    <>
+      <div className={cn("pb-2", effectiveCollapsed && "flex justify-center")}>
+        {(isAdmin || isModeratorOrAdmin || isEventMod) && (
+          <SidebarNavLink
+            path="/admin"
+            label="Admin Home"
+            icon={LayoutDashboard}
+            active={isActive("/admin")}
+            collapsed={effectiveCollapsed}
+            onNavigate={onNavigate}
+          />
+        )}
+        {isAnalytics && !isAdmin && (
+          <SidebarNavLink
+            path="/admin/stats"
+            label="Analytics Hub"
+            icon={BarChart3}
+            active={isActive("/admin/stats")}
+            collapsed={effectiveCollapsed}
+            onNavigate={onNavigate}
+          />
+        )}
+      </div>
+      {effectiveCollapsed
+        ? sections.map((section, sectionIndex) => (
+            <div key={section.id}>
+              {sectionIndex > 0 && (
+                <div className="my-2 border-t border-border/60" />
+              )}
+              <div className="flex justify-center">
+                <CollapsedSectionToggle
+                  label={section.label}
+                  open={openSections.has(section.id)}
+                  onToggle={() => toggleSection(section.id)}
+                />
+              </div>
+              {openSections.has(section.id) && (
+                <div className="space-y-1">
+                  {section.items.map((item) => (
+                    <SidebarNavLink
+                      key={item.path}
+                      {...item}
+                      active={isActive(item.path)}
+                      collapsed
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))
+        : sections.map((section) => (
+            <div key={section.id} className="pb-2">
+              <button
+                type="button"
+                onClick={() => toggleSection(section.id)}
+                className="mb-2 flex w-full min-w-0 items-center justify-between px-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <span className="truncate">{section.label}</span>
+                {openSections.has(section.id) ? (
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                )}
+              </button>
+              {openSections.has(section.id) && (
+                <div className="space-y-1">
+                  {section.items.map((item) => (
+                    <SidebarNavLink
+                      key={item.path}
+                      {...item}
+                      active={isActive(item.path)}
+                      collapsed={false}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+    </>
+  );
 
   const panel = (
     <>
@@ -553,92 +636,15 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
         )}
       </div>
 
-      {/* Navigation */}
-      {showNav && (
-        <ScrollArea className="min-h-0 flex-1">
-          <nav className="space-y-1 pr-2">
-            <div className={cn("pb-2", effectiveCollapsed && "flex justify-center")}>
-              {(isAdmin || isModeratorOrAdmin || isEventMod) && (
-                <SidebarNavLink
-                  path="/admin"
-                  label="Admin Home"
-                  icon={LayoutDashboard}
-                  active={isActive("/admin")}
-                  collapsed={effectiveCollapsed}
-                  onNavigate={onNavigate}
-                />
-              )}
-              {isAnalytics && !isAdmin && (
-                <SidebarNavLink
-                  path="/admin/stats"
-                  label="Analytics Hub"
-                  icon={BarChart3}
-                  active={isActive("/admin/stats")}
-                  collapsed={effectiveCollapsed}
-                  onNavigate={onNavigate}
-                />
-              )}
-            </div>
-            {effectiveCollapsed
-              ? sections.map((section, sectionIndex) => (
-                  <div key={section.id}>
-                    {sectionIndex > 0 && (
-                      <div className="my-2 border-t border-border/60" />
-                    )}
-                    <div className="flex justify-center">
-                      <CollapsedSectionToggle
-                        label={section.label}
-                        open={openSections.has(section.id)}
-                        onToggle={() => toggleSection(section.id)}
-                      />
-                    </div>
-                    {openSections.has(section.id) && (
-                      <div className="space-y-1">
-                        {section.items.map((item) => (
-                          <SidebarNavLink
-                            key={item.path}
-                            {...item}
-                            active={isActive(item.path)}
-                            collapsed
-                            onNavigate={onNavigate}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))
-              : sections.map((section) => (
-                  <div key={section.id} className="pb-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSection(section.id)}
-                      className="mb-2 flex w-full min-w-0 items-center justify-between px-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <span className="truncate">{section.label}</span>
-                      {openSections.has(section.id) ? (
-                        <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-                      ) : (
-                        <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                      )}
-                    </button>
-                    {openSections.has(section.id) && (
-                      <div className="space-y-1">
-                        {section.items.map((item) => (
-                          <SidebarNavLink
-                            key={item.path}
-                            {...item}
-                            active={isActive(item.path)}
-                            collapsed={false}
-                            onNavigate={onNavigate}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-          </nav>
-        </ScrollArea>
-      )}
+      {/* Navigation — sheet uses ScrollArea; desktop grows with the page */}
+      {showNav &&
+        (inSheet ? (
+          <ScrollArea className="min-h-0 flex-1">
+            <nav className="space-y-1 pr-2">{navContent}</nav>
+          </ScrollArea>
+        ) : (
+          <nav className="space-y-1 pr-2">{navContent}</nav>
+        ))}
     </>
   );
 
@@ -654,7 +660,7 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          "sticky top-0 z-20 hidden h-[calc(100vh-2.5rem)] shrink-0 flex-col border-r bg-background transition-[width] duration-200 ease-in-out md:flex",
+          "z-20 hidden shrink-0 self-start flex-col border-r bg-background transition-[width] duration-200 ease-in-out md:flex",
           effectiveCollapsed ? "w-14 p-2" : "w-56 p-4",
         )}
       >

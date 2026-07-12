@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import { Download, ExternalLink, Loader2, RefreshCw, Save, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { cn } from "@/lib/utils.ts";
 import {
   formatHowToCompleteLabel,
   type EvidenceInput,
@@ -43,6 +44,9 @@ import { getCampaignPhase } from "@/pages/summer-slam/_components/campaign-phase
 
 const CAMPAIGN_SLUG = "summer-slam";
 
+/** Visible field chrome — theme `--input` is nearly white on cards. */
+const fieldClass = "border-foreground/20 bg-background";
+
 type Category = "traveller" | "competitor" | "summer_spirit" | "team_player" | "community" | "summer_legend";
 type CompletionMethod = "auto" | "manual" | "admin";
 type RuleType =
@@ -50,7 +54,12 @@ type RuleType =
   | "play_all_team_formats"
   | "reach_top_5"
   | "reach_top_3"
-  | "win_game";
+  | "reach_top_10"
+  | "win_game"
+  | "play_event_type"
+  | "distinct_teammates"
+  | "new_member_teammate"
+  | "new_teammates";
 
 function timestampToDatetimeLocal(ts?: number): string {
   if (!ts) return "";
@@ -64,6 +73,19 @@ function datetimeLocalToTimestamp(value: string): number | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   return new Date(trimmed).getTime();
+}
+
+function formatTaggedEventDate(startDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(startDate);
+  const date = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(startDate);
+  if (Number.isNaN(date.getTime())) return startDate;
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 const categoryLabels: Record<Category, string> = {
@@ -108,7 +130,29 @@ function buildRule(args: { ruleType: RuleType; threshold: number }) {
   if (args.ruleType === "reach_top_3") {
     return { type: "reach_top_3" as const };
   }
+  if (args.ruleType === "reach_top_10") {
+    return { type: "reach_top_10" as const };
+  }
+  if (args.ruleType === "play_event_type") {
+    return { type: "play_event_type" as const, eventType: "showdown" as const };
+  }
+  if (args.ruleType === "distinct_teammates") {
+    return { type: "distinct_teammates" as const, count: args.threshold };
+  }
+  if (args.ruleType === "new_member_teammate") {
+    return { type: "new_member_teammate" as const, maxEvents: args.threshold };
+  }
+  if (args.ruleType === "new_teammates") {
+    return { type: "new_teammates" as const, count: args.threshold };
+  }
   return { type: "win_game" as const };
+}
+
+function defaultThresholdForRule(ruleType: RuleType): number {
+  if (ruleType === "distinct_teammates") return 3;
+  if (ruleType === "new_member_teammate") return 5;
+  if (ruleType === "new_teammates") return 2;
+  return 1;
 }
 
 export default function SummerSlamAdminPage() {
@@ -144,6 +188,7 @@ export default function SummerSlamAdminPage() {
     { _id: Id<"seasonalQuests">; title: string } | null
   >(null);
   const [isDeletingQuest, setIsDeletingQuest] = useState(false);
+  const [activeTab, setActiveTab] = useState("quests");
   const { isAdmin } = useUserRole();
 
   const ensureCampaign = useMutation(api.seasonal.ensureSummerSlamCampaign);
@@ -153,6 +198,7 @@ export default function SummerSlamAdminPage() {
   const reviewSubmission = useMutation(api.seasonal.reviewSubmission);
   const recalculateCampaign = useMutation(api.seasonal.recalculateCampaign);
   const dashboard = useQuery(api.seasonal.getAdminDashboard, isAdmin ? { slug: CAMPAIGN_SLUG } : "skip");
+  const taggedEvents = useQuery(api.seasonal.getAdminTaggedEvents, isAdmin ? { slug: CAMPAIGN_SLUG } : "skip");
   const reviewQueue = useQuery(api.seasonal.getReviewQueue, isAdmin ? { slug: CAMPAIGN_SLUG, status: reviewStatus } : "skip");
   const passports = useQuery(api.seasonal.getAdminPassports, isAdmin ? { slug: CAMPAIGN_SLUG } : "skip");
   const exportData = useQuery(api.seasonal.getProgressExport, isAdmin ? { slug: CAMPAIGN_SLUG } : "skip");
@@ -253,6 +299,29 @@ export default function SummerSlamAdminPage() {
       setRuleType("win_game");
       return;
     }
+    if (rule.type === "reach_top_10") {
+      setRuleType("reach_top_10");
+      return;
+    }
+    if (rule.type === "play_event_type") {
+      setRuleType("play_event_type");
+      return;
+    }
+    if (rule.type === "distinct_teammates") {
+      setRuleType("distinct_teammates");
+      setThreshold(rule.count);
+      return;
+    }
+    if (rule.type === "new_member_teammate") {
+      setRuleType("new_member_teammate");
+      setThreshold(rule.maxEvents);
+      return;
+    }
+    if (rule.type === "new_teammates") {
+      setRuleType("new_teammates");
+      setThreshold(rule.count);
+      return;
+    }
     // Legacy rules map to the closest current option when editing.
     if (rule.type === "play_team_format") {
       setRuleType("play_events");
@@ -260,7 +329,9 @@ export default function SummerSlamAdminPage() {
       return;
     }
     if (rule.type === "reach_top") {
-      setRuleType(rule.placement <= 3 ? "reach_top_3" : "reach_top_5");
+      if (rule.placement <= 3) setRuleType("reach_top_3");
+      else if (rule.placement <= 5) setRuleType("reach_top_5");
+      else setRuleType("reach_top_10");
     }
   };
 
@@ -390,32 +461,33 @@ export default function SummerSlamAdminPage() {
       authTitle="Sign in to manage Summer Slam"
       maxWidth="wide"
     >
-      <div className="space-y-6">
-        <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
+      <div className="space-y-4">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(240px,300px)]">
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle>Campaign Settings</CardTitle>
               <CardDescription>Create, activate, edit, or archive the current Summer Slam campaign.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Campaign Title</Label>
-                  <Input value={campaignTitle} onChange={(event) => setCampaignTitle(event.target.value)} />
+                  <Input className={fieldClass} value={campaignTitle} onChange={(event) => setCampaignTitle(event.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Stamp Name</Label>
-                  <Input value={stampName} onChange={(event) => setStampName(event.target.value)} />
+                  <Input className={fieldClass} value={stampName} onChange={(event) => setStampName(event.target.value)} />
                 </div>
               </div>
               <div className="space-y-1.5">
                 <Label>Description</Label>
-                <Textarea value={campaignDescription} onChange={(event) => setCampaignDescription(event.target.value)} />
+                <Textarea className={fieldClass} value={campaignDescription} onChange={(event) => setCampaignDescription(event.target.value)} />
               </div>
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Season start</Label>
                   <Input
+                    className={fieldClass}
                     type="datetime-local"
                     value={campaignStartsAt}
                     onChange={(event) => setCampaignStartsAt(event.target.value)}
@@ -424,28 +496,28 @@ export default function SummerSlamAdminPage() {
                 <div className="space-y-1.5">
                   <Label>Season end (submission deadline)</Label>
                   <Input
+                    className={fieldClass}
                     type="datetime-local"
                     value={campaignEndsAt}
                     onChange={(event) => setCampaignEndsAt(event.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Last moment players can submit evidence. Staff can still review submissions after
-                    this date.
+                    Last moment players can submit evidence. Staff can still review after this date.
                   </p>
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label>Little Wheel Ticket Every X Points</Label>
-                  <Input type="number" min={1} value={littleWheelEvery} onChange={(event) => setLittleWheelEvery(Number(event.target.value))} />
+                  <Input className={fieldClass} type="number" min={1} value={littleWheelEvery} onChange={(event) => setLittleWheelEvery(Number(event.target.value))} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Big Wheel Ticket Every X Points</Label>
-                  <Input type="number" min={1} value={bigWheelEvery} onChange={(event) => setBigWheelEvery(Number(event.target.value))} />
+                  <Input className={fieldClass} type="number" min={1} value={bigWheelEvery} onChange={(event) => setBigWheelEvery(Number(event.target.value))} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>{campaignActive ? "Active" : "Archived"}</Label>
-                  <div className="flex h-10 items-center gap-2">
+                  <div className="flex h-9 items-center gap-2 rounded-md border border-foreground/20 bg-background px-3">
                     <Switch checked={campaignActive} onCheckedChange={setCampaignActive} />
                     <span className="text-sm text-muted-foreground">
                       {campaignActive ? "Players can access passports" : "Campaign is archived"}
@@ -461,84 +533,85 @@ export default function SummerSlamAdminPage() {
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle>Launch Checklist</CardTitle>
-              <CardDescription>Use this checklist before opening Summer Slam Passport to players.</CardDescription>
+              <CardDescription>Before opening passports to players.</CardDescription>
             </CardHeader>
             <CardContent>
-              <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-                <li>Activate the campaign and set season start/end dates in Campaign Settings.</li>
-                <li>Tag Summer Slam events in Events Manager and assign Duos, Trios, or Squads.</li>
-                <li>Configure manual and MVP auto quests in the Quests tab. Use the Bonus category for secret end-of-season quests.</li>
+              <ol className="list-decimal space-y-1.5 pl-4 text-sm text-muted-foreground">
+                <li>Activate the campaign and set season start/end dates.</li>
+                <li>Tag Summer Slam events in Events Manager (Duos, Trios, or Squads).</li>
+                <li>Configure quests. Use Bonus for secret end-of-season quests.</li>
                 <li>
-                  Before launch, admins can claim a passport early at{" "}
+                  Preview at{" "}
                   <Link to="/summer-slam/passport" className="font-medium text-primary underline">
                     /summer-slam/passport
-                  </Link>{" "}
-                  to verify layout and quests.
+                  </Link>
+                  .
                 </li>
-                <li>Test one manual submission, then approve/reject/request more evidence in Review Queue (works before launch).</li>
-                <li>Run recalculation after imports, quest changes, or event tag changes.</li>
-                <li>Export Little Wheel and Big Wheel tickets from Recalculate & Exports.</li>
+                <li>Test one manual submission in Review Queue.</li>
+                <li>Recalculate after imports, quest, or tag changes.</li>
+                <li>Export wheel tickets from Recalculate & Exports.</li>
               </ol>
-              <Button asChild variant="outline" className="mt-4">
+              <Button asChild variant="outline" size="sm" className="mt-3">
                 <Link to="/summer-slam/passport">Preview player passport</Link>
               </Button>
             </CardContent>
           </Card>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Tagged Events</p>
-              <p className="text-2xl font-bold">{dashboard?.counts.taggedEvents ?? 0}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Active Quests</p>
-              <p className="text-2xl font-bold">{dashboard?.counts.activeQuests ?? 0}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Pending Reviews</p>
-              <p className="text-2xl font-bold">{dashboard?.counts.pendingSubmissions ?? 0}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Approved Points</p>
-              <p className="text-2xl font-bold">{dashboard?.counts.approvedStamps ?? 0}</p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <button
+            type="button"
+            onClick={() => setActiveTab("tagged-events")}
+            className="rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/40"
+          >
+            <p className="text-xs text-muted-foreground">Tagged Events</p>
+            <p className="text-xl font-bold">{dashboard?.counts.taggedEvents ?? 0}</p>
+          </button>
+          <div className="rounded-lg border bg-card p-3">
+            <p className="text-xs text-muted-foreground">Active Quests</p>
+            <p className="text-xl font-bold">{dashboard?.counts.activeQuests ?? 0}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab("review")}
+            className="rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/40"
+          >
+            <p className="text-xs text-muted-foreground">Pending Reviews</p>
+            <p className="text-xl font-bold">{dashboard?.counts.pendingSubmissions ?? 0}</p>
+          </button>
+          <div className="rounded-lg border bg-card p-3">
+            <p className="text-xs text-muted-foreground">Approved Points</p>
+            <p className="text-xl font-bold">{dashboard?.counts.approvedStamps ?? 0}</p>
+          </div>
         </div>
 
-        <Tabs defaultValue="quests">
-          <TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-3">
+          <TabsList className="inline-flex h-auto w-auto max-w-full flex-wrap justify-start">
             <TabsTrigger value="quests">Quests</TabsTrigger>
+            <TabsTrigger value="tagged-events">Tagged Events</TabsTrigger>
             <TabsTrigger value="review">Review Queue</TabsTrigger>
             <TabsTrigger value="passports">Passports</TabsTrigger>
             <TabsTrigger value="exports">Recalculate & Exports</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="quests" className="mt-4 grid gap-4 lg:grid-cols-[420px_1fr]">
+          <TabsContent value="quests" className="mt-0 grid gap-3 lg:grid-cols-[minmax(280px,360px)_1fr]">
             <Card>
-              <CardHeader>
+              <CardHeader className="pb-3">
                 <CardTitle>{editingQuestId ? "Edit Quest" : "Create Quest"}</CardTitle>
                 <CardDescription>Quest definitions stay campaign-based; Summer Slam is the active campaign.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="space-y-1.5">
                   <Label>Title</Label>
-                  <Input value={title} onChange={(event) => setTitle(event.target.value)} />
+                  <Input className={fieldClass} value={title} onChange={(event) => setTitle(event.target.value)} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label>Category</Label>
                     <Select value={category} onValueChange={(value) => setCategory(value as Category)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className={cn("w-full", fieldClass)}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Object.entries(categoryLabels).map(([value, label]) => (
                           <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -555,7 +628,7 @@ export default function SummerSlamAdminPage() {
                         setCompletionMethod(next === "auto" ? "auto" : "manual");
                       }}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className={cn("w-full", fieldClass)}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="auto">Auto Complete</SelectItem>
                         <SelectItem value="submit">Submit</SelectItem>
@@ -576,7 +649,7 @@ export default function SummerSlamAdminPage() {
                       value={evidenceInput}
                       onValueChange={(value) => setEvidenceInput(value as EvidenceInput)}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className={cn("w-full", fieldClass)}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="image">Screenshot link</SelectItem>
                         <SelectItem value="link">Link (clip / other)</SelectItem>
@@ -596,11 +669,12 @@ export default function SummerSlamAdminPage() {
                 )}
                 <div className="space-y-1.5">
                   <Label>Description</Label>
-                  <Textarea value={description} onChange={(event) => setDescription(event.target.value)} />
+                  <Textarea className={fieldClass} value={description} onChange={(event) => setDescription(event.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Evidence Instructions</Label>
                   <Textarea
+                    className={fieldClass}
                     value={evidenceInstructions}
                     onChange={(event) => setEvidenceInstructions(event.target.value)}
                     placeholder="Upload screenshots to https://postimages.org/ and paste the link. Video clips: YouTube, Twitch, TikTok, Medal, Streamable, Discord, etc."
@@ -609,6 +683,7 @@ export default function SummerSlamAdminPage() {
                 <div className="space-y-1.5">
                   <Label>Admin Hint (optional)</Label>
                   <Textarea
+                    className={fieldClass}
                     value={adminHint}
                     onChange={(event) => setAdminHint(event.target.value)}
                     placeholder="Extra tips shown to players (e.g. modes to play, who counts as a teammate). Not required."
@@ -618,15 +693,15 @@ export default function SummerSlamAdminPage() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1.5">
                     <Label>Sort</Label>
-                    <Input type="number" value={sortOrder} onChange={(event) => setSortOrder(Number(event.target.value))} />
+                    <Input className={fieldClass} type="number" value={sortOrder} onChange={(event) => setSortOrder(Number(event.target.value))} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Wheel Points</Label>
-                    <Input type="number" min={1} value={stampReward} onChange={(event) => setStampReward(Number(event.target.value))} />
+                    <Input className={fieldClass} type="number" min={1} value={stampReward} onChange={(event) => setStampReward(Number(event.target.value))} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Active</Label>
-                    <div className="flex h-10 items-center">
+                    <div className="flex h-9 items-center rounded-md border border-foreground/20 bg-background px-3">
                       <Switch checked={isActive} onCheckedChange={setIsActive} />
                     </div>
                   </div>
@@ -636,25 +711,80 @@ export default function SummerSlamAdminPage() {
                   <div className="rounded-lg border p-3 space-y-3">
                     <div className="space-y-1.5">
                       <Label>Auto Rule</Label>
-                      <Select value={ruleType} onValueChange={(value) => setRuleType(value as RuleType)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      <Select
+                        value={ruleType}
+                        onValueChange={(value) => {
+                          const next = value as RuleType;
+                          setRuleType(next);
+                          setThreshold(defaultThresholdForRule(next));
+                        }}
+                      >
+                        <SelectTrigger className={cn("w-full", fieldClass)}><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="play_events">Play X Summer Slam Scrims</SelectItem>
                           <SelectItem value="play_all_team_formats">Play Duos, Trios and Squads</SelectItem>
+                          <SelectItem value="play_event_type">Play a Showdown event</SelectItem>
+                          <SelectItem value="reach_top_10">Reach Top 10</SelectItem>
                           <SelectItem value="reach_top_5">Reach Top 5</SelectItem>
                           <SelectItem value="reach_top_3">Reach Top 3</SelectItem>
-                          <SelectItem value="win_game">Win a game</SelectItem>
+                          <SelectItem value="win_game">Win a game (1st place)</SelectItem>
+                          <SelectItem value="distinct_teammates">Play with X different teammates</SelectItem>
+                          <SelectItem value="new_member_teammate">Play with a new member (&lt;X events)</SelectItem>
+                          <SelectItem value="new_teammates">Team with X never-played-with players</SelectItem>
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Placement rules use team results from Summer Slam tagged events after imports.
+                        Auto rules use Yunite results from Summer Slam tagged events. Teammate rules
+                        match by Discord ID from import history.
                       </p>
                     </div>
                     {ruleType === "play_events" && (
                       <div className="space-y-1.5">
                         <Label>Scrim Count</Label>
-                        <Input type="number" min={1} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} />
+                        <Input className={fieldClass} type="number" min={1} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} />
                       </div>
+                    )}
+                    {ruleType === "distinct_teammates" && (
+                      <div className="space-y-1.5">
+                        <Label>Different teammates required</Label>
+                        <Input className={fieldClass} type="number" min={1} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} />
+                        <p className="text-xs text-muted-foreground">
+                          Counts unique teammates across all Summer Slam events (a squads scrim can
+                          complete this in one event).
+                        </p>
+                      </div>
+                    )}
+                    {ruleType === "new_member_teammate" && (
+                      <div className="space-y-1.5">
+                        <Label>New member max prior events</Label>
+                        <Input className={fieldClass} type="number" min={1} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} />
+                        <p className="text-xs text-muted-foreground">
+                          Completes when a Summer Slam teammate has appeared on fewer than this many
+                          Yunite leaderboards total.
+                        </p>
+                      </div>
+                    )}
+                    {ruleType === "new_teammates" && (
+                      <div className="space-y-1.5">
+                        <Label>Never-played-with teammates required</Label>
+                        <Input className={fieldClass} type="number" min={1} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} />
+                        <p className="text-xs text-muted-foreground">
+                          Completes when one Summer Slam team includes this many players with no prior
+                          Yunite coplay on record.
+                        </p>
+                      </div>
+                    )}
+                    {ruleType === "play_event_type" && (
+                      <p className="text-sm text-muted-foreground">
+                        Auto-completes when the player appears on a Yunite leaderboard for a Summer
+                        Slam tagged event whose type is Showdown.
+                      </p>
+                    )}
+                    {ruleType === "reach_top_10" && (
+                      <p className="text-sm text-muted-foreground">
+                        Auto-completes when the player finishes in the top 10 teams at any tagged
+                        Summer Slam scrim.
+                      </p>
                     )}
                     {ruleType === "reach_top_5" && (
                       <p className="text-sm text-muted-foreground">
@@ -672,6 +802,12 @@ export default function SummerSlamAdminPage() {
                       <p className="text-sm text-muted-foreground">
                         Auto-completes when the player&apos;s team finishes 1st at any tagged Summer
                         Slam scrim.
+                      </p>
+                    )}
+                    {ruleType === "play_all_team_formats" && (
+                      <p className="text-sm text-muted-foreground">
+                        Auto-completes when the player has played Duos, Trios, and Squads Summer Slam
+                        events.
                       </p>
                     )}
                   </div>
@@ -735,7 +871,79 @@ export default function SummerSlamAdminPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="review" className="mt-4 space-y-4">
+          <TabsContent value="tagged-events" className="mt-0">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>Summer Slam Tagged Events</CardTitle>
+                <CardDescription>
+                  Events marked for this campaign in Events Manager. Auto quests only count results from these events.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Event</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Mode</TableHead>
+                      <TableHead>Team Format</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Open</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {taggedEvents === undefined ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                          Loading tagged events…
+                        </TableCell>
+                      </TableRow>
+                    ) : taggedEvents.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                          No events tagged yet. Open{" "}
+                          <Link to="/admin/events-manager" className="font-medium text-primary underline">
+                            Events Manager
+                          </Link>{" "}
+                          and enable Summer Slam on an event.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      taggedEvents.map((row) => (
+                        <TableRow key={row.tagId}>
+                          <TableCell className="font-medium">
+                            {row.event?.name ?? "Missing event"}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                            {row.event?.startDate ? formatTaggedEventDate(row.event.startDate) : "—"}
+                          </TableCell>
+                          <TableCell className="capitalize">{row.event?.type ?? "—"}</TableCell>
+                          <TableCell>{row.event?.mode ?? "—"}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="capitalize">
+                              {row.teamFormat}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="capitalize">{row.event?.status ?? "—"}</TableCell>
+                          <TableCell className="text-right">
+                            <Button asChild size="sm" variant="outline">
+                              <Link to={`/events/${row.eventId}`}>
+                                <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                                View
+                              </Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="review" className="mt-0 space-y-3">
             {isPreLaunchPreview ? (
               <p className="rounded-lg border border-violet-200/80 bg-violet-50/70 px-3 py-2 text-sm text-violet-950/90">
                 Pre-launch testing — the season has not started yet. You can review submissions here,
@@ -744,9 +952,9 @@ export default function SummerSlamAdminPage() {
             ) : null}
             <SummerSlamReviewGuidance />
             <div className="flex flex-wrap gap-3">
-              <Input className="max-w-sm" placeholder="Filter by player, quest, category, evidence..." value={filterText} onChange={(event) => setFilterText(event.target.value)} />
+              <Input className={cn("max-w-sm", fieldClass)} placeholder="Filter by player, quest, category, evidence..." value={filterText} onChange={(event) => setFilterText(event.target.value)} />
               <Select value={reviewStatus} onValueChange={(value) => setReviewStatus(value as ReviewStatus)}>
-                <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+                <SelectTrigger className={cn("w-56", fieldClass)}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending_review">Pending Review</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
@@ -868,7 +1076,7 @@ export default function SummerSlamAdminPage() {
             />
           </TabsContent>
 
-          <TabsContent value="passports" className="mt-4">
+          <TabsContent value="passports" className="mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Player Passports</CardTitle>
@@ -908,7 +1116,7 @@ export default function SummerSlamAdminPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="exports" className="mt-4">
+          <TabsContent value="exports" className="mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Recalculation and Wheel Exports</CardTitle>

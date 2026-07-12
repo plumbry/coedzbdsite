@@ -109,8 +109,27 @@ const qualificationRuleValidator = v.union(
     type: v.literal("reach_top_3"),
   }),
   v.object({
+    type: v.literal("reach_top_10"),
+  }),
+  v.object({
     type: v.literal("win_game"),
     teamFormat: v.optional(teamFormatValidator),
+  }),
+  v.object({
+    type: v.literal("play_event_type"),
+    eventType: v.literal("showdown"),
+  }),
+  v.object({
+    type: v.literal("distinct_teammates"),
+    count: v.number(),
+  }),
+  v.object({
+    type: v.literal("new_member_teammate"),
+    maxEvents: v.number(),
+  }),
+  v.object({
+    type: v.literal("new_teammates"),
+    count: v.number(),
   }),
   // Legacy rules kept so existing quests keep validating.
   v.object({
@@ -389,7 +408,9 @@ async function loadCampaignEventContext(ctx: QueryCtx | MutationCtx, campaignId:
   return { tags, eventById, teamFormatByEvent };
 }
 
-type CampaignEventMeta = Pick<Doc<"events">, "_id" | "name" | "startDate">;
+type CampaignEventMeta = Pick<Doc<"events">, "_id" | "name" | "startDate"> & {
+  type?: Doc<"events">["type"];
+};
 
 type CampaignPlayerResult = Doc<"thirdPartyResults"> & {
   importId: Id<"thirdPartyImports">;
@@ -403,7 +424,7 @@ function eventMetaFromImport(
   event: Doc<"events"> | null,
 ): CampaignEventMeta {
   if (event) {
-    return { _id: event._id, name: event.name, startDate: event.startDate };
+    return { _id: event._id, name: event.name, startDate: event.startDate, type: event.type };
   }
   return {
     _id: (importRecord.eventId ?? importRecord._id) as Id<"events">,
@@ -527,12 +548,153 @@ function evaluateReachTop(
   };
 }
 
-function evaluateRule(
+function ruleNeedsCoplay(rule: QualificationRule): boolean {
+  if (!rule) return false;
+  return (
+    rule.type === "distinct_teammates" ||
+    rule.type === "new_member_teammate" ||
+    rule.type === "new_teammates"
+  );
+}
+
+type PlayerCoplayContext = {
+  /** Teammate Discord IDs per import (excluding the player). */
+  teammatesByImport: Map<Id<"thirdPartyImports">, string[]>;
+  /** Distinct Yunite leaderboard appearances per teammate Discord ID. */
+  leaderboardCountByDiscordId: Map<string, number>;
+};
+
+async function resolveEpicToDiscordId(
+  ctx: QueryCtx | MutationCtx,
+  epicUsername: string,
+  cache: Map<string, string | null>,
+): Promise<string | null> {
+  const key = epicUsername.trim().toLowerCase();
+  if (!key) return null;
+  if (cache.has(key)) return cache.get(key) ?? null;
+  const player = await ctx.db
+    .query("players")
+    .withIndex("by_epic_username", (q) => q.eq("epicUsername", epicUsername))
+    .first();
+  const discordId = player?.discordUserId ?? null;
+  cache.set(key, discordId);
+  // Also cache lowercase variant of stored epic if casing differs
+  if (player?.epicUsername) {
+    cache.set(player.epicUsername.trim().toLowerCase(), discordId);
+  }
+  return discordId;
+}
+
+async function countLeaderboardsForDiscordId(
+  ctx: QueryCtx | MutationCtx,
+  discordId: string,
+  cache: Map<string, number>,
+): Promise<number> {
+  if (cache.has(discordId)) return cache.get(discordId)!;
+  const player = await ctx.db
+    .query("players")
+    .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", discordId))
+    .first();
+  if (!player) {
+    cache.set(discordId, Number.POSITIVE_INFINITY);
+    return Number.POSITIVE_INFINITY;
+  }
+  const results = await ctx.db
+    .query("thirdPartyResults")
+    .withIndex("by_player", (q) => q.eq("playerId", player._id))
+    .collect();
+  const count = new Set(results.map((result) => result.importId)).size;
+  cache.set(discordId, count);
+  return count;
+}
+
+async function loadTeammateDiscordIds(
+  ctx: QueryCtx | MutationCtx,
+  result: Doc<"thirdPartyResults">,
+  self: { discordId: string | null; epicUsername: string | null },
+  caches: {
+    epicToDiscord: Map<string, string | null>;
+    teamByImportTeamId: Map<string, string[]>;
+  },
+): Promise<string[]> {
+  if (result.teamMembers && result.teamMembers.length > 0) {
+    const ids: string[] = [];
+    for (const epic of result.teamMembers) {
+      if (
+        self.epicUsername &&
+        epic.trim().toLowerCase() === self.epicUsername.trim().toLowerCase()
+      ) {
+        continue;
+      }
+      const discordId = await resolveEpicToDiscordId(ctx, epic, caches.epicToDiscord);
+      if (discordId && discordId !== self.discordId) ids.push(discordId);
+    }
+    return [...new Set(ids)];
+  }
+
+  if (!result.teamId) return [];
+
+  const cacheKey = `${result.importId}:${result.teamId}`;
+  let teamDiscordIds = caches.teamByImportTeamId.get(cacheKey);
+  if (!teamDiscordIds) {
+    const importResults = await ctx.db
+      .query("thirdPartyResults")
+      .withIndex("by_import", (q) => q.eq("importId", result.importId))
+      .collect();
+    teamDiscordIds = importResults
+      .filter((row) => row.teamId === result.teamId && row.discordId)
+      .map((row) => row.discordId!) ;
+    caches.teamByImportTeamId.set(cacheKey, teamDiscordIds);
+  }
+  return [...new Set(teamDiscordIds.filter((id) => id !== self.discordId))];
+}
+
+async function loadPlayerCoplayContext(
+  ctx: QueryCtx | MutationCtx,
+  playerId: Id<"players">,
+): Promise<PlayerCoplayContext> {
+  const player = await ctx.db.get(playerId);
+  const self = {
+    discordId: player?.discordUserId ?? null,
+    epicUsername: player?.epicUsername ?? null,
+  };
+  const allResults = await ctx.db
+    .query("thirdPartyResults")
+    .withIndex("by_player", (q) => q.eq("playerId", playerId))
+    .collect();
+
+  const caches = {
+    epicToDiscord: new Map<string, string | null>(),
+    teamByImportTeamId: new Map<string, string[]>(),
+  };
+  const teammatesByImport = new Map<Id<"thirdPartyImports">, string[]>();
+  const neededDiscordIds = new Set<string>();
+
+  for (const result of allResults) {
+    const teammates = await loadTeammateDiscordIds(ctx, result, self, caches);
+    const existing = teammatesByImport.get(result.importId) ?? [];
+    const merged = [...new Set([...existing, ...teammates])];
+    teammatesByImport.set(result.importId, merged);
+    for (const id of merged) neededDiscordIds.add(id);
+  }
+
+  const leaderboardCountByDiscordId = new Map<string, number>();
+  for (const discordId of neededDiscordIds) {
+    await countLeaderboardsForDiscordId(ctx, discordId, leaderboardCountByDiscordId);
+  }
+
+  return { teammatesByImport, leaderboardCountByDiscordId };
+}
+
+async function evaluateRule(
+  ctx: QueryCtx | MutationCtx,
   rule: QualificationRule,
   data: Awaited<ReturnType<typeof loadPlayerCampaignResults>>,
+  playerId: Id<"players">,
+  coplay: PlayerCoplayContext | null,
 ) {
   if (!rule) {
-    return { qualifies: false, current: 0, target: 1, log: undefined };
+    return { qualifies: false, current: 0, target: 1, log: undefined as string | undefined };
   }
 
   const scrimsPlayed = new Set(data.results.map((result) => result.importId));
@@ -567,6 +729,10 @@ function evaluateRule(
     return evaluateReachTop(3, data);
   }
 
+  if (rule.type === "reach_top_10") {
+    return evaluateReachTop(10, data);
+  }
+
   if (rule.type === "win_game") {
     const win = data.results.find(
       (result) =>
@@ -580,6 +746,90 @@ function evaluateRule(
       log: win
         ? `Auto-approved: Finished 1st in ${win.teamFormat} on ${formatEventDate(win.event)}.`
         : undefined,
+    };
+  }
+
+  if (rule.type === "play_event_type") {
+    const match = data.results.find((result) => result.event.type === rule.eventType);
+    return {
+      qualifies: !!match,
+      current: match ? 1 : 0,
+      target: 1,
+      log: match
+        ? `Auto-approved: Played a Showdown event on ${formatEventDate(match.event)}.`
+        : undefined,
+    };
+  }
+
+  if (rule.type === "distinct_teammates" || rule.type === "new_member_teammate" || rule.type === "new_teammates") {
+    const context = coplay ?? (await loadPlayerCoplayContext(ctx, playerId));
+    const campaignImportIds = [...scrimsPlayed];
+
+    if (rule.type === "distinct_teammates") {
+      const target = requirePositiveInteger(rule.count, "Teammate count");
+      const teammates = new Set<string>();
+      for (const importId of campaignImportIds) {
+        for (const discordId of context.teammatesByImport.get(importId) ?? []) {
+          teammates.add(discordId);
+        }
+      }
+      return {
+        qualifies: teammates.size >= target,
+        current: teammates.size,
+        target,
+        log:
+          teammates.size >= target
+            ? `Auto-approved: Played with ${teammates.size} different teammates during Summer Slam.`
+            : undefined,
+      };
+    }
+
+    if (rule.type === "new_member_teammate") {
+      const maxEvents = requirePositiveInteger(rule.maxEvents, "New member event limit");
+      let best: { discordId: string; count: number; result: CampaignPlayerResult } | null = null;
+      for (const result of data.results) {
+        for (const discordId of context.teammatesByImport.get(result.importId) ?? []) {
+          const count = context.leaderboardCountByDiscordId.get(discordId) ?? Number.POSITIVE_INFINITY;
+          if (count < maxEvents && (!best || count < best.count)) {
+            best = { discordId, count, result };
+          }
+        }
+      }
+      return {
+        qualifies: !!best,
+        current: best ? 1 : 0,
+        target: 1,
+        log: best
+          ? `Auto-approved: Played with a new member (${best.count} prior event${best.count === 1 ? "" : "s"}) on ${formatEventDate(best.result.event)}.`
+          : undefined,
+      };
+    }
+
+    // new_teammates: teammates with no prior Yunite coplay outside this import
+    const target = requirePositiveInteger(rule.count, "New teammate count");
+    let bestCurrent = 0;
+    let bestResult: CampaignPlayerResult | null = null;
+    for (const result of data.results) {
+      const teammates = context.teammatesByImport.get(result.importId) ?? [];
+      const prior = new Set<string>();
+      for (const [importId, ids] of context.teammatesByImport) {
+        if (importId === result.importId) continue;
+        for (const id of ids) prior.add(id);
+      }
+      const fresh = teammates.filter((id) => !prior.has(id));
+      if (fresh.length > bestCurrent) {
+        bestCurrent = fresh.length;
+        bestResult = result;
+      }
+    }
+    return {
+      qualifies: bestCurrent >= target,
+      current: Math.min(bestCurrent, target),
+      target,
+      log:
+        bestCurrent >= target && bestResult
+          ? `Auto-approved: Teamed with ${bestCurrent} player${bestCurrent === 1 ? "" : "s"} with no prior Yunite coplay on ${formatEventDate(bestResult.event)}.`
+          : undefined,
     };
   }
 
@@ -822,6 +1072,47 @@ export const getEventTags = query({
       .query("seasonalCampaignEvents")
       .withIndex("by_campaign", (q) => q.eq("campaignId", campaign._id))
       .collect();
+  },
+});
+
+/** Admin list of Summer Slam tagged events with event details. */
+export const getAdminTaggedEvents = query({
+  args: { slug: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
+    const tags = await ctx.db
+      .query("seasonalCampaignEvents")
+      .withIndex("by_campaign", (q) => q.eq("campaignId", campaign._id))
+      .collect();
+
+    const rows = [];
+    for (const tag of tags) {
+      const event = await ctx.db.get(tag.eventId);
+      rows.push({
+        tagId: tag._id,
+        eventId: tag.eventId,
+        teamFormat: tag.teamFormat,
+        updatedAt: tag.updatedAt,
+        event: event
+          ? {
+              name: event.name,
+              startDate: event.startDate,
+              endDate: event.endDate,
+              type: event.type,
+              mode: event.mode,
+              status: event.status,
+            }
+          : null,
+      });
+    }
+
+    return rows.sort((a, b) => {
+      const aDate = a.event?.startDate ?? "";
+      const bDate = b.event?.startDate ?? "";
+      if (aDate !== bDate) return bDate.localeCompare(aDate);
+      return (a.event?.name ?? "").localeCompare(b.event?.name ?? "");
+    });
   },
 });
 
@@ -1500,8 +1791,16 @@ export const recalculateCampaignInternal = internalMutation({
 
     for (const player of page.page) {
       const data = await loadPlayerCampaignResults(ctx, args.campaignId, player._id);
+      const needsCoplay = autoQuests.some((quest) => ruleNeedsCoplay(quest.qualificationRule));
+      const coplay = needsCoplay ? await loadPlayerCoplayContext(ctx, player._id) : null;
       for (const quest of autoQuests) {
-        const evaluation = evaluateRule(quest.qualificationRule, data);
+        const evaluation = await evaluateRule(
+          ctx,
+          quest.qualificationRule,
+          data,
+          player._id,
+          coplay,
+        );
         await setProgress(ctx, {
           campaignId: args.campaignId,
           quest,

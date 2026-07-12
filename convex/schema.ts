@@ -724,10 +724,31 @@ export default defineSchema({
           type: v.literal("reach_top_3"),
         }),
         v.object({
+          type: v.literal("reach_top_10"),
+        }),
+        v.object({
           type: v.literal("win_game"),
           teamFormat: v.optional(
             v.union(v.literal("duos"), v.literal("trios"), v.literal("squads")),
           ),
+        }),
+        v.object({
+          type: v.literal("play_event_type"),
+          eventType: v.literal("showdown"),
+        }),
+        v.object({
+          type: v.literal("distinct_teammates"),
+          count: v.number(),
+        }),
+        v.object({
+          type: v.literal("new_member_teammate"),
+          /** Teammate must have appeared on fewer than this many Yunite leaderboards. */
+          maxEvents: v.number(),
+        }),
+        v.object({
+          type: v.literal("new_teammates"),
+          /** Number of teammates with no prior Yunite coplay on record. */
+          count: v.number(),
         }),
         // Legacy rules for quests saved before rule simplification.
         v.object({

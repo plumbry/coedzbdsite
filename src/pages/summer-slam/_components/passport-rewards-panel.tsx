@@ -46,16 +46,16 @@ export function PassportRewardsPanel({
       <h2 className={cn(ssSectionTitle, "mb-2")}>Rewards</h2>
 
       <dl className="mb-2 grid grid-cols-3 gap-1.5 sm:gap-2">
-        <div className={ssStatCell}>
+        <div className={cn(ssStatCell, "text-center")}>
           <dt className={ssLabel}>Quests</dt>
           <dd className="text-base font-bold tabular-nums text-orange-950 sm:text-sm">{approvedStamps}</dd>
         </div>
-        <div className={ssStatCell}>
-          <dt className={ssLabel}>Little</dt>
+        <div className={cn(ssStatCell, "text-center")}>
+          <dt className={ssLabel}>Little Wheel</dt>
           <dd className="text-base font-bold tabular-nums text-teal-800 sm:text-sm">{littleWheelEntries}</dd>
         </div>
-        <div className={ssStatCell}>
-          <dt className={ssLabel}>Big</dt>
+        <div className={cn(ssStatCell, "text-center")}>
+          <dt className={ssLabel}>Big Wheel</dt>
           <dd className="text-base font-bold tabular-nums text-violet-800 sm:text-sm">{bigWheelEntries}</dd>
         </div>
       </dl>

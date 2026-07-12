@@ -35,7 +35,12 @@ type QualificationRule =
   | { type: "play_all_team_formats" }
   | { type: "reach_top_5" }
   | { type: "reach_top_3" }
+  | { type: "reach_top_10" }
   | { type: "win_game"; teamFormat?: string }
+  | { type: "play_event_type"; eventType: "showdown" }
+  | { type: "distinct_teammates"; count: number }
+  | { type: "new_member_teammate"; maxEvents: number }
+  | { type: "new_teammates"; count: number }
   | { type: "play_team_format"; teamFormat: string }
   | { type: "reach_top"; placement: number; eventCount?: number; teamFormat?: string };
 
@@ -92,8 +97,18 @@ function formatQualificationRule(rule: QualificationRule): string {
       return "Reach Top 5 in a tagged Summer Slam scrim";
     case "reach_top_3":
       return "Reach Top 3 in a tagged Summer Slam scrim";
+    case "reach_top_10":
+      return "Reach Top 10 in a tagged Summer Slam scrim";
     case "win_game":
       return "Finish 1st in a tagged Summer Slam scrim";
+    case "play_event_type":
+      return "Play a Showdown Summer Slam event";
+    case "distinct_teammates":
+      return `Play with ${rule.count} different teammates during Summer Slam`;
+    case "new_member_teammate":
+      return `Play with a teammate who has fewer than ${rule.maxEvents} Yunite events`;
+    case "new_teammates":
+      return `Team with ${rule.count} player${rule.count === 1 ? "" : "s"} with no prior Yunite coplay`;
     case "play_team_format":
       return `Play a ${rule.teamFormat} event (legacy)`;
     case "reach_top":
