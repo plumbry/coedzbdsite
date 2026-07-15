@@ -1,5 +1,21 @@
-const CACHE_NAME = "app-v2";
+const CACHE_NAME = "app-v3";
 const urlsToCache = ["/", "/icon/icon-192.png", "/icon/icon-512.png"];
+
+function isHtmlResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+  return contentType.includes("text/html");
+}
+
+function isAssetPath(pathname) {
+  return (
+    pathname.startsWith("/assets/") ||
+    pathname.endsWith(".js") ||
+    pathname.endsWith(".mjs") ||
+    pathname.endsWith(".css") ||
+    pathname.endsWith(".wasm") ||
+    pathname.endsWith(".map")
+  );
+}
 
 // Install event - cache core assets
 self.addEventListener("install", (event) => {
@@ -40,12 +56,32 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Hashed build assets must never be served from SPA HTML fallbacks.
+  // Netlify `/* /index.html 200` returns HTML with status 200 for missing
+  // chunks — caching that under a .js URL breaks module scripts.
+  if (
+    isAssetPath(url.pathname) ||
+    event.request.destination === "script" ||
+    event.request.destination === "style" ||
+    event.request.destination === "worker"
+  ) {
+    event.respondWith(
+      fetch(event.request).then((response) => {
+        if (isHtmlResponse(response)) {
+          return Response.error();
+        }
+        return response;
+      }),
+    );
+    return;
+  }
+
   // Network-first for other same-origin GET requests
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Only cache successful responses (status 200-299)
-        if (!response.ok) {
+        // Only cache successful non-HTML responses (status 200-299)
+        if (!response.ok || isHtmlResponse(response)) {
           return response;
         }
         const responseToCache = response.clone();
