@@ -31,7 +31,7 @@ crons.daily(
 // Re-kick mildly stalled import chains; fail orphans stuck as "running"
 crons.interval(
   "cleanup stalled import jobs",
-  { minutes: 15 },
+  { minutes: 2 },
   internal.importProcessing.cleanupImportProcessingJobsInternal,
 );
 

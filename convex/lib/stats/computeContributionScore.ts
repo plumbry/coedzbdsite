@@ -53,6 +53,33 @@ export async function computeContributionScorePayload(
     };
   }
 
+  // Bound work for high-volume players — newest sessions first.
+  const MATCH_ANALYSIS_CAP = 120;
+  const matchStats =
+    allMatchStats.length > MATCH_ANALYSIS_CAP
+      ? [...allMatchStats]
+          .sort((a, b) => (b._creationTime ?? 0) - (a._creationTime ?? 0))
+          .slice(0, MATCH_ANALYSIS_CAP)
+      : allMatchStats;
+
+  const sessionKey = (importId: Id<"thirdPartyImports">, sessionId: string) =>
+    `${importId}:${sessionId}`;
+  const teammatesBySession = new Map<string, Doc<"matchPlayerStats">[]>();
+
+  for (const match of matchStats) {
+    const key = sessionKey(match.importId, match.sessionId);
+    if (teammatesBySession.has(key)) {
+      continue;
+    }
+    const sessionRows = await ctx.db
+      .query("matchPlayerStats")
+      .withIndex("by_match", (q) =>
+        q.eq("importId", match.importId).eq("sessionId", match.sessionId),
+      )
+      .collect();
+    teammatesBySession.set(key, sessionRows);
+  }
+
   let killShareSum = 0;
   let top5Placements = 0;
   let earlyDeathCount = 0;
@@ -61,7 +88,7 @@ export async function computeContributionScorePayload(
   let totalDeaths = 0;
   let validMatches = 0;
 
-  for (const match of allMatchStats) {
+  for (const match of matchStats) {
     validMatches++;
     totalKills += match.eliminations;
     totalDeaths += match.deaths;
@@ -74,13 +101,9 @@ export async function computeContributionScorePayload(
       top5Placements++;
     }
 
-    const teammateStats = await ctx.db
-      .query("matchPlayerStats")
-      .withIndex("by_match", (q) =>
-        q.eq("importId", match.importId).eq("sessionId", match.sessionId),
-      )
-      .filter((q) => q.neq(q.field("playerId"), playerId))
-      .collect();
+    const teammateStats = (teammatesBySession.get(
+      sessionKey(match.importId, match.sessionId),
+    ) ?? []).filter((row) => row.playerId !== playerId);
 
     if (teammateStats.length > 0 && match.deathTime !== undefined) {
       const playerDeathTime = match.deathTime;

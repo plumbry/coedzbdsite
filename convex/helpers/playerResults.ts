@@ -59,7 +59,7 @@ export async function fetchThirdPartyResultsForPlayer(
   for (const discordId of discordIds) {
     const matches = await ctx.db
       .query("thirdPartyResults")
-      .filter((q) => q.eq(q.field("discordId"), discordId))
+      .withIndex("by_discord", (q) => q.eq("discordId", discordId))
       .collect();
 
     for (const result of matches) {
@@ -94,7 +94,7 @@ export async function relinkEventResultsForPlayer(
   for (const discordId of discordIds) {
     const results = await ctx.db
       .query("thirdPartyResults")
-      .filter((q) => q.eq(q.field("discordId"), discordId))
+      .withIndex("by_discord", (q) => q.eq("discordId", discordId))
       .collect();
 
     for (const result of results) {

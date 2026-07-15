@@ -58,10 +58,52 @@ const RECONCILE_IDLE_MS = 90 * 1000;
  * If update_player_stats stays on the same cursor this long, skip that player
  * (mutation timeouts leave the job running with no continuation).
  */
-const SKIP_STUCK_STATS_PLAYER_MS = 3 * 60 * 1000;
+const SKIP_STUCK_STATS_PLAYER_MS = 90 * 1000;
 
 function jobIdleMs(job: { lastProgressAt: number }, now: number): number {
   return now - job.lastProgressAt;
+}
+
+async function advancePastImportStatsPlayer(
+  ctx: MutationCtx,
+  job: Doc<"importProcessingJobs">,
+  args: {
+    cursor: number;
+    reason: string;
+  },
+): Promise<{ nextCursor: number; done: boolean }> {
+  const playerIds = job.affectedPlayerIds ?? [];
+  const stuckPlayerId = playerIds[args.cursor];
+  const nextCursor = args.cursor + 1;
+  const skipMessage = stuckPlayerId
+    ? `${stuckPlayerId}: ${args.reason}`
+    : `cursor ${args.cursor}: ${args.reason}`;
+  const now = Date.now();
+
+  await ctx.db.patch(job._id, {
+    statsPlayerCursor: nextCursor,
+    errors: [...(job.errors ?? []), skipMessage],
+    lastProgressAt: now,
+    progressCurrent: nextCursor,
+    progressTotal: playerIds.length || job.progressTotal,
+    progressMessage: progressMessageForStep("update_player_stats", {
+      current: nextCursor,
+      total: playerIds.length || job.progressTotal || 0,
+    }),
+  });
+
+  logImportPipelineEvent({
+    importId: job.importId,
+    jobId: job._id,
+    step: "update_player_stats",
+    error: skipMessage,
+    message: "update_player_stats_skipped_stalled_player",
+  });
+
+  return {
+    nextCursor,
+    done: playerIds.length > 0 && nextCursor >= playerIds.length,
+  };
 }
 
 async function failStaleRunningImportJobs(ctx: MutationCtx): Promise<number> {
@@ -148,53 +190,28 @@ async function reconcileImportProcessingJobs(ctx: MutationCtx): Promise<number> 
       elapsedMs: idleMs,
     });
 
-    if (
-      job.currentStep === "update_player_stats" &&
-      idleMs >= SKIP_STUCK_STATS_PLAYER_MS
-    ) {
+    if (job.currentStep === "update_player_stats") {
       const cursor = job.statsPlayerCursor ?? 0;
-      const playerIds = job.affectedPlayerIds ?? [];
-      const stuckPlayerId = playerIds[cursor];
-      const nextCursor = cursor + 1;
-      const skipMessage = stuckPlayerId
-        ? `${stuckPlayerId}: skipped after stall (no progress for ${Math.round(idleMs / 1000)}s)`
-        : `cursor ${cursor}: skipped after stall (no progress for ${Math.round(idleMs / 1000)}s)`;
-
-      await ctx.db.patch(job._id, {
-        statsPlayerCursor: nextCursor,
-        errors: [...(job.errors ?? []), skipMessage],
-        lastProgressAt: now,
-        progressCurrent: nextCursor,
-        progressTotal: playerIds.length || job.progressTotal,
-        progressMessage: progressMessageForStep("update_player_stats", {
-          current: nextCursor,
-          total: playerIds.length || job.progressTotal || 0,
-        }),
-      });
-
-      logImportPipelineEvent({
-        importId: job.importId,
-        jobId: job._id,
-        step: "update_player_stats",
-        error: skipMessage,
-        message: "update_player_stats_skipped_stalled_player",
-      });
-
-      if (playerIds.length > 0 && nextCursor >= playerIds.length) {
-        await completePipelineStepAndContinue(ctx, job._id, "update_player_stats");
+      const progress = job.progressCurrent ?? 0;
+      // Claim-first leaves cursor ahead of progressCurrent while a player is in-flight.
+      // Only skip when the cursor never moved (pre-claim hang on this player).
+      if (idleMs >= SKIP_STUCK_STATS_PLAYER_MS && cursor === progress) {
+        const advanced = await advancePastImportStatsPlayer(ctx, job, {
+          cursor,
+          reason: `skipped after stall (no progress for ${Math.round(idleMs / 1000)}s)`,
+        });
+        if (advanced.done) {
+          await completePipelineStepAndContinue(ctx, job._id, "update_player_stats");
+        } else {
+          await ctx.scheduler.runAfter(0, internal.importProcessing.processOneImportStatsPlayer, {
+            jobId: job._id,
+          });
+        }
       } else {
         await ctx.scheduler.runAfter(0, internal.importProcessing.processOneImportStatsPlayer, {
           jobId: job._id,
         });
       }
-      reconciled += 1;
-      continue;
-    }
-
-    if (job.currentStep === "update_player_stats") {
-      await ctx.scheduler.runAfter(0, internal.importProcessing.processOneImportStatsPlayer, {
-        jobId: job._id,
-      });
       reconciled += 1;
       continue;
     }
@@ -1146,7 +1163,7 @@ export const completeApiPipelineStep = internalMutation({
   },
 });
 
-/** One player per mutation — always advances cursor so doc-limit failures cannot stall the job. */
+/** One player per mutation — claim the cursor first so timeouts cannot stick forever. */
 export const processOneImportStatsPlayer = internalMutation({
   args: { jobId: v.id("importProcessingJobs") },
   handler: async (ctx, args) => {
@@ -1173,10 +1190,35 @@ export const processOneImportStatsPlayer = internalMutation({
       }
 
       const playerId = playerIds[startIndex]!;
+      const endIndex = startIndex + 1;
+      const done = endIndex >= playerIds.length;
       const batchNumber = (job.batchesProcessed ?? 0) + 1;
       const matchDataChangedPlayerIds = new Set(
         (job.matchStatsAffectedPlayerIds ?? []).map((id) => id as string),
       );
+
+      // Claim this slot before heavy work. If the mutation times out, the next
+      // kick/watchdog continues at endIndex instead of retrying forever.
+      await ctx.db.patch(args.jobId, {
+        currentStep: step,
+        statsPlayerCursor: endIndex,
+        lastProgressAt: Date.now(),
+        progressCurrent: startIndex,
+        progressTotal: playerIds.length,
+        progressMessage: progressMessageForStep(step, {
+          current: startIndex,
+          total: playerIds.length,
+        }),
+        batchesProcessed: batchNumber,
+        contextReads: (job.contextReads ?? 0) + 1,
+      });
+
+      await ctx.scheduler.runAfter(
+        SKIP_STUCK_STATS_PLAYER_MS,
+        internal.importProcessing.watchdogImportStatsPlayer,
+        { jobId: args.jobId, expectedCursor: endIndex },
+      );
+
       let summary = {
         playersUpdated: 0,
         skippedNoChange: 0,
@@ -1186,8 +1228,10 @@ export const processOneImportStatsPlayer = internalMutation({
       };
 
       try {
+        // Import path skips inline TC — full-table / N+1 CS work can abort the mutation.
         summary = await updateStatsForPlayers(ctx, [playerId], {
           matchDataChangedPlayerIds,
+          skipContributionScore: true,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1203,21 +1247,18 @@ export const processOneImportStatsPlayer = internalMutation({
         });
       }
 
-      const endIndex = startIndex + 1;
-      const done = endIndex >= playerIds.length;
       const deferredPlayerIds =
-        summary.errors.length > 0 ? [playerId] : [];
+        summary.errors.length > 0 || matchDataChangedPlayerIds.has(playerId)
+          ? [playerId]
+          : [];
 
       await ctx.db.patch(args.jobId, {
-        currentStep: step,
-        statsPlayerCursor: endIndex,
         playersUpdated: (job.playersUpdated ?? 0) + summary.playersUpdated,
         skippedNoChange: (job.skippedNoChange ?? 0) + summary.skippedNoChange,
         csCalculated: (job.csCalculated ?? 0) + summary.csCalculated,
         csSkippedNoChange: (job.csSkippedNoChange ?? 0) + summary.csSkippedNoChange,
         errors: [...(job.errors ?? []), ...summary.errors],
-        batchesProcessed: batchNumber,
-        contextReads: (job.contextReads ?? 0) + 1,
+        lastProgressAt: Date.now(),
         ...(done ? { matchStatsAffectedPlayerIds: undefined } : {}),
       });
 
@@ -1250,6 +1291,13 @@ export const processOneImportStatsPlayer = internalMutation({
         await ctx.scheduler.runAfter(0, internal.importProcessing.processOneImportStatsPlayer, {
           jobId: args.jobId,
         });
+        if (deferredPlayerIds.length > 0) {
+          await ctx.scheduler.runAfter(
+            0,
+            internal.helpers.eventDrivenRebuilds.scheduleStatsForAffectedPlayers,
+            { playerIds: deferredPlayerIds },
+          );
+        }
         return { continuing: true, playersProcessed: 1, cursor: endIndex };
       }
 
@@ -1260,11 +1308,15 @@ export const processOneImportStatsPlayer = internalMutation({
           { playerIds },
         );
       }
-      if (deferredPlayerIds.length > 0) {
+      const endDeferred =
+        deferredPlayerIds.length > 0
+          ? deferredPlayerIds
+          : (job.matchStatsAffectedPlayerIds ?? []);
+      if (endDeferred.length > 0) {
         await ctx.scheduler.runAfter(
           0,
           internal.helpers.eventDrivenRebuilds.scheduleStatsForAffectedPlayers,
-          { playerIds: deferredPlayerIds },
+          { playerIds: endDeferred },
         );
       }
 
@@ -1289,6 +1341,59 @@ export const processOneImportStatsPlayer = internalMutation({
       });
       return { done: true, failed: true as const, error: message };
     }
+  },
+});
+
+/**
+ * If update_player_stats is still sitting on the claimed cursor, skip/re-kick.
+ * Scheduled whenever a player slot is claimed so timeouts cannot hang forever.
+ */
+export const watchdogImportStatsPlayer = internalMutation({
+  args: {
+    jobId: v.id("importProcessingJobs"),
+    expectedCursor: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const context = await loadJobContext(ctx, args.jobId);
+    if (!context || context.job.status !== "running") {
+      return { skipped: true as const, reason: "job_not_running" as const };
+    }
+
+    const { job } = context;
+    if (job.currentStep !== "update_player_stats") {
+      return { skipped: true as const, reason: "wrong_step" as const };
+    }
+
+    const cursor = job.statsPlayerCursor ?? 0;
+    if (cursor !== args.expectedCursor) {
+      return { skipped: true as const, reason: "cursor_advanced" as const };
+    }
+
+    const idleMs = jobIdleMs(job, Date.now());
+    if (idleMs < SKIP_STUCK_STATS_PLAYER_MS) {
+      return { skipped: true as const, reason: "still_fresh" as const };
+    }
+
+    // Cursor was claimed but never progressed past this point — force next player.
+    const playerIds = job.affectedPlayerIds ?? [];
+    if (cursor >= playerIds.length && playerIds.length > 0) {
+      await completePipelineStepAndContinue(ctx, args.jobId, "update_player_stats");
+      return { completed: true as const };
+    }
+
+    logImportPipelineEvent({
+      importId: job.importId,
+      jobId: args.jobId,
+      step: "update_player_stats",
+      message: "update_player_stats_watchdog_kick",
+      elapsedMs: idleMs,
+    });
+
+    await ctx.db.patch(args.jobId, { lastProgressAt: Date.now() });
+    await ctx.scheduler.runAfter(0, internal.importProcessing.processOneImportStatsPlayer, {
+      jobId: args.jobId,
+    });
+    return { kicked: true as const, cursor };
   },
 });
 

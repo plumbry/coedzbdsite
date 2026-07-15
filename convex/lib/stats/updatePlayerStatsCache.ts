@@ -233,6 +233,8 @@ export type UpdatePlayerStatsOutcome = {
 
 export type UpdateStatsForPlayerOptions = {
   matchDataChanged?: boolean;
+  /** Skip heavy TC recalculation (import pipeline defers it). */
+  skipContributionScore?: boolean;
 };
 
 /** Update denormalized player fields, stats cache, tier-eval eligibility, and TC when triggered. */
@@ -253,15 +255,17 @@ export async function updateStatsForPlayer(
     .withIndex("by_player", (q) => q.eq("playerId", playerId))
     .first();
 
-  const contributionScore = await maybeRecalculateContributionScore(
-    ctx,
-    playerId,
-    {
-      statsCacheChanged: statsCache.action !== "skipped",
-      matchDataChanged: options?.matchDataChanged ?? false,
-    },
-    cacheRow,
-  );
+  const contributionScore = options?.skipContributionScore
+    ? ({ action: "skipped_no_trigger" } as const)
+    : await maybeRecalculateContributionScore(
+        ctx,
+        playerId,
+        {
+          statsCacheChanged: statsCache.action !== "skipped",
+          matchDataChanged: options?.matchDataChanged ?? false,
+        },
+        cacheRow,
+      );
 
   if (!cacheRow?.reevaluationEligible) {
     const tierEvalRemoved = await removeTierReEvaluationCacheForPlayer(ctx, playerId);
@@ -283,6 +287,7 @@ export async function updateStatsForPlayer(
 
 export type UpdateStatsForPlayersOptions = {
   matchDataChangedPlayerIds?: ReadonlySet<string>;
+  skipContributionScore?: boolean;
 };
 
 export async function updateStatsForPlayers(
@@ -307,6 +312,7 @@ export async function updateStatsForPlayers(
     try {
       const outcome = await updateStatsForPlayer(ctx, playerId, {
         matchDataChanged: matchDataChanged?.has(playerId) ?? false,
+        skipContributionScore: options?.skipContributionScore,
       });
       if (outcome.statsCache.action === "skipped") {
         skippedNoChange += 1;
