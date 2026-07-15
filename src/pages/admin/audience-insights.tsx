@@ -222,7 +222,7 @@ function DonutCard({
 }
 
 type GenderMemberScope = "all" | "active" | "new";
-type TierMemberScope = "all" | "active";
+type TierMemberScope = "all" | "active" | "played1";
 type ApplicationSourceWindow = "7" | "30";
 type NewMemberWindow = "7" | "30";
 
@@ -231,24 +231,31 @@ function MemberScopeToggle({
   onChange,
   disabled,
   includeNew = false,
+  includePlayed1 = false,
 }: {
   value: GenderMemberScope | TierMemberScope;
   onChange: (value: GenderMemberScope | TierMemberScope) => void;
   disabled?: boolean;
   includeNew?: boolean;
+  includePlayed1?: boolean;
 }) {
   return (
     <ToggleGroup
       type="single"
       value={value}
       onValueChange={(next) => {
-        if (next === "all" || next === "active" || (includeNew && next === "new")) {
+        if (
+          next === "all" ||
+          next === "active" ||
+          (includeNew && next === "new") ||
+          (includePlayed1 && next === "played1")
+        ) {
           onChange(next);
         }
       }}
       variant="outline"
       size="sm"
-      className="shrink-0"
+      className="shrink-0 flex-wrap justify-start"
       disabled={disabled}
     >
       <ToggleGroupItem value="all" aria-label="All members">
@@ -257,6 +264,11 @@ function MemberScopeToggle({
       <ToggleGroupItem value="active" aria-label="Active members">
         Active Members
       </ToggleGroupItem>
+      {includePlayed1 && (
+        <ToggleGroupItem value="played1" aria-label="Played one event minimum">
+          Played 1 Event Minimum
+        </ToggleGroupItem>
+      )}
       {includeNew && (
         <ToggleGroupItem value="new" aria-label="New members">
           New Members
@@ -343,7 +355,12 @@ function AudienceInsightsContent() {
   const openSegment = (
     chartType: AudienceChartType,
     segmentKey: string,
-    options?: { activeOnly?: boolean; newMemberWindowDays?: 7 | 30; sourceWindowDays?: 7 | 30 },
+    options?: {
+      activeOnly?: boolean;
+      played1MinOnly?: boolean;
+      newMemberWindowDays?: 7 | 30;
+      sourceWindowDays?: 7 | 30;
+    },
   ) => {
     navigate(audienceSegmentPath(chartType, segmentKey, options));
   };
@@ -462,11 +479,15 @@ function AudienceInsightsContent() {
   const tierChartData =
     tierMemberScope === "active"
       ? chartSegments(insights.tierActive)
-      : chartSegments(insights.tier);
+      : tierMemberScope === "played1"
+        ? chartSegments(insights.tierPlayed1Min)
+        : chartSegments(insights.tier);
   const tierChartTotal =
     tierMemberScope === "active"
       ? insights.totalActiveMembers || 1
-      : insights.totalMembers || 1;
+      : tierMemberScope === "played1"
+        ? insights.totalPlayed1MinMembers || 1
+        : insights.totalMembers || 1;
   const applicationSourceChartData =
     applicationSourceWindow === "7"
       ? chartSegments(insights.applicationSource7d)
@@ -562,8 +583,8 @@ function AudienceInsightsContent() {
         <Alert>
           <AlertTitle>Member scope splits need a refresh</AlertTitle>
           <AlertDescription>
-            Click Refresh stats once to cache active-member and new-member gender data, and to
-            speed up segment member lists.
+            Click Refresh stats once to cache active-member, played-1-event, and new-member scope
+            data, and to speed up segment member lists.
           </AlertDescription>
         </Alert>
       )}
@@ -651,7 +672,9 @@ function AudienceInsightsContent() {
           description={
             tierMemberScope === "active"
               ? "Active members (last Yunite event within 6 weeks) by tier."
-              : "How accepted members are distributed across tiers."
+              : tierMemberScope === "played1"
+                ? "Members with at least one Yunite leaderboard result, by tier."
+                : "How accepted members are distributed across tiers."
           }
           data={tierChartData}
           total={tierChartTotal}
@@ -660,6 +683,7 @@ function AudienceInsightsContent() {
           onSegmentClick={(key) =>
             openSegment("tier", key, {
               activeOnly: tierMemberScope === "active",
+              played1MinOnly: tierMemberScope === "played1",
             })
           }
           headerActions={
@@ -667,6 +691,7 @@ function AudienceInsightsContent() {
               value={tierMemberScope}
               onChange={(value) => setTierMemberScope(value as TierMemberScope)}
               disabled={!hasCache}
+              includePlayed1
             />
           }
         />

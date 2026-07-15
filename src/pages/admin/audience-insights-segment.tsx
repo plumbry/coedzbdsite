@@ -50,6 +50,7 @@ export default function AudienceInsightsSegmentPage() {
   const [searchParams] = useSearchParams();
   const activeOnly =
     (chart === "tier" || chart === "gender") && searchParams.get("members") === "active";
+  const played1MinOnly = chart === "tier" && searchParams.get("members") === "played1";
   const newMemberWindowDays =
     chart === "gender" &&
     searchParams.get("members") === "new" &&
@@ -78,6 +79,7 @@ export default function AudienceInsightsSegmentPage() {
           segment: segmentKey,
           playersCursor: playersCursor ?? undefined,
           activeOnly: activeOnly || undefined,
+          played1MinOnly: played1MinOnly || undefined,
           newMemberWindowDays,
           sourceWindowDays,
         }
@@ -90,7 +92,7 @@ export default function AudienceInsightsSegmentPage() {
     setHasMore(true);
     setInitialLoaded(false);
     setSearch("");
-  }, [chartType, segmentKey, activeOnly, newMemberWindowDays, sourceWindowDays]);
+  }, [chartType, segmentKey, activeOnly, played1MinOnly, newMemberWindowDays, sourceWindowDays]);
 
   useEffect(() => {
     if (!page) return;
@@ -152,6 +154,7 @@ export default function AudienceInsightsSegmentPage() {
 
   const title = audienceSegmentPageTitle(chartType, segmentKey, {
     activeOnly,
+    played1MinOnly,
     newMemberWindowDays,
     sourceWindowDays,
   });
@@ -167,6 +170,8 @@ export default function AudienceInsightsSegmentPage() {
           ? `Applications submitted in the last ${sourceWindowDays} days in this source segment.`
           : newMemberWindowDays
             ? `Accepted members from applications approved in the last ${newMemberWindowDays} days.`
+          : played1MinOnly
+            ? "Members in this segment with at least one Yunite leaderboard result."
           : activeOnly
             ? "Active members in this segment (last Yunite event within 6 weeks)."
             : "Accepted members in this audience segment."

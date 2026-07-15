@@ -1355,7 +1355,18 @@ export default defineSchema({
         }),
       ),
     ),
+    /** Accepted members with ≥1 Yunite event, by tier. */
+    tierPlayed1Min: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          value: v.number(),
+          color: v.string(),
+        }),
+      ),
+    ),
     totalActiveMembers: v.optional(v.number()),
+    totalPlayed1MinMembers: v.optional(v.number()),
     totalNewMembers7d: v.optional(v.number()),
     totalNewMembers30d: v.optional(v.number()),
     tenure: v.array(
@@ -1477,6 +1488,12 @@ export default defineSchema({
     tierBActive: v.optional(v.number()),
     tierCActive: v.optional(v.number()),
     tierOtherActive: v.optional(v.number()),
+    totalPlayed1MinMembers: v.optional(v.number()),
+    tierSPlayed1Min: v.optional(v.number()),
+    tierAPlayed1Min: v.optional(v.number()),
+    tierBPlayed1Min: v.optional(v.number()),
+    tierCPlayed1Min: v.optional(v.number()),
+    tierOtherPlayed1Min: v.optional(v.number()),
     tenureUnder3m: v.number(),
     tenure3to6m: v.number(),
     tenure6to12m: v.number(),

@@ -16,7 +16,7 @@ import {
 import { requireAdmin, requireAnalyticsHubAccess, requireAnalyticsStatsRefresh } from "./auth_helpers";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
-const AUDIENCE_INSIGHTS_CACHE_VERSION = 11;
+const AUDIENCE_INSIGHTS_CACHE_VERSION = 12;
 const APPLICATION_SOURCE_7D_MS = 7 * 24 * 60 * 60 * 1000;
 const APPLICATION_SOURCE_30D_MS = 30 * 24 * 60 * 60 * 1000;
 const NEW_MEMBER_7D_MS = 7 * 24 * 60 * 60 * 1000;
@@ -73,6 +73,13 @@ type JobCounters = {
   tierBActive: number;
   tierCActive: number;
   tierOtherActive: number;
+  /** Members with ≥1 Yunite event (eventsPlayedCount). */
+  totalPlayed1MinMembers: number;
+  tierSPlayed1Min: number;
+  tierAPlayed1Min: number;
+  tierBPlayed1Min: number;
+  tierCPlayed1Min: number;
+  tierOtherPlayed1Min: number;
   tenureUnder3m: number;
   tenure3to6m: number;
   tenure6to12m: number;
@@ -111,6 +118,12 @@ const EMPTY_COUNTERS: JobCounters = {
   tierBActive: 0,
   tierCActive: 0,
   tierOtherActive: 0,
+  totalPlayed1MinMembers: 0,
+  tierSPlayed1Min: 0,
+  tierAPlayed1Min: 0,
+  tierBPlayed1Min: 0,
+  tierCPlayed1Min: 0,
+  tierOtherPlayed1Min: 0,
   tenureUnder3m: 0,
   tenure3to6m: 0,
   tenure6to12m: 0,
@@ -280,6 +293,16 @@ function accumulateMember(
     else counters.tierOtherActive += 1;
   }
 
+  const eventsPlayed = member.eventsPlayedCount ?? 0;
+  if (eventsPlayed >= 1) {
+    counters.totalPlayed1MinMembers += 1;
+    if (member.tier === "S") counters.tierSPlayed1Min += 1;
+    else if (member.tier === "A") counters.tierAPlayed1Min += 1;
+    else if (member.tier === "B") counters.tierBPlayed1Min += 1;
+    else if (member.tier === "C") counters.tierCPlayed1Min += 1;
+    else counters.tierOtherPlayed1Min += 1;
+  }
+
   if (isNewMember7d) {
     counters.totalNewMembers7d += 1;
     if (gender === 100) counters.maleNew7d += 1;
@@ -294,7 +317,6 @@ function accumulateMember(
     else counters.genderUnknownNew30d += 1;
   }
 
-  const eventsPlayed = member.eventsPlayedCount ?? 0;
   if (eventsPlayed > 5) counters.eventsOverFive += 1;
   else counters.eventsFiveOrLess += 1;
 
@@ -345,6 +367,7 @@ function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
   return {
     totalMembers,
     totalActiveMembers: counters.totalActiveMembers,
+    totalPlayed1MinMembers: counters.totalPlayed1MinMembers,
     totalNewMembers7d: counters.totalNewMembers7d,
     totalNewMembers30d: counters.totalNewMembers30d,
     gender: genderSegmentsFromCounters(counters),
@@ -370,6 +393,13 @@ function segmentsFromCounters(counters: JobCounters, totalMembers: number) {
       tierB: counters.tierBActive,
       tierC: counters.tierCActive,
       tierOther: counters.tierOtherActive,
+    }),
+    tierPlayed1Min: tierSegmentsFromCounters({
+      tierS: counters.tierSPlayed1Min,
+      tierA: counters.tierAPlayed1Min,
+      tierB: counters.tierBPlayed1Min,
+      tierC: counters.tierCPlayed1Min,
+      tierOther: counters.tierOtherPlayed1Min,
     }),
     tenure: filterPositive([
       { label: "Under 3 months", value: counters.tenureUnder3m, color: "#4f46e5" },
@@ -703,6 +733,7 @@ async function upsertAudienceInsightsSnapshot(
     insightsCacheVersion: number;
     totalMembers: number;
     totalActiveMembers: number;
+    totalPlayed1MinMembers: number;
     totalNewMembers7d: number;
     totalNewMembers30d: number;
     gender: ChartSegment[];
@@ -711,6 +742,7 @@ async function upsertAudienceInsightsSnapshot(
     genderNew30d: ChartSegment[];
     tier: ChartSegment[];
     tierActive: ChartSegment[];
+    tierPlayed1Min: ChartSegment[];
     tenure: ChartSegment[];
     events: ChartSegment[];
     recentEvents: ChartSegment[];
@@ -756,6 +788,12 @@ function countersFromJob(job: Doc<"audienceInsightsJobs">): JobCounters {
     tierBActive: job.tierBActive ?? 0,
     tierCActive: job.tierCActive ?? 0,
     tierOtherActive: job.tierOtherActive ?? 0,
+    totalPlayed1MinMembers: job.totalPlayed1MinMembers ?? 0,
+    tierSPlayed1Min: job.tierSPlayed1Min ?? 0,
+    tierAPlayed1Min: job.tierAPlayed1Min ?? 0,
+    tierBPlayed1Min: job.tierBPlayed1Min ?? 0,
+    tierCPlayed1Min: job.tierCPlayed1Min ?? 0,
+    tierOtherPlayed1Min: job.tierOtherPlayed1Min ?? 0,
     tenureUnder3m: job.tenureUnder3m ?? 0,
     tenure3to6m: job.tenure3to6m ?? 0,
     tenure6to12m: job.tenure6to12m ?? 0,
@@ -778,7 +816,9 @@ function snapshotHasMemberScopeCache(
     cached.insightsCacheVersion === AUDIENCE_INSIGHTS_CACHE_VERSION ||
     (typeof cached.totalActiveMembers === "number" &&
       typeof cached.totalNewMembers7d === "number" &&
-      typeof cached.totalNewMembers30d === "number")
+      typeof cached.totalNewMembers30d === "number" &&
+      Array.isArray(cached.tierPlayed1Min) &&
+      typeof cached.totalPlayed1MinMembers === "number")
   );
 }
 
@@ -878,6 +918,7 @@ async function reconcileAudienceInsightsJobs(ctx: MutationCtx) {
 const emptyInsights = {
   totalMembers: 0,
   totalActiveMembers: 0,
+  totalPlayed1MinMembers: 0,
   totalNewMembers7d: 0,
   totalNewMembers30d: 0,
   gender: [] as ChartSegment[],
@@ -886,6 +927,7 @@ const emptyInsights = {
   genderNew30d: [] as ChartSegment[],
   tier: [] as ChartSegment[],
   tierActive: [] as ChartSegment[],
+  tierPlayed1Min: [] as ChartSegment[],
   tenure: [] as ChartSegment[],
   events: [] as ChartSegment[],
   recentEvents: [] as ChartSegment[],
@@ -914,6 +956,7 @@ export const getAudienceInsights = query({
     return {
       totalMembers: cached.totalMembers,
       totalActiveMembers: cached.totalActiveMembers ?? 0,
+      totalPlayed1MinMembers: cached.totalPlayed1MinMembers ?? 0,
       totalNewMembers7d: cached.totalNewMembers7d ?? 0,
       totalNewMembers30d: cached.totalNewMembers30d ?? 0,
       gender: cached.gender ?? [],
@@ -922,6 +965,7 @@ export const getAudienceInsights = query({
       genderNew30d: cached.genderNew30d ?? [],
       tier: cached.tier ?? [],
       tierActive: cached.tierActive ?? [],
+      tierPlayed1Min: cached.tierPlayed1Min ?? [],
       tenure: cached.tenure ?? [],
       events: cached.events ?? [],
       recentEvents: cached.recentEvents ?? [],
@@ -946,6 +990,8 @@ export const listAudienceInsightMembers = query({
     segment: v.string(),
     playersCursor: v.optional(v.union(v.string(), v.null())),
     activeOnly: v.optional(v.boolean()),
+    /** Tier chart: ≥1 Yunite event (eventsPlayedCount). */
+    played1MinOnly: v.optional(v.boolean()),
     newMemberWindowDays: v.optional(v.union(v.literal(7), v.literal(30))),
     sourceWindowDays: v.optional(v.union(v.literal(7), v.literal(30))),
   },
@@ -982,6 +1028,7 @@ export const listAudienceInsightMembers = query({
 
     const activeOnly =
       (args.chart === "tier" || args.chart === "gender") && args.activeOnly === true;
+    const played1MinOnly = args.chart === "tier" && args.played1MinOnly === true;
     const newMemberWindowDays =
       args.chart === "gender" &&
       (args.newMemberWindowDays === 7 || args.newMemberWindowDays === 30)
@@ -1022,6 +1069,7 @@ export const listAudienceInsightMembers = query({
           if (!player?.isRecentlyActive) continue;
         }
       }
+      if (played1MinOnly && (row.eventsPlayedCount ?? 0) < 1) continue;
       if (newMemberWindowDays === 7 && row.isNewMember7d !== true) continue;
       if (newMemberWindowDays === 30 && row.isNewMember30d !== true) continue;
       members.push({

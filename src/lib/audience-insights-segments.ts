@@ -115,12 +115,20 @@ export function segmentKeyToLabel(chart: AudienceChartType, segment: string): st
 export function audienceSegmentPath(
   chart: AudienceChartType,
   segment: string,
-  options?: { activeOnly?: boolean; newMemberWindowDays?: 7 | 30; sourceWindowDays?: 7 | 30 },
+  options?: {
+    activeOnly?: boolean;
+    played1MinOnly?: boolean;
+    newMemberWindowDays?: 7 | 30;
+    sourceWindowDays?: 7 | 30;
+  },
 ): string {
   const base = `/admin/audience-insights/${chart}/${segment}`;
   const params = new URLSearchParams();
   if (options?.activeOnly) {
     params.set("members", "active");
+  }
+  if (options?.played1MinOnly) {
+    params.set("members", "played1");
   }
   if (options?.newMemberWindowDays) {
     params.set("members", "new");
@@ -136,17 +144,24 @@ export function audienceSegmentPath(
 export function audienceSegmentPageTitle(
   chart: AudienceChartType,
   segment: string,
-  options?: { activeOnly?: boolean; newMemberWindowDays?: 7 | 30; sourceWindowDays?: 7 | 30 },
+  options?: {
+    activeOnly?: boolean;
+    played1MinOnly?: boolean;
+    newMemberWindowDays?: 7 | 30;
+    sourceWindowDays?: 7 | 30;
+  },
 ): string {
   const segmentLabel = segmentKeyToLabel(chart, segment) ?? segment;
   const scope =
-    (chart === "tier" || chart === "gender") && options?.activeOnly
-      ? " (active members)"
-      : chart === "gender" && options?.newMemberWindowDays
-        ? ` (new members, last ${options.newMemberWindowDays} days)`
-      : chart === "applicationSource" && options?.sourceWindowDays
-        ? ` (last ${options.sourceWindowDays} days)`
-        : "";
+    chart === "tier" && options?.played1MinOnly
+      ? " (1+ Yunite events)"
+      : (chart === "tier" || chart === "gender") && options?.activeOnly
+        ? " (active members)"
+        : chart === "gender" && options?.newMemberWindowDays
+          ? ` (new members, last ${options.newMemberWindowDays} days)`
+          : chart === "applicationSource" && options?.sourceWindowDays
+            ? ` (last ${options.sourceWindowDays} days)`
+            : "";
   return `${CHART_TITLES[chart]} — ${segmentLabel}${scope}`;
 }
 
