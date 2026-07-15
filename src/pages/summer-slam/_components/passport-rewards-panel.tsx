@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { HelpCircle, Stamp } from "lucide-react";
+import { CircleHelp, HelpCircle, Stamp } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
+import { Button } from "@/components/ui/button.tsx";
 import { SEASON_REWARDS } from "./passport-destinations.ts";
 import { PassportCertificateDownloadButton } from "./passport-certificate-download-button.tsx";
 import { ssCard, ssCardPad, ssLabel, ssSectionTitle, ssStatCell } from "./passport-dashboard-theme.ts";
@@ -24,6 +25,7 @@ export function PassportRewardsPanel({
   seasonStartsAt,
   seasonEndsAt,
   certificateDownload,
+  onHowItWorks,
   className,
 }: {
   season: SeasonSummary;
@@ -37,13 +39,28 @@ export function PassportRewardsPanel({
   seasonStartsAt?: number;
   seasonEndsAt?: number;
   certificateDownload?: ReactNode;
+  onHowItWorks?: () => void;
   className?: string;
 }) {
   const { isComplete } = season;
 
   return (
     <section className={cn(ssCard, ssCardPad, className)} aria-label="Rewards">
-      <h2 className={cn(ssSectionTitle, "mb-2")}>Rewards</h2>
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <h2 className={ssSectionTitle}>Rewards</h2>
+        {onHowItWorks ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1 px-2 text-xs font-medium text-orange-900/70 touch-manipulation hover:bg-orange-50 hover:text-orange-950"
+            onClick={onHowItWorks}
+          >
+            <CircleHelp className="h-3.5 w-3.5" aria-hidden />
+            How it works
+          </Button>
+        ) : null}
+      </div>
 
       <dl className="mb-2 grid grid-cols-3 gap-1.5 sm:gap-2">
         <div className={cn(ssStatCell, "text-center")}>

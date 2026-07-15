@@ -61,6 +61,7 @@ export function PassportDashboard({
   onRequestEvidence: (entry: QuestEntry) => void;
 }) {
   const [celebratingSealIds, setCelebratingSealIds] = useState<string[]>([]);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const reduceMotion = useReducedMotion();
 
   const { mainQuests, bonusQuestEntries } = useMemo(() => {
@@ -132,7 +133,10 @@ export function PassportDashboard({
 
   return (
     <div className={ssPageContent}>
-      <PassportOnboarding />
+      <PassportOnboarding
+        forceOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+      />
 
       <div className={ssPageContainer}>
         <PassportHero title={campaignTitle} />
@@ -185,6 +189,7 @@ export function PassportDashboard({
               seasonStartsAt={campaign?.startsAt}
               seasonEndsAt={campaign?.endsAt}
               certificateDownload={certificateDownload}
+              onHowItWorks={() => setShowOnboarding(true)}
             />
 
             <PassportEvidenceReviewPanel

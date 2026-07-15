@@ -7,18 +7,34 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
-import { Users, Shield, Eye, UserCog, Calendar, RefreshCw, BarChart3, GitMerge, Trash2 } from "lucide-react";
+import { Users, Shield, Eye, UserCog, Calendar, RefreshCw, BarChart3, GitMerge, Trash2, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { useClientPagination } from "@/hooks/use-client-pagination.ts";
 import TablePagination from "@/components/table-pagination.tsx";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import MergeUsersDialog from "./merge-users-dialog.tsx";
 import DeleteUserDialog from "./delete-user-dialog.tsx";
+
+type SortColumn = "name" | "username" | "email" | "role";
+type SortDirection = "asc" | "desc";
+
+const ROLE_SORT_ORDER: Record<string, number> = {
+  admin: 0,
+  event_mod: 1,
+  analytics: 2,
+  viewer: 3,
+};
+
+function compareOptionalString(a: string | undefined | null, b: string | undefined | null): number {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  return a.localeCompare(b, undefined, { sensitivity: "base" });
+}
 
 export default function UserManagement() {
   const users = useQuery(api.users.getAllUsers, {});
   const duplicateEmails = useQuery(api.userMerge.getDuplicateUserEmails, {});
-  const usersPagination = useClientPagination(users, {});
   const currentUser = useQuery(api.users.getCurrentUser);
   const updateUserRole = useMutation(api.users.updateUserRole);
   const clearViewerUsernames = useMutation(api.users.clearViewerUsernames);
@@ -27,6 +43,58 @@ export default function UserManagement() {
   const [isClearingViewerUsernames, setIsClearingViewerUsernames] = useState(false);
   const [mergeGroupEmail, setMergeGroupEmail] = useState<string | null>(null);
   const [deleteUserId, setDeleteUserId] = useState<Id<"users"> | null>(null);
+  const [sortColumn, setSortColumn] = useState<SortColumn>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const sortedUsers = useMemo(() => {
+    if (!users) return undefined;
+    return [...users].sort((a, b) => {
+      let comparison = 0;
+      switch (sortColumn) {
+        case "name":
+          comparison = compareOptionalString(a.name, b.name);
+          break;
+        case "username":
+          comparison = compareOptionalString(a.username, b.username);
+          break;
+        case "email":
+          comparison = compareOptionalString(a.email, b.email);
+          break;
+        case "role": {
+          const roleA = a.role || "viewer";
+          const roleB = b.role || "viewer";
+          comparison =
+            (ROLE_SORT_ORDER[roleA] ?? 99) - (ROLE_SORT_ORDER[roleB] ?? 99);
+          break;
+        }
+      }
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [users, sortColumn, sortDirection]);
+
+  const usersPagination = useClientPagination(sortedUsers, {
+    resetDeps: [sortColumn, sortDirection],
+  });
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
+
+  const getSortIcon = (column: SortColumn) => {
+    if (sortColumn !== column) {
+      return <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />;
+    }
+    return sortDirection === "asc" ? (
+      <ChevronUp className="h-4 w-4" />
+    ) : (
+      <ChevronDown className="h-4 w-4" />
+    );
+  };
 
   if (users === undefined || currentUser === undefined || duplicateEmails === undefined) {
     return <Skeleton className="h-48 w-full" />;
@@ -171,10 +239,46 @@ export default function UserManagement() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Username</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => handleSort("name")}
+                    className="flex items-center gap-2 hover:text-foreground transition-colors"
+                  >
+                    User
+                    {getSortIcon("name")}
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => handleSort("username")}
+                    className="flex items-center gap-2 hover:text-foreground transition-colors"
+                  >
+                    Username
+                    {getSortIcon("username")}
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => handleSort("email")}
+                    className="flex items-center gap-2 hover:text-foreground transition-colors"
+                  >
+                    Email
+                    {getSortIcon("email")}
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => handleSort("role")}
+                    className="flex items-center gap-2 hover:text-foreground transition-colors"
+                  >
+                    Role
+                    {getSortIcon("role")}
+                  </button>
+                </TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
