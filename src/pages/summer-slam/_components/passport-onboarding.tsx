@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Award, MousePointerClick, Sparkles, TrendingUp, Upload } from "lucide-react";
+import { Award, MousePointerClick, Sparkles, Ticket, TrendingUp, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import {
   Dialog,
@@ -112,7 +112,26 @@ export function PassportOnboarding({
           ))}
         </ol>
 
-        <div className="mt-2 flex items-center gap-2 rounded-xl border border-teal-200/70 bg-teal-50/60 px-3 py-2.5 text-xs text-teal-900">
+        <div className="mt-2 flex gap-2 rounded-xl border border-teal-200/70 bg-teal-50/60 px-3 py-2.5 text-teal-900">
+          <Ticket className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-700">
+              Prize Wheel Tickets
+            </p>
+            <ul className="mt-1 space-y-0.5 text-xs leading-relaxed">
+              <li>
+                Complete <span className="font-semibold text-teal-800">1</span> Quest = Earn{" "}
+                <span className="font-semibold text-teal-800">1</span> Little Prize Wheel Ticket
+              </li>
+              <li>
+                Complete <span className="font-semibold text-teal-800">5</span> Quests = Earn{" "}
+                <span className="font-semibold text-teal-800">5</span> Little Prize Wheel Tickets
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 rounded-xl border border-teal-200/70 bg-teal-50/60 px-3 py-2.5 text-xs text-teal-900">
           <Award className="h-4 w-4 shrink-0" aria-hidden />
           Earn all five stamps to complete your passport and maximise your prize wheel tickets.
         </div>

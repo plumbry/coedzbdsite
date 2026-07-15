@@ -41,7 +41,7 @@ export function PassportSealImage({
   const needsChanges = badgeStatus === "needs_changes";
   const inProgress = state === "in_progress" && !needsChanges;
   const percent = earned ? 100 : (seal?.percent ?? 0);
-  const showRing = showProgressRing && seal && seal.total > 0 && !locked;
+  const showRing = showProgressRing && seal && seal.total > 0;
   const hasArtwork = Boolean(meta.image);
   const strokeWidth = 3;
   const ringSize = size + 12;

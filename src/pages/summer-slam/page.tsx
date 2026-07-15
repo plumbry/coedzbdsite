@@ -41,32 +41,32 @@ import { Compass, Gift, Stamp, Sun, Trophy, Upload, UserCheck } from "lucide-rea
 const STEPS = [
   {
     icon: Compass,
-    title: "Open your passport",
+    title: "Open Your Passport",
     body: "Five destination categories, each with quests. Track progress on your passport dashboard.",
   },
   {
     icon: Sun,
-    title: "Complete quests",
+    title: "Complete Quests",
     body: "Auto quests track from tagged ZBD events. Manual quests need proof. Staff-awarded quests are granted by admins.",
   },
   {
     icon: Upload,
-    title: "Submit evidence",
+    title: "Submit Evidence",
     body: "For manual quests, paste a public evidence link (screenshots via postimages.org, clips via Medal/YouTube/etc.). Only submit when you meet the quest requirements.",
   },
   {
     icon: UserCheck,
-    title: "Staff review",
+    title: "Staff Review",
     body: "Admins check evidence against quest instructions. Typical review time is 48–72 hours. Resubmit if staff request more proof.",
   },
   {
     icon: Stamp,
-    title: "Earn seals",
+    title: "Earn Seals",
     body: "When every quest in a destination category is approved, you earn that category seal on your passport.",
   },
   {
     icon: Trophy,
-    title: "Wheel tickets",
+    title: "Wheel Tickets",
     body: "Approved quests award wheel points. Points convert to Little and Big Wheel tickets at configured thresholds.",
   },
 ];
@@ -109,7 +109,7 @@ function getPrizeItems(littleEvery: number, bigEvery: number) {
   return [
     {
       icon: Gift,
-      title: "Little Wheel tickets",
+      title: "Little Wheel Tickets",
       body:
         littleEvery === 1
           ? "Each approved quest earns 1 wheel point and a Little Wheel ticket — your entry into regular season prize draws."
@@ -117,7 +117,7 @@ function getPrizeItems(littleEvery: number, bigEvery: number) {
     },
     {
       icon: Trophy,
-      title: "Big Wheel tickets",
+      title: "Big Wheel Tickets",
       body: `Every ${bigEvery} wheel points earns a Big Wheel ticket — your entry into the headline end-of-season prize draw.`,
     },
     {

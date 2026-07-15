@@ -4,13 +4,16 @@ import {
   Check,
   ChevronRight,
   Clock,
+  Gift,
   Square,
+  Target,
+  Unlock,
   Upload,
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
-import { ssLabel, ssPassportSpine, ssStampSize } from "./passport-dashboard-theme.ts";
+import { ssLabel, ssPassportSpine } from "./passport-dashboard-theme.ts";
 import { PassportSealImage } from "./passport-seal-image.tsx";
 import { PassportStatusBadge } from "./passport-status-badge.tsx";
 import { PassportStampCelebration } from "./passport-stamp-celebration.tsx";
@@ -22,6 +25,8 @@ import {
 import {
   formatSealDate,
   getActionableEntry,
+  SEAL_META,
+  SEAL_ORDER,
   sealBadgeStatus,
   type SealProgress,
   type SealTask,
@@ -90,6 +95,55 @@ function PageCompletedBadge() {
   );
 }
 
+function formatPageReward(stampReward: number): string {
+  if (stampReward <= 0) return "Stamp for your passport";
+  return `+${stampReward} Little Wheel Ticket${stampReward === 1 ? "" : "s"}`;
+}
+
+function getNextUnlockCopy(seal: SealProgress, isBonus: boolean): string {
+  const isEarned = seal.state === "earned";
+
+  if (isBonus) {
+    return isEarned
+      ? "Bonus stamp claimed — enjoy the glory"
+      : "Finish these quests to claim your bonus stamp";
+  }
+
+  const index = SEAL_ORDER.indexOf(seal.id);
+  const nextId = index >= 0 && index < SEAL_ORDER.length - 1 ? SEAL_ORDER[index + 1] : null;
+  const nextLabel = nextId ? SEAL_META[nextId].label : null;
+
+  if (isEarned) {
+    if (nextLabel) return `${nextLabel} stamp unlocked`;
+    return "Bonus Stamp unlocked";
+  }
+
+  if (nextLabel) return `Complete this page to unlock ${nextLabel}`;
+  return "Complete this page to unlock the Bonus Stamp";
+}
+
+function PageSummaryRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Target;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-orange-100/80 bg-white/70 px-2.5 py-2 text-left">
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-orange-50 text-teal-700">
+        <Icon className="h-3.5 w-3.5" aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-teal-800/65">{label}</p>
+        <p className="text-[11px] font-semibold leading-snug text-orange-950 sm:text-xs">{value}</p>
+      </div>
+    </div>
+  );
+}
+
 function LeftPage({
   seal,
   isBonus,
@@ -103,51 +157,58 @@ function LeftPage({
   const badgeStatus = sealBadgeStatus(seal);
   const isEarned = seal.state === "earned";
   const earnedDate = formatSealDate(seal.earnedAt);
+  const questProgressLabel =
+    seal.total > 0
+      ? `${seal.approved}/${seal.total} Quests Complete`
+      : "Quests coming soon";
+  const pageRewardLabel = formatPageReward(seal.stampReward);
+  const nextUnlockLabel = getNextUnlockCopy(seal, isBonus);
 
   return (
     <div
       className={cn(
         PAGE_SURFACE,
         PAGE_PAD,
-        "flex shrink-0 flex-row items-center gap-3 text-left lg:flex-col lg:items-center lg:justify-center lg:text-center",
+        "flex min-h-0 flex-col items-center text-center sm:p-3 lg:h-full lg:justify-between lg:gap-3 lg:p-3.5",
       )}
     >
       {isEarned ? <PageCompletedBadge /> : null}
       <PassportStampCelebration active={celebrating} />
 
-      <div className="relative shrink-0 lg:mb-1.5">
-        <PassportSealImage
-          meta={meta}
-          state={seal.state}
-          seal={seal}
-          size={ssStampSize.challenge}
-          showProgressRing
-          animateEarned={celebrating}
-        />
-      </div>
+      <div className="flex w-full flex-col items-center">
+        <div className="relative mx-auto mb-3 w-[6.75rem] sm:mb-3.5 sm:w-32 lg:w-36">
+          <PassportSealImage
+            meta={meta}
+            state={seal.state}
+            seal={seal}
+            fill
+            showProgressRing
+            animateEarned={celebrating}
+          />
+        </div>
 
-      <div className="min-w-0 flex-1 lg:flex-none">
-        <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-teal-800/60">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-teal-800/60">
           {isBonus ? "Bonus" : "Page"}
         </p>
-        <h2 className="font-display text-sm font-semibold leading-tight text-orange-950">{meta.label}</h2>
-        <PassportStatusBadge status={badgeStatus} size="sm" withTooltip={false} className="mt-1" />
-        <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-orange-900/55 lg:line-clamp-2">
+        <h2 className="mt-0.5 font-display text-base font-semibold leading-tight text-orange-950 sm:text-lg">
+          {meta.label}
+        </h2>
+        <PassportStatusBadge status={badgeStatus} size="sm" withTooltip={false} className="mt-1.5" />
+        <p className="mt-2 max-w-[16rem] text-[11px] leading-snug text-orange-900/55 sm:text-xs">
           {meta.tagline}
         </p>
-        <p
-          className={cn(
-            "mt-1.5 inline-block rounded-full px-2 py-px text-[9px] font-semibold",
-            isEarned ? "bg-teal-50 text-teal-800" : "bg-orange-50/80 text-orange-800/65",
-          )}
-        >
-          {isEarned
-            ? earnedDate
-              ? `Earned ${earnedDate}`
-              : "Stamp earned"
-            : `${seal.approved}/${seal.total} quests`}
-        </p>
+        {isEarned ? (
+          <p className="mt-2 inline-block rounded-full bg-teal-50 px-2.5 py-0.5 text-[9px] font-semibold text-teal-800">
+            {earnedDate ? `Earned ${earnedDate}` : "Stamp earned"}
+          </p>
+        ) : null}
       </div>
+
+      <dl className="mt-4 flex w-full flex-col gap-1.5 sm:mt-5 lg:mt-auto">
+        <PageSummaryRow icon={Target} label="Quest Progress" value={questProgressLabel} />
+        <PageSummaryRow icon={Gift} label="Page Reward" value={pageRewardLabel} />
+        <PageSummaryRow icon={Unlock} label="Next Unlock" value={nextUnlockLabel} />
+      </dl>
     </div>
   );
 }
