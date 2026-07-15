@@ -26,7 +26,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog.tsx";
 import { toast } from "sonner";
-import { Download, ExternalLink, Loader2, RefreshCw, Save, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronUp,
+  Download,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
+  Save,
+  Trash2,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils.ts";
 import {
@@ -48,6 +58,70 @@ const CAMPAIGN_SLUG = "summer-slam";
 
 /** Visible field chrome — theme `--input` is nearly white on cards. */
 const fieldClass = "border-foreground/20 bg-background";
+
+type SortDirection = "asc" | "desc";
+
+function compareOptionalString(a: string | undefined | null, b: string | undefined | null): number {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  return a.localeCompare(b, undefined, { sensitivity: "base" });
+}
+
+function SortableHead({
+  label,
+  column,
+  sortColumn,
+  sortDirection,
+  onSort,
+  className,
+}: {
+  label: string;
+  column: string;
+  sortColumn: string;
+  sortDirection: SortDirection;
+  onSort: (column: string) => void;
+  className?: string;
+}) {
+  const icon =
+    sortColumn !== column ? (
+      <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
+    ) : sortDirection === "asc" ? (
+      <ChevronUp className="h-4 w-4" />
+    ) : (
+      <ChevronDown className="h-4 w-4" />
+    );
+
+  return (
+    <TableHead className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className="flex items-center gap-2 transition-colors hover:text-foreground"
+      >
+        {label}
+        {icon}
+      </button>
+    </TableHead>
+  );
+}
+
+function useColumnSort<T extends string>(defaultColumn: T, defaultDirection: SortDirection = "asc") {
+  const [sortColumn, setSortColumn] = useState<T>(defaultColumn);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(defaultDirection);
+
+  const handleSort = (column: string) => {
+    const next = column as T;
+    if (sortColumn === next) {
+      setSortDirection((direction) => (direction === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColumn(next);
+      setSortDirection("asc");
+    }
+  };
+
+  return { sortColumn, sortDirection, handleSort };
+}
 
 type Category = "traveller" | "competitor" | "summer_spirit" | "team_player" | "community" | "summer_legend";
 type CompletionMethod = "auto" | "manual" | "admin";
@@ -191,6 +265,7 @@ export default function SummerSlamAdminPage() {
   const [campaignActive, setCampaignActive] = useState(true);
   const [campaignStartsAt, setCampaignStartsAt] = useState("");
   const [campaignEndsAt, setCampaignEndsAt] = useState("");
+  const [campaignSubmissionsEnabled, setCampaignSubmissionsEnabled] = useState(false);
   const [stampName, setStampName] = useState("Passport Stamp");
   const [littleWheelEvery, setLittleWheelEvery] = useState(1);
   const [bigWheelEvery, setBigWheelEvery] = useState(5);
@@ -205,6 +280,12 @@ export default function SummerSlamAdminPage() {
   >(null);
   const [isDeletingQuest, setIsDeletingQuest] = useState(false);
   const [activeTab, setActiveTab] = useState("quests");
+  const questSort = useColumnSort<"title" | "category" | "method" | "status">("title");
+  const eventSort = useColumnSort<"event" | "date" | "type" | "mode" | "teamFormat" | "status">("date", "desc");
+  const reviewSort = useColumnSort<"player" | "quest" | "submitted">("submitted", "desc");
+  const passportSort = useColumnSort<
+    "player" | "discordUser" | "created" | "approvedPoints" | "littleTickets" | "bigTickets" | "completedQuests"
+  >("created", "desc");
   const { isAdmin } = useUserRole();
 
   const ensureCampaign = useMutation(api.seasonal.ensureSummerSlamCampaign);
@@ -234,6 +315,7 @@ export default function SummerSlamAdminPage() {
     setCampaignActive(dashboard.campaign.isActive);
     setCampaignStartsAt(timestampToDatetimeLocal(dashboard.campaign.startsAt));
     setCampaignEndsAt(timestampToDatetimeLocal(dashboard.campaign.endsAt));
+    setCampaignSubmissionsEnabled(dashboard.campaign.submissionsEnabled !== false);
     setStampName(dashboard.campaign.stampName);
     setLittleWheelEvery(dashboard.campaign.littleWheelEntryEveryStamps);
     setBigWheelEvery(dashboard.campaign.bigWheelEntryEveryStamps);
@@ -263,6 +345,120 @@ export default function SummerSlamAdminPage() {
       );
     });
   }, [filterText, reviewQueue]);
+
+  const sortedQuests = useMemo(() => {
+    const rows = [...(dashboard?.quests ?? [])];
+    const direction = questSort.sortDirection === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      let comparison = 0;
+      switch (questSort.sortColumn) {
+        case "title":
+          comparison = a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+          break;
+        case "category":
+          comparison =
+            TAGLINE_EDIT_ORDER.indexOf(a.category) - TAGLINE_EDIT_ORDER.indexOf(b.category);
+          break;
+        case "method":
+          comparison = formatHowToCompleteLabel(a.completionMethod, a.evidenceInput).localeCompare(
+            formatHowToCompleteLabel(b.completionMethod, b.evidenceInput),
+          );
+          break;
+        case "status":
+          comparison = Number(a.isActive) - Number(b.isActive);
+          break;
+      }
+      return comparison * direction;
+    });
+    return rows;
+  }, [dashboard?.quests, questSort.sortColumn, questSort.sortDirection]);
+
+  const sortedTaggedEvents = useMemo(() => {
+    const rows = [...(taggedEvents ?? [])];
+    const direction = eventSort.sortDirection === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      let comparison = 0;
+      switch (eventSort.sortColumn) {
+        case "event":
+          comparison = compareOptionalString(a.event?.name, b.event?.name);
+          break;
+        case "date":
+          comparison = compareOptionalString(a.event?.startDate, b.event?.startDate);
+          break;
+        case "type":
+          comparison = compareOptionalString(a.event?.type, b.event?.type);
+          break;
+        case "mode":
+          comparison = compareOptionalString(a.event?.mode, b.event?.mode);
+          break;
+        case "teamFormat":
+          comparison = a.teamFormat.localeCompare(b.teamFormat, undefined, { sensitivity: "base" });
+          break;
+        case "status":
+          comparison = compareOptionalString(a.event?.status, b.event?.status);
+          break;
+      }
+      return comparison * direction;
+    });
+    return rows;
+  }, [taggedEvents, eventSort.sortColumn, eventSort.sortDirection]);
+
+  const sortedReviewQueue = useMemo(() => {
+    const rows = [...filteredReviewQueue];
+    const direction = reviewSort.sortDirection === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      let comparison = 0;
+      switch (reviewSort.sortColumn) {
+        case "player":
+          comparison = compareOptionalString(a.player?.discordUsername, b.player?.discordUsername);
+          break;
+        case "quest":
+          comparison = compareOptionalString(a.quest?.title, b.quest?.title);
+          break;
+        case "submitted":
+          comparison = a.submission.submittedAt - b.submission.submittedAt;
+          break;
+      }
+      return comparison * direction;
+    });
+    return rows;
+  }, [filteredReviewQueue, reviewSort.sortColumn, reviewSort.sortDirection]);
+
+  const sortedPassports = useMemo(() => {
+    const rows = [...(passports ?? [])];
+    const direction = passportSort.sortDirection === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      let comparison = 0;
+      switch (passportSort.sortColumn) {
+        case "player":
+          comparison = compareOptionalString(a.player?.discordUsername, b.player?.discordUsername);
+          break;
+        case "discordUser":
+          comparison = compareOptionalString(
+            a.user?.discordUsername ?? a.user?.username ?? a.user?.name,
+            b.user?.discordUsername ?? b.user?.username ?? b.user?.name,
+          );
+          break;
+        case "created":
+          comparison = a.passport.createdAt - b.passport.createdAt;
+          break;
+        case "approvedPoints":
+          comparison = a.approvedStamps - b.approvedStamps;
+          break;
+        case "littleTickets":
+          comparison = a.littleWheelEntries - b.littleWheelEntries;
+          break;
+        case "bigTickets":
+          comparison = a.bigWheelEntries - b.bigWheelEntries;
+          break;
+        case "completedQuests":
+          comparison = a.completedQuests - b.completedQuests;
+          break;
+      }
+      return comparison * direction;
+    });
+    return rows;
+  }, [passports, passportSort.sortColumn, passportSort.sortDirection]);
 
   const isPreLaunchPreview = useMemo(() => {
     const campaign = dashboard?.campaign;
@@ -464,6 +660,7 @@ export default function SummerSlamAdminPage() {
         isActive: campaignActive,
         startsAt: datetimeLocalToTimestamp(campaignStartsAt),
         endsAt: datetimeLocalToTimestamp(campaignEndsAt),
+        submissionsEnabled: campaignSubmissionsEnabled,
         stampName,
         littleWheelEntryEveryStamps: littleWheelEvery,
         bigWheelEntryEveryStamps: bigWheelEvery,
@@ -518,6 +715,9 @@ export default function SummerSlamAdminPage() {
                     value={campaignStartsAt}
                     onChange={(event) => setCampaignStartsAt(event.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    From this time, players can claim and view passports.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Season end (submission deadline)</Label>
@@ -528,11 +728,39 @@ export default function SummerSlamAdminPage() {
                     onChange={(event) => setCampaignEndsAt(event.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Last moment players can submit evidence. Staff can still review after this date.
+                    Hard close for evidence — staff can still review after this date.
                   </p>
                 </div>
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Evidence submissions</Label>
+                  <div className="flex h-9 items-center gap-2 rounded-md border border-foreground/20 bg-background px-3">
+                    <Switch
+                      checked={campaignSubmissionsEnabled}
+                      onCheckedChange={setCampaignSubmissionsEnabled}
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {campaignSubmissionsEnabled
+                        ? "Players can submit evidence"
+                        : "Claim/view only — submissions off"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Independent of season start. Turn on when you are ready for quest evidence.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{campaignActive ? "Active" : "Archived"}</Label>
+                  <div className="flex h-9 items-center gap-2 rounded-md border border-foreground/20 bg-background px-3">
+                    <Switch checked={campaignActive} onCheckedChange={setCampaignActive} />
+                    <span className="text-sm text-muted-foreground">
+                      {campaignActive ? "Campaign is live" : "Campaign is archived"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Little Wheel Ticket Every X Points</Label>
                   <Input className={fieldClass} type="number" min={1} value={littleWheelEvery} onChange={(event) => setLittleWheelEvery(Number(event.target.value))} />
@@ -540,15 +768,6 @@ export default function SummerSlamAdminPage() {
                 <div className="space-y-1.5">
                   <Label>Big Wheel Ticket Every X Points</Label>
                   <Input className={fieldClass} type="number" min={1} value={bigWheelEvery} onChange={(event) => setBigWheelEvery(Number(event.target.value))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>{campaignActive ? "Active" : "Archived"}</Label>
-                  <div className="flex h-9 items-center gap-2 rounded-md border border-foreground/20 bg-background px-3">
-                    <Switch checked={campaignActive} onCheckedChange={setCampaignActive} />
-                    <span className="text-sm text-muted-foreground">
-                      {campaignActive ? "Players can access passports" : "Campaign is archived"}
-                    </span>
-                  </div>
                 </div>
               </div>
               <div className="space-y-2">
@@ -722,6 +941,11 @@ export default function SummerSlamAdminPage() {
                 <div className="space-y-1.5">
                   <Label>Description</Label>
                   <Textarea className={fieldClass} value={description} onChange={(event) => setDescription(event.target.value)} />
+                  <p className="text-xs text-muted-foreground">
+                    Markdown supported — e.g.{" "}
+                    <code className="rounded bg-muted px-1">[Postimages](https://postimages.org/)</code>,{" "}
+                    <code className="rounded bg-muted px-1">**bold**</code>, lists.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Evidence Instructions</Label>
@@ -731,6 +955,7 @@ export default function SummerSlamAdminPage() {
                     onChange={(event) => setEvidenceInstructions(event.target.value)}
                     placeholder="Upload screenshots to https://postimages.org/ and paste the link. Video clips: YouTube, Twitch, TikTok, Medal, Streamable, Discord, etc."
                   />
+                  <p className="text-xs text-muted-foreground">Markdown supported for links and formatting.</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Admin Hint (optional)</Label>
@@ -741,6 +966,7 @@ export default function SummerSlamAdminPage() {
                     placeholder="Extra tips shown to players (e.g. modes to play, who counts as a teammate). Not required."
                     rows={4}
                   />
+                  <p className="text-xs text-muted-foreground">Markdown supported for links and formatting.</p>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1.5">
@@ -886,15 +1112,39 @@ export default function SummerSlamAdminPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Quest</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>Status</TableHead>
+                      <SortableHead
+                        label="Quest"
+                        column="title"
+                        sortColumn={questSort.sortColumn}
+                        sortDirection={questSort.sortDirection}
+                        onSort={questSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Category"
+                        column="category"
+                        sortColumn={questSort.sortColumn}
+                        sortDirection={questSort.sortDirection}
+                        onSort={questSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Method"
+                        column="method"
+                        sortColumn={questSort.sortColumn}
+                        sortDirection={questSort.sortDirection}
+                        onSort={questSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Status"
+                        column="status"
+                        sortColumn={questSort.sortColumn}
+                        sortDirection={questSort.sortDirection}
+                        onSort={questSort.handleSort}
+                      />
                       <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(dashboard?.quests ?? []).map((quest) => (
+                    {sortedQuests.map((quest) => (
                       <TableRow key={quest._id}>
                         <TableCell className="font-medium">{quest.title}</TableCell>
                         <TableCell>{categoryLabels[quest.category]}</TableCell>
@@ -938,12 +1188,48 @@ export default function SummerSlamAdminPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Event</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Mode</TableHead>
-                      <TableHead>Team Format</TableHead>
-                      <TableHead>Status</TableHead>
+                      <SortableHead
+                        label="Event"
+                        column="event"
+                        sortColumn={eventSort.sortColumn}
+                        sortDirection={eventSort.sortDirection}
+                        onSort={eventSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Date"
+                        column="date"
+                        sortColumn={eventSort.sortColumn}
+                        sortDirection={eventSort.sortDirection}
+                        onSort={eventSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Type"
+                        column="type"
+                        sortColumn={eventSort.sortColumn}
+                        sortDirection={eventSort.sortDirection}
+                        onSort={eventSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Mode"
+                        column="mode"
+                        sortColumn={eventSort.sortColumn}
+                        sortDirection={eventSort.sortDirection}
+                        onSort={eventSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Team Format"
+                        column="teamFormat"
+                        sortColumn={eventSort.sortColumn}
+                        sortDirection={eventSort.sortDirection}
+                        onSort={eventSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Status"
+                        column="status"
+                        sortColumn={eventSort.sortColumn}
+                        sortDirection={eventSort.sortDirection}
+                        onSort={eventSort.handleSort}
+                      />
                       <TableHead className="text-right">Open</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -954,7 +1240,7 @@ export default function SummerSlamAdminPage() {
                           Loading tagged events…
                         </TableCell>
                       </TableRow>
-                    ) : taggedEvents.length === 0 ? (
+                    ) : sortedTaggedEvents.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                           No events tagged yet. Open{" "}
@@ -965,7 +1251,7 @@ export default function SummerSlamAdminPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      taggedEvents.map((row) => (
+                      sortedTaggedEvents.map((row) => (
                         <TableRow key={row.tagId}>
                           <TableCell className="font-medium">
                             {row.event?.name ?? "Missing event"}
@@ -1023,22 +1309,40 @@ export default function SummerSlamAdminPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Player</TableHead>
-                      <TableHead>Quest</TableHead>
-                      <TableHead>Submitted</TableHead>
+                      <SortableHead
+                        label="Player"
+                        column="player"
+                        sortColumn={reviewSort.sortColumn}
+                        sortDirection={reviewSort.sortDirection}
+                        onSort={reviewSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Quest"
+                        column="quest"
+                        sortColumn={reviewSort.sortColumn}
+                        sortDirection={reviewSort.sortDirection}
+                        onSort={reviewSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Submitted"
+                        column="submitted"
+                        sortColumn={reviewSort.sortColumn}
+                        sortDirection={reviewSort.sortDirection}
+                        onSort={reviewSort.handleSort}
+                      />
                       <TableHead>Preview</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredReviewQueue.length === 0 ? (
+                    {sortedReviewQueue.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
                           No submissions match this filter.
                         </TableCell>
                       </TableRow>
                     ) : null}
-                    {filteredReviewQueue.map((row) => (
+                    {sortedReviewQueue.map((row) => (
                       <TableRow key={row.submission._id}>
                         <TableCell>
                           <div className="font-medium">{row.player?.discordUsername ?? "Unknown"}</div>
@@ -1141,17 +1445,59 @@ export default function SummerSlamAdminPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Player</TableHead>
-                      <TableHead>Discord User</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Approved Points</TableHead>
-                      <TableHead>Little Tickets</TableHead>
-                      <TableHead>Big Tickets</TableHead>
-                      <TableHead>Completed Quests</TableHead>
+                      <SortableHead
+                        label="Player"
+                        column="player"
+                        sortColumn={passportSort.sortColumn}
+                        sortDirection={passportSort.sortDirection}
+                        onSort={passportSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Discord User"
+                        column="discordUser"
+                        sortColumn={passportSort.sortColumn}
+                        sortDirection={passportSort.sortDirection}
+                        onSort={passportSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Created"
+                        column="created"
+                        sortColumn={passportSort.sortColumn}
+                        sortDirection={passportSort.sortDirection}
+                        onSort={passportSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Approved Points"
+                        column="approvedPoints"
+                        sortColumn={passportSort.sortColumn}
+                        sortDirection={passportSort.sortDirection}
+                        onSort={passportSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Little Tickets"
+                        column="littleTickets"
+                        sortColumn={passportSort.sortColumn}
+                        sortDirection={passportSort.sortDirection}
+                        onSort={passportSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Big Tickets"
+                        column="bigTickets"
+                        sortColumn={passportSort.sortColumn}
+                        sortDirection={passportSort.sortDirection}
+                        onSort={passportSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Completed Quests"
+                        column="completedQuests"
+                        sortColumn={passportSort.sortColumn}
+                        sortDirection={passportSort.sortDirection}
+                        onSort={passportSort.handleSort}
+                      />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(passports ?? []).map((row) => (
+                    {sortedPassports.map((row) => (
                       <TableRow key={row.passport._id}>
                         <TableCell>
                           <div className="font-medium">{row.player?.discordUsername ?? "Unknown"}</div>

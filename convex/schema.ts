@@ -620,6 +620,11 @@ export default defineSchema({
     isActive: v.boolean(),
     startsAt: v.optional(v.number()),
     endsAt: v.optional(v.number()),
+    /**
+     * When false, players can claim/view passports after season start but cannot submit evidence.
+     * Omitted on legacy campaigns — treated as enabled.
+     */
+    submissionsEnabled: v.optional(v.boolean()),
     stampName: v.string(),
     littleWheelEntryEveryStamps: v.number(),
     bigWheelEntryEveryStamps: v.number(),
@@ -1243,6 +1248,8 @@ export default defineSchema({
         gender: v.optional(v.number()),
         femaleVerified: v.boolean(),
         isActive: v.boolean(),
+        /** Optional while cache rebuilds after schema add; builders always write a number. */
+        eventsPlayedCount: v.optional(v.number()),
       }),
     ),
     lastUpdated: v.number(),

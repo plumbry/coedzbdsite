@@ -13,6 +13,8 @@ import { PassportStampBadge } from "./passport-stamp-badge.tsx";
 
 import { PassportQuestTypeBadge } from "./passport-quest-type-badge.tsx";
 
+import { QuestMarkdown } from "./quest-markdown.tsx";
+
 import {
 
   getEvidenceSubmitOptions,
@@ -273,7 +275,7 @@ export function PassportQuestDetailContent({
 
           <SectionHeading>What is this?</SectionHeading>
 
-          <p className="text-sm leading-relaxed text-stone-700">{quest.description}</p>
+          <QuestMarkdown className="text-stone-700">{quest.description}</QuestMarkdown>
 
         </section>
 
@@ -287,7 +289,9 @@ export function PassportQuestDetailContent({
 
             {howToBullets.map((bullet) => (
 
-              <li key={bullet}>{bullet}</li>
+              <li key={bullet}>
+                <QuestMarkdown className="inline text-stone-700 [&_p]:mb-0 [&_p]:inline">{bullet}</QuestMarkdown>
+              </li>
 
             ))}
 
@@ -327,7 +331,7 @@ export function PassportQuestDetailContent({
 
                 <p className="mb-1 text-xs font-semibold text-stone-500">Specific requirements</p>
 
-                <p className="whitespace-pre-wrap">{quest.evidenceInstructions}</p>
+                <QuestMarkdown className="text-stone-700">{quest.evidenceInstructions}</QuestMarkdown>
 
               </div>
 

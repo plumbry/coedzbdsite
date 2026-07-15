@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import {
   Dialog,
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/drawer.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
+import { QuestMarkdown } from "./quest-markdown.tsx";
 import {
   Select,
   SelectContent,
@@ -33,6 +34,8 @@ import {
   type EvidenceType,
 } from "./passport-types.ts";
 
+export const MAX_EVIDENCE_LINKS = 5;
+
 type QuestForDialog = {
   title: string;
   evidenceInstructions?: string;
@@ -42,30 +45,36 @@ type QuestForDialog = {
 function EvidenceFormFields({
   quest,
   evidenceType,
-  evidenceUrl,
+  evidenceUrls,
   notes,
   onEvidenceTypeChange,
   onEvidenceUrlChange,
+  onAddEvidenceUrl,
+  onRemoveEvidenceUrl,
   onNotesChange,
 }: {
   quest: QuestForDialog | undefined;
   evidenceType: EvidenceType;
-  evidenceUrl: string;
+  evidenceUrls: string[];
   notes: string;
   onEvidenceTypeChange: (type: EvidenceType) => void;
-  onEvidenceUrlChange: (url: string) => void;
+  onEvidenceUrlChange: (index: number, url: string) => void;
+  onAddEvidenceUrl: () => void;
+  onRemoveEvidenceUrl: (index: number) => void;
   onNotesChange: (notes: string) => void;
 }) {
   const lockedInput = quest?.evidenceInput;
   const showScreenshotHelper =
     lockedInput === "image" || evidenceType === "screenshot_link" || evidenceType === "image";
+  const linkLabel = lockedInput === "image" ? "Screenshot Link" : "Evidence Link";
+  const canAddLink = evidenceUrls.length < MAX_EVIDENCE_LINKS;
 
   return (
     <div className="space-y-4">
       {quest?.evidenceInstructions && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">What we need</p>
-          <p className="mt-1 text-sm text-amber-950">{quest.evidenceInstructions}</p>
+          <QuestMarkdown className="mt-1 text-amber-950">{quest.evidenceInstructions}</QuestMarkdown>
         </div>
       )}
 
@@ -93,14 +102,36 @@ function EvidenceFormFields({
         </div>
       ) : null}
 
-      <div className="space-y-2">
-        <Label>{lockedInput === "image" ? "Screenshot Link" : "Evidence Link"}</Label>
-        <Input
-          value={evidenceUrl}
-          onChange={(event) => onEvidenceUrlChange(event.target.value)}
-          placeholder="https://..."
-          className="min-h-11 touch-manipulation"
-        />
+      <div className="space-y-3">
+        {evidenceUrls.map((url, index) => (
+          <div key={index} className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor={`evidence-url-${index}`}>
+                {evidenceUrls.length > 1 ? `${linkLabel} ${index + 1}` : linkLabel}
+              </Label>
+              {evidenceUrls.length > 1 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs text-muted-foreground touch-manipulation hover:text-destructive"
+                  onClick={() => onRemoveEvidenceUrl(index)}
+                >
+                  <Trash2 className="mr-1 h-3.5 w-3.5" aria-hidden />
+                  Remove
+                </Button>
+              ) : null}
+            </div>
+            <Input
+              id={`evidence-url-${index}`}
+              value={url}
+              onChange={(event) => onEvidenceUrlChange(index, event.target.value)}
+              placeholder="https://..."
+              className="min-h-11 touch-manipulation"
+            />
+          </div>
+        ))}
+
         {showScreenshotHelper ? (
           <p className="text-xs text-muted-foreground">
             {SCREENSHOT_LINK_HELPER}{" "}
@@ -114,6 +145,23 @@ function EvidenceFormFields({
             </a>
           </p>
         ) : null}
+
+        {canAddLink ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-10 w-full touch-manipulation"
+            onClick={onAddEvidenceUrl}
+          >
+            <Plus className="mr-1.5 h-4 w-4" aria-hidden />
+            Add another link
+          </Button>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            You can add up to {MAX_EVIDENCE_LINKS} links per submission.
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -132,11 +180,13 @@ export function PassportEvidenceDialog({
   open,
   quest,
   evidenceType,
-  evidenceUrl,
+  evidenceUrls,
   notes,
   isSubmitting,
   onEvidenceTypeChange,
   onEvidenceUrlChange,
+  onAddEvidenceUrl,
+  onRemoveEvidenceUrl,
   onNotesChange,
   onClose,
   onSubmit,
@@ -144,16 +194,32 @@ export function PassportEvidenceDialog({
   open: boolean;
   quest: QuestForDialog | undefined;
   evidenceType: EvidenceType;
-  evidenceUrl: string;
+  evidenceUrls: string[];
   notes: string;
   isSubmitting: boolean;
   onEvidenceTypeChange: (type: EvidenceType) => void;
-  onEvidenceUrlChange: (url: string) => void;
+  onEvidenceUrlChange: (index: number, url: string) => void;
+  onAddEvidenceUrl: () => void;
+  onRemoveEvidenceUrl: (index: number) => void;
   onNotesChange: (notes: string) => void;
   onClose: () => void;
   onSubmit: () => void;
 }) {
   const isMobile = useIsMobile();
+
+  const formFields = (
+    <EvidenceFormFields
+      quest={quest}
+      evidenceType={evidenceType}
+      evidenceUrls={evidenceUrls}
+      notes={notes}
+      onEvidenceTypeChange={onEvidenceTypeChange}
+      onEvidenceUrlChange={onEvidenceUrlChange}
+      onAddEvidenceUrl={onAddEvidenceUrl}
+      onRemoveEvidenceUrl={onRemoveEvidenceUrl}
+      onNotesChange={onNotesChange}
+    />
+  );
 
   const actions = (
     <>
@@ -175,15 +241,7 @@ export function PassportEvidenceDialog({
             <DrawerTitle className="text-xl">Submit Evidence</DrawerTitle>
             <DrawerDescription>{quest?.title}</DrawerDescription>
           </DrawerHeader>
-          <EvidenceFormFields
-            quest={quest}
-            evidenceType={evidenceType}
-            evidenceUrl={evidenceUrl}
-            notes={notes}
-            onEvidenceTypeChange={onEvidenceTypeChange}
-            onEvidenceUrlChange={onEvidenceUrlChange}
-            onNotesChange={onNotesChange}
-          />
+          {formFields}
           <DrawerFooter className="gap-2 px-0">{actions}</DrawerFooter>
         </DrawerContent>
       </Drawer>
@@ -197,15 +255,7 @@ export function PassportEvidenceDialog({
           <DialogTitle className="text-xl">Submit Evidence</DialogTitle>
           <DialogDescription>{quest?.title}</DialogDescription>
         </DialogHeader>
-        <EvidenceFormFields
-          quest={quest}
-          evidenceType={evidenceType}
-          evidenceUrl={evidenceUrl}
-          notes={notes}
-          onEvidenceTypeChange={onEvidenceTypeChange}
-          onEvidenceUrlChange={onEvidenceUrlChange}
-          onNotesChange={onNotesChange}
-        />
+        {formFields}
         <DialogFooter>{actions}</DialogFooter>
       </DialogContent>
     </Dialog>

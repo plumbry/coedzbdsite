@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { PassportAdminHint } from "./passport-admin-hint.tsx";
 import { PassportStampBadge } from "./passport-stamp-badge.tsx";
 import { PassportQuestTypeBadge } from "./passport-quest-type-badge.tsx";
+import { QuestMarkdown } from "./quest-markdown.tsx";
 import { getQuestStatus, type QuestEntry } from "./passport-types.ts";
 
 export function PassportQuestEntry({
@@ -79,11 +80,11 @@ export function PassportQuestEntry({
             evidenceInput={quest.evidenceInput}
             variant="inline"
           />
-          <p className="text-sm leading-relaxed text-slate-600">{quest.description}</p>
+          <QuestMarkdown className="text-slate-600">{quest.description}</QuestMarkdown>
           {quest.evidenceInstructions && quest.completionMethod === "manual" && (
-            <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-              {quest.evidenceInstructions}
-            </p>
+            <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              <QuestMarkdown className="text-xs text-slate-700">{quest.evidenceInstructions}</QuestMarkdown>
+            </div>
           )}
           {progress?.awardLog && status === "approved" && (
             <p className="text-xs text-emerald-700">{progress.awardLog}</p>

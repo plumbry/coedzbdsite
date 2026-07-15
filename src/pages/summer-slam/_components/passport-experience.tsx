@@ -4,7 +4,7 @@ import PageShell from "@/components/page-shell.tsx";
 import { CompactMobileButtonsOptOut } from "@/components/compact-mobile-buttons.tsx";
 import { toast } from "sonner";
 import { PassportDashboard } from "./passport-dashboard.tsx";
-import { PassportEvidenceDialog } from "./passport-evidence-dialog.tsx";
+import { MAX_EVIDENCE_LINKS, PassportEvidenceDialog } from "./passport-evidence-dialog.tsx";
 import { ssPageBg } from "./passport-dashboard-theme.ts";
 import type { PassportAvatarId } from "./passport-avatars.ts";
 import type { PassportBirthplaceId } from "./passport-birthplaces.ts";
@@ -14,7 +14,7 @@ import type { CampaignPublic } from "./campaign-phase.ts";
 export type PassportEvidenceSubmitPayload = {
   questId: Id<"seasonalQuests">;
   evidenceType: EvidenceType;
-  evidenceUrl: string;
+  evidenceUrls: string[];
   notes: string;
 };
 
@@ -43,7 +43,7 @@ export function PassportExperience({
 }) {
   const [evidenceQuestId, setEvidenceQuestId] = useState<Id<"seasonalQuests"> | null>(null);
   const [evidenceType, setEvidenceType] = useState<EvidenceType>("screenshot_link");
-  const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [evidenceUrls, setEvidenceUrls] = useState<string[]>([""]);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,26 +54,26 @@ export function PassportExperience({
     // "image" quests now require a public screenshot link (e.g. Postimages), not a file upload.
     if (evidenceQuest.evidenceInput === "image" || evidenceQuest.evidenceInput === "link") {
       setEvidenceType("screenshot_link");
-      setEvidenceUrl("");
+      setEvidenceUrls([""]);
     }
   }, [evidenceQuest?._id, evidenceQuest?.evidenceInput]);
 
   const resetSubmission = () => {
     setEvidenceQuestId(null);
     setEvidenceType("screenshot_link");
-    setEvidenceUrl("");
+    setEvidenceUrls([""]);
     setNotes("");
   };
 
   const handleSubmitEvidence = async () => {
     if (!evidenceQuest) return;
-    const trimmedUrl = evidenceUrl.trim();
+    const trimmedUrls = evidenceUrls.map((url) => url.trim()).filter(Boolean);
     const trimmedNotes = notes.trim();
     const submissionType =
       evidenceQuest.evidenceInput === "image" || evidenceQuest.evidenceInput === "link"
         ? "screenshot_link"
         : evidenceType;
-    if (submissionType !== "other" && !trimmedUrl) {
+    if (submissionType !== "other" && trimmedUrls.length === 0) {
       toast.error("Paste your evidence link before submitting.");
       return;
     }
@@ -83,7 +83,7 @@ export function PassportExperience({
       await onSubmitEvidence({
         questId: evidenceQuest._id,
         evidenceType: submissionType,
-        evidenceUrl: trimmedUrl,
+        evidenceUrls: trimmedUrls,
         notes: trimmedNotes,
       });
       resetSubmission();
@@ -112,11 +112,24 @@ export function PassportExperience({
           open={!!evidenceQuestId}
           quest={evidenceQuest}
           evidenceType={evidenceType}
-          evidenceUrl={evidenceUrl}
+          evidenceUrls={evidenceUrls}
           notes={notes}
           isSubmitting={isSubmitting}
           onEvidenceTypeChange={setEvidenceType}
-          onEvidenceUrlChange={setEvidenceUrl}
+          onEvidenceUrlChange={(index, url) => {
+            setEvidenceUrls((prev) => prev.map((value, i) => (i === index ? url : value)));
+          }}
+          onAddEvidenceUrl={() => {
+            setEvidenceUrls((prev) =>
+              prev.length >= MAX_EVIDENCE_LINKS ? prev : [...prev, ""],
+            );
+          }}
+          onRemoveEvidenceUrl={(index) => {
+            setEvidenceUrls((prev) => {
+              if (prev.length <= 1) return prev;
+              return prev.filter((_, i) => i !== index);
+            });
+          }}
           onNotesChange={setNotes}
           onClose={resetSubmission}
           onSubmit={handleSubmitEvidence}

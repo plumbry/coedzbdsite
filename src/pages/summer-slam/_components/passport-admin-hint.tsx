@@ -2,6 +2,7 @@ import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.tsx";
 import { cn } from "@/lib/utils.ts";
+import { QuestMarkdown } from "./quest-markdown.tsx";
 
 export function PassportAdminHint({
   hint,
@@ -28,7 +29,7 @@ export function PassportAdminHint({
       </PopoverTrigger>
       <PopoverContent className="max-w-xs text-sm leading-relaxed" align="start">
         <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Helpful tip</p>
-        <p className="whitespace-pre-wrap text-slate-800">{trimmed}</p>
+        <QuestMarkdown className="text-slate-800">{trimmed}</QuestMarkdown>
       </PopoverContent>
     </Popover>
   );
@@ -44,7 +45,7 @@ export function PassportAdminHintSection({ hint }: { hint?: string }) {
         <Info className="h-3.5 w-3.5" aria-hidden />
         Helpful tip
       </p>
-      <p className="whitespace-pre-wrap leading-relaxed">{trimmed}</p>
+      <QuestMarkdown className="text-blue-950">{trimmed}</QuestMarkdown>
     </section>
   );
 }

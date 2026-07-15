@@ -14,7 +14,7 @@ import {
   buildSeals,
   summariseSeason,
 } from "./passport-seal.ts";
-import { areSubmissionsOpen } from "./campaign-phase.ts";
+import { areProfileEditsOpen, areSubmissionsOpen, getCampaignPhase } from "./campaign-phase.ts";
 import type { CampaignPublic } from "./campaign-phase.ts";
 import { CATEGORY_PAGES, getQuestStatus, type QuestEntry } from "./passport-types.ts";
 import { isBonusQuestCategory, isBonusStampUnlocked } from "./passport-bonus-stamp.ts";
@@ -117,6 +117,7 @@ export function PassportDashboard({
   const littleEvery = campaign?.littleWheelEntryEveryStamps ?? 1;
   const bigEvery = campaign?.bigWheelEntryEveryStamps ?? 5;
   const submissionsOpen = areSubmissionsOpen(campaign, Date.now(), { adminPreview: isAdminPreview });
+  const profileEditable = areProfileEditsOpen(campaign, Date.now(), { adminPreview: isAdminPreview });
   const wheelTotals = useMemo(
     () => computeWheelTotals(quests, littleEvery, bigEvery),
     [quests, littleEvery, bigEvery],
@@ -163,6 +164,11 @@ export function PassportDashboard({
             Admin preview — the season has not started yet. Use this passport to verify quests and
             layout before players can claim passports.
           </p>
+        ) : !submissionsOpen && getCampaignPhase(campaign, Date.now()) === "active" ? (
+          <p className="rounded-lg border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-sm text-amber-950/90">
+            Passports are open, but evidence submissions are not switched on yet. You can explore
+            quests now — watch Discord for when Submit opens.
+          </p>
         ) : !submissionsOpen ? (
           <p className="rounded-lg border border-orange-200/70 bg-orange-50/60 px-3 py-2 text-sm text-orange-900/80">
             Submissions are closed for this season. Your passport is read-only while staff finish
@@ -188,6 +194,7 @@ export function PassportDashboard({
             onSaveBirthplace={onSaveBirthplace}
             onSubmitEvidence={onRequestEvidence}
             submissionsOpen={submissionsOpen}
+            profileEditable={profileEditable}
             isAdminPreview={isAdminPreview}
             />
           </div>

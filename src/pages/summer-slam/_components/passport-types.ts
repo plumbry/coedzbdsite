@@ -81,6 +81,10 @@ export const SUBMISSIONS_CLOSED_MESSAGE = `The submission deadline has passed.
 
 Staff may still be reviewing evidence submitted before the season ended.`;
 
+export const SUBMISSIONS_NOT_OPEN_MESSAGE = `Evidence submissions are not open yet.
+
+You can still explore your passport — watch Discord for when Submit goes live.`;
+
 export function getPassportErrorTitle(message: string) {
   if (message === CAMPAIGN_NOT_STARTED_MESSAGE) return CAMPAIGN_NOT_STARTED_TITLE;
   if (message === CAMPAIGN_ENDED_MESSAGE || message === INACTIVE_CAMPAIGN_MESSAGE) {
@@ -91,6 +95,7 @@ export function getPassportErrorTitle(message: string) {
 
 export function mapEnsurePassportError(message: string) {
   if (message.includes("Campaign has not started")) return CAMPAIGN_NOT_STARTED_MESSAGE;
+  if (message.includes("Evidence submissions are not open")) return SUBMISSIONS_NOT_OPEN_MESSAGE;
   if (message.includes("Campaign has ended") || message.includes("Submissions are closed")) {
     return SUBMISSIONS_CLOSED_MESSAGE;
   }

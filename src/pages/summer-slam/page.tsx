@@ -17,6 +17,7 @@ import {
   isAdminPassportPreview,
   isPassportAccessible,
   phaseMessage,
+  submissionsPendingMessage,
 } from "./_components/campaign-phase.ts";
 import {
   ssCard,
@@ -146,7 +147,7 @@ export default function SummerSlamLandingPage() {
   const phase = getCampaignPhase(campaign ?? null);
   const statusMessage = isAdminPassportPreview(campaign ?? null, isAdmin)
     ? "Admin preview is available before the season starts. Claim a passport to verify quests and layout."
-    : phaseMessage(phase);
+    : submissionsPendingMessage(campaign ?? null) ?? phaseMessage(phase);
   const canEnterPassport = isPassportAccessible(campaign ?? null, Date.now(), { adminPreview: isAdmin });
   const isAdminPreview = isAdminPassportPreview(campaign ?? null, isAdmin);
   const hasPassport = Boolean(passportStatus?.passport);

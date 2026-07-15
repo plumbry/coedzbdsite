@@ -177,14 +177,13 @@ function PassportContent() {
   const quests = (passport?.quests ?? []) as QuestEntry[];
 
   const handleSubmitEvidence = async (payload: PassportEvidenceSubmitPayload) => {
-    const { questId, evidenceType: submissionType, evidenceUrl: trimmedUrl, notes: trimmedNotes } =
-      payload;
+    const { questId, evidenceType: submissionType, evidenceUrls, notes: trimmedNotes } = payload;
     try {
       await submitEvidence({
         slug: CAMPAIGN_SLUG,
         questId,
         evidenceTypes: [submissionType, ...(trimmedNotes ? ["notes" as const] : [])],
-        evidenceUrls: trimmedUrl ? [trimmedUrl] : undefined,
+        evidenceUrls: evidenceUrls.length > 0 ? evidenceUrls : undefined,
         notes: trimmedNotes || undefined,
       });
       toast.success(EVIDENCE_SUBMITTED_SUCCESS_MESSAGE);

@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/sheet.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { Loader2 } from "lucide-react";
-import { textToBullets } from "@/pages/summer-slam/_components/passport-quest-meta.ts";
+import { QuestMarkdown } from "@/pages/summer-slam/_components/quest-markdown.tsx";
 import {
   buildReviewMessage,
   REJECTION_REASON_TEMPLATES,
@@ -198,24 +198,18 @@ export function SummerSlamReviewSheet({
               </div>
               <div>
                 <h3 className="text-sm font-semibold">Quest requirements</h3>
-                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-sm text-muted-foreground">
-                  {textToBullets(quest.description).map((bullet) => (
-                    <li key={bullet}>{bullet}</li>
-                  ))}
-                </ul>
+                <QuestMarkdown className="mt-1 text-muted-foreground">{quest.description}</QuestMarkdown>
               </div>
               {quest.evidenceInstructions ? (
                 <div>
                   <h3 className="text-sm font-semibold">Evidence instructions</h3>
-                  <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap">
-                    {quest.evidenceInstructions}
-                  </p>
+                  <QuestMarkdown className="mt-1 text-muted-foreground">{quest.evidenceInstructions}</QuestMarkdown>
                 </div>
               ) : null}
               {quest.adminHint ? (
                 <div>
                   <h3 className="text-sm font-semibold">Admin hint</h3>
-                  <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap">{quest.adminHint}</p>
+                  <QuestMarkdown className="mt-1 text-muted-foreground">{quest.adminHint}</QuestMarkdown>
                 </div>
               ) : null}
               {quest.qualificationRule ? (

@@ -28,6 +28,7 @@ import {
   type SealTask,
 } from "./passport-seal.ts";
 import { getQuestTypeInfo } from "./passport-quest-meta.ts";
+import { QuestMarkdown } from "./quest-markdown.tsx";
 import {
   getQuestStatus,
   statusLabel,
@@ -373,13 +374,13 @@ function CompactQuestPage({
         >
           {statusLabel(status)}
         </p>
-        <p className="mt-3 max-w-md text-sm leading-snug text-orange-900/60 sm:text-[13px]">
-          {quest.description}
-        </p>
+        <div className="mt-3 max-w-md text-sm leading-snug text-orange-900/60 sm:text-[13px]">
+          <QuestMarkdown className="text-orange-900/60 sm:text-[13px]">{quest.description}</QuestMarkdown>
+        </div>
         {quest.evidenceInstructions && typeInfo.requiresSubmission ? (
-          <p className="mt-2 max-w-md rounded-lg border border-orange-100/80 bg-orange-50/50 px-2.5 py-2 text-left text-xs leading-snug text-orange-900/70">
-            {quest.evidenceInstructions}
-          </p>
+          <div className="mt-2 max-w-md rounded-lg border border-orange-100/80 bg-orange-50/50 px-2.5 py-2 text-left text-xs leading-snug text-orange-900/70">
+            <QuestMarkdown className="text-xs text-orange-900/70">{quest.evidenceInstructions}</QuestMarkdown>
+          </div>
         ) : null}
         {progress?.awardLog && (status === "rejected" || status === "needs_more_evidence") ? (
           <p className="mt-2 max-w-md rounded border border-orange-100 bg-orange-50/60 px-2.5 py-1.5 text-left text-xs text-orange-900/70">
@@ -400,7 +401,7 @@ function CompactQuestPage({
           </Button>
         ) : null}
         {showClosedNote ? (
-          <p className="text-xs text-orange-800/60">Submissions are closed for this season.</p>
+          <p className="text-xs text-orange-800/60">Evidence submissions are not open right now.</p>
         ) : null}
         {showPendingNote ? (
           <p className="rounded-lg border border-amber-200/80 bg-amber-50/70 px-2.5 py-2 text-xs text-amber-900/80">

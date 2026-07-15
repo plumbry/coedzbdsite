@@ -226,6 +226,17 @@ function assertSubmissionsOpen(
       code: "SUBMISSIONS_CLOSED",
     });
   }
+  // Admin early-access preview may submit before season start regardless of the switch.
+  const isEarlyAdminPreview =
+    Boolean(options?.allowAdminEarlyAccess) &&
+    Boolean(campaign.startsAt) &&
+    now < campaign.startsAt!;
+  if (!isEarlyAdminPreview && campaign.submissionsEnabled === false) {
+    throw new ConvexError({
+      message: "Evidence submissions are not open yet",
+      code: "SUBMISSIONS_DISABLED",
+    });
+  }
 }
 
 /** Admins can test passport flows before the season start date. */
@@ -933,6 +944,7 @@ export const ensureSummerSlamCampaign = mutation({
       title: DEFAULT_CAMPAIGN_TITLE,
       description: DEFAULT_CAMPAIGN_DESCRIPTION,
       isActive: true,
+      submissionsEnabled: false,
       stampName: "Passport Stamp",
       littleWheelEntryEveryStamps: 1,
       bigWheelEntryEveryStamps: 5,
@@ -1060,6 +1072,7 @@ export const updateCampaign = mutation({
     isActive: v.boolean(),
     startsAt: v.optional(v.number()),
     endsAt: v.optional(v.number()),
+    submissionsEnabled: v.boolean(),
     stampName: v.string(),
     littleWheelEntryEveryStamps: v.number(),
     bigWheelEntryEveryStamps: v.number(),
@@ -1083,6 +1096,7 @@ export const updateCampaign = mutation({
       isActive: args.isActive,
       startsAt: args.startsAt,
       endsAt: args.endsAt,
+      submissionsEnabled: args.submissionsEnabled,
       stampName,
       littleWheelEntryEveryStamps: requirePositiveInteger(
         args.littleWheelEntryEveryStamps,

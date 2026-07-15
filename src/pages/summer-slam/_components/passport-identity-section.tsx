@@ -34,6 +34,7 @@ export function PassportIdentitySection({
   onOpenTask,
   onSubmitEvidence,
   submissionsOpen = true,
+  profileEditable,
   isAdminPreview = false,
   bonusQuestEntries = [],
   bonusTagline,
@@ -56,6 +57,8 @@ export function PassportIdentitySection({
   onOpenTask?: (entry: QuestEntry) => void;
   onSubmitEvidence?: (entry: QuestEntry) => void;
   submissionsOpen?: boolean;
+  /** Avatar/birthplace edits; defaults to submissionsOpen || admin preview. */
+  profileEditable?: boolean;
   isAdminPreview?: boolean;
   className?: string;
 }) {
@@ -66,7 +69,8 @@ export function PassportIdentitySection({
   const [selectedQuest, setSelectedQuest] = useState<QuestEntry | null>(null);
 
   const canEditProfile =
-    Boolean(onSaveAvatar && onSaveBirthplace) && (submissionsOpen || isAdminPreview);
+    Boolean(onSaveAvatar && onSaveBirthplace) &&
+    (profileEditable ?? (submissionsOpen || isAdminPreview));
   const bonusUnlocked = isBonusStampUnlocked(seals);
   const hasBonusQuests = bonusQuestEntries.length > 0;
   const questPoints = useMemo(() => computeQuestPoints(quests), [quests]);

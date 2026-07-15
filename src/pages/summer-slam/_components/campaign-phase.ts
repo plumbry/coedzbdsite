@@ -11,6 +11,8 @@ export type CampaignPublic = {
   isActive: boolean;
   startsAt?: number;
   endsAt?: number;
+  /** When false, passports can be claimed after start but evidence submit is blocked. */
+  submissionsEnabled?: boolean;
   stampName: string;
   littleWheelEntryEveryStamps: number;
   bigWheelEntryEveryStamps: number;
@@ -36,16 +38,37 @@ export function getCampaignPhase(
   return "active";
 }
 
-/** Players can submit evidence only while the season is live. */
+/** Legacy campaigns without the field are treated as submissions enabled. */
+export function isSubmissionsSwitchOn(
+  campaign: Pick<CampaignPublic, "submissionsEnabled"> | null | undefined,
+): boolean {
+  return campaign?.submissionsEnabled !== false;
+}
+
+/** Players can submit evidence only while the season is live and submissions are switched on. */
 export function areSubmissionsOpen(
   campaign: CampaignPublic | null | undefined,
   now = Date.now(),
   options?: { adminPreview?: boolean },
 ): boolean {
   const phase = getCampaignPhase(campaign, now);
-  if (phase === "active") return true;
   if (phase === "not_started") return Boolean(options?.adminPreview);
-  return false;
+  if (phase !== "active") return false;
+  return isSubmissionsSwitchOn(campaign);
+}
+
+/**
+ * Profile (avatar/birthplace) edits follow passport claim window, not the submissions switch.
+ * Locked after season end.
+ */
+export function areProfileEditsOpen(
+  campaign: CampaignPublic | null | undefined,
+  now = Date.now(),
+  options?: { adminPreview?: boolean },
+): boolean {
+  const phase = getCampaignPhase(campaign, now);
+  if (phase === "not_started") return Boolean(options?.adminPreview);
+  return phase === "active";
 }
 
 /** Passport entry is available once the campaign is live and has quests configured. */
@@ -106,6 +129,16 @@ export function phaseMessage(phase: CampaignPhase) {
     default:
       return null;
   }
+}
+
+/** Status copy when passports are claimable but evidence submissions are still off. */
+export function submissionsPendingMessage(
+  campaign: CampaignPublic | null | undefined,
+  now = Date.now(),
+): string | null {
+  if (getCampaignPhase(campaign, now) !== "active") return null;
+  if (isSubmissionsSwitchOn(campaign)) return null;
+  return "Passports are open — explore your quests. Evidence submissions will turn on soon; watch Discord for the go-ahead.";
 }
 
 export function phaseBadge(phase: CampaignPhase) {
