@@ -1,11 +1,14 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.tsx";
 import {
   AlertTriangle,
   Archive,
+  CheckCircle2,
   Database,
   ShieldOff,
   Trash2,
@@ -20,6 +23,7 @@ import {
 } from "@/components/admin/player-stats-rebuild-button.tsx";
 import { PlayerStatsMigrationChecklist } from "@/components/admin/player-stats-migration-checklist.tsx";
 import { PlayerStatsCacheBackfillChecklist } from "@/components/admin/player-stats-cache-backfill-checklist.tsx";
+import { Spinner } from "@/components/ui/spinner.tsx";
 
 type PendingConfirm = {
   title: string;
@@ -62,6 +66,9 @@ export default function DataMaintenanceTools() {
   const startRecomputeActivityFromLastEventDate = useMutation(
     api.memberManagement.startRecomputeActivityFromLastEventDate,
   );
+  const activityRecomputeStatus = useQuery(api.memberManagement.getActivityRecomputeStatus, {});
+  const audienceInsightsJob = useQuery(api.audienceInsights.getRebuildJobStatus, {});
+  const audienceInsights = useQuery(api.audienceInsights.getAudienceInsights);
 
   const [isDeletingDiscordOnly, setIsDeletingDiscordOnly] = useState(false);
   const [isDeletingAllPlayers, setIsDeletingAllPlayers] = useState(false);
@@ -117,7 +124,11 @@ export default function DataMaintenanceTools() {
     setIsRecomputingActivity(true);
     try {
       const result = await startRecomputeActivityFromLastEventDate({});
-      toast.success(result.message);
+      if (result.started) {
+        toast.success(result.message);
+      } else {
+        toast.info(result.message);
+      }
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to start activity backfill",
@@ -126,6 +137,9 @@ export default function DataMaintenanceTools() {
       setIsRecomputingActivity(false);
     }
   };
+
+  const activityJobRunning = activityRecomputeStatus?.status === "running";
+  const insightsRefreshing = audienceInsightsJob?.status === "running";
 
   const runDeleteDiscordOnlyMembers = async () => {
     if (!players) return;
@@ -413,11 +427,72 @@ export default function DataMaintenanceTools() {
             automatically so Active Members counts match.
           </CardDescription>
         </CardHeader>
-        <CardContent className="py-3">
+        <CardContent className="py-3 space-y-3">
+          {activityJobRunning && activityRecomputeStatus && (
+            <Alert>
+              <Spinner className="h-4 w-4" />
+              <AlertTitle>Activity backfill running</AlertTitle>
+              <AlertDescription>
+                Processed {activityRecomputeStatus.processedCount.toLocaleString()} players ·{" "}
+                {activityRecomputeStatus.updatedCount.toLocaleString()} updated
+                {activityRecomputeStatus.lastProgressAt
+                  ? ` · last progress ${new Date(activityRecomputeStatus.lastProgressAt).toLocaleTimeString()}`
+                  : ""}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!activityJobRunning && activityRecomputeStatus?.status === "completed" && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertTitle>Last run completed</AlertTitle>
+              <AlertDescription>
+                {activityRecomputeStatus.processedCount.toLocaleString()} players processed ·{" "}
+                {activityRecomputeStatus.updatedCount.toLocaleString()} updated
+                {activityRecomputeStatus.completedAt
+                  ? ` · finished ${new Date(activityRecomputeStatus.completedAt).toLocaleString()}`
+                  : ""}
+                {insightsRefreshing
+                  ? " · Audience Insights is still refreshing…"
+                  : audienceInsights?.lastUpdated
+                    ? ` · Audience Insights cached ${new Date(audienceInsights.lastUpdated).toLocaleString()}`
+                    : ""}
+                {" "}
+                <Link to="/admin/audience-insights" className="underline underline-offset-2">
+                  Open Audience Insights
+                </Link>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!activityJobRunning && activityRecomputeStatus?.status === "failed" && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Last run failed</AlertTitle>
+              <AlertDescription>
+                {activityRecomputeStatus.errorMessage ?? "Unknown error"}
+                {activityRecomputeStatus.processedCount > 0
+                  ? ` (got through ${activityRecomputeStatus.processedCount.toLocaleString()} players)`
+                  : ""}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!activityRecomputeStatus && (
+            <p className="text-xs text-muted-foreground">
+              No tracked run yet. The job you started earlier had no progress UI — run again after
+              this deploy to see live status. Check{" "}
+              <Link to="/admin/audience-insights" className="underline underline-offset-2">
+                Audience Insights
+              </Link>{" "}
+              for “Cached …” / “Refreshing…” to see if charts already rebuilt.
+            </p>
+          )}
+
           <Button
             size="sm"
             variant="secondary"
-            disabled={isRecomputingActivity}
+            disabled={isRecomputingActivity || activityJobRunning}
             onClick={() =>
               setPendingConfirm({
                 title: "Recompute active members from Yunite leaderboard dates?",
@@ -428,8 +503,16 @@ export default function DataMaintenanceTools() {
               })
             }
           >
-            <Wrench className="mr-2 h-4 w-4" />
-            {isRecomputingActivity ? "Starting…" : "Recompute activity flags"}
+            {activityJobRunning ? (
+              <Spinner className="mr-2 h-4 w-4" />
+            ) : (
+              <Wrench className="mr-2 h-4 w-4" />
+            )}
+            {activityJobRunning
+              ? "Running…"
+              : isRecomputingActivity
+                ? "Starting…"
+                : "Recompute activity flags"}
           </Button>
         </CardContent>
       </Card>

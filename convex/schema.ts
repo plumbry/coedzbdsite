@@ -1500,6 +1500,24 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
   }).index("by_status", ["status"]),
 
+  /** Progress for Data Maintenance “Recompute activity flags” (Yunite last-event dates). */
+  activityRecomputeJobs: defineTable({
+    status: v.union(
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+    ),
+    processedCount: v.number(),
+    updatedCount: v.number(),
+    playersCursor: v.union(v.string(), v.null()),
+    startedAt: v.number(),
+    lastProgressAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+    /** Audience Insights rebuild was scheduled after activity pass. */
+    insightsRefreshStarted: v.optional(v.boolean()),
+  }).index("by_status", ["status"]),
+
   // Cached per-import leaderboard analytics (leaderboard-stats admin page)
   leaderboardStatsCache: defineTable({
     stats: v.array(

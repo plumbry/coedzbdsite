@@ -907,6 +907,7 @@ export const markPlayersRecentlyActiveInternal = internalMutation({
 });
 
 const ACTIVITY_BACKFILL_BATCH = 15;
+const ACTIVITY_JOB_STALE_MS = 15 * 60 * 1000;
 
 /**
  * Maintenance: re-sync lastEventDate from Yunite tournamentStartedAt (leaderboard start),
@@ -916,28 +917,106 @@ export const startRecomputeActivityFromLastEventDate = mutation({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
+
+    const existing = await ctx.db
+      .query("activityRecomputeJobs")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .first();
+    if (existing) {
+      const idleMs = Date.now() - (existing.lastProgressAt ?? existing.startedAt);
+      if (idleMs < ACTIVITY_JOB_STALE_MS) {
+        return {
+          started: false,
+          jobId: existing._id,
+          message: `Activity backfill already running (${existing.processedCount} players processed, ${existing.updatedCount} updated).`,
+        };
+      }
+      await ctx.db.patch(existing._id, {
+        status: "failed",
+        completedAt: Date.now(),
+        errorMessage: "Marked failed: no progress for 15 minutes (stale).",
+      });
+    }
+
+    const now = Date.now();
+    const jobId = await ctx.db.insert("activityRecomputeJobs", {
+      status: "running",
+      processedCount: 0,
+      updatedCount: 0,
+      playersCursor: null,
+      startedAt: now,
+      lastProgressAt: now,
+    });
+
     await ctx.scheduler.runAfter(
       0,
       internal.memberManagement.recomputeActivityFromLastEventDateBatch,
-      {},
+      { jobId },
     );
     return {
       started: true,
+      jobId,
       message:
-        "Activity backfill started from Yunite leaderboard dates. Audience Insights will refresh when it finishes.",
+        "Activity backfill started from Yunite leaderboard dates. Progress shows below; Audience Insights refreshes when it finishes.",
+    };
+  },
+});
+
+export const getActivityRecomputeStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const running = await ctx.db
+      .query("activityRecomputeJobs")
+      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .first();
+    if (running) {
+      return {
+        status: "running" as const,
+        jobId: running._id,
+        processedCount: running.processedCount,
+        updatedCount: running.updatedCount,
+        startedAt: running.startedAt,
+        lastProgressAt: running.lastProgressAt,
+        completedAt: undefined,
+        errorMessage: undefined,
+        insightsRefreshStarted: running.insightsRefreshStarted,
+      };
+    }
+
+    const latest = await ctx.db.query("activityRecomputeJobs").order("desc").first();
+    if (!latest) {
+      return null;
+    }
+
+    return {
+      status: latest.status,
+      jobId: latest._id,
+      processedCount: latest.processedCount,
+      updatedCount: latest.updatedCount,
+      startedAt: latest.startedAt,
+      lastProgressAt: latest.lastProgressAt,
+      completedAt: latest.completedAt,
+      errorMessage: latest.errorMessage,
+      insightsRefreshStarted: latest.insightsRefreshStarted,
     };
   },
 });
 
 export const recomputeActivityFromLastEventDateBatch = internalMutation({
   args: {
-    cursor: v.optional(v.union(v.string(), v.null())),
-    updatedTotal: v.optional(v.number()),
+    jobId: v.id("activityRecomputeJobs"),
   },
   handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.status !== "running") {
+      return { done: true, skipped: true };
+    }
+
     const page = await ctx.db.query("players").paginate({
       numItems: ACTIVITY_BACKFILL_BATCH,
-      cursor: args.cursor ?? null,
+      cursor: job.playersCursor,
     });
 
     let updated = 0;
@@ -959,18 +1038,36 @@ export const recomputeActivityFromLastEventDateBatch = internalMutation({
       }
     }
 
-    const updatedTotal = (args.updatedTotal ?? 0) + updated;
+    const processedCount = job.processedCount + page.page.length;
+    const updatedCount = job.updatedCount + updated;
+    const now = Date.now();
 
     if (!page.isDone) {
+      await ctx.db.patch(args.jobId, {
+        processedCount,
+        updatedCount,
+        playersCursor: page.continueCursor,
+        lastProgressAt: now,
+      });
       await ctx.scheduler.runAfter(
         0,
         internal.memberManagement.recomputeActivityFromLastEventDateBatch,
-        { cursor: page.continueCursor, updatedTotal },
+        { jobId: args.jobId },
       );
-      return { updated, updatedTotal, done: false };
+      return { updated, processedCount, updatedCount, done: false };
     }
 
-    if (updatedTotal > 0) {
+    await ctx.db.patch(args.jobId, {
+      processedCount,
+      updatedCount,
+      playersCursor: null,
+      lastProgressAt: now,
+      status: "completed",
+      completedAt: now,
+      insightsRefreshStarted: true,
+    });
+
+    if (updatedCount > 0) {
       await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
     }
 
@@ -981,7 +1078,7 @@ export const recomputeActivityFromLastEventDateBatch = internalMutation({
       {},
     );
 
-    return { updated, updatedTotal, done: true };
+    return { updated, processedCount, updatedCount, done: true };
   },
 });
 
