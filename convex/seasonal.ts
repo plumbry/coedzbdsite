@@ -417,6 +417,8 @@ type CampaignPlayerResult = Doc<"thirdPartyResults"> & {
   eventId: Id<"events">;
   teamFormat: TeamFormat;
   event: CampaignEventMeta;
+  /** Rank on the overall Yunite tournament leaderboard (by points), not an individual game. */
+  overallLeaderboardPlacement: number;
 };
 
 function eventMetaFromImport(
@@ -431,6 +433,38 @@ function eventMetaFromImport(
     name: importRecord.eventName,
     startDate: importRecord.eventDate ?? importRecord.tournamentStartedAt?.slice(0, 10) ?? "",
   };
+}
+
+function teamLeaderboardKey(result: Doc<"thirdPartyResults">): string {
+  if (result.teamId) return `team:${result.teamId}`;
+  if (result.playerId) return `player:${result.playerId}`;
+  if (result.discordId) return `discord:${result.discordId}`;
+  return `epic:${result.epicUsername.trim().toLowerCase()}`;
+}
+
+/** Overall Yunite standings for one import: unique teams ranked by tournament points. */
+function computeOverallLeaderboardRanks(
+  importResults: Doc<"thirdPartyResults">[],
+): Map<string, number> {
+  const teamBest = new Map<string, { points: number; seedPlacement: number }>();
+  for (const row of importResults) {
+    const key = teamLeaderboardKey(row);
+    const existing = teamBest.get(key);
+    if (
+      !existing ||
+      row.points > existing.points ||
+      (row.points === existing.points && row.placement < existing.seedPlacement)
+    ) {
+      teamBest.set(key, { points: row.points, seedPlacement: row.placement });
+    }
+  }
+
+  const ranked = [...teamBest.entries()].sort((a, b) => {
+    if (b[1].points !== a[1].points) return b[1].points - a[1].points;
+    return a[1].seedPlacement - b[1].seedPlacement;
+  });
+
+  return new Map(ranked.map(([key], index) => [key, index + 1]));
 }
 
 async function appendImportResultsForPlayer(
@@ -452,6 +486,8 @@ async function appendImportResultsForPlayer(
     .withIndex("by_import", (q) => q.eq("importId", args.importRecord._id))
     .collect();
 
+  const overallRankByTeam = computeOverallLeaderboardRanks(importResults);
+
   for (const result of importResults) {
     if (result.playerId !== args.playerId) continue;
     args.results.push({
@@ -460,6 +496,8 @@ async function appendImportResultsForPlayer(
       eventId: args.event._id,
       teamFormat: args.teamFormat,
       event: args.event,
+      overallLeaderboardPlacement:
+        overallRankByTeam.get(teamLeaderboardKey(result)) ?? result.placement,
     });
   }
 }
@@ -537,13 +575,15 @@ function evaluateReachTop(
   maxPlacement: number,
   data: Awaited<ReturnType<typeof loadPlayerCampaignResults>>,
 ) {
-  const match = data.results.find((result) => result.placement <= maxPlacement);
+  const match = data.results.find(
+    (result) => result.overallLeaderboardPlacement <= maxPlacement,
+  );
   return {
     qualifies: !!match,
     current: match ? 1 : 0,
     target: 1,
     log: match
-      ? `Auto-approved: Reached Top ${maxPlacement} in ${match.teamFormat} on ${formatEventDate(match.event)}.`
+      ? `Auto-approved: Reached Top ${maxPlacement} on the overall Yunite leaderboard (${match.teamFormat}) on ${formatEventDate(match.event)}.`
       : undefined,
   };
 }
@@ -734,17 +774,27 @@ async function evaluateRule(
   }
 
   if (rule.type === "win_game") {
-    const win = data.results.find(
-      (result) =>
-        result.placement === 1 &&
-        (!rule.teamFormat || result.teamFormat === rule.teamFormat),
+    const teamFormatByImport = new Map(
+      data.results.map((result) => [result.importId, result.teamFormat] as const),
     );
+    const eventByImport = new Map(
+      data.results.map((result) => [result.importId, result.event] as const),
+    );
+    const winningMatch = data.matchStats.find((stat) => {
+      if (stat.placement !== 1) return false;
+      if (!rule.teamFormat) return true;
+      return teamFormatByImport.get(stat.importId) === rule.teamFormat;
+    });
+    const event = winningMatch ? eventByImport.get(winningMatch.importId) : undefined;
+    const teamFormat = winningMatch
+      ? teamFormatByImport.get(winningMatch.importId)
+      : undefined;
     return {
-      qualifies: !!win,
-      current: win ? 1 : 0,
+      qualifies: !!winningMatch,
+      current: winningMatch ? 1 : 0,
       target: 1,
-      log: win
-        ? `Auto-approved: Finished 1st in ${win.teamFormat} on ${formatEventDate(win.event)}.`
+      log: winningMatch
+        ? `Auto-approved: Won a match${teamFormat ? ` in ${teamFormat}` : ""}${event ? ` on ${formatEventDate(event)}` : ""}.`
         : undefined,
     };
   }
@@ -851,7 +901,7 @@ async function evaluateRule(
     const neededEvents = requirePositiveInteger(rule.eventCount ?? 1, "Event count");
     const matches = data.results.filter(
       (result) =>
-        result.placement <= targetPlacement &&
+        result.overallLeaderboardPlacement <= targetPlacement &&
         (!rule.teamFormat || result.teamFormat === rule.teamFormat),
     );
     const uniqueEvents = new Map<Id<"events">, (typeof matches)[number]>();
@@ -863,7 +913,7 @@ async function evaluateRule(
       target: neededEvents,
       log:
         uniqueEvents.size >= neededEvents && firstMatch
-          ? `Auto-approved: Reached Top ${targetPlacement} in ${firstMatch.teamFormat} on ${formatEventDate(firstMatch.event)}.`
+          ? `Auto-approved: Reached Top ${targetPlacement} on the overall Yunite leaderboard (${firstMatch.teamFormat}) on ${formatEventDate(firstMatch.event)}.`
           : undefined,
     };
   }

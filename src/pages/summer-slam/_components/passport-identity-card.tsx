@@ -31,7 +31,7 @@ const STAMP_BTN_CLASS =
 const STAMP_COLUMN_CLASS =
   "mx-auto flex w-full max-w-[72px] flex-col items-center gap-0.5 sm:max-w-[76px] lg:max-w-[96px] xl:max-w-[104px]";
 const STAMP_LABEL_CLASS =
-  "w-full text-center text-[8px] font-semibold leading-tight text-orange-900/55 lg:text-[10px]";
+  "w-full text-center text-[8px] font-semibold leading-[1.15] text-orange-900/55 lg:text-[10px]";
 const STAMP_PROGRESS_CLASS =
   "w-full text-center text-[9px] font-bold tabular-nums text-teal-800/70 lg:text-[11px]";
 
@@ -96,7 +96,7 @@ function CollectionSealButton({
           className={COLLECTION_STAMP_SLOT}
         />
       </button>
-      <p className={cn(STAMP_LABEL_CLASS, "truncate")}>{seal.meta.label}</p>
+      <p className={STAMP_LABEL_CLASS}>{seal.meta.label}</p>
       <p className={STAMP_PROGRESS_CLASS}>{progressLabel}</p>
     </div>
   );

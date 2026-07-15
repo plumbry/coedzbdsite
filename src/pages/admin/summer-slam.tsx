@@ -834,26 +834,29 @@ export default function SummerSlamAdminPage() {
                     )}
                     {ruleType === "reach_top_10" && (
                       <p className="text-sm text-muted-foreground">
-                        Auto-completes when the player finishes in the top 10 teams at any tagged
-                        Summer Slam scrim.
+                        Auto-completes when the player finishes Top 10 on the overall Yunite
+                        leaderboard for any tagged Summer Slam scrim (tournament standings, not an
+                        individual game).
                       </p>
                     )}
                     {ruleType === "reach_top_5" && (
                       <p className="text-sm text-muted-foreground">
-                        Auto-completes when the player finishes in the top 5 teams at any tagged
-                        Summer Slam scrim.
+                        Auto-completes when the player finishes Top 5 on the overall Yunite
+                        leaderboard for any tagged Summer Slam scrim (tournament standings, not an
+                        individual game).
                       </p>
                     )}
                     {ruleType === "reach_top_3" && (
                       <p className="text-sm text-muted-foreground">
-                        Auto-completes when the player finishes in the top 3 teams at any tagged
-                        Summer Slam scrim.
+                        Auto-completes when the player finishes Top 3 on the overall Yunite
+                        leaderboard for any tagged Summer Slam scrim (tournament standings, not an
+                        individual game).
                       </p>
                     )}
                     {ruleType === "win_game" && (
                       <p className="text-sm text-muted-foreground">
-                        Auto-completes when the player&apos;s team finishes 1st at any tagged Summer
-                        Slam scrim.
+                        Auto-completes when the player wins an individual match (1st place in a
+                        single game) in any tagged Summer Slam scrim.
                       </p>
                     )}
                     {ruleType === "play_all_team_formats" && (
