@@ -346,7 +346,7 @@ function CompactQuestPage({
   const showSubmitButton = (canSubmit || canResubmit) && submissionsOpen;
   const showClosedNote = (canSubmit || canResubmit) && !submissionsOpen;
   const showPendingNote = typeInfo.requiresSubmission && status === "pending_review";
-  const showAutoNote = !typeInfo.requiresSubmission && status !== "approved";
+  const showAutoNote = quest.completionMethod === "auto" && status !== "approved";
 
   return (
     <div
@@ -408,9 +408,15 @@ function CompactQuestPage({
           </p>
         ) : null}
         {showAutoNote ? (
-          <p className="rounded-lg border border-teal-200/70 bg-teal-50/60 px-2.5 py-2 text-xs text-teal-900/80">
-            {typeInfo.detail} No evidence submission is needed for this quest.
-          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled
+            className="h-10 w-full whitespace-normal px-3 text-xs leading-snug touch-manipulation sm:h-9"
+          >
+            Quest Auto-Completes via Admin Approved Yunite Leaderboards
+          </Button>
         ) : null}
         {status === "approved" ? (
           <p className="rounded-lg border border-teal-200/70 bg-teal-50/60 px-2.5 py-2 text-xs font-semibold text-teal-900">
