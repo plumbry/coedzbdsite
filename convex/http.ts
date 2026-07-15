@@ -1,6 +1,10 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import {
+  clerkUserToProvisionArgs,
+  fetchClerkUserById,
+} from "./userProvisioning";
 
 const http = httpRouter();
 
@@ -564,11 +568,17 @@ http.route({
             provider?: string;
             provider_user_id?: string;
             username?: string;
+            external_id?: string;
+            account_id?: string;
           }>;
         };
       };
 
-      if (event.type !== "user.created" && event.type !== "session.created") {
+      if (
+        event.type !== "user.created" &&
+        event.type !== "user.updated" &&
+        event.type !== "session.created"
+      ) {
         return new Response(JSON.stringify({ ok: true, ignored: event.type }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -585,28 +595,54 @@ http.route({
         );
       }
 
-      const primaryEmail = event.data.email_addresses?.[0]?.email_address;
-      const fullName = [event.data.first_name, event.data.last_name]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
-      const discordAccount = event.data.external_accounts?.find(
-        (account) =>
-          account.provider === "oauth_discord" || account.provider === "discord",
-      );
+      // session.created payloads omit external_accounts — fetch the full Clerk user.
+      let provisionArgs:
+        | {
+            clerkUserId: string;
+            name?: string;
+            email?: string;
+            username?: string;
+            discordUserId?: string;
+            discordUsername?: string;
+          }
+        | null = null;
 
-      await ctx.runMutation(internal.userProvisioning.provisionFromClerkData, {
-        clerkUserId,
-        name: fullName || event.data.username || undefined,
-        email: primaryEmail || undefined,
-        username: event.data.username || undefined,
-        discordUserId:
-          discordAccount?.provider_user_id &&
-          /^\d{17,20}$/.test(discordAccount.provider_user_id)
-            ? discordAccount.provider_user_id
-            : undefined,
-        discordUsername: discordAccount?.username || undefined,
-      });
+      if (event.type === "session.created" || !event.data.external_accounts) {
+        const clerkUser = await fetchClerkUserById(clerkUserId);
+        if (clerkUser) {
+          provisionArgs = clerkUserToProvisionArgs(clerkUser);
+        }
+      }
+
+      if (!provisionArgs) {
+        const primaryEmail = event.data.email_addresses?.[0]?.email_address;
+        const fullName = [event.data.first_name, event.data.last_name]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        const discordAccount = event.data.external_accounts?.find((account) =>
+          (account.provider ?? "").toLowerCase().includes("discord"),
+        );
+        const discordCandidates = [
+          discordAccount?.provider_user_id,
+          discordAccount?.external_id,
+          discordAccount?.account_id,
+        ];
+        const discordUserId = discordCandidates.find(
+          (value) => typeof value === "string" && /^\d{17,20}$/.test(value),
+        );
+
+        provisionArgs = {
+          clerkUserId,
+          name: fullName || event.data.username || undefined,
+          email: primaryEmail || undefined,
+          username: event.data.username || undefined,
+          discordUserId,
+          discordUsername: discordAccount?.username || undefined,
+        };
+      }
+
+      await ctx.runMutation(internal.userProvisioning.provisionFromClerkData, provisionArgs);
 
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,

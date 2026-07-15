@@ -1,5 +1,4 @@
 import { ConvexError, v } from "convex/values";
-import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { isValidDiscordSnowflake } from "./auth_discord";
 import {
@@ -35,24 +34,6 @@ function assertDeletableUser(
     throw new ConvexError({
       message: "Admin accounts cannot be deleted from User Management",
       code: "BAD_REQUEST",
-    });
-  }
-}
-
-async function assertDiscordUserIdAvailable(
-  ctx: MutationCtx,
-  discordUserId: string,
-  excludeUserId?: Id<"users">,
-): Promise<void> {
-  const existing = await ctx.db
-    .query("users")
-    .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", discordUserId))
-    .first();
-
-  if (existing && existing._id !== excludeUserId) {
-    throw new ConvexError({
-      message: "Discord user id is already linked to another account",
-      code: "CONFLICT",
     });
   }
 }
@@ -136,7 +117,17 @@ export const setDiscordLink = mutation({
       });
     }
 
-    await assertDiscordUserIdAvailable(ctx, snowflake, args.userId);
+    // Move Discord link to this user if it was attached to another site account.
+    const existingOwner = await ctx.db
+      .query("users")
+      .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", snowflake))
+      .first();
+    if (existingOwner && existingOwner._id !== args.userId) {
+      await ctx.db.patch(existingOwner._id, {
+        discordUserId: undefined,
+        discordUsername: undefined,
+      });
+    }
 
     await ctx.db.patch(args.userId, {
       discordUserId: snowflake,

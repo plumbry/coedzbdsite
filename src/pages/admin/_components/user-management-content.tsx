@@ -14,6 +14,7 @@ import TablePagination from "@/components/table-pagination.tsx";
 import { useMemo, useState } from "react";
 import MergeUsersDialog from "./merge-users-dialog.tsx";
 import DeleteUserDialog from "./delete-user-dialog.tsx";
+import { LinkDiscordDialog } from "./link-discord-dialog.tsx";
 
 type SortColumn = "name" | "username" | "email" | "role";
 type SortDirection = "asc" | "desc";
@@ -43,6 +44,12 @@ export default function UserManagement() {
   const [isClearingViewerUsernames, setIsClearingViewerUsernames] = useState(false);
   const [mergeGroupEmail, setMergeGroupEmail] = useState<string | null>(null);
   const [deleteUserId, setDeleteUserId] = useState<Id<"users"> | null>(null);
+  const [linkDiscordUser, setLinkDiscordUser] = useState<{
+    _id: Id<"users">;
+    label: string;
+    discordUserId?: string;
+    discordUsername?: string;
+  } | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
@@ -269,6 +276,7 @@ export default function UserManagement() {
                     {getSortIcon("email")}
                   </button>
                 </TableHead>
+                <TableHead>Discord ID</TableHead>
                 <TableHead>
                   <button
                     type="button"
@@ -303,6 +311,11 @@ export default function UserManagement() {
                     <TableCell className="text-muted-foreground">
                       {user.email || "—"}
                     </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {user.discordUserId || (
+                        <span className="text-amber-700">Not linked</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={
@@ -336,6 +349,20 @@ export default function UserManagement() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setLinkDiscordUser({
+                              _id: user._id,
+                              label: user.name || user.username || user.email || "user",
+                              discordUserId: user.discordUserId,
+                              discordUsername: user.discordUsername,
+                            })
+                          }
+                        >
+                          {user.discordUserId ? "Edit Discord" : "Link Discord"}
+                        </Button>
                         {role !== "admin" && (
                           <Button
                             size="sm"
@@ -429,6 +456,17 @@ export default function UserManagement() {
       onOpenChange={(open) => {
         if (!open) setDeleteUserId(null);
       }}
+    />
+    <LinkDiscordDialog
+      key={linkDiscordUser?._id ?? "closed"}
+      open={linkDiscordUser !== null}
+      onOpenChange={(open) => {
+        if (!open) setLinkDiscordUser(null);
+      }}
+      userId={linkDiscordUser?._id ?? null}
+      userLabel={linkDiscordUser?.label ?? "user"}
+      initialDiscordUserId={linkDiscordUser?.discordUserId}
+      initialDiscordUsername={linkDiscordUser?.discordUsername}
     />
     </>
   );

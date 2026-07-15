@@ -86,15 +86,25 @@ export async function provisionViewerUser(
 ): Promise<{ userId: Id<"users">; created: boolean }> {
   const { tokenIdentifier, profilePatch, discordUserId, username, auditSource } = args;
 
-  const existingUser = await ctx.db
+  let existingUser = await ctx.db
     .query("users")
     .withIndex("by_token", (q) => q.eq("tokenIdentifier", tokenIdentifier))
     .unique();
+
+  // Email accounts created before Discord was connected may not share the Clerk
+  // token used by sync — fall back to email match for the small staff user table.
+  if (!existingUser && profilePatch.email) {
+    const email = profilePatch.email.trim().toLowerCase();
+    const allUsers = await ctx.db.query("users").collect();
+    existingUser =
+      allUsers.find((user) => user.email?.trim().toLowerCase() === email) ?? null;
+  }
 
   const usernamePatch = await resolveUsernamePatch(ctx, username, existingUser?._id);
 
   if (existingUser) {
     await ctx.db.patch(existingUser._id, {
+      tokenIdentifier,
       ...profilePatch,
       ...usernamePatch,
       ...(discordUserId ? { discordUserId } : {}),
@@ -188,25 +198,41 @@ export async function provisionFromIdentity(
 }
 
 function readDiscordIdFromClerkUser(
-  externalAccounts: Array<{ provider?: string; provider_user_id?: string; username?: string }> | undefined,
+  externalAccounts: Array<{
+    provider?: string;
+    provider_user_id?: string;
+    username?: string;
+    external_id?: string;
+    account_id?: string;
+  }> | undefined,
 ): { discordUserId?: string; discordUsername?: string } {
   if (!externalAccounts) {
     return {};
   }
 
-  const discord = externalAccounts.find(
-    (account) =>
-      account.provider === "oauth_discord" || account.provider === "discord",
+  const discord = externalAccounts.find((account) =>
+    (account.provider ?? "").toLowerCase().includes("discord"),
   );
 
-  if (!discord?.provider_user_id || !isValidDiscordSnowflake(discord.provider_user_id)) {
+  if (!discord) {
     return {};
   }
 
-  return {
-    discordUserId: discord.provider_user_id.trim(),
-    discordUsername: discord.username?.trim(),
-  };
+  const candidates = [
+    discord.provider_user_id,
+    discord.external_id,
+    discord.account_id,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && isValidDiscordSnowflake(candidate)) {
+      return {
+        discordUserId: candidate.trim(),
+        discordUsername: discord.username?.trim(),
+      };
+    }
+  }
+
+  return {};
 }
 
 export const assertAdminByToken = internalQuery({
@@ -269,8 +295,52 @@ type ClerkUserRecord = {
     provider?: string;
     provider_user_id?: string;
     username?: string;
+    external_id?: string;
+    account_id?: string;
   }>;
 };
+
+export async function fetchClerkUserById(
+  clerkUserId: string,
+): Promise<ClerkUserRecord | null> {
+  const secret = process.env.CLERK_SECRET_KEY;
+  if (!secret) {
+    return null;
+  }
+
+  const response = await fetch(`https://api.clerk.com/v1/users/${clerkUserId}`, {
+    headers: {
+      Authorization: `Bearer ${secret}`,
+    },
+  });
+
+  if (!response.ok) {
+    console.error(
+      `Clerk user fetch failed (${response.status}): ${(await response.text()).slice(0, 200)}`,
+    );
+    return null;
+  }
+
+  return (await response.json()) as ClerkUserRecord;
+}
+
+export function clerkUserToProvisionArgs(clerkUser: ClerkUserRecord) {
+  const primaryEmail = clerkUser.email_addresses?.[0]?.email_address;
+  const fullName = [clerkUser.first_name, clerkUser.last_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const discord = readDiscordIdFromClerkUser(clerkUser.external_accounts);
+
+  return {
+    clerkUserId: clerkUser.id,
+    name: fullName || clerkUser.username || undefined,
+    email: primaryEmail || undefined,
+    username: clerkUser.username || undefined,
+    discordUserId: discord.discordUserId,
+    discordUsername: discord.discordUsername,
+  };
+}
 
 /** Admin-only: import all Clerk users into Convex as viewers. */
 export const syncUsersFromClerk = action({
@@ -327,23 +397,11 @@ export const syncUsersFromClerk = action({
       clerkTotal += clerkUsers.length;
 
       for (const clerkUser of clerkUsers) {
-        const primaryEmail = clerkUser.email_addresses?.[0]?.email_address;
-        const fullName = [clerkUser.first_name, clerkUser.last_name]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
-        const discord = readDiscordIdFromClerkUser(clerkUser.external_accounts);
+        const args = clerkUserToProvisionArgs(clerkUser);
 
         const result = await ctx.runMutation(
           internal.userProvisioning.provisionFromClerkData,
-          {
-            clerkUserId: clerkUser.id,
-            name: fullName || clerkUser.username || undefined,
-            email: primaryEmail || undefined,
-            username: clerkUser.username || undefined,
-            discordUserId: discord.discordUserId,
-            discordUsername: discord.discordUsername,
-          },
+          args,
         );
 
         if (result.created) {
