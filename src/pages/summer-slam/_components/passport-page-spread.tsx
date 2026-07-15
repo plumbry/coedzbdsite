@@ -5,8 +5,8 @@ import {
   Clock,
   Gift,
   Square,
+  Stamp,
   Target,
-  Unlock,
   Upload,
 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
@@ -23,12 +23,11 @@ import {
 } from "./passport-bonus-stamp.ts";
 import {
   formatSealDate,
-  SEAL_META,
-  SEAL_ORDER,
   sealBadgeStatus,
   type SealProgress,
   type SealTask,
 } from "./passport-seal.ts";
+import { getQuestTypeInfo } from "./passport-quest-meta.ts";
 import {
   getQuestStatus,
   statusLabel,
@@ -98,26 +97,29 @@ function formatPageReward(stampReward: number): string {
   return `+${stampReward} Little Wheel Ticket${stampReward === 1 ? "" : "s"}`;
 }
 
-function getNextUnlockCopy(seal: SealProgress, isBonus: boolean): string {
-  const isEarned = seal.state === "earned";
+function getStampGoalCopy(seal: SealProgress, isBonus: boolean): string {
+  if (seal.state === "earned") {
+    return isBonus ? "Bonus stamp claimed" : `${seal.meta.label} stamp earned`;
+  }
+
+  if (seal.total <= 0) {
+    return "Quests coming soon";
+  }
+
+  const remaining = Math.max(seal.total - seal.approved, 0);
+  if (remaining === 0) {
+    return isBonus ? "Bonus stamp ready to claim" : `${seal.meta.label} stamp ready to claim`;
+  }
 
   if (isBonus) {
-    return isEarned
-      ? "Bonus stamp claimed — enjoy the glory"
-      : "Finish these quests to claim your bonus stamp";
+    return remaining === 1
+      ? "1 quest left to claim your bonus stamp"
+      : `${remaining} quests left to claim your bonus stamp`;
   }
 
-  const index = SEAL_ORDER.indexOf(seal.id);
-  const nextId = index >= 0 && index < SEAL_ORDER.length - 1 ? SEAL_ORDER[index + 1] : null;
-  const nextLabel = nextId ? SEAL_META[nextId].label : null;
-
-  if (isEarned) {
-    if (nextLabel) return `${nextLabel} stamp unlocked`;
-    return "Bonus Stamp unlocked";
-  }
-
-  if (nextLabel) return `Complete this page to unlock ${nextLabel}`;
-  return "Complete this page to unlock the Bonus Stamp";
+  return remaining === 1
+    ? `1 quest left to earn the ${seal.meta.label} stamp`
+    : `${remaining} quests left to earn the ${seal.meta.label} stamp`;
 }
 
 function PageSummaryRow({
@@ -130,13 +132,13 @@ function PageSummaryRow({
   value: string;
 }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-orange-100/80 bg-white/70 px-2.5 py-2 text-left">
-      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-orange-50 text-teal-700">
+    <div className="flex items-start gap-2 rounded-md border border-orange-100/80 bg-white/70 px-2 py-1.5 text-left">
+      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded text-teal-700">
         <Icon className="h-3.5 w-3.5" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-teal-800/65">{label}</p>
-        <p className="text-[11px] font-semibold leading-snug text-orange-950 sm:text-xs">{value}</p>
+        <p className="text-[8px] font-semibold uppercase tracking-[0.08em] text-teal-800/65">{label}</p>
+        <p className="text-[11px] font-semibold leading-snug text-orange-950">{value}</p>
       </div>
     </div>
   );
@@ -160,22 +162,22 @@ function LeftPage({
       ? `${seal.approved}/${seal.total} Quests Complete`
       : "Quests coming soon";
   const pageRewardLabel = formatPageReward(seal.stampReward);
-  const nextUnlockLabel = getNextUnlockCopy(seal, isBonus);
+  const stampGoalLabel = getStampGoalCopy(seal, isBonus);
 
   return (
     <div
       className={cn(
         PAGE_SURFACE,
         PAGE_PAD,
-        "flex min-h-0 flex-col items-center text-center sm:p-3",
-        "lg:h-full lg:min-h-0 lg:justify-start lg:gap-2.5 lg:overflow-y-auto lg:p-3",
+        "flex min-h-0 flex-col items-center text-center sm:p-2.5",
+        "lg:h-full lg:min-h-0 lg:justify-between lg:gap-2 lg:overflow-hidden lg:p-2.5",
       )}
     >
       {isEarned ? <PageCompletedBadge /> : null}
       <PassportStampCelebration active={celebrating} />
 
       <div className="flex w-full shrink-0 flex-col items-center">
-        <div className="relative mx-auto mb-2.5 w-[6.75rem] sm:mb-3 sm:w-28 lg:w-[7.25rem]">
+        <div className="relative mx-auto mb-2 w-24 sm:w-[6.5rem] lg:w-[6.75rem]">
           <PassportSealImage
             meta={meta}
             state={seal.state}
@@ -186,27 +188,27 @@ function LeftPage({
           />
         </div>
 
-        <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-teal-800/60">
+        <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-teal-800/60">
           {isBonus ? "Bonus" : "Page"}
         </p>
-        <h2 className="mt-0.5 font-display text-base font-semibold leading-tight text-orange-950 sm:text-lg">
+        <h2 className="mt-0.5 font-display text-sm font-semibold leading-tight text-orange-950 sm:text-base">
           {meta.label}
         </h2>
-        <PassportStatusBadge status={badgeStatus} size="sm" withTooltip={false} className="mt-1.5" />
-        <p className="mt-1.5 max-w-[16rem] text-[11px] leading-snug text-orange-900/55 sm:text-xs">
+        <PassportStatusBadge status={badgeStatus} size="sm" withTooltip={false} className="mt-1" />
+        <p className="mt-1 max-w-[15rem] text-[10px] leading-snug text-orange-900/55 sm:text-[11px]">
           {meta.tagline}
         </p>
         {isEarned ? (
-          <p className="mt-2 inline-block rounded-full bg-teal-50 px-2.5 py-0.5 text-[9px] font-semibold text-teal-800">
+          <p className="mt-1.5 inline-block rounded-full bg-teal-50 px-2 py-px text-[8px] font-semibold text-teal-800">
             {earnedDate ? `Earned ${earnedDate}` : "Stamp earned"}
           </p>
         ) : null}
       </div>
 
-      <dl className="mt-3 flex w-full flex-col gap-1.5 sm:mt-4 lg:mt-auto lg:pt-2">
+      <dl className="mt-2.5 flex w-full shrink-0 flex-col gap-1 sm:mt-3">
         <PageSummaryRow icon={Target} label="Quest Progress" value={questProgressLabel} />
         <PageSummaryRow icon={Gift} label="Stamp Completion Reward" value={pageRewardLabel} />
-        <PageSummaryRow icon={Unlock} label="Next Unlock" value={nextUnlockLabel} />
+        <PageSummaryRow icon={Stamp} label="Stamp Goal" value={stampGoalLabel} />
       </dl>
     </div>
   );
@@ -281,7 +283,6 @@ function QuestListPage({
         <ul className="space-y-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {seal.tasks.map((task) => {
             const status = getQuestStatus(task.entry);
-            const description = task.entry.quest.description?.trim();
 
             return (
               <li key={task.entry.quest._id}>
@@ -289,13 +290,13 @@ function QuestListPage({
                   type="button"
                   onClick={() => onOpenTask(task.entry)}
                   className={cn(
-                    "flex min-h-[4.75rem] w-full items-start gap-2.5 rounded-md border bg-white/70 px-2.5 py-2.5 text-left touch-manipulation hover:border-teal-200/80 hover:bg-teal-50/30 sm:min-h-[5rem] sm:gap-3 sm:px-3 sm:py-3",
+                    "flex min-h-12 w-full items-center gap-2.5 rounded-md border bg-white/70 px-2.5 py-2 text-left touch-manipulation hover:border-teal-200/80 hover:bg-teal-50/30 sm:gap-3 sm:px-3 sm:py-2.5",
                     task.needsFix
                       ? "border-red-200/90 bg-red-50/20 hover:border-red-300 hover:bg-red-50/40"
                       : "border-orange-100/90",
                   )}
                 >
-                  <span className="mt-0.5">
+                  <span className="shrink-0">
                     <ChecklistIcon task={task} />
                   </span>
                   <span className="min-w-0 flex-1 space-y-1">
@@ -307,15 +308,10 @@ function QuestListPage({
                     >
                       {task.title}
                     </span>
-                    {description ? (
-                      <span className="line-clamp-2 block text-[11px] leading-snug text-orange-900/55 sm:text-xs">
-                        {description}
-                      </span>
-                    ) : null}
                     <QuestCardStatus status={status} />
                   </span>
                   <ChevronRight
-                    className="mt-1 h-3.5 w-3.5 shrink-0 self-center text-orange-300"
+                    className="h-3.5 w-3.5 shrink-0 text-orange-300"
                     aria-hidden
                   />
                 </button>
@@ -339,53 +335,89 @@ function CompactQuestPage({
 }) {
   const { quest, progress } = entry;
   const status = getQuestStatus(entry);
+  const typeInfo = getQuestTypeInfo(quest.completionMethod, quest.evidenceInput);
   const canSubmit =
-    quest.completionMethod === "manual" &&
+    typeInfo.requiresSubmission &&
     status !== "approved" &&
     status !== "pending_review";
   const canResubmit =
-    quest.completionMethod === "manual" &&
+    typeInfo.requiresSubmission &&
     (status === "rejected" || status === "needs_more_evidence");
+  const showSubmitButton = (canSubmit || canResubmit) && submissionsOpen;
+  const showClosedNote = (canSubmit || canResubmit) && !submissionsOpen;
+  const showPendingNote = typeInfo.requiresSubmission && status === "pending_review";
+  const showAutoNote = !typeInfo.requiresSubmission && status !== "approved";
 
   return (
-    <div className={cn(PAGE_SURFACE, PAGE_PAD, "col-span-full flex min-h-0 flex-1 flex-col items-center text-center lg:col-span-2")}>
-      <p className={cn(ssLabel, "text-xs sm:text-[11px]")}>{quest.category.replace(/_/g, " ")}</p>
-      <h2 className="mt-1 line-clamp-2 text-xl font-semibold leading-snug text-orange-950 sm:text-2xl">
-        {quest.title}
-      </h2>
-      <p
-        className={cn(
-          "mt-2 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase sm:text-[11px]",
-          status === "approved" && "bg-teal-100 text-teal-800",
-          status === "pending_review" && "bg-amber-100 text-amber-800",
-          (status === "rejected" || status === "needs_more_evidence") && "bg-orange-100 text-orange-800",
-          status === "not_started" && "bg-orange-50 text-orange-700/70",
-          status === "in_progress" && "bg-sky-100 text-sky-800",
-        )}
-      >
-        {statusLabel(status)}
-      </p>
-      <p className="mt-3 line-clamp-4 max-w-md flex-1 text-sm leading-snug text-orange-900/60 sm:text-[13px]">
-        {quest.description}
-      </p>
-      {progress?.awardLog && (status === "rejected" || status === "needs_more_evidence") ? (
-        <p className="mt-2 line-clamp-3 w-full max-w-md rounded border border-orange-100 bg-orange-50/60 px-2.5 py-1.5 text-xs text-orange-900/70">
-          {progress.awardLog}
-        </p>
-      ) : null}
-      {(canSubmit || canResubmit) && submissionsOpen && (
-        <Button
-          size="sm"
-          className="mt-3 h-9 w-full max-w-md shrink-0 px-3 text-xs touch-manipulation sm:h-8"
-          onClick={onSubmitEvidence}
-        >
-          <Upload className="mr-1.5 h-3.5 w-3.5" />
-          {canResubmit ? "Resubmit evidence" : "Submit evidence"}
-        </Button>
+    <div
+      className={cn(
+        PAGE_SURFACE,
+        PAGE_PAD,
+        "col-span-full flex min-h-0 flex-1 flex-col items-center text-center lg:col-span-2 lg:min-h-0",
       )}
-      {(canSubmit || canResubmit) && !submissionsOpen ? (
-        <p className="mt-3 text-xs text-orange-800/60">Submissions are closed for this season.</p>
-      ) : null}
+    >
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto">
+        <p className={cn(ssLabel, "text-xs sm:text-[11px]")}>{quest.category.replace(/_/g, " ")}</p>
+        <h2 className="mt-1 line-clamp-2 text-xl font-semibold leading-snug text-orange-950 sm:text-2xl">
+          {quest.title}
+        </h2>
+        <p
+          className={cn(
+            "mt-2 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase sm:text-[11px]",
+            status === "approved" && "bg-teal-100 text-teal-800",
+            status === "pending_review" && "bg-amber-100 text-amber-800",
+            (status === "rejected" || status === "needs_more_evidence") && "bg-orange-100 text-orange-800",
+            status === "not_started" && "bg-orange-50 text-orange-700/70",
+            status === "in_progress" && "bg-sky-100 text-sky-800",
+          )}
+        >
+          {statusLabel(status)}
+        </p>
+        <p className="mt-3 max-w-md text-sm leading-snug text-orange-900/60 sm:text-[13px]">
+          {quest.description}
+        </p>
+        {quest.evidenceInstructions && typeInfo.requiresSubmission ? (
+          <p className="mt-2 max-w-md rounded-lg border border-orange-100/80 bg-orange-50/50 px-2.5 py-2 text-left text-xs leading-snug text-orange-900/70">
+            {quest.evidenceInstructions}
+          </p>
+        ) : null}
+        {progress?.awardLog && (status === "rejected" || status === "needs_more_evidence") ? (
+          <p className="mt-2 max-w-md rounded border border-orange-100 bg-orange-50/60 px-2.5 py-1.5 text-left text-xs text-orange-900/70">
+            {progress.awardLog}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="mt-3 w-full max-w-md shrink-0 space-y-2">
+        {showSubmitButton ? (
+          <Button
+            size="sm"
+            className="h-10 w-full px-3 text-xs touch-manipulation sm:h-9"
+            onClick={onSubmitEvidence}
+          >
+            <Upload className="mr-1.5 h-3.5 w-3.5" />
+            {canResubmit ? "Resubmit evidence" : "Submit evidence"}
+          </Button>
+        ) : null}
+        {showClosedNote ? (
+          <p className="text-xs text-orange-800/60">Submissions are closed for this season.</p>
+        ) : null}
+        {showPendingNote ? (
+          <p className="rounded-lg border border-amber-200/80 bg-amber-50/70 px-2.5 py-2 text-xs text-amber-900/80">
+            Evidence submitted — awaiting staff review (typically 48–72 hours).
+          </p>
+        ) : null}
+        {showAutoNote ? (
+          <p className="rounded-lg border border-teal-200/70 bg-teal-50/60 px-2.5 py-2 text-xs text-teal-900/80">
+            {typeInfo.detail} No evidence submission is needed for this quest.
+          </p>
+        ) : null}
+        {status === "approved" ? (
+          <p className="rounded-lg border border-teal-200/70 bg-teal-50/60 px-2.5 py-2 text-xs font-semibold text-teal-900">
+            Quest complete
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
