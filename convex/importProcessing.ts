@@ -51,9 +51,14 @@ import {
 /** Absolute ceiling for a single import job wall-clock run. */
 const STALE_JOB_MS = 6 * 60 * 60 * 1000;
 /** Fail jobs that have made no progress for this long. */
-const STALE_PROGRESS_MS = 30 * 60 * 1000;
+const STALE_PROGRESS_MS = 10 * 60 * 1000;
 /** Re-kick the scheduler chain after this idle window (before hard fail). */
 const RECONCILE_IDLE_MS = 90 * 1000;
+/**
+ * If update_player_stats stays on the same cursor this long, skip that player
+ * (mutation timeouts leave the job running with no continuation).
+ */
+const SKIP_STUCK_STATS_PLAYER_MS = 3 * 60 * 1000;
 
 function jobIdleMs(job: { lastProgressAt: number }, now: number): number {
   return now - job.lastProgressAt;
@@ -133,13 +138,66 @@ async function reconcileImportProcessingJobs(ctx: MutationCtx): Promise<number> 
       continue;
     }
 
-    await ctx.db.patch(job._id, { lastProgressAt: now });
+    // Do NOT refresh lastProgressAt here — that would prevent stale fail forever
+    // when re-kicks keep dying on the same step.
     logImportPipelineEvent({
       importId: job.importId,
       jobId: job._id,
       step: job.currentStep,
       message: "stalled_job_reconciled",
+      elapsedMs: idleMs,
     });
+
+    if (
+      job.currentStep === "update_player_stats" &&
+      idleMs >= SKIP_STUCK_STATS_PLAYER_MS
+    ) {
+      const cursor = job.statsPlayerCursor ?? 0;
+      const playerIds = job.affectedPlayerIds ?? [];
+      const stuckPlayerId = playerIds[cursor];
+      const nextCursor = cursor + 1;
+      const skipMessage = stuckPlayerId
+        ? `${stuckPlayerId}: skipped after stall (no progress for ${Math.round(idleMs / 1000)}s)`
+        : `cursor ${cursor}: skipped after stall (no progress for ${Math.round(idleMs / 1000)}s)`;
+
+      await ctx.db.patch(job._id, {
+        statsPlayerCursor: nextCursor,
+        errors: [...(job.errors ?? []), skipMessage],
+        lastProgressAt: now,
+        progressCurrent: nextCursor,
+        progressTotal: playerIds.length || job.progressTotal,
+        progressMessage: progressMessageForStep("update_player_stats", {
+          current: nextCursor,
+          total: playerIds.length || job.progressTotal || 0,
+        }),
+      });
+
+      logImportPipelineEvent({
+        importId: job.importId,
+        jobId: job._id,
+        step: "update_player_stats",
+        error: skipMessage,
+        message: "update_player_stats_skipped_stalled_player",
+      });
+
+      if (playerIds.length > 0 && nextCursor >= playerIds.length) {
+        await completePipelineStepAndContinue(ctx, job._id, "update_player_stats");
+      } else {
+        await ctx.scheduler.runAfter(0, internal.importProcessing.processOneImportStatsPlayer, {
+          jobId: job._id,
+        });
+      }
+      reconciled += 1;
+      continue;
+    }
+
+    if (job.currentStep === "update_player_stats") {
+      await ctx.scheduler.runAfter(0, internal.importProcessing.processOneImportStatsPlayer, {
+        jobId: job._id,
+      });
+      reconciled += 1;
+      continue;
+    }
 
     const nextStep = await resolveNextStepForImport(
       ctx,
