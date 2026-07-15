@@ -549,7 +549,7 @@ export function PassportIdentityCard({
                           "touch-manipulation",
                         )}
                       >
-                        <SelectValue placeholder="Select birthplace?" />
+                        <SelectValue placeholder="Select Birthplace" />
                       </SelectTrigger>
                       <SelectContent>
                         {PASSPORT_BIRTHPLACES.map((place) => (

@@ -16,20 +16,20 @@ const STEPS: Array<{ icon: LucideIcon; step: string; title: string; body: string
   {
     icon: TrendingUp,
     step: "Step 1",
-    title: "Check your overall progress",
-    body: "Passport progress shows how many stamps you've earned and how long the season has left.",
+    title: "Complete quests and submit evidence",
+    body: "Take part in Summer Slam events, complete quests, and submit proof for staff review.",
   },
   {
     icon: MousePointerClick,
     step: "Step 2",
-    title: "Click any stamp to see requirements",
-    body: "Each stamp opens a panel with its challenges and your progress.",
+    title: "Receive stamps in your passport",
+    body: "Once your submission is approved, you'll earn stamps that track your seasonal progress.",
   },
   {
     icon: Upload,
     step: "Step 3",
-    title: "Submit evidence to earn stamps",
-    body: "Once you've completed a challenge, submit proof. Staff review it and award your stamp.",
+    title: "Track your progress and rewards",
+    body: "View your completed stamps, remaining challenges, season countdown, and prize wheel tickets anytime.",
   },
 ];
 

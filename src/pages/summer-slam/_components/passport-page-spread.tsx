@@ -31,6 +31,7 @@ import {
   statusLabel,
   type QuestCategory,
   type QuestEntry,
+  type QuestStatus,
 } from "./passport-types.ts";
 
 export type PassportPageId = QuestCategory | BonusStampId;
@@ -151,6 +152,40 @@ function LeftPage({
   );
 }
 
+function questCardStatusLabel(status: QuestStatus) {
+  switch (status) {
+    case "approved":
+      return "Completed";
+    case "pending_review":
+      return "Pending Review";
+    case "rejected":
+      return "Rejected";
+    case "needs_more_evidence":
+      return "Needs Evidence";
+    case "in_progress":
+      return "In Progress";
+    default:
+      return "Not Started";
+  }
+}
+
+function QuestCardStatus({ status }: { status: QuestStatus }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em]",
+        status === "approved" && "bg-teal-100 text-teal-800",
+        status === "pending_review" && "bg-amber-100 text-amber-800",
+        (status === "rejected" || status === "needs_more_evidence") && "bg-orange-100 text-orange-800",
+        status === "not_started" && "bg-orange-50 text-orange-700/70",
+        status === "in_progress" && "bg-sky-100 text-sky-800",
+      )}
+    >
+      {questCardStatusLabel(status)}
+    </span>
+  );
+}
+
 function QuestListPage({
   seal,
   onOpenTask,
@@ -167,8 +202,8 @@ function QuestListPage({
   const isPending = !isEarned && !actionableEntry && seal.state === "submitted";
 
   return (
-    <div className={cn(PAGE_SURFACE, PAGE_PAD, "flex min-h-0 flex-1 flex-col")}>
-      <div className="mb-1 flex shrink-0 items-center justify-between gap-2">
+    <div className={cn(PAGE_SURFACE, PAGE_PAD, "flex min-h-0 flex-1 flex-col justify-start")}>
+      <div className="mb-1.5 flex shrink-0 items-center justify-between gap-2">
         <p className={ssLabel}>Quests</p>
         {!isEarned && seal.total > 0 ? (
           <span className="text-[10px] font-bold tabular-nums text-orange-950/70">
@@ -178,7 +213,7 @@ function QuestListPage({
       </div>
 
       {!isEarned && seal.total > 0 ? (
-        <div className="mb-1.5 h-1 shrink-0 overflow-hidden rounded-full bg-orange-100/90">
+        <div className="mb-2.5 h-1 shrink-0 overflow-hidden rounded-full bg-orange-100/90">
           <div
             className="h-full rounded-full transition-[width] duration-700"
             style={{ width: `${seal.percent}%`, backgroundColor: seal.meta.accent }}
@@ -187,61 +222,77 @@ function QuestListPage({
       ) : null}
 
       {seal.tasks.length === 0 ? (
-        <p className="flex flex-1 items-center justify-center text-center text-[10px] text-orange-800/50">
-          Coming soon
-        </p>
+        <p className="py-6 text-center text-[10px] text-orange-800/50">Coming soon</p>
       ) : (
-        <ul className="min-h-0 flex-1 space-y-1">
-          {seal.tasks.map((task) => (
-            <li key={task.entry.quest._id}>
-              <button
-                type="button"
-                onClick={() => onOpenTask(task.entry)}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-md border bg-white/70 px-2 py-2 text-left touch-manipulation hover:border-teal-200/80 hover:bg-teal-50/30 lg:gap-1.5 lg:px-1.5 lg:py-1",
-                  task.needsFix
-                    ? "border-red-200/90 bg-red-50/20 hover:border-red-300 hover:bg-red-50/40"
-                    : "border-orange-100/90",
-                )}
-              >
-                <ChecklistIcon task={task} compact />
-                <span
+        <ul className="shrink-0 space-y-2">
+          {seal.tasks.map((task) => {
+            const status = getQuestStatus(task.entry);
+            const description = task.entry.quest.description?.trim();
+
+            return (
+              <li key={task.entry.quest._id}>
+                <button
+                  type="button"
+                  onClick={() => onOpenTask(task.entry)}
                   className={cn(
-                    "min-w-0 flex-1 truncate text-[11px] font-medium",
-                    task.done ? "text-orange-800/45 line-through" : "text-orange-950",
+                    "flex min-h-[4.75rem] w-full items-start gap-2.5 rounded-md border bg-white/70 px-2.5 py-2.5 text-left touch-manipulation hover:border-teal-200/80 hover:bg-teal-50/30 sm:min-h-[5rem] sm:gap-3 sm:px-3 sm:py-3",
+                    task.needsFix
+                      ? "border-red-200/90 bg-red-50/20 hover:border-red-300 hover:bg-red-50/40"
+                      : "border-orange-100/90",
                   )}
                 >
-                  {task.title}
-                </span>
-                <ChevronRight className="h-3 w-3 shrink-0 text-orange-300" aria-hidden />
-              </button>
-            </li>
-          ))}
+                  <span className="mt-0.5">
+                    <ChecklistIcon task={task} />
+                  </span>
+                  <span className="min-w-0 flex-1 space-y-1">
+                    <span
+                      className={cn(
+                        "block text-[13px] font-semibold leading-snug sm:text-sm",
+                        task.done ? "text-orange-800/45 line-through" : "text-orange-950",
+                      )}
+                    >
+                      {task.title}
+                    </span>
+                    {description ? (
+                      <span className="line-clamp-2 block text-[11px] leading-snug text-orange-900/55 sm:text-xs">
+                        {description}
+                      </span>
+                    ) : null}
+                    <QuestCardStatus status={status} />
+                  </span>
+                  <ChevronRight
+                    className="mt-1 h-3.5 w-3.5 shrink-0 self-center text-orange-300"
+                    aria-hidden
+                  />
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
 
-      <div className="mt-1.5 shrink-0">
+      <div className="mt-3 shrink-0">
         {isEarned ? (
-          <Button disabled size="sm" className="h-7 w-full px-2 text-[10px] touch-manipulation">
-            <Award className="mr-1 h-3 w-3" />
+          <Button disabled size="sm" className="h-8 w-full px-2 text-xs touch-manipulation">
+            <Award className="mr-1.5 h-3.5 w-3.5" />
             Stamp earned
           </Button>
         ) : actionableEntry && submissionsOpen ? (
           <Button
             size="sm"
-            className="h-7 w-full px-2 text-[10px] touch-manipulation"
+            className="h-8 w-full px-2 text-xs touch-manipulation"
             onClick={() => onSubmitEvidence(actionableEntry)}
           >
-            <Upload className="mr-1 h-3 w-3" />
+            <Upload className="mr-1.5 h-3.5 w-3.5" />
             {seal.needsFix > 0 ? "Resubmit" : "Submit evidence"}
           </Button>
         ) : actionableEntry && !submissionsOpen ? (
-          <Button disabled size="sm" variant="outline" className="h-7 w-full px-2 text-[10px] touch-manipulation">
+          <Button disabled size="sm" variant="outline" className="h-8 w-full px-2 text-xs touch-manipulation">
             Submissions closed
           </Button>
         ) : isPending ? (
-          <Button disabled size="sm" variant="outline" className="h-7 w-full px-2 text-[10px] touch-manipulation">
-            <Clock className="mr-1 h-3 w-3" />
+          <Button disabled size="sm" variant="outline" className="h-8 w-full px-2 text-xs touch-manipulation">
+            <Clock className="mr-1.5 h-3.5 w-3.5" />
             Awaiting review
           </Button>
         ) : null}
