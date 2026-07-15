@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  Award,
   Check,
   ChevronRight,
   Clock,
@@ -24,7 +23,6 @@ import {
 } from "./passport-bonus-stamp.ts";
 import {
   formatSealDate,
-  getActionableEntry,
   SEAL_META,
   SEAL_ORDER,
   sealBadgeStatus,
@@ -169,14 +167,15 @@ function LeftPage({
       className={cn(
         PAGE_SURFACE,
         PAGE_PAD,
-        "flex min-h-0 flex-col items-center text-center sm:p-3 lg:h-full lg:justify-between lg:gap-3 lg:p-3.5",
+        "flex min-h-0 flex-col items-center text-center sm:p-3",
+        "lg:h-full lg:min-h-0 lg:justify-start lg:gap-2.5 lg:overflow-y-auto lg:p-3",
       )}
     >
       {isEarned ? <PageCompletedBadge /> : null}
       <PassportStampCelebration active={celebrating} />
 
-      <div className="flex w-full flex-col items-center">
-        <div className="relative mx-auto mb-3 w-[6.75rem] sm:mb-3.5 sm:w-32 lg:w-36">
+      <div className="flex w-full shrink-0 flex-col items-center">
+        <div className="relative mx-auto mb-2.5 w-[6.75rem] sm:mb-3 sm:w-28 lg:w-[7.25rem]">
           <PassportSealImage
             meta={meta}
             state={seal.state}
@@ -194,7 +193,7 @@ function LeftPage({
           {meta.label}
         </h2>
         <PassportStatusBadge status={badgeStatus} size="sm" withTooltip={false} className="mt-1.5" />
-        <p className="mt-2 max-w-[16rem] text-[11px] leading-snug text-orange-900/55 sm:text-xs">
+        <p className="mt-1.5 max-w-[16rem] text-[11px] leading-snug text-orange-900/55 sm:text-xs">
           {meta.tagline}
         </p>
         {isEarned ? (
@@ -204,9 +203,9 @@ function LeftPage({
         ) : null}
       </div>
 
-      <dl className="mt-4 flex w-full flex-col gap-1.5 sm:mt-5 lg:mt-auto">
+      <dl className="mt-3 flex w-full flex-col gap-1.5 sm:mt-4 lg:mt-auto lg:pt-2">
         <PageSummaryRow icon={Target} label="Quest Progress" value={questProgressLabel} />
-        <PageSummaryRow icon={Gift} label="Page Reward" value={pageRewardLabel} />
+        <PageSummaryRow icon={Gift} label="Stamp Completion Reward" value={pageRewardLabel} />
         <PageSummaryRow icon={Unlock} label="Next Unlock" value={nextUnlockLabel} />
       </dl>
     </div>
@@ -250,20 +249,14 @@ function QuestCardStatus({ status }: { status: QuestStatus }) {
 function QuestListPage({
   seal,
   onOpenTask,
-  onSubmitEvidence,
-  submissionsOpen,
 }: {
   seal: SealProgress;
   onOpenTask: (entry: QuestEntry) => void;
-  onSubmitEvidence: (entry: QuestEntry) => void;
-  submissionsOpen: boolean;
 }) {
-  const actionableEntry = getActionableEntry(seal);
   const isEarned = seal.state === "earned";
-  const isPending = !isEarned && !actionableEntry && seal.state === "submitted";
 
   return (
-    <div className={cn(PAGE_SURFACE, PAGE_PAD, "flex min-h-0 flex-1 flex-col justify-start")}>
+    <div className={cn(PAGE_SURFACE, PAGE_PAD, "flex min-h-0 flex-1 flex-col justify-start lg:min-h-0 lg:overflow-hidden")}>
       <div className="mb-1.5 flex shrink-0 items-center justify-between gap-2">
         <p className={ssLabel}>Quests</p>
         {!isEarned && seal.total > 0 ? (
@@ -285,7 +278,7 @@ function QuestListPage({
       {seal.tasks.length === 0 ? (
         <p className="py-6 text-center text-[10px] text-orange-800/50">Coming soon</p>
       ) : (
-        <ul className="shrink-0 space-y-2">
+        <ul className="space-y-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {seal.tasks.map((task) => {
             const status = getQuestStatus(task.entry);
             const description = task.entry.quest.description?.trim();
@@ -331,33 +324,6 @@ function QuestListPage({
           })}
         </ul>
       )}
-
-      <div className="mt-3 shrink-0">
-        {isEarned ? (
-          <Button disabled size="sm" className="h-8 w-full px-2 text-xs touch-manipulation">
-            <Award className="mr-1.5 h-3.5 w-3.5" />
-            Stamp earned
-          </Button>
-        ) : actionableEntry && submissionsOpen ? (
-          <Button
-            size="sm"
-            className="h-8 w-full px-2 text-xs touch-manipulation"
-            onClick={() => onSubmitEvidence(actionableEntry)}
-          >
-            <Upload className="mr-1.5 h-3.5 w-3.5" />
-            {seal.needsFix > 0 ? "Resubmit" : "Submit evidence"}
-          </Button>
-        ) : actionableEntry && !submissionsOpen ? (
-          <Button disabled size="sm" variant="outline" className="h-8 w-full px-2 text-xs touch-manipulation">
-            Submissions closed
-          </Button>
-        ) : isPending ? (
-          <Button disabled size="sm" variant="outline" className="h-8 w-full px-2 text-xs touch-manipulation">
-            <Clock className="mr-1.5 h-3.5 w-3.5" />
-            Awaiting review
-          </Button>
-        ) : null}
-      </div>
     </div>
   );
 }
@@ -450,7 +416,7 @@ export function PassportPageSpread({
 
   return (
     <motion.div
-      className={cn("flex h-full min-h-0 flex-col overflow-hidden", className)}
+      className={cn("flex min-h-0 flex-col lg:h-full lg:overflow-hidden", className)}
       initial={reduceMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
@@ -466,7 +432,7 @@ export function PassportPageSpread({
         {selectedQuest ? `Back to ${seal.meta.label}` : "Passport Overview"}
       </Button>
 
-      <div className="relative grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-0">
+      <div className="relative grid min-h-0 flex-1 grid-cols-1 gap-3 lg:min-h-0 lg:grid-cols-2 lg:gap-0 lg:overflow-hidden lg:[&>*]:min-h-0 lg:[&>*]:h-full">
         <div aria-hidden className={cn(ssPassportSpine, "hidden lg:block")} />
 
         {selectedQuest ? (
@@ -478,12 +444,7 @@ export function PassportPageSpread({
         ) : (
           <>
             <LeftPage seal={seal} isBonus={isBonus} celebrating={celebrating} />
-            <QuestListPage
-              seal={seal}
-              onOpenTask={onOpenTask}
-              onSubmitEvidence={onSubmitEvidence}
-              submissionsOpen={submissionsOpen}
-            />
+            <QuestListPage seal={seal} onOpenTask={onOpenTask} />
           </>
         )}
       </div>

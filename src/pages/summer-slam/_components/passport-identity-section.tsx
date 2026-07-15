@@ -169,7 +169,7 @@ export function PassportIdentitySection({
       >
         {openSeal ? (
           <PassportPageSpread
-            className="h-full lg:h-full"
+            className="lg:h-full"
             seal={openSeal}
             selectedQuest={selectedQuest}
             celebrating={pageCelebrating}

@@ -461,7 +461,7 @@ export function PassportIdentityCard({
           <div
             className={cn(
               "flex flex-col gap-3 sm:gap-5 lg:min-h-0 lg:flex-1",
-              pageOpen && "pointer-events-none invisible",
+              pageOpen && "max-lg:hidden lg:pointer-events-none lg:invisible",
             )}
             aria-hidden={pageOpen || undefined}
           >
@@ -630,13 +630,18 @@ export function PassportIdentityCard({
           </div>
 
           {pageOpen ? (
-            <div className="absolute inset-0 flex min-h-0 flex-col overflow-hidden">
+            <div className="relative flex min-h-0 flex-col lg:absolute lg:inset-0 lg:overflow-hidden">
               {children}
             </div>
           ) : null}
         </div>
 
-        <div className="relative hidden shrink-0 items-end gap-3 border-t border-dashed border-orange-200/55 px-3.5 py-2 sm:flex sm:px-4 lg:px-5 lg:py-2.5">
+        <div
+          className={cn(
+            "relative hidden shrink-0 items-end gap-3 border-t border-dashed border-orange-200/55 px-3.5 py-2 sm:flex sm:px-4 lg:px-5 lg:py-2.5",
+            pageOpen && "sm:hidden",
+          )}
+        >
           <div className="shrink-0 pb-0.5">
             <StampedZbdLogo />
           </div>

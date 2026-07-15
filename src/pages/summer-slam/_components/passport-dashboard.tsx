@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useReducedMotion } from "motion/react";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button.tsx";
 import { PassportHero } from "./passport-hero.tsx";
 import { PassportIdentitySection } from "./passport-identity-section.tsx";
 import { PassportRewardsPanel } from "./passport-rewards-panel.tsx";
@@ -139,6 +142,20 @@ export function PassportDashboard({
       />
 
       <div className={ssPageContainer}>
+        <div className="mb-1">
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="h-9 -ml-2 px-2 text-xs text-teal-800 touch-manipulation hover:bg-teal-50 hover:text-teal-950 lg:h-8 lg:text-[11px]"
+          >
+            <Link to="/summer-slam">
+              <ArrowLeft className="mr-1.5 h-4 w-4 lg:mr-1 lg:h-3.5 lg:w-3.5" aria-hidden />
+              Back
+            </Link>
+          </Button>
+        </div>
+
         <PassportHero title={campaignTitle} />
 
         {isAdminPreview ? (
