@@ -16,6 +16,7 @@ import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
 import { markPlayersRecentlyActive, RECENT_ACTIVITY_MS } from "./lib/memberActivity";
+import { syncInternalEventParticipation } from "./lib/stats/syncInternalEventParticipation";
 import { filterVisibleMembers } from "./helpers/playerAlt";
 import {
   playerMatchesSearchTerm,
@@ -905,11 +906,11 @@ export const markPlayersRecentlyActiveInternal = internalMutation({
   },
 });
 
-const ACTIVITY_BACKFILL_BATCH = 50;
+const ACTIVITY_BACKFILL_BATCH = 15;
 
 /**
- * One-time / maintenance: recompute isRecentlyActive from lastEventDate for all players.
- * Run after deploying event-date-based activity, then refresh Audience Insights.
+ * Maintenance: re-sync lastEventDate from Yunite tournamentStartedAt (leaderboard start),
+ * recompute isRecentlyActive, then refresh Audience Insights so chart counts match.
  */
 export const startRecomputeActivityFromLastEventDate = mutation({
   args: {},
@@ -923,7 +924,7 @@ export const startRecomputeActivityFromLastEventDate = mutation({
     return {
       started: true,
       message:
-        "Activity backfill started (from lastEventDate). When finished, refresh Audience Insights stats.",
+        "Activity backfill started from Yunite leaderboard dates. Audience Insights will refresh when it finishes.",
     };
   },
 });
@@ -939,10 +940,25 @@ export const recomputeActivityFromLastEventDateBatch = internalMutation({
       cursor: args.cursor ?? null,
     });
 
-    const updated = await markPlayersRecentlyActive(
-      ctx,
-      page.page.map((p) => p._id),
-    );
+    let updated = 0;
+    for (const player of page.page) {
+      const beforeActive = player.isRecentlyActive ?? false;
+      const beforeDate = player.lastEventDate;
+      const beforeAt = player.lastActiveAt;
+
+      await syncInternalEventParticipation(ctx, player._id);
+
+      const after = await ctx.db.get(player._id);
+      if (!after) continue;
+      if (
+        (after.isRecentlyActive ?? false) !== beforeActive ||
+        after.lastEventDate !== beforeDate ||
+        after.lastActiveAt !== beforeAt
+      ) {
+        updated += 1;
+      }
+    }
+
     const updatedTotal = (args.updatedTotal ?? 0) + updated;
 
     if (!page.isDone) {
@@ -957,6 +973,13 @@ export const recomputeActivityFromLastEventDateBatch = internalMutation({
     if (updatedTotal > 0) {
       await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
     }
+
+    // Charts are snapshotted — rebuild so Active Members tier counts update.
+    await ctx.scheduler.runAfter(
+      0,
+      internal.audienceInsights.startAudienceInsightsRebuildInternal,
+      {},
+    );
 
     return { updated, updatedTotal, done: true };
   },

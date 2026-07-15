@@ -2,6 +2,7 @@ import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel.d.ts";
 import { fetchThirdPartyResultsForPlayer } from "../../helpers/playerResults";
 import { isYuniteImport } from "../importSource";
+import { yuniteImportPlayTime } from "../yunite";
 import { computeInternalPlayerStats } from "./computeInternalPlayerStats";
 import { syncInternalEventParticipationFromResults } from "./syncInternalEventParticipation";
 import {
@@ -111,9 +112,9 @@ export async function computePlayerStatsCacheFieldsFromResults(
       bestPlacementByImport.set(importKey, result.placement);
     }
 
-    const eventDate = importRecord.eventDate;
-    if (eventDate && (!lastEventAt || eventDate > lastEventAt)) {
-      lastEventAt = eventDate;
+    const play = yuniteImportPlayTime(importRecord);
+    if (play && (!lastEventAt || play.lastEventDate > lastEventAt)) {
+      lastEventAt = play.lastEventDate;
     }
   }
 

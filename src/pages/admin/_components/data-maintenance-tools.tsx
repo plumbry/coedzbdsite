@@ -407,9 +407,10 @@ export default function DataMaintenanceTools() {
             Recompute active members from last event date
           </CardTitle>
           <CardDescription className="text-xs">
-            Fixes <code className="text-xs">isRecentlyActive</code> stamped at import time so Active
-            Members (last 6 weeks) matches each player&apos;s last Yunite event. After this finishes,
-            open Audience Insights and click Refresh stats.
+            Re-reads each player&apos;s Yunite leaderboard start date (
+            <code className="text-xs">tournamentStartedAt</code>), updates{" "}
+            <code className="text-xs">isRecentlyActive</code>, then refreshes Audience Insights
+            automatically so Active Members counts match.
           </CardDescription>
         </CardHeader>
         <CardContent className="py-3">
@@ -419,9 +420,9 @@ export default function DataMaintenanceTools() {
             disabled={isRecomputingActivity}
             onClick={() =>
               setPendingConfirm({
-                title: "Recompute active members from last event date?",
+                title: "Recompute active members from Yunite leaderboard dates?",
                 description:
-                  "Walks all players and sets isRecentlyActive from lastEventDate (6-week window). Then refresh Audience Insights so charts and segment lists match.",
+                  "Walks all players, sets last event from Yunite tournament start (fallback: eventDate), then rebuilds Audience Insights charts.",
                 confirmLabel: "Start backfill",
                 onConfirm: runRecomputeActivityFromLastEventDate,
               })

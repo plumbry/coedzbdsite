@@ -120,6 +120,39 @@ export function yuniteStartFieldsFromTournament(
   return yuniteStartFieldsFromIso(getYuniteTournamentStartIso(tournament));
 }
 
+/**
+ * Play time for activity / lastEventDate from a Yunite import.
+ * Prefer Yunite leaderboard `tournamentStartedAt` (startDate); fall back to eventDate.
+ */
+export function yuniteImportPlayTime(importRecord: {
+  tournamentStartedAt?: string;
+  eventDate?: string;
+}): { lastEventDate: string; lastActiveAt: number } | null {
+  const started = importRecord.tournamentStartedAt?.trim();
+  if (started) {
+    const ms = Date.parse(started);
+    if (Number.isFinite(ms)) {
+      return {
+        lastEventDate: new Date(ms).toISOString().split("T")[0]!,
+        lastActiveAt: ms,
+      };
+    }
+  }
+
+  const eventDate = importRecord.eventDate?.trim();
+  if (eventDate) {
+    const ms = Date.parse(eventDate);
+    if (Number.isFinite(ms)) {
+      return {
+        lastEventDate: new Date(ms).toISOString().split("T")[0]!,
+        lastActiveAt: ms,
+      };
+    }
+  }
+
+  return null;
+}
+
 /** Normalize an arbitrary date string to ISO for storage. */
 export function normalizeTournamentStartedAt(
   value: string | undefined,

@@ -9,7 +9,22 @@ export type PlayerActivityFields = {
   lastActiveAt?: number;
 };
 
-/** Derive activity flags from the player's real last Yunite event date. */
+/** Derive activity flags from a Yunite play timestamp (tournament start / event date). */
+export function activityFromLastActiveAt(
+  lastActiveAt: number | undefined,
+  now: number = Date.now(),
+): PlayerActivityFields {
+  if (lastActiveAt === undefined || !Number.isFinite(lastActiveAt)) {
+    return { isRecentlyActive: false };
+  }
+
+  return {
+    isRecentlyActive: lastActiveAt >= now - RECENT_ACTIVITY_MS,
+    lastActiveAt,
+  };
+}
+
+/** Derive activity flags from a stored lastEventDate string. */
 export function activityFromLastEventDate(
   lastEventDate: string | undefined,
   now: number = Date.now(),
@@ -23,10 +38,7 @@ export function activityFromLastEventDate(
     return { isRecentlyActive: false };
   }
 
-  return {
-    isRecentlyActive: lastActiveAt >= now - RECENT_ACTIVITY_MS,
-    lastActiveAt,
-  };
+  return activityFromLastActiveAt(lastActiveAt, now);
 }
 
 function activityFieldsEqual(

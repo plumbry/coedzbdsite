@@ -185,6 +185,15 @@ async function resolveYuniteLeaderboardTime(
     return cached;
   }
 
+  // Prefer Yunite leaderboard startDate stored as tournamentStartedAt
+  const fromYunite = importData.tournamentStartedAt
+    ? parseParticipationDateMs(importData.tournamentStartedAt)
+    : null;
+  if (fromYunite !== null) {
+    importDateCache.set(importData._id, fromYunite);
+    return fromYunite;
+  }
+
   let dateStr: string | undefined = importData.eventDate;
   if (!dateStr && importData.eventId) {
     const event = await ctx.db.get(importData.eventId);
@@ -1141,7 +1150,14 @@ export const rebuildAudienceInsightsCache = mutation({
   args: {},
   handler: async (ctx) => {
     await requireAnalyticsStatsRefresh(ctx);
+    return await startAudienceInsightsRebuildJob(ctx);
+  },
+});
 
+/** Internal entry (e.g. after activity backfill) — skips analytics refresh rate limit. */
+export const startAudienceInsightsRebuildInternal = internalMutation({
+  args: {},
+  handler: async (ctx) => {
     await failStaleRunningJobs(ctx);
 
     const running = await ctx.db
@@ -1150,33 +1166,48 @@ export const rebuildAudienceInsightsCache = mutation({
       .first();
 
     if (running) {
-      throw new ConvexError({
-        message: "An audience insights rebuild is already running",
-        code: "CONFLICT",
-      });
+      return { started: false as const, alreadyRunning: true as const };
     }
 
-    const now = Date.now();
-    const jobId = await ctx.db.insert("audienceInsightsJobs", {
-      status: "running",
-      totalCount: 0,
-      processedCount: 0,
-      playersCursor: null,
-      ...EMPTY_COUNTERS,
-      startedAt: now,
-      lastProgressAt: now,
-    });
-
-    await ctx.scheduler.runAfter(0, internal.audienceInsights.clearSegmentMembers, {
-      jobId,
-    });
-
-    return {
-      jobId,
-      started: true,
-    };
+    return await startAudienceInsightsRebuildJob(ctx);
   },
 });
+
+async function startAudienceInsightsRebuildJob(ctx: MutationCtx) {
+  await failStaleRunningJobs(ctx);
+
+  const running = await ctx.db
+    .query("audienceInsightsJobs")
+    .withIndex("by_status", (q) => q.eq("status", "running"))
+    .first();
+
+  if (running) {
+    throw new ConvexError({
+      message: "An audience insights rebuild is already running",
+      code: "CONFLICT",
+    });
+  }
+
+  const now = Date.now();
+  const jobId = await ctx.db.insert("audienceInsightsJobs", {
+    status: "running",
+    totalCount: 0,
+    processedCount: 0,
+    playersCursor: null,
+    ...EMPTY_COUNTERS,
+    startedAt: now,
+    lastProgressAt: now,
+  });
+
+  await ctx.scheduler.runAfter(0, internal.audienceInsights.clearSegmentMembers, {
+    jobId,
+  });
+
+  return {
+    jobId,
+    started: true as const,
+  };
+}
 
 export const processRebuildBatch = internalMutation({
   args: {

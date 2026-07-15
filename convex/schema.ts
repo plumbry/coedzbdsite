@@ -94,15 +94,15 @@ export default defineSchema({
     // Flag if player has left Discord server (no longer appears in member sync)
     hasLeftServer: v.optional(v.boolean()),
     /**
-     * Cached: last Yunite event date is within 6 weeks (from lastEventDate; cleared by cron).
+     * Cached: last Yunite leaderboard date (tournamentStartedAt) is within 6 weeks.
      * Must not be stamped from import processing time.
      */
     isRecentlyActive: v.optional(v.boolean()),
-    /** Timestamp of lastEventDate (used for inactivity sweep). */
+    /** Timestamp of last Yunite play (tournamentStartedAt / eventDate). */
     lastActiveAt: v.optional(v.number()),
     /** Denormalized unique Yunite event count (imports with results). */
     eventsPlayedCount: v.optional(v.number()),
-    /** Denormalized most recent Yunite event date (ISO / YYYY-MM-DD string). */
+    /** Denormalized most recent Yunite play date (from tournamentStartedAt when available). */
     lastEventDate: v.optional(v.string()),
     /** Denormalized from manualScores.gender for public directory (avoids N+1 score reads). */
     gender: v.optional(v.number()),
