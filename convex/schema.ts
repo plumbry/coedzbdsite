@@ -93,13 +93,16 @@ export default defineSchema({
     needsReview: v.optional(v.boolean()),
     // Flag if player has left Discord server (no longer appears in member sync)
     hasLeftServer: v.optional(v.boolean()),
-    /** Cached: played in an event linked to a recent import (set on import; cleared by cron). */
+    /**
+     * Cached: last Yunite event date is within 6 weeks (from lastEventDate; cleared by cron).
+     * Must not be stamped from import processing time.
+     */
     isRecentlyActive: v.optional(v.boolean()),
-    /** Timestamp of most recent import-linked activity (used for inactivity sweep). */
+    /** Timestamp of lastEventDate (used for inactivity sweep). */
     lastActiveAt: v.optional(v.number()),
-    /** Denormalized unique event count across eventResults + thirdPartyResults. */
+    /** Denormalized unique Yunite event count (imports with results). */
     eventsPlayedCount: v.optional(v.number()),
-    /** Denormalized most recent event date (ISO string). */
+    /** Denormalized most recent Yunite event date (ISO / YYYY-MM-DD string). */
     lastEventDate: v.optional(v.string()),
     /** Denormalized from manualScores.gender for public directory (avoids N+1 score reads). */
     gender: v.optional(v.number()),
@@ -1429,6 +1432,8 @@ export default defineSchema({
     epicUsername: v.string(),
     tier: v.optional(v.string()),
     eventsPlayedCount: v.number(),
+    /** Player last Yunite event date when indexed (for active-member validation). */
+    lastEventDate: v.optional(v.string()),
     genderLabel: v.string(),
     serverJoinDate: v.string(),
     isRecentlyActive: v.optional(v.boolean()),

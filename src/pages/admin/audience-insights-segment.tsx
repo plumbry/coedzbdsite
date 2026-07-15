@@ -35,6 +35,7 @@ type MemberRow = {
   epicUsername: string;
   tier: string | undefined;
   eventsPlayedCount: number;
+  lastEventDate?: string;
   genderLabel: string;
   serverJoinDate: string;
 };
@@ -167,7 +168,7 @@ export default function AudienceInsightsSegmentPage() {
           : newMemberWindowDays
             ? `Accepted members from applications approved in the last ${newMemberWindowDays} days.`
           : activeOnly
-            ? "Active members in this segment (played in the last 6 weeks)."
+            ? "Active members in this segment (last Yunite event within 6 weeks)."
             : "Accepted members in this audience segment."
       }
       authTitle="Sign in to view audience segment"
@@ -232,6 +233,7 @@ export default function AudienceInsightsSegmentPage() {
                   <TableHead>Epic</TableHead>
                   <TableHead>Tier</TableHead>
                   <TableHead>Gender</TableHead>
+                  <TableHead>Last event</TableHead>
                   <TableHead className="text-right">Events</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
@@ -252,6 +254,9 @@ export default function AudienceInsightsSegmentPage() {
                         )}
                       </TableCell>
                       <TableCell>{member.genderLabel}</TableCell>
+                      <TableCell className="tabular-nums text-muted-foreground">
+                        {member.lastEventDate ?? "—"}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {member.eventsPlayedCount}
                       </TableCell>

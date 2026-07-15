@@ -893,7 +893,7 @@ export const getPublicMemberDirectory = query({
   },
 });
 
-/** Mark import-affected players as recently active (called from import pipeline). */
+/** Recompute activity from lastEventDate for import-affected players (does not stamp now). */
 export const markPlayersRecentlyActiveInternal = internalMutation({
   args: { playerIds: v.array(v.id("players")) },
   handler: async (ctx, args) => {
@@ -902,6 +902,63 @@ export const markPlayersRecentlyActiveInternal = internalMutation({
       await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
     }
     return { updated };
+  },
+});
+
+const ACTIVITY_BACKFILL_BATCH = 50;
+
+/**
+ * One-time / maintenance: recompute isRecentlyActive from lastEventDate for all players.
+ * Run after deploying event-date-based activity, then refresh Audience Insights.
+ */
+export const startRecomputeActivityFromLastEventDate = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    await ctx.scheduler.runAfter(
+      0,
+      internal.memberManagement.recomputeActivityFromLastEventDateBatch,
+      {},
+    );
+    return {
+      started: true,
+      message:
+        "Activity backfill started (from lastEventDate). When finished, refresh Audience Insights stats.",
+    };
+  },
+});
+
+export const recomputeActivityFromLastEventDateBatch = internalMutation({
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+    updatedTotal: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query("players").paginate({
+      numItems: ACTIVITY_BACKFILL_BATCH,
+      cursor: args.cursor ?? null,
+    });
+
+    const updated = await markPlayersRecentlyActive(
+      ctx,
+      page.page.map((p) => p._id),
+    );
+    const updatedTotal = (args.updatedTotal ?? 0) + updated;
+
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.memberManagement.recomputeActivityFromLastEventDateBatch,
+        { cursor: page.continueCursor, updatedTotal },
+      );
+      return { updated, updatedTotal, done: false };
+    }
+
+    if (updatedTotal > 0) {
+      await ctx.scheduler.runAfter(0, internal.memberManagement.storePublicMemberDirectoryCache, {});
+    }
+
+    return { updated, updatedTotal, done: true };
   },
 });
 

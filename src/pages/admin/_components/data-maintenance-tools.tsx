@@ -59,6 +59,9 @@ export default function DataMaintenanceTools() {
     api.playerStatsCache.recalculateAffectedPlayerStatsCache,
   );
   const rebuildTierReevaluation = useMutation(api.playerStatsCache.rebuildTierReevaluationForEligible);
+  const startRecomputeActivityFromLastEventDate = useMutation(
+    api.memberManagement.startRecomputeActivityFromLastEventDate,
+  );
 
   const [isDeletingDiscordOnly, setIsDeletingDiscordOnly] = useState(false);
   const [isDeletingAllPlayers, setIsDeletingAllPlayers] = useState(false);
@@ -68,6 +71,7 @@ export default function DataMaintenanceTools() {
   const [isRemovingRoles, setIsRemovingRoles] = useState(false);
   const [isClearingDeprecatedRanking, setIsClearingDeprecatedRanking] = useState(false);
   const [isClearingTierEvalPr, setIsClearingTierEvalPr] = useState(false);
+  const [isRecomputingActivity, setIsRecomputingActivity] = useState(false);
   const [fixProgress, setFixProgress] = useState<{ current: number; total: number } | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
@@ -106,6 +110,20 @@ export default function DataMaintenanceTools() {
       );
     } finally {
       setIsClearingTierEvalPr(false);
+    }
+  };
+
+  const runRecomputeActivityFromLastEventDate = async () => {
+    setIsRecomputingActivity(true);
+    try {
+      const result = await startRecomputeActivityFromLastEventDate({});
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to start activity backfill",
+      );
+    } finally {
+      setIsRecomputingActivity(false);
     }
   };
 
@@ -379,6 +397,39 @@ export default function DataMaintenanceTools() {
               Rebuild tier re-eval
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-amber-500/60">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2 text-amber-700 dark:text-amber-400">
+            <Wrench className="h-4 w-4" />
+            Recompute active members from last event date
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Fixes <code className="text-xs">isRecentlyActive</code> stamped at import time so Active
+            Members (last 6 weeks) matches each player&apos;s last Yunite event. After this finishes,
+            open Audience Insights and click Refresh stats.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="py-3">
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={isRecomputingActivity}
+            onClick={() =>
+              setPendingConfirm({
+                title: "Recompute active members from last event date?",
+                description:
+                  "Walks all players and sets isRecentlyActive from lastEventDate (6-week window). Then refresh Audience Insights so charts and segment lists match.",
+                confirmLabel: "Start backfill",
+                onConfirm: runRecomputeActivityFromLastEventDate,
+              })
+            }
+          >
+            <Wrench className="mr-2 h-4 w-4" />
+            {isRecomputingActivity ? "Starting…" : "Recompute activity flags"}
+          </Button>
         </CardContent>
       </Card>
 

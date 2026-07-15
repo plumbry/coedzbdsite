@@ -1,10 +1,11 @@
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel.d.ts";
 import { fetchThirdPartyResultsForPlayer } from "../../helpers/playerResults";
+import { activityFromLastEventDate } from "../memberActivity";
 import { isYuniteImport } from "../importSource";
 import { getCachedImportRecord, type ImportRecordCache } from "./importRecordCache";
 
-/** Recompute `eventsPlayedCount` (Yunite imports only) and `lastEventDate` for a player. */
+/** Recompute `eventsPlayedCount` (Yunite imports only), `lastEventDate`, and activity flags. */
 export async function syncInternalEventParticipationFromResults(
   ctx: MutationCtx,
   playerId: Id<"players">,
@@ -28,9 +29,12 @@ export async function syncInternalEventParticipationFromResults(
     }
   }
 
+  const activity = activityFromLastEventDate(lastEventDate);
+
   await ctx.db.patch(playerId, {
     eventsPlayedCount: yuniteImportIds.size,
     lastEventDate,
+    ...activity,
   });
 }
 

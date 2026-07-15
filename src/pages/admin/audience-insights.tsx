@@ -611,8 +611,8 @@ function AudienceInsightsContent() {
         <DonutCard
           title="Gender Split"
           description={
-            genderMemberScope === "active"
-              ? "Active members (played in the last 6 weeks) by evaluation gender category."
+              genderMemberScope === "active"
+              ? "Active members (last Yunite event within 6 weeks) by evaluation gender category."
               : genderMemberScope === "new"
                 ? `New members accepted in the last ${newMemberWindow} days by evaluation gender category.`
               : "Distribution by evaluation gender category."
@@ -650,7 +650,7 @@ function AudienceInsightsContent() {
           title="Tier Split"
           description={
             tierMemberScope === "active"
-              ? "Active members (played in the last 6 weeks) by tier."
+              ? "Active members (last Yunite event within 6 weeks) by tier."
               : "How accepted members are distributed across tiers."
           }
           data={tierChartData}

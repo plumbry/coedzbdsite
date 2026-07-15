@@ -527,6 +527,7 @@ async function insertApplicationSourceSegmentRow(
   let genderLabelValue = "—";
   let serverJoinDate = "—";
   let isRecentlyActive = false;
+  let lastEventDate: string | undefined;
   let playerId = app.playerId;
 
   if (playerId) {
@@ -537,6 +538,7 @@ async function insertApplicationSourceSegmentRow(
       eventsPlayedCount = player.eventsPlayedCount ?? 0;
       serverJoinDate = player.serverJoinDate;
       isRecentlyActive = player.isRecentlyActive ?? false;
+      lastEventDate = player.lastEventDate;
       genderLabelValue = genderLabel(await genderForPlayer(ctx, playerId));
     }
   }
@@ -550,6 +552,7 @@ async function insertApplicationSourceSegmentRow(
     epicUsername,
     tier,
     eventsPlayedCount,
+    lastEventDate,
     genderLabel: genderLabelValue,
     serverJoinDate,
     isRecentlyActive,
@@ -654,6 +657,7 @@ async function insertSegmentMemberRows(
     epicUsername: member.epicUsername,
     tier: member.tier,
     eventsPlayedCount: member.eventsPlayedCount ?? 0,
+    lastEventDate: member.lastEventDate,
     genderLabel: genderLabel(gender),
     serverJoinDate: member.serverJoinDate,
     isRecentlyActive: member.isRecentlyActive ?? false,
@@ -1017,6 +1021,7 @@ export const listAudienceInsightMembers = query({
         epicUsername: row.epicUsername,
         tier: row.tier,
         eventsPlayedCount: row.eventsPlayedCount,
+        lastEventDate: row.lastEventDate,
         genderLabel: row.genderLabel,
         serverJoinDate: row.serverJoinDate,
       });
