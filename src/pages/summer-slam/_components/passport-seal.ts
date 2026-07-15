@@ -123,8 +123,15 @@ export type SealProgress = {
   earnedAt?: number;
 };
 
-export function deriveSeal(category: QuestCategory, entries: QuestEntry[]): SealProgress {
-  const meta = SEAL_META[category];
+export function deriveSeal(
+  category: QuestCategory,
+  entries: QuestEntry[],
+  taglineOverride?: string,
+): SealProgress {
+  const base = SEAL_META[category];
+  const meta: SealMeta = taglineOverride
+    ? { ...base, tagline: taglineOverride }
+    : base;
   const tasks: SealTask[] = entries.map((entry) => {
     const status = getQuestStatus(entry);
     return {
@@ -182,9 +189,12 @@ export function deriveSeal(category: QuestCategory, entries: QuestEntry[]): Seal
   };
 }
 
-export function buildSeals(questsByCategory: Map<string, QuestEntry[]>): SealProgress[] {
+export function buildSeals(
+  questsByCategory: Map<string, QuestEntry[]>,
+  taglines?: Partial<Record<QuestCategory, string>>,
+): SealProgress[] {
   return SEAL_ORDER.map((category) =>
-    deriveSeal(category, questsByCategory.get(category) ?? []),
+    deriveSeal(category, questsByCategory.get(category) ?? [], taglines?.[category]),
   );
 }
 

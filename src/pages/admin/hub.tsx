@@ -188,16 +188,6 @@ export default function AdminHubPage() {
           href: "/admin/uploads",
           icon: Upload,
         },
-        ...(isModeratorOrAdmin
-          ? [
-              {
-                title: "Scrim Series",
-                description: "Manage Scrim Series leaderboards and scoring.",
-                href: "/admin/scrim-series",
-                icon: Trophy,
-              },
-            ]
-          : []),
       ],
     },
     {
@@ -247,6 +237,16 @@ export default function AdminHubPage() {
           href: "/admin/spin-moderation",
           icon: KeyRound,
         },
+        ...(isModeratorOrAdmin
+          ? [
+              {
+                title: "Scrim Series",
+                description: "Manage Scrim Series leaderboards and scoring.",
+                href: "/admin/scrim-series",
+                icon: Trophy,
+              },
+            ]
+          : []),
         ...(isAdmin
           ? [
               {

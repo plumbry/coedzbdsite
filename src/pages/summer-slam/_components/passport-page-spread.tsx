@@ -380,7 +380,10 @@ export function PassportPageSpread({
 }
 
 /** Build a synthetic bonus seal progress object for the hidden stamp page. */
-export function buildBonusSealProgress(entries: QuestEntry[]): SealProgress {
+export function buildBonusSealProgress(
+  entries: QuestEntry[],
+  taglineOverride?: string,
+): SealProgress {
   const tasks = entries.map((entry) => ({
     entry,
     title: entry.quest.title,
@@ -401,7 +404,7 @@ export function buildBonusSealProgress(entries: QuestEntry[]): SealProgress {
       id: BONUS_STAMP_ID as unknown as QuestCategory,
       label: BONUS_STAMP_META.label,
       title: BONUS_STAMP_META.title,
-      tagline: BONUS_STAMP_META.tagline,
+      tagline: taglineOverride ?? BONUS_STAMP_META.tagline,
       image: BONUS_STAMP_META.image,
       accent: BONUS_STAMP_META.accent,
       tint: BONUS_STAMP_META.tint,

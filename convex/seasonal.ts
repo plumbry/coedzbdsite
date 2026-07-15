@@ -959,6 +959,49 @@ export const getQuestLeaderboard = query({
   },
 });
 
+const categoryTaglinesValidator = v.object({
+  traveller: v.optional(v.string()),
+  competitor: v.optional(v.string()),
+  summer_spirit: v.optional(v.string()),
+  team_player: v.optional(v.string()),
+  community: v.optional(v.string()),
+  summer_legend: v.optional(v.string()),
+});
+
+function sanitizeCategoryTaglines(
+  taglines: {
+    traveller?: string;
+    competitor?: string;
+    summer_spirit?: string;
+    team_player?: string;
+    community?: string;
+    summer_legend?: string;
+  } | undefined,
+) {
+  if (!taglines) return undefined;
+  const entries = (
+    [
+      ["traveller", taglines.traveller],
+      ["competitor", taglines.competitor],
+      ["summer_spirit", taglines.summer_spirit],
+      ["team_player", taglines.team_player],
+      ["community", taglines.community],
+      ["summer_legend", taglines.summer_legend],
+    ] as const
+  )
+    .map(([key, value]) => [key, sanitizeText(value, 160)] as const)
+    .filter((entry): entry is readonly [typeof entry[0], string] => entry[1] != null);
+  if (entries.length === 0) return undefined;
+  return Object.fromEntries(entries) as {
+    traveller?: string;
+    competitor?: string;
+    summer_spirit?: string;
+    team_player?: string;
+    community?: string;
+    summer_legend?: string;
+  };
+}
+
 export const updateCampaign = mutation({
   args: {
     slug: v.optional(v.string()),
@@ -970,6 +1013,7 @@ export const updateCampaign = mutation({
     stampName: v.string(),
     littleWheelEntryEveryStamps: v.number(),
     bigWheelEntryEveryStamps: v.number(),
+    categoryTaglines: v.optional(categoryTaglinesValidator),
   },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx);
@@ -998,6 +1042,7 @@ export const updateCampaign = mutation({
         args.bigWheelEntryEveryStamps,
         "Big wheel stamp interval",
       ),
+      categoryTaglines: sanitizeCategoryTaglines(args.categoryTaglines),
       updatedBy: admin._id,
       updatedAt: Date.now(),
     });

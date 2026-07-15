@@ -346,13 +346,6 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
         );
       }
       eventItems.push({ path: "/admin/uploads", label: "Uploads & Imports", icon: Upload });
-      if (isModeratorOrAdmin) {
-        eventItems.push({
-          path: "/admin/scrim-series",
-          label: "Scrim Series",
-          icon: Trophy,
-        });
-      }
       result.push({ id: "events", label: "Events", items: eventItems });
     }
 
@@ -368,6 +361,13 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
         { path: "/spin", label: "Spin Page", icon: Dices },
         { path: "/admin/spin-moderation", label: "Spin Moderation", icon: KeyRound },
       ];
+      if (isModeratorOrAdmin) {
+        modsItems.push({
+          path: "/admin/scrim-series",
+          label: "Scrim Series",
+          icon: Trophy,
+        });
+      }
       if (isAdmin) {
         modsItems.push({ path: "/admin/summer-slam", label: "Summer Slam", icon: Trophy });
       }

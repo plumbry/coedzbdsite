@@ -36,6 +36,7 @@ export function PassportIdentitySection({
   submissionsOpen = true,
   isAdminPreview = false,
   bonusQuestEntries = [],
+  bonusTagline,
   className,
 }: {
   playerName: string;
@@ -44,6 +45,7 @@ export function PassportIdentitySection({
   seals: SealProgress[];
   quests: QuestEntry[];
   bonusQuestEntries?: QuestEntry[];
+  bonusTagline?: string;
   completionPercent: number;
   seasonStartsAt?: number;
   seasonEndsAt?: number;
@@ -72,7 +74,10 @@ export function PassportIdentitySection({
   const pagesCompleted = seals.filter((seal) => seal.state === "earned").length;
   const totalPages = seals.length;
 
-  const bonusSeal = useMemo(() => buildBonusSealProgress(bonusQuestEntries), [bonusQuestEntries]);
+  const bonusSeal = useMemo(
+    () => buildBonusSealProgress(bonusQuestEntries, bonusTagline),
+    [bonusQuestEntries, bonusTagline],
+  );
 
   const openSeal = useMemo(() => {
     if (!openPageId) return null;

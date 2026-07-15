@@ -15,6 +15,14 @@ export type CampaignPublic = {
   littleWheelEntryEveryStamps: number;
   bigWheelEntryEveryStamps: number;
   activeQuestCount?: number;
+  categoryTaglines?: {
+    traveller?: string;
+    competitor?: string;
+    summer_spirit?: string;
+    team_player?: string;
+    community?: string;
+    summer_legend?: string;
+  };
 };
 
 export function getCampaignPhase(

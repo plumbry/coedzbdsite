@@ -619,6 +619,17 @@ export default defineSchema({
     stampName: v.string(),
     littleWheelEntryEveryStamps: v.number(),
     bigWheelEntryEveryStamps: v.number(),
+    /** Optional overrides for passport stamp page taglines. */
+    categoryTaglines: v.optional(
+      v.object({
+        traveller: v.optional(v.string()),
+        competitor: v.optional(v.string()),
+        summer_spirit: v.optional(v.string()),
+        team_player: v.optional(v.string()),
+        community: v.optional(v.string()),
+        summer_legend: v.optional(v.string()),
+      }),
+    ),
     createdBy: v.id("users"),
     updatedBy: v.optional(v.id("users")),
     updatedAt: v.optional(v.number()),

@@ -34,6 +34,8 @@ import {
   type EvidenceInput,
   type HowToComplete,
 } from "@/pages/summer-slam/_components/passport-quest-meta.ts";
+import { SEAL_META, SEAL_ORDER } from "@/pages/summer-slam/_components/passport-seal.ts";
+import { BONUS_STAMP_META } from "@/pages/summer-slam/_components/passport-bonus-stamp.ts";
 import { SummerSlamReviewGuidance } from "@/pages/admin/_components/summer-slam-review-guidance.tsx";
 import {
   SummerSlamReviewSheet,
@@ -96,6 +98,17 @@ const categoryLabels: Record<Category, string> = {
   community: "Community",
   summer_legend: "Bonus",
 };
+
+const DEFAULT_CATEGORY_TAGLINES: Record<Category, string> = {
+  traveller: SEAL_META.traveller.tagline,
+  competitor: SEAL_META.competitor.tagline,
+  summer_spirit: SEAL_META.summer_spirit.tagline,
+  team_player: SEAL_META.team_player.tagline,
+  community: SEAL_META.community.tagline,
+  summer_legend: BONUS_STAMP_META.tagline,
+};
+
+const TAGLINE_EDIT_ORDER: Category[] = [...SEAL_ORDER, "summer_legend"];
 
 function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
   if (rows.length === 0) {
@@ -181,6 +194,9 @@ export default function SummerSlamAdminPage() {
   const [stampName, setStampName] = useState("Passport Stamp");
   const [littleWheelEvery, setLittleWheelEvery] = useState(1);
   const [bigWheelEvery, setBigWheelEvery] = useState(5);
+  const [categoryTaglines, setCategoryTaglines] = useState<Record<Category, string>>({
+    ...DEFAULT_CATEGORY_TAGLINES,
+  });
   const [isSavingQuest, setIsSavingQuest] = useState(false);
   const [isSavingCampaign, setIsSavingCampaign] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
@@ -221,6 +237,15 @@ export default function SummerSlamAdminPage() {
     setStampName(dashboard.campaign.stampName);
     setLittleWheelEvery(dashboard.campaign.littleWheelEntryEveryStamps);
     setBigWheelEvery(dashboard.campaign.bigWheelEntryEveryStamps);
+    const stored = dashboard.campaign.categoryTaglines;
+    setCategoryTaglines({
+      traveller: stored?.traveller ?? DEFAULT_CATEGORY_TAGLINES.traveller,
+      competitor: stored?.competitor ?? DEFAULT_CATEGORY_TAGLINES.competitor,
+      summer_spirit: stored?.summer_spirit ?? DEFAULT_CATEGORY_TAGLINES.summer_spirit,
+      team_player: stored?.team_player ?? DEFAULT_CATEGORY_TAGLINES.team_player,
+      community: stored?.community ?? DEFAULT_CATEGORY_TAGLINES.community,
+      summer_legend: stored?.summer_legend ?? DEFAULT_CATEGORY_TAGLINES.summer_legend,
+    });
   }, [dashboard?.campaign]);
 
   const filteredReviewQueue = useMemo(() => {
@@ -442,6 +467,7 @@ export default function SummerSlamAdminPage() {
         stampName,
         littleWheelEntryEveryStamps: littleWheelEvery,
         bigWheelEntryEveryStamps: bigWheelEvery,
+        categoryTaglines,
       });
       toast.success(campaignActive ? "Campaign saved." : "Campaign archived.");
     } catch (error) {
@@ -523,6 +549,32 @@ export default function SummerSlamAdminPage() {
                       {campaignActive ? "Players can access passports" : "Campaign is archived"}
                     </span>
                   </div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <Label>Stamp page taglines</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Short lines shown under each stamp page title on the player passport.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {TAGLINE_EDIT_ORDER.map((key) => (
+                    <div key={key} className="space-y-1.5">
+                      <Label htmlFor={`tagline-${key}`}>{categoryLabels[key]}</Label>
+                      <Textarea
+                        id={`tagline-${key}`}
+                        className={cn(fieldClass, "min-h-[72px]")}
+                        value={categoryTaglines[key]}
+                        onChange={(event) =>
+                          setCategoryTaglines((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
               <Button onClick={handleSaveCampaign} disabled={isSavingCampaign}>

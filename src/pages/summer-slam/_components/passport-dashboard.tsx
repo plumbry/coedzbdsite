@@ -86,7 +86,10 @@ export function PassportDashboard({
     return groups;
   }, [mainQuests]);
 
-  const seals = useMemo(() => buildSeals(questsByCategory), [questsByCategory]);
+  const seals = useMemo(
+    () => buildSeals(questsByCategory, campaign?.categoryTaglines),
+    [questsByCategory, campaign?.categoryTaglines],
+  );
   const season = useMemo(() => summariseSeason(seals, campaign), [seals, campaign]);
   const bonusUnlocked = useMemo(() => isBonusStampUnlocked(seals), [seals]);
   const visibleQuests = useMemo(
@@ -155,6 +158,7 @@ export function PassportDashboard({
             seals={seals}
             quests={mainQuests}
             bonusQuestEntries={bonusQuestEntries}
+            bonusTagline={campaign?.categoryTaglines?.summer_legend}
             completionPercent={season.questPercent}
             seasonStartsAt={campaign?.startsAt}
             seasonEndsAt={campaign?.endsAt}
