@@ -165,7 +165,7 @@ export function resolveNextStep(
 }
 
 export function postStepStatus(
-  imp: Doc<"thirdPartyImports">,
+  imp: Pick<Doc<"thirdPartyImports">, "eventId">,
   completedStep: ImportPipelineStep,
 ): ImportPipelineStatus {
   switch (completedStep) {
@@ -186,6 +186,48 @@ export function postStepStatus(
   }
 }
 
+const IN_PROGRESS_PIPELINE_STATUSES: ReadonlySet<string> = new Set([
+  "Syncing Match Data",
+  "Matching Players",
+  "Linking Event",
+  "Generating Results",
+  "Rate Limited",
+]);
+
+/**
+ * Durable status after cancel/stall — rolls back in-progress labels like
+ * "Generating Results" to the last completed pipeline checkpoint.
+ */
+export function pipelineStatusAfterInterrupt(
+  imp: Pick<
+    Doc<"thirdPartyImports">,
+    "source" | "eventId" | "matchDataSynced" | "pipelineStatus"
+  >,
+  completedSteps: readonly string[] | undefined,
+): ImportPipelineStatus {
+  const completed = new Set(completedSteps ?? []);
+  let lastCompleted: ImportPipelineStep | null = null;
+  for (const step of pipelineStepsForImport(imp.source)) {
+    if (completed.has(step)) {
+      lastCompleted = step;
+    }
+  }
+  if (lastCompleted) {
+    return postStepStatus(imp, lastCompleted);
+  }
+  if (imp.matchDataSynced) {
+    return "Match Data Synced";
+  }
+  if (
+    imp.pipelineStatus &&
+    !IN_PROGRESS_PIPELINE_STATUSES.has(imp.pipelineStatus) &&
+    imp.pipelineStatus !== "Failed"
+  ) {
+    return imp.pipelineStatus as ImportPipelineStatus;
+  }
+  return "Imported";
+}
+
 export type ImportProcessingErrorCode =
   | "rate_limited"
   | "event_link_ambiguous"
@@ -194,6 +236,8 @@ export type ImportProcessingErrorCode =
   | "yunite_api_error"
   | "import_not_found"
   | "not_yunite"
+  | "stalled"
+  | "cancelled"
   | "unknown";
 
 export function isRateLimitError(message: string) {

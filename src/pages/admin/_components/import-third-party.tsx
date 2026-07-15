@@ -184,6 +184,9 @@ export default function ImportThirdParty() {
   const refreshAllImports = useMutation(api.thirdPartyMutations.refreshAllImports);
   const startProcessImport = useMutation(api.importProcessing.startProcessImport);
   const cancelRunningImportJob = useMutation(api.importProcessing.cancelRunningImportJob);
+  const cleanupImportProcessingJobs = useMutation(
+    api.importProcessing.cleanupImportProcessingJobs,
+  );
   const unlockImport = useMutation(api.importProcessing.unlockImport);
   const reprocessImport = useMutation(api.importProcessing.reprocessImport);
   const recalculateStatsForImport = useMutation(api.playerStatsCache.recalculateStatsForImport);
@@ -211,6 +214,11 @@ export default function ImportThirdParty() {
       setProcessingImportId(null);
     }
   }, [importProcessingState?.job?.status, processingImportId]);
+
+  useEffect(() => {
+    if (!isAdmin || activeTab !== "history") return;
+    void cleanupImportProcessingJobs({});
+  }, [isAdmin, activeTab, cleanupImportProcessingJobs]);
   const backfillLeaderboardLinks = useMutation(api.thirdPartyMutations.backfillLeaderboardLinks);
   const createEvent = useMutation(api.events.management.createEvent);
   const { results: importHistory, status: importHistoryStatus, loadMore: loadMoreImports } = usePaginatedQuery(

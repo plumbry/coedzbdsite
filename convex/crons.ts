@@ -28,4 +28,11 @@ crons.daily(
   internal.inGameEarnings.actions.refreshTournamentCache,
 );
 
+// Re-kick mildly stalled import chains; fail orphans stuck as "running"
+crons.interval(
+  "cleanup stalled import jobs",
+  { minutes: 15 },
+  internal.importProcessing.cleanupImportProcessingJobsInternal,
+);
+
 export default crons;
