@@ -1,4 +1,4 @@
-const CACHE_NAME = "app-v3";
+const CACHE_NAME = "app-v4";
 const urlsToCache = ["/", "/icon/icon-192.png", "/icon/icon-512.png"];
 
 function isHtmlResponse(response) {
@@ -50,29 +50,21 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Handle navigation requests differently
-  if (event.request.mode === "navigate") {
-    event.respondWith(fetch(event.request).catch(() => caches.match("/")));
-    return;
-  }
-
-  // Hashed build assets must never be served from SPA HTML fallbacks.
-  // Netlify `/* /index.html 200` returns HTML with status 200 for missing
-  // chunks — caching that under a .js URL breaks module scripts.
+  // Never intercept hashed build assets / scripts / styles.
+  // Intercepting these and returning Response.error() when an SPA HTML
+  // fallback (or flaky edge response) appears unstyles the whole app.
   if (
     isAssetPath(url.pathname) ||
     event.request.destination === "script" ||
     event.request.destination === "style" ||
     event.request.destination === "worker"
   ) {
-    event.respondWith(
-      fetch(event.request).then((response) => {
-        if (isHtmlResponse(response)) {
-          return Response.error();
-        }
-        return response;
-      }),
-    );
+    return;
+  }
+
+  // Handle navigation requests differently
+  if (event.request.mode === "navigate") {
+    event.respondWith(fetch(event.request).catch(() => caches.match("/")));
     return;
   }
 
