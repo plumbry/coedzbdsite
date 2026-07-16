@@ -507,17 +507,32 @@ export default function BigSummerReEvalDashboard() {
                       </div>
                     ) : (
                       finalReview.changedPlayers.map((row: DashboardRow) => (
-                        <div key={row._id} className="space-y-1 py-3">
+                        <div key={row._id} className="space-y-1.5 py-3">
                           <PlayerProfileLink
                             discordUsername={row.discordUsername}
                             className="text-sm font-medium text-primary"
                           >
                             {row.playerName}
                           </PlayerProfileLink>
-                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                            <span>Current: {row.currentTier ?? "—"}</span>
-                            <span>Summer: {row.finalDecision ?? "—"}</span>
-                            <span>{row.evaluationStatus ?? "—"}</span>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                            <div>
+                              <span className="text-muted-foreground">Current: </span>
+                              {row.currentTier ?? "—"}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Summer: </span>
+                              {row.finalDecision ?? "—"}
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground">Evaluation: </span>
+                              {row.evaluationStatus ?? "—"}
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground">Evaluated: </span>
+                              {row.evaluatedAt
+                                ? format(new Date(row.evaluatedAt), "MMM d HH:mm")
+                                : "—"}
+                            </div>
                           </div>
                         </div>
                       ))
@@ -790,56 +805,111 @@ export default function BigSummerReEvalDashboard() {
             <Skeleton className="h-64 w-full" />
           ) : (
             <>
-              <div className="divide-y md:hidden">
-                {pagination.pageItems && pagination.pageItems.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-muted-foreground">
-                    No players match this filter.
-                  </div>
-                ) : (
-                  pagination.pageItems?.map((row) => (
-                    <div
-                      key={row._id}
-                      className={`flex items-start gap-2 py-3 ${row.reEvalStatus === "private_tracker" ? "bg-amber-500/5 -mx-3 px-3" : ""}`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-1 shrink-0"
-                        checked={selectedRows.has(row._id)}
-                        onChange={(e) => toggleRowSelection(row._id, e.target.checked)}
-                      />
-                      <div className="min-w-0 flex-1 space-y-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <PlayerProfileLink
-                            discordUsername={row.discordUsername}
-                            className="min-w-0 truncate text-sm font-medium text-primary"
-                          >
-                            {row.playerName}
-                          </PlayerProfileLink>
-                          <Button
-                            size="sm"
-                            className="h-7 shrink-0 px-2 text-xs"
-                            onClick={() => openDetail(row._id)}
-                          >
-                            Review
-                          </Button>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                          <span>{row.currentTier ?? "—"}/{row.summerTier ?? "-"}</span>
-                          <span>{row.eventsPlayedCount ?? 0} events</span>
-                          <Badge className={row.triageOutcome ? reEvalBadgeClass(row.reEvalStatus) : ""}>
-                            {row.triageOutcome ? TRIAGE_LABELS[row.triageOutcome] : "Pending"}
-                          </Badge>
-                        </div>
-                        {(row.triageSuggestedOutcome || row.triageSuggestionReason) && (
-                          <p className="line-clamp-2 text-xs text-muted-foreground">
-                            {row.triageSuggestedOutcome ? TRIAGE_LABELS[row.triageSuggestedOutcome] : ""}
-                            {row.triageSuggestionReason ? ` — ${row.triageSuggestionReason}` : ""}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))
+              <div className="space-y-2 md:hidden">
+                {(pagination.pageItems ?? []).length > 0 && (
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={(pagination.pageItems ?? []).every((row) => selectedRows.has(row._id))}
+                      onChange={(e) => setAllPageSelected(e.target.checked)}
+                    />
+                    Select page
+                  </label>
                 )}
+                <div className="divide-y">
+                  {pagination.pageItems && pagination.pageItems.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                      No players match this filter.
+                    </div>
+                  ) : (
+                    pagination.pageItems?.map((row) => (
+                      <div
+                        key={row._id}
+                        className={`flex items-start gap-2 py-3 ${row.reEvalStatus === "private_tracker" ? "bg-amber-500/5 -mx-3 px-3" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-1 shrink-0"
+                          checked={selectedRows.has(row._id)}
+                          onChange={(e) => toggleRowSelection(row._id, e.target.checked)}
+                        />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <PlayerProfileLink
+                              discordUsername={row.discordUsername}
+                              className="min-w-0 truncate text-sm font-medium text-primary"
+                            >
+                              {row.playerName}
+                            </PlayerProfileLink>
+                            <Button
+                              size="sm"
+                              className="h-7 shrink-0 px-2 text-xs"
+                              onClick={() => openDetail(row._id)}
+                            >
+                              Review
+                            </Button>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                            <div>
+                              <span className="text-muted-foreground">Tier: </span>
+                              {row.currentTier ?? "—"}/{row.summerTier ?? "-"}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Events: </span>
+                              {row.eventsPlayedCount ?? 0}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Tracker: </span>
+                              {row.fortniteTrackerLink ? (
+                                <a
+                                  href={row.fortniteTrackerLink}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center text-primary hover:underline"
+                                >
+                                  Link <ExternalLink className="ml-0.5 h-3 w-3" />
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Admin: </span>
+                              <span className="truncate">{row.assignedAdminName ?? "—"}</span>
+                            </div>
+                            <div className="col-span-2 flex flex-wrap items-center gap-1.5">
+                              <span className="text-muted-foreground">Triage: </span>
+                              <Badge className={`whitespace-nowrap ${row.triageOutcome ? reEvalBadgeClass(row.reEvalStatus) : ""}`}>
+                                {row.triageOutcome ? TRIAGE_LABELS[row.triageOutcome] : "Pending"}
+                              </Badge>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground">Suggested: </span>
+                              {row.triageSuggestedOutcome
+                                ? TRIAGE_LABELS[row.triageSuggestedOutcome]
+                                : "—"}
+                              {row.triageSuggestionReason ? (
+                                <span className="text-muted-foreground">
+                                  {" "}
+                                  — {row.triageSuggestionReason}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Decision: </span>
+                              {row.finalDecision?.replace("_", " ") ?? "—"}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Updated: </span>
+                              {format(new Date(row.lastUpdatedAt), "MMM d HH:mm")}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
               <div className={`hidden md:block ${scrollableTableWrapperClass}`}>
                 <Table className={compactTableClass}>
