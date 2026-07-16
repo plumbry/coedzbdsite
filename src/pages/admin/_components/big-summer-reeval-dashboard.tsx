@@ -101,6 +101,12 @@ const FILTER_LABELS: Record<DashboardFilter, string> = {
   C: "C Tier",
 };
 
+const scrollableTableWrapperClass =
+  "overflow-x-auto rounded-md border [&_[data-slot=table-container]]:overflow-x-auto";
+
+const compactTableClass =
+  "min-w-[1080px] [&_td]:py-1.5 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2";
+
 function reEvalBadgeClass(status: string): string {
   switch (status) {
     case "reviewed":
@@ -371,10 +377,10 @@ export default function BigSummerReEvalDashboard() {
       <div className="space-y-4">
         <Card>
           <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Sun className="h-5 w-5 text-amber-500" />
+                  <Sun className="h-5 w-5 shrink-0 text-amber-500" />
                   Summer Re-Eval Final Review
                 </CardTitle>
                 <CardDescription className="max-w-2xl">
@@ -383,7 +389,7 @@ export default function BigSummerReEvalDashboard() {
                   remain private when completed will be flagged for tier removal.
                 </CardDescription>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex w-full shrink-0 flex-wrap gap-2 lg:w-auto lg:justify-end">
                 <Button
                   variant="outline"
                   size="sm"
@@ -407,17 +413,19 @@ export default function BigSummerReEvalDashboard() {
               <Skeleton className="h-64 w-full" />
             ) : (
               <Tabs defaultValue="changed">
-                <TabsList>
-                  <TabsTrigger value="changed">
-                    Needs Full Review ({finalReview.changedPlayers.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="private">
-                    Private Trackers ({finalReview.privateTrackers.length})
-                  </TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto pb-1">
+                  <TabsList className="inline-flex h-9 w-max min-w-full gap-1 p-1 sm:min-w-0">
+                    <TabsTrigger value="changed" className="whitespace-nowrap">
+                      Needs Full Review ({finalReview.changedPlayers.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="private" className="whitespace-nowrap">
+                      Private Trackers ({finalReview.privateTrackers.length})
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
                 <TabsContent value="changed" className="mt-4">
-                  <div className="overflow-x-auto rounded-md border">
-                    <Table>
+                  <div className={`hidden md:block ${scrollableTableWrapperClass}`}>
+                    <Table className={compactTableClass}>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Player</TableHead>
@@ -454,10 +462,33 @@ export default function BigSummerReEvalDashboard() {
                       </TableBody>
                     </Table>
                   </div>
+                  <div className="divide-y md:hidden">
+                    {finalReview.changedPlayers.length === 0 ? (
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        No players currently need full review.
+                      </div>
+                    ) : (
+                      finalReview.changedPlayers.map((row: DashboardRow) => (
+                        <div key={row._id} className="space-y-1 py-3">
+                          <PlayerProfileLink
+                            discordUsername={row.discordUsername}
+                            className="text-sm font-medium text-primary"
+                          >
+                            {row.playerName}
+                          </PlayerProfileLink>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                            <span>Current: {row.currentTier ?? "—"}</span>
+                            <span>Summer: {row.finalDecision ?? "—"}</span>
+                            <span>{row.evaluationStatus ?? "—"}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </TabsContent>
                 <TabsContent value="private" className="mt-4">
-                  <div className="overflow-x-auto rounded-md border">
-                    <Table>
+                  <div className={`hidden md:block ${scrollableTableWrapperClass}`}>
+                    <Table className={compactTableClass}>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Player</TableHead>
@@ -500,9 +531,10 @@ export default function BigSummerReEvalDashboard() {
                                   {formatReEvalStatus(row.reEvalStatus)}
                                 </Badge>
                               </TableCell>
-                              <TableCell>
+                              <TableCell className="whitespace-nowrap">
                                 <Button
                                   size="sm"
+                                  className="h-7 whitespace-nowrap px-2 text-xs"
                                   onClick={() => openScoreDialog(row)}
                                 >
                                   Mark Public + Re-Evaluate
@@ -513,6 +545,50 @@ export default function BigSummerReEvalDashboard() {
                         )}
                       </TableBody>
                     </Table>
+                  </div>
+                  <div className="divide-y md:hidden">
+                    {finalReview.privateTrackers.length === 0 ? (
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        No private trackers remain.
+                      </div>
+                    ) : (
+                      finalReview.privateTrackers.map((row: DashboardRow) => (
+                        <div key={row._id} className="space-y-2 bg-amber-500/5 py-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <PlayerProfileLink
+                              discordUsername={row.discordUsername}
+                              className="min-w-0 truncate text-sm font-medium text-primary"
+                            >
+                              {row.playerName}
+                            </PlayerProfileLink>
+                            <Button
+                              size="sm"
+                              className="h-7 shrink-0 px-2 text-xs"
+                              onClick={() => openScoreDialog(row)}
+                            >
+                              Re-Evaluate
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            {row.fortniteTrackerLink ? (
+                              <a
+                                href={row.fortniteTrackerLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center text-primary hover:underline"
+                              >
+                                Tracker <ExternalLink className="ml-1 h-3 w-3" />
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground">No tracker</span>
+                            )}
+                            <Badge className={reEvalBadgeClass(row.reEvalStatus)}>
+                              {formatReEvalStatus(row.reEvalStatus)}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </TabsContent>
               </Tabs>
@@ -548,10 +624,10 @@ export default function BigSummerReEvalDashboard() {
     <div className="space-y-4">
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 flex-1">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Sun className="h-5 w-5 text-amber-500" />
+                <Sun className="h-5 w-5 shrink-0 text-amber-500" />
                 Summer Re-Eval
               </CardTitle>
               <CardDescription className="max-w-2xl">
@@ -581,10 +657,11 @@ export default function BigSummerReEvalDashboard() {
                 </div>
               )}
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex w-full shrink-0 gap-2 lg:w-auto lg:justify-end">
               <Button
                 variant="destructive"
                 size="sm"
+                className="w-full sm:w-auto"
                 onClick={() => setFirstStageConfirmOpen(true)}
                 disabled={workflowState.stage === "completed"}
               >
@@ -594,83 +671,139 @@ export default function BigSummerReEvalDashboard() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <Select value={filter} onValueChange={(value) => setFilter(value as DashboardFilter)}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FILTER_OPTIONS.map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {FILTER_LABELS[key]} ({filterCounts[key] ?? 0})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={eventsFilter} onValueChange={(value) => setEventsFilter(value as EventsFilter)}>
-              <SelectTrigger className="w-[150px]"><SelectValue placeholder="Events" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Events</SelectItem>
-                <SelectItem value="0">0 Events</SelectItem>
-                <SelectItem value="1-2">1-2 Events</SelectItem>
-                <SelectItem value="3+">3+ Events</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={triageFilter} onValueChange={(value) => setTriageFilter(value as TriageFilter)}>
-              <SelectTrigger className="w-[190px]"><SelectValue placeholder="Triage" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Triage</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="no_change">No Change</SelectItem>
-                <SelectItem value="needs_full_review">Needs Full Review</SelectItem>
-                <SelectItem value="private_tracker">Private Tracker</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={adminFilter} onValueChange={setAdminFilter}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Admin" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Admins</SelectItem>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-                {admins?.map((admin: { _id: Id<"users">; name: string }) => (
-                  <SelectItem key={admin._id} value={admin._id}>{admin.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={yuniteFilter} onValueChange={(value) => setYuniteFilter(value as YuniteFilter)}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Yunite Data" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Yunite</SelectItem>
-                <SelectItem value="yes">Yunite: Yes</SelectItem>
-                <SelectItem value="no">Yunite: No</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-5">
+              <Select value={filter} onValueChange={(value) => setFilter(value as DashboardFilter)}>
+                <SelectTrigger className="w-full min-w-0 xl:w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FILTER_OPTIONS.map((key) => (
+                    <SelectItem key={key} value={key}>
+                      {FILTER_LABELS[key]} ({filterCounts[key] ?? 0})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={eventsFilter} onValueChange={(value) => setEventsFilter(value as EventsFilter)}>
+                <SelectTrigger className="w-full min-w-0 xl:w-[150px]"><SelectValue placeholder="Events" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Events</SelectItem>
+                  <SelectItem value="0">0 Events</SelectItem>
+                  <SelectItem value="1-2">1-2 Events</SelectItem>
+                  <SelectItem value="3+">3+ Events</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={triageFilter} onValueChange={(value) => setTriageFilter(value as TriageFilter)}>
+                <SelectTrigger className="w-full min-w-0 xl:w-[190px]"><SelectValue placeholder="Triage" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Triage</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="no_change">No Change</SelectItem>
+                  <SelectItem value="needs_full_review">Needs Full Review</SelectItem>
+                  <SelectItem value="private_tracker">Private Tracker</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={adminFilter} onValueChange={setAdminFilter}>
+                <SelectTrigger className="w-full min-w-0 xl:w-[180px]"><SelectValue placeholder="Admin" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Admins</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {admins?.map((admin: { _id: Id<"users">; name: string }) => (
+                    <SelectItem key={admin._id} value={admin._id}>{admin.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={yuniteFilter} onValueChange={(value) => setYuniteFilter(value as YuniteFilter)}>
+                <SelectTrigger className="w-full min-w-0 xl:w-[160px]"><SelectValue placeholder="Yunite Data" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Yunite</SelectItem>
+                  <SelectItem value="yes">Yunite: Yes</SelectItem>
+                  <SelectItem value="no">Yunite: No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-full max-w-md">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-8"
+                  placeholder="Search name, Discord, Epic, tier, admin, notes..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
 
           {selectedRows.size > 0 && (
-            <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 p-2 text-sm">
-              <span className="font-medium">{selectedRows.size} selected</span>
-              <Button size="sm" variant="outline" onClick={() => void runBulkTriage("no_change")}>Mark No Change</Button>
-              <Button size="sm" variant="outline" onClick={() => void runBulkTriage("needs_full_review")}>Needs Full Review</Button>
-              <Button size="sm" variant="outline" onClick={() => void runBulkTriage("private_tracker")}>Private Tracker</Button>
+            <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-2 text-sm sm:flex-row sm:flex-wrap sm:items-center">
+              <span className="font-medium shrink-0">{selectedRows.size} selected</span>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => void runBulkTriage("no_change")}>Mark No Change</Button>
+                <Button size="sm" variant="outline" onClick={() => void runBulkTriage("needs_full_review")}>Needs Full Review</Button>
+                <Button size="sm" variant="outline" onClick={() => void runBulkTriage("private_tracker")}>Private Tracker</Button>
+              </div>
             </div>
           )}
-
-          <div className="relative max-w-md">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-8"
-              placeholder="Search name, Discord, Epic, tier, admin, notes..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
 
           {!rows ? (
             <Skeleton className="h-64 w-full" />
           ) : (
             <>
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
+              <div className="divide-y md:hidden">
+                {pagination.pageItems && pagination.pageItems.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    No players match this filter.
+                  </div>
+                ) : (
+                  pagination.pageItems?.map((row) => (
+                    <div
+                      key={row._id}
+                      className={`flex items-start gap-2 py-3 ${row.reEvalStatus === "private_tracker" ? "bg-amber-500/5 -mx-3 px-3" : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 shrink-0"
+                        checked={selectedRows.has(row._id)}
+                        onChange={(e) => toggleRowSelection(row._id, e.target.checked)}
+                      />
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <PlayerProfileLink
+                            discordUsername={row.discordUsername}
+                            className="min-w-0 truncate text-sm font-medium text-primary"
+                          >
+                            {row.playerName}
+                          </PlayerProfileLink>
+                          <Button
+                            size="sm"
+                            className="h-7 shrink-0 px-2 text-xs"
+                            onClick={() => openDetail(row._id, row)}
+                          >
+                            Review
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                          <span>{row.currentTier ?? "—"}/{row.summerTier ?? "-"}</span>
+                          <span>{row.eventsPlayedCount ?? 0} events</span>
+                          <Badge className={row.triageOutcome ? reEvalBadgeClass(row.reEvalStatus) : ""}>
+                            {row.triageOutcome ? TRIAGE_LABELS[row.triageOutcome] : "Pending"}
+                          </Badge>
+                        </div>
+                        {(row.triageSuggestedOutcome || row.triageSuggestionReason) && (
+                          <p className="line-clamp-2 text-xs text-muted-foreground">
+                            {row.triageSuggestedOutcome ? TRIAGE_LABELS[row.triageSuggestedOutcome] : ""}
+                            {row.triageSuggestionReason ? ` — ${row.triageSuggestionReason}` : ""}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className={`hidden md:block ${scrollableTableWrapperClass}`}>
+                <Table className={compactTableClass}>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-8">
@@ -681,29 +814,31 @@ export default function BigSummerReEvalDashboard() {
                         />
                       </TableHead>
                       <TableHead>
-                        <Button variant="ghost" size="sm" className="h-7 px-1" onClick={() => toggleSort("playerName")}>
+                        <Button variant="ghost" size="sm" className="h-7 whitespace-nowrap px-1" onClick={() => toggleSort("playerName")}>
                           Player <ArrowUpDown className="ml-1 h-3 w-3" />
                         </Button>
                       </TableHead>
-                      <TableHead>
-                        <Button variant="ghost" size="sm" className="h-7 px-1" onClick={() => toggleSort("currentTier")}>
+                      <TableHead className="whitespace-nowrap">
+                        <Button variant="ghost" size="sm" className="h-7 whitespace-nowrap px-1" onClick={() => toggleSort("currentTier")}>
                           Tier <ArrowUpDown className="ml-1 h-3 w-3" />
                         </Button>
                       </TableHead>
-                      <TableHead>Events</TableHead>
-                      <TableHead>Tracker</TableHead>
-                      <TableHead>Suggested Outcome</TableHead>
-                      <TableHead>Triage Status</TableHead>
-                      <TableHead>Admin</TableHead>
-                      <TableHead>Final Decision</TableHead>
-                      <TableHead>Updated</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead className="whitespace-nowrap">Events</TableHead>
+                      <TableHead className="whitespace-nowrap">Tracker</TableHead>
+                      <TableHead className="min-w-[180px]">Suggested Outcome</TableHead>
+                      <TableHead className="whitespace-nowrap">Triage Status</TableHead>
+                      <TableHead className="whitespace-nowrap">Admin</TableHead>
+                      <TableHead className="whitespace-nowrap">Final Decision</TableHead>
+                      <TableHead className="whitespace-nowrap">Updated</TableHead>
+                      <TableHead className="sticky right-0 z-10 bg-muted/95 whitespace-nowrap shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+                        Actions
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pagination.pageItems && pagination.pageItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={11} className="py-8 text-center text-muted-foreground">
                           No players match this filter.
                         </TableCell>
                       </TableRow>
@@ -711,7 +846,7 @@ export default function BigSummerReEvalDashboard() {
                       pagination.pageItems?.map((row) => (
                         <TableRow
                           key={row._id}
-                          className={row.reEvalStatus === "private_tracker" ? "bg-amber-500/5" : undefined}
+                          className={`group ${row.reEvalStatus === "private_tracker" ? "bg-amber-500/5" : ""}`}
                         >
                           <TableCell>
                             <input
@@ -743,36 +878,40 @@ export default function BigSummerReEvalDashboard() {
                               "—"
                             )}
                           </TableCell>
-                          <TableCell className="text-xs max-w-[220px]">
-                            <div className="font-medium">
+                          <TableCell className="max-w-[220px] text-xs">
+                            <div className="truncate font-medium">
                               {row.triageSuggestedOutcome ? TRIAGE_LABELS[row.triageSuggestedOutcome] : "—"}
                             </div>
-                            <div className="text-muted-foreground">
+                            <div className="line-clamp-2 text-muted-foreground">
                               {row.triageSuggestionReason ?? ""}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <Badge className={row.triageOutcome ? reEvalBadgeClass(row.reEvalStatus) : ""}>
+                          <TableCell className="whitespace-nowrap">
+                            <Badge className={`whitespace-nowrap ${row.triageOutcome ? reEvalBadgeClass(row.reEvalStatus) : ""}`}>
                               {row.triageOutcome ? TRIAGE_LABELS[row.triageOutcome] : "Pending"}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-xs">{row.assignedAdminName ?? "—"}</TableCell>
-                          <TableCell className="text-xs">
+                          <TableCell className="max-w-[120px] truncate text-xs">{row.assignedAdminName ?? "—"}</TableCell>
+                          <TableCell className="whitespace-nowrap text-xs">
                             {row.finalDecision?.replace("_", " ") ?? "—"}
                           </TableCell>
-                          <TableCell className="text-xs whitespace-nowrap">
+                          <TableCell className="whitespace-nowrap text-xs">
                             {format(new Date(row.lastUpdatedAt), "MMM d HH:mm")}
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                onClick={() => openDetail(row._id, row)}
-                              >
-                                Review
-                              </Button>
-                            </div>
+                          <TableCell
+                            className={`sticky right-0 z-10 whitespace-nowrap shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)] group-hover:bg-muted/50 ${
+                              row.reEvalStatus === "private_tracker"
+                                ? "bg-amber-500/5 group-hover:bg-amber-500/10"
+                                : "bg-background"
+                            }`}
+                          >
+                            <Button
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => openDetail(row._id, row)}
+                            >
+                              Review
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))

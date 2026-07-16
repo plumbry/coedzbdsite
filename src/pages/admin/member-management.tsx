@@ -670,9 +670,9 @@ export default function MemberManagement() {
       }}
     >
       <Tabs value={activeTab} onValueChange={handleTabChange} className="min-w-0">
-          <div className="min-w-0">
+          <div className="min-w-0 overflow-x-auto pb-1">
             <TabsList
-              className={`inline-flex h-9 w-max min-w-0 gap-0.5 p-0.5 md:grid md:h-10 md:w-full md:gap-1 md:p-1 ${
+              className={`inline-flex h-9 w-max min-w-full gap-0.5 p-0.5 md:grid md:h-10 md:w-full md:min-w-0 md:gap-1 md:p-1 ${
                 isAdmin ? "md:grid-cols-6" : isModeratorOrAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
               }`}
             >

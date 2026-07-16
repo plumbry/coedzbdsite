@@ -42,6 +42,8 @@ export type PublicMemberDirectoryEntry = {
   gender?: number;
   femaleVerified: boolean;
   isActive: boolean;
+  /** Unique Yunite event count (denormalized from players.eventsPlayedCount). */
+  eventsPlayedCount: number;
 };
 
 export async function buildPublicMemberDirectory(
@@ -73,6 +75,7 @@ export async function buildPublicMemberDirectory(
       gender: player.gender,
       femaleVerified: verification.femaleVerified,
       isActive: player.isRecentlyActive ?? false,
+      eventsPlayedCount: player.eventsPlayedCount ?? 0,
     };
   });
 

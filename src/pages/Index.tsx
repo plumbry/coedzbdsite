@@ -28,6 +28,7 @@ export default function Index() {
   const [genderFilter, setGenderFilter] = useState<string>("all");
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [eventsFilter, setEventsFilter] = useState<string>("all");
   const [sort, setSort] = useState<{ field: string; direction: "asc" | "desc" }>(
     DEFAULT_PLAYER_LIST_SORT,
   );
@@ -52,8 +53,12 @@ export default function Index() {
     const matchesStatus = statusFilter === "all"
       || (statusFilter === "active" && member.isActive)
       || (statusFilter === "inactive" && !member.isActive);
+
+    const eventsPlayed = member.eventsPlayedCount ?? 0;
+    const matchesEvents = eventsFilter === "all"
+      || (eventsFilter === "lt5" && eventsPlayed < 5);
     
-    return matchesSearch && matchesGender && matchesTier && matchesStatus;
+    return matchesSearch && matchesGender && matchesTier && matchesStatus && matchesEvents;
   });
   
   const sortedMembers = filteredMembers?.sort((a, b) => {
@@ -99,7 +104,7 @@ export default function Index() {
   };
 
   const membersPagination = useClientPagination(sortedMembers, {
-    resetDeps: [search, genderFilter, tierFilter, statusFilter, sort],
+    resetDeps: [search, genderFilter, tierFilter, statusFilter, eventsFilter, sort],
   });
   const displayedMembers = membersPagination.pageItems ?? [];
 
@@ -107,6 +112,7 @@ export default function Index() {
     genderFilter !== "all",
     tierFilter !== "all",
     statusFilter !== "all",
+    eventsFilter !== "all",
     search.length > 0,
   ].filter(Boolean).length;
 
@@ -142,6 +148,15 @@ export default function Index() {
           <SelectItem value="all">All Status</SelectItem>
           <SelectItem value="active">Active</SelectItem>
           <SelectItem value="inactive">Inactive</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={eventsFilter} onValueChange={setEventsFilter}>
+        <SelectTrigger size="sm" className="w-full px-2 text-xs md:w-36 md:text-sm">
+          <SelectValue placeholder="Events" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Events</SelectItem>
+          <SelectItem value="lt5">Fewer than 5</SelectItem>
         </SelectContent>
       </Select>
       <SearchInput
@@ -425,7 +440,7 @@ export default function Index() {
                   </EmptyMedia>
                   <EmptyTitle>No members found</EmptyTitle>
                   <EmptyDescription>
-                    {search || genderFilter !== "all" || tierFilter !== "all" || statusFilter !== "all"
+                    {search || genderFilter !== "all" || tierFilter !== "all" || statusFilter !== "all" || eventsFilter !== "all"
                       ? "Try adjusting your filters" 
                       : "No active members yet"}
                   </EmptyDescription>
