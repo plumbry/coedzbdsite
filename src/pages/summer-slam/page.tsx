@@ -95,7 +95,6 @@ const GUIDE_LIST_CLASS = "mt-2 space-y-1 text-center text-[13px] text-orange-900
 
 const LITTLE_PRIZE_EXAMPLES = [
   "$5 Cash",
-  "500 V-Bucks",
   "Gifted Emotes",
   "Nitro Basic",
   "Discord Badge",
