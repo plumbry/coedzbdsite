@@ -25,11 +25,11 @@ export function isSummerReEvalEligible(
   );
 }
 
-export function defaultTrackerLink(epicUsername: string): string {
-  return `https://fortnitetracker.com/profile/all/${encodeURIComponent(epicUsername)}`;
+export function defaultTrackerLink(identifier: string): string {
+  return `https://fortnitetracker.com/profile/all/${encodeURIComponent(identifier)}`;
 }
 
-/** Discord server nickname is the Epic name when present. */
+/** Discord server nickname is the Epic display name when present. */
 export function resolveTrackerEpicUsername(
   player: Pick<Doc<"players">, "nickname" | "epicUsername" | "discordUsername">,
 ): string {
@@ -44,10 +44,19 @@ export function isTrackerLinkManuallySet(reEval: Doc<"bigSummerReEval">): boolea
   return reEval.trackerLinkManuallySet === true;
 }
 
+/**
+ * Prefer Yunite Epic account ID for stable Fortnite Tracker URLs.
+ * Falls back to nickname / epic username / application link when epicId is missing.
+ */
 export async function resolveAutoTrackerLink(
   ctx: QueryCtx | MutationCtx,
   player: Doc<"players">,
 ): Promise<string | undefined> {
+  const epicId = player.epicId?.trim();
+  if (epicId) {
+    return defaultTrackerLink(epicId);
+  }
+
   const nickname = player.nickname?.trim();
   if (nickname) {
     return defaultTrackerLink(nickname);

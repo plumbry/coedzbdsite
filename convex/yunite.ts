@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { resolvePlayerByDiscordId } from "./helpers/playerDiscordId";
 import { syncPlayerImportLookupForPlayer } from "./helpers/playerImportLookup";
+import { syncDashboardCacheForPlayer } from "./bigSummerReEval/helpers";
 
 /**
  * Find player by Discord ID - includes ALL players regardless of status (active/archived)
@@ -104,6 +105,7 @@ export const updatePlayerEpicId = mutation({
     }
 
     await syncPlayerImportLookupForPlayer(ctx, args.playerId);
+    await syncDashboardCacheForPlayer(ctx, args.playerId);
   },
 });
 

@@ -741,7 +741,7 @@ export const updatePlayer = mutation({
     // Update player
     await ctx.db.patch(args.playerId, patchData);
     await syncPlayerImportLookupForPlayer(ctx, args.playerId);
-    if (args.epicUsername !== existingPlayer.epicUsername) {
+    if (args.epicUsername !== existingPlayer.epicUsername || args.epicId !== existingPlayer.epicId) {
       await syncDashboardCacheForPlayer(ctx, args.playerId);
     }
     
@@ -820,7 +820,7 @@ export const updatePlayerProfile = mutation({
     // Update player
     await ctx.db.patch(args.playerId, patchData);
     await syncPlayerImportLookupForPlayer(ctx, args.playerId);
-    if (args.epicUsername !== existingPlayer.epicUsername) {
+    if (args.epicUsername !== existingPlayer.epicUsername || args.epicId !== existingPlayer.epicId) {
       await syncDashboardCacheForPlayer(ctx, args.playerId);
     }
     
