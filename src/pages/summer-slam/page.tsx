@@ -187,29 +187,29 @@ export default function SummerSlamLandingPage() {
           <PassportHero title={campaign?.title ?? "Summer Slam Passport"} />
 
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:justify-center">
+            <div className="mx-auto flex w-full max-w-md flex-row items-center justify-center gap-2.5 sm:max-w-none sm:gap-3">
               {!isLoaded || campaign === undefined || isPassportStatusLoading ? (
-                <Skeleton className={cn("h-10 w-48 max-w-full", ssSkeleton)} />
+                <Skeleton className={cn("h-11 flex-1 max-w-[11rem]", ssSkeleton)} />
               ) : !canEnterPassport ? (
                 isSignedIn ? (
-                  <Button asChild className="min-h-10 touch-manipulation">
+                  <Button asChild className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6">
                     <Link to="/summer-slam/passport">Coming Soon</Link>
                   </Button>
                 ) : (
-                  <Button disabled className="min-h-10 touch-manipulation">
+                  <Button disabled className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6">
                     Coming Soon
                   </Button>
                 )
               ) : isSignedIn ? (
                   hasPassport ? (
-                    <Button asChild className="min-h-10 touch-manipulation">
+                    <Button asChild className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6">
                       <Link to="/summer-slam/passport">
                         {isAdminPreview ? "Preview Passport" : "My Passport"}
                       </Link>
                     </Button>
                   ) : (
                     <Button
-                      className="min-h-10 touch-manipulation"
+                      className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6"
                       disabled={isClaimingPassport}
                       onClick={() => void handleClaimPassport()}
                     >
@@ -222,13 +222,17 @@ export default function SummerSlamLandingPage() {
                   )
                 ) : (
                   <SignInButton
-                    className="min-h-10 touch-manipulation"
+                    className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6"
                     signInText="Sign in with Discord"
                     showIcon={false}
                   />
                 )
               }
-              <Button asChild variant="ghost" className="min-h-10 touch-manipulation">
+              <Button
+                asChild
+                variant="outline"
+                className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6"
+              >
                 <Link to="/support">Site Support</Link>
               </Button>
             </div>
