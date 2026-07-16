@@ -87,7 +87,7 @@ const TAB_TRIGGER_CLASS =
 const GUIDE_TAB_PANEL_CLASS =
   "col-start-1 row-start-1 mt-0 data-[state=inactive]:pointer-events-none data-[state=inactive]:invisible";
 const GUIDE_STEP_TITLE_CLASS = "text-center text-sm font-semibold text-orange-950";
-const GUIDE_STEP_BODY_CLASS = "text-justify text-[13px] text-orange-900/55";
+const GUIDE_STEP_BODY_CLASS = "text-justify text-last-center text-[13px] text-orange-900/55";
 
 const LITTLE_PRIZE_EXAMPLES = [
   "$5 Cash",
@@ -242,12 +242,12 @@ export default function SummerSlamLandingPage() {
                   {campaign === undefined ? (
                     <Skeleton className={cn("mx-auto h-6 w-full max-w-md", ssSkeleton)} />
                   ) : (
-                    <div className="space-y-3 py-1">
-                      <p className="text-justify text-lg font-semibold leading-relaxed text-orange-950 sm:text-xl">
+                    <div className="mx-auto max-w-xl space-y-3 py-1">
+                      <p className="text-justify text-last-center text-lg font-semibold leading-relaxed text-orange-950 sm:text-xl">
                         {LANDING_INTRO}
                       </p>
                       {statusMessage ? (
-                        <p className="rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-justify text-sm leading-relaxed text-orange-900/70">
+                        <p className="rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-justify text-last-center text-sm leading-relaxed text-orange-900/70">
                           {statusMessage}
                         </p>
                       ) : null}
