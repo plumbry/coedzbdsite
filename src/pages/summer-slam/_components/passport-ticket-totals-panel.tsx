@@ -5,6 +5,12 @@ import {
   ssSectionTitle,
 } from "./passport-dashboard-theme.ts";
 
+const TICKET_RULES = [
+  { quests: "1 Quest", reward: "1 Little Wheel Ticket" },
+  { quests: "5 Quests", reward: "1 Big Wheel Ticket" },
+  { quests: "all 5 Categories", reward: "the Bonus Quest", unlock: true },
+] as const;
+
 export function PassportTicketTotalsPanel({ className }: { className?: string }) {
   return (
     <section
@@ -17,22 +23,25 @@ export function PassportTicketTotalsPanel({ className }: { className?: string })
       <div className={ssAccentBarClass} />
       <div className={cn(ssCardPad, "space-y-2")}>
         <h2 className={cn(ssSectionTitle, "text-base")}>Ticket Totals</h2>
-        <ul className="space-y-1 text-[11px] leading-snug text-orange-900/70">
-          <li>
-            Complete <span className="font-semibold text-orange-950">1 Quest</span> = Earn{" "}
-            <span className="font-semibold text-orange-950">1 Little Prize Wheel Ticket</span>
-          </li>
-          <li>
-            Complete <span className="font-semibold text-orange-950">5 Quests</span> = Earn{" "}
-            <span className="font-semibold text-orange-950">5 Little Prize Wheel Tickets</span>
-          </li>
-          <li className="text-orange-800/45">
-            Completed everything? Start your secret bonus quests
-          </li>
+        <ul className="space-y-1.5 text-xs leading-snug text-orange-900/70 sm:text-sm">
+          {TICKET_RULES.map((rule) => (
+            <li key={rule.quests}>
+              {rule.unlock ? (
+                <>
+                  Complete <span className="font-semibold text-orange-950">all 5 Categories</span> =
+                  Unlock <span className="font-semibold text-orange-950">the Bonus Quest</span>
+                </>
+              ) : (
+                <>
+                  Complete <span className="font-semibold text-orange-950">{rule.quests}</span> =
+                  Earn <span className="font-semibold text-orange-950">{rule.reward}</span>
+                </>
+              )}
+            </li>
+          ))}
         </ul>
-        <p className="text-[10px] leading-relaxed text-orange-800/45">
-          Draw dates and prize details are announced in Discord. Ticket totals are tracked on your
-          passport.
+        <p className="text-[10px] leading-relaxed text-orange-800/45 sm:text-xs">
+          Ticket totals are tracked on your passport. Draw details are announced in Discord.
         </p>
       </div>
     </section>

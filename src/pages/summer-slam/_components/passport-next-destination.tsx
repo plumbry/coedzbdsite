@@ -73,7 +73,7 @@ export function PassportNextDestination({
               You&apos;ve reached Summer Finale!
             </h2>
             <p className="mt-1 text-sm text-teal-700/80">
-              Every destination visited, every stamp collected. Watch Discord for prize wheel draws and
+              Every destination visited, every stamp collected. Watch Discord for prize draws and
               Hall of Fame recognition.
             </p>
           </div>

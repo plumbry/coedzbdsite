@@ -194,7 +194,7 @@ function SealDetailBody({
         <Stamp className="h-4 w-4 shrink-0 text-stone-500" aria-hidden />
         <span>
           Reward: the <span className="font-bold text-stone-900">{meta.label} stamp</span>. Every
-          quest you complete also earns a Little Wheel ticket (every 5 quests = a Big Wheel ticket).
+          quest you complete also earns a Little Wheel Ticket (every 5 quests = a Big Wheel Ticket).
         </span>
       </div>
 

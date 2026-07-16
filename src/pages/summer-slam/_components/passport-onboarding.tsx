@@ -29,7 +29,7 @@ const STEPS: Array<{ icon: LucideIcon; step: string; title: string; body: string
     icon: Upload,
     step: "Step 3",
     title: "Track your progress and rewards",
-    body: "View your completed stamps, remaining challenges, season countdown, and prize wheel tickets anytime.",
+    body: "View your completed stamps, remaining challenges, season countdown, and Wheel Tickets anytime.",
   },
 ];
 
@@ -116,16 +116,20 @@ export function PassportOnboarding({
           <Ticket className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" aria-hidden />
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-700">
-              Prize Wheel Tickets
+              Wheel Tickets
             </p>
             <ul className="mt-1 space-y-0.5 text-xs leading-relaxed">
               <li>
                 Complete <span className="font-semibold text-teal-800">1</span> Quest = Earn{" "}
-                <span className="font-semibold text-teal-800">1</span> Little Prize Wheel Ticket
+                <span className="font-semibold text-teal-800">1</span> Little Wheel Ticket
               </li>
               <li>
                 Complete <span className="font-semibold text-teal-800">5</span> Quests = Earn{" "}
-                <span className="font-semibold text-teal-800">5</span> Little Prize Wheel Tickets
+                <span className="font-semibold text-teal-800">1</span> Big Wheel Ticket
+              </li>
+              <li>
+                Complete <span className="font-semibold text-teal-800">all 5 Categories</span> =
+                Unlock <span className="font-semibold text-teal-800">the Bonus Quest</span>
               </li>
             </ul>
           </div>
@@ -133,7 +137,7 @@ export function PassportOnboarding({
 
         <div className="flex items-center gap-2 rounded-xl border border-teal-200/70 bg-teal-50/60 px-3 py-2.5 text-xs text-teal-900">
           <Award className="h-4 w-4 shrink-0" aria-hidden />
-          Earn all five stamps to complete your passport and maximise your prize wheel tickets.
+          Complete all five categories to unlock the Bonus Quest.
         </div>
 
         <Button className="mt-1 min-h-11 w-full touch-manipulation" onClick={dismiss}>

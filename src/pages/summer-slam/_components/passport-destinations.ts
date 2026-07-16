@@ -65,9 +65,9 @@ export function getNextDestination(currentId: QuestCategory | null): SeasonDesti
 export const SEASON_REWARDS = [
   {
     id: "passport",
-    title: "Full Passport",
+    title: "Bonus Quest",
     description:
-      "Complete all five stamps to unlock the Bonus Stamp. You will also receive a certificate and exclusive Discord Role!",
+      "Complete all five categories to unlock the Bonus Quest, plus a certificate and exclusive Discord role.",
     icon: "passport" as const,
   },
 ];

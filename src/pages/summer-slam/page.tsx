@@ -39,6 +39,9 @@ import { SEASON_REWARDS } from "./_components/passport-destinations.ts";
 import { CAMPAIGN_SLUG, getPassportErrorTitle, mapEnsurePassportError } from "./_components/passport-types.ts";
 import { Compass, Gift, Stamp, Sun, Trophy, Upload, UserCheck } from "lucide-react";
 
+const LANDING_INTRO =
+  "Complete quests during scrims, submit evidence, and earn Wheel Tickets for a chance to win prizes!";
+
 const STEPS = [
   {
     icon: Compass,
@@ -48,7 +51,7 @@ const STEPS = [
   {
     icon: Sun,
     title: "Complete Quests",
-    body: "Auto quests track from tagged ZBD events. Manual quests need proof. Staff-awarded quests are granted by admins.",
+    body: "Some quests are tracked automatically. Others require evidence for staff review.",
   },
   {
     icon: Upload,
@@ -58,7 +61,7 @@ const STEPS = [
   {
     icon: UserCheck,
     title: "Staff Review",
-    body: "Admins check evidence against quest instructions. Typical review time is 48–72 hours. Resubmit if staff request more proof.",
+    body: "Admins review submitted evidence. Most reviews take 48–72 hours.",
   },
   {
     icon: Stamp,
@@ -68,7 +71,7 @@ const STEPS = [
   {
     icon: Trophy,
     title: "Wheel Tickets",
-    body: "Approved quests award wheel points. Points convert to Little and Big Wheel tickets at configured thresholds.",
+    body: "Completing quests earns Little and Big Wheel Tickets, which are entered into the prize draws.",
   },
 ];
 
@@ -104,29 +107,26 @@ const BIG_PRIZE_EXAMPLES = [
   "Discord Role",
 ] as const;
 
-function getPrizeItems(littleEvery: number, bigEvery: number) {
+function getPrizeItems() {
   const fullPassport = SEASON_REWARDS.find((reward) => reward.id === "passport");
 
   return [
     {
       icon: Gift,
-      title: "Little Wheel Tickets",
-      body:
-        littleEvery === 1
-          ? "Each approved quest earns 1 wheel point and a Little Wheel ticket — your entry into regular season prize draws."
-          : `Every ${littleEvery} wheel points earns a Little Wheel ticket — your entry into regular season prize draws.`,
+      title: "Little Wheel Ticket",
+      body: "Each completed quest earns a Little Wheel Ticket — your entry into regular season prize draws.",
     },
     {
       icon: Trophy,
-      title: "Big Wheel Tickets",
-      body: `Every ${bigEvery} wheel points earns a Big Wheel ticket — your entry into the headline end-of-season prize draw.`,
+      title: "Big Wheel Ticket",
+      body: "Every 5 completed quests earns a Big Wheel Ticket — your entry into the end-of-season prize draw.",
     },
     {
       icon: Stamp,
-      title: fullPassport?.title ?? "Full Passport",
+      title: "Bonus Quest",
       body:
         fullPassport?.description ??
-        "Complete all five stamps to unlock the Bonus Stamp. You will also receive a certificate and exclusive Discord Role!",
+        "Complete all five categories to unlock the Bonus Quest, plus a certificate and exclusive Discord role.",
     },
   ] as const;
 }
@@ -153,12 +153,7 @@ export default function SummerSlamLandingPage() {
   const hasPassport = Boolean(passportStatus?.passport);
   const isPassportStatusLoading =
     isSignedIn && (!isConvexAuthenticated || passportStatus === undefined);
-  const littleEvery = campaign?.littleWheelEntryEveryStamps ?? 1;
-  const bigEvery = campaign?.bigWheelEntryEveryStamps ?? 5;
-  const prizeItems = getPrizeItems(littleEvery, bigEvery);
-  const campaignDescription =
-    campaign?.description ??
-    "Complete quests during scrims, submit evidence, earn a place on the prize wheel!";
+  const prizeItems = getPrizeItems();
 
   const handleClaimPassport = async () => {
     setIsClaimingPassport(true);
@@ -245,14 +240,14 @@ export default function SummerSlamLandingPage() {
               >
                 <Tabs defaultValue="how-it-works" className="flex min-h-0 flex-1 flex-col gap-3">
                   {campaign === undefined ? (
-                    <Skeleton className={cn("mx-auto h-4 w-full max-w-md", ssSkeleton)} />
+                    <Skeleton className={cn("mx-auto h-6 w-full max-w-md", ssSkeleton)} />
                   ) : (
-                    <div className="space-y-2 text-center">
-                      <p className="text-sm leading-relaxed text-orange-900/60 sm:text-base">
-                        {campaignDescription}
+                    <div className="space-y-3 py-1 text-center">
+                      <p className="text-lg font-semibold leading-relaxed text-orange-950 sm:text-xl">
+                        {LANDING_INTRO}
                       </p>
                       {statusMessage ? (
-                        <p className="rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-sm text-orange-900/70">
+                        <p className="rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-sm leading-relaxed text-orange-900/70">
                           {statusMessage}
                         </p>
                       ) : null}
@@ -293,8 +288,8 @@ export default function SummerSlamLandingPage() {
 
                     <TabsContent forceMount value="prizes" className={GUIDE_TAB_PANEL_CLASS}>
                       <p className={cn("mx-auto max-w-md leading-relaxed", GUIDE_STEP_BODY_CLASS)}>
-                        Complete quests to earn wheel tickets for prize draws, and finish every stamp
-                        category for the full passport reward.
+                        Complete quests, earn Little and Big Wheel Tickets, and compete for Little and
+                        Big Prizes.
                       </p>
                       <ul className="mt-3 space-y-3">
                         {prizeItems.map((prize) => (
@@ -316,7 +311,7 @@ export default function SummerSlamLandingPage() {
                       </ul>
                       <div className="mx-auto mt-6 grid w-full max-w-md gap-4 sm:grid-cols-2">
                         <div className="text-center">
-                          <p className={GUIDE_STEP_TITLE_CLASS}>Little Prize Examples</p>
+                          <p className={GUIDE_STEP_TITLE_CLASS}>Little Prizes</p>
                           <ul className={cn("mt-2 space-y-1", GUIDE_STEP_BODY_CLASS)}>
                             {LITTLE_PRIZE_EXAMPLES.map((prize) => (
                               <li key={prize}>{prize}</li>
@@ -324,7 +319,7 @@ export default function SummerSlamLandingPage() {
                           </ul>
                         </div>
                         <div className="text-center">
-                          <p className={GUIDE_STEP_TITLE_CLASS}>Big Prize Examples</p>
+                          <p className={GUIDE_STEP_TITLE_CLASS}>Big Prizes</p>
                           <ul className={cn("mt-2 space-y-1", GUIDE_STEP_BODY_CLASS)}>
                             {BIG_PRIZE_EXAMPLES.map((prize) => (
                               <li key={prize}>{prize}</li>

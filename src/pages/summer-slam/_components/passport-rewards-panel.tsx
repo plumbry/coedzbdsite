@@ -68,11 +68,11 @@ export function PassportRewardsPanel({
           <dd className="text-base font-bold tabular-nums text-orange-950 sm:text-sm">{approvedStamps}</dd>
         </div>
         <div className={cn(ssStatCell, "text-center")}>
-          <dt className={ssLabel}>Little Wheel</dt>
+          <dt className={ssLabel}>Little Tickets</dt>
           <dd className="text-base font-bold tabular-nums text-teal-800 sm:text-sm">{littleWheelEntries}</dd>
         </div>
         <div className={cn(ssStatCell, "text-center")}>
-          <dt className={ssLabel}>Big Wheel</dt>
+          <dt className={ssLabel}>Big Tickets</dt>
           <dd className="text-base font-bold tabular-nums text-violet-800 sm:text-sm">{bigWheelEntries}</dd>
         </div>
       </dl>
