@@ -6,8 +6,8 @@ import {
 } from "./passport-dashboard-theme.ts";
 
 const TICKET_RULES = [
-  { quests: "1 Quest", reward: "1 Little Wheel Ticket" },
-  { quests: "5 Quests", reward: "1 Big Wheel Ticket" },
+  { quests: "1 Quest", reward: "1 Little Wheel Ticket", unlock: false },
+  { quests: "5 Quests", reward: "1 Big Wheel Ticket", unlock: false },
   { quests: "all 5 Categories", reward: "the Bonus Quest", unlock: true },
 ] as const;
 
