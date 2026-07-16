@@ -40,8 +40,10 @@ export function PassportTicketTotalsPanel({ className }: { className?: string })
             </li>
           ))}
         </ul>
-        <p className="text-[10px] leading-relaxed text-orange-800/45 sm:text-xs">
-          Ticket totals are tracked on your passport. Draw details are announced in Discord.
+        <p className="text-pretty text-[10px] leading-relaxed text-orange-800/45 sm:text-xs">
+          Ticket totals are tracked on your passport.
+          <br />
+          Draw details are announced in Discord.
         </p>
       </div>
     </section>

@@ -40,8 +40,10 @@ export function PassportLeaderboardPanel({ className }: { className?: string }) 
           ))}
         </ul>
       ) : leaderboard.length === 0 ? (
-        <p className="mt-4 text-center text-xs leading-relaxed text-orange-800/45">
-          No quests have been completed yet. Check back once Summer Slam begins!
+        <p className="mt-4 text-pretty text-center text-xs leading-relaxed text-orange-800/45">
+          No quests have been completed yet.
+          <br />
+          Check back once Summer Slam begins!
         </p>
       ) : (
         <ol className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto">

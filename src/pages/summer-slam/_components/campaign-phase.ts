@@ -119,13 +119,13 @@ export function formatCampaignDateRange(
 export function phaseMessage(phase: CampaignPhase) {
   switch (phase) {
     case "not_configured":
-      return "Summer Slam is still being prepared. Staff are setting up quests and rewards — watch Discord for the official launch date.";
+      return "Summer Slam is still being prepared. Watch Discord for the official launch date.";
     case "not_started":
-      return "The season hasn't started yet. Watch Discord for the official start date, then return here to open your passport.";
+      return "The season hasn't started yet. Watch Discord for the start date, then return to open your passport.";
     case "submissions_closed":
-      return "Submissions are closed for this season. You can still view your passport while staff finish reviewing evidence.";
+      return "Submissions are closed for this season. You can still view your passport while staff finish reviews.";
     case "ended":
-      return "Summer Slam is not currently active. Passport progress may be read-only until the next season begins.";
+      return "Summer Slam is not currently active. Progress may be read-only until the next season.";
     default:
       return null;
   }
@@ -138,7 +138,7 @@ export function submissionsPendingMessage(
 ): string | null {
   if (getCampaignPhase(campaign, now) !== "active") return null;
   if (isSubmissionsSwitchOn(campaign)) return null;
-  return "Passports are open — explore your quests. Evidence submissions will turn on soon; watch Discord for the go-ahead.";
+  return "Passports are open — explore your quests. Evidence submissions turn on soon; watch Discord for the go-ahead.";
 }
 
 export function phaseBadge(phase: CampaignPhase) {

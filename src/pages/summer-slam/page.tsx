@@ -39,24 +39,26 @@ import { SEASON_REWARDS } from "./_components/passport-destinations.ts";
 import { CAMPAIGN_SLUG, getPassportErrorTitle, mapEnsurePassportError } from "./_components/passport-types.ts";
 import { Compass, Gift, Stamp, Sun, Trophy, Upload, UserCheck } from "lucide-react";
 
-const LANDING_INTRO =
-  "Complete quests during scrims, submit evidence, and earn Wheel Tickets for a chance to win prizes!";
+const LANDING_INTRO_LINES = [
+  "Complete quests during scrims, submit evidence,",
+  "and earn Wheel Tickets for a chance to win prizes!",
+] as const;
 
 const STEPS = [
   {
     icon: Compass,
     title: "Open Your Passport",
-    body: "Five destination categories, each with quests. Track progress on your passport dashboard.",
+    body: "Five destination categories, each with quests. Track progress on your passport.",
   },
   {
     icon: Sun,
     title: "Complete Quests",
-    body: "Some quests are tracked automatically. Others require evidence for staff review.",
+    body: "Some quests are tracked automatically. Others need evidence for staff review.",
   },
   {
     icon: Upload,
     title: "Submit Evidence",
-    body: "For manual quests, paste a public evidence link (screenshots via postimages.org, clips via Medal/YouTube/etc.). Only submit when you meet the quest requirements.",
+    body: "For manual quests, paste a public evidence link — screenshots via postimages.org, or clips via Medal/YouTube. Only submit when you meet the requirements.",
   },
   {
     icon: UserCheck,
@@ -66,12 +68,12 @@ const STEPS = [
   {
     icon: Stamp,
     title: "Earn Seals",
-    body: "When every quest in a destination category is approved, you earn that category seal on your passport.",
+    body: "Approve every quest in a category to earn that seal on your passport.",
   },
   {
     icon: Trophy,
     title: "Wheel Tickets",
-    body: "Completing quests earns Little and Big Wheel Tickets, which are entered into the prize draws.",
+    body: "Completing quests earns Little and Big Wheel Tickets for the prize draws.",
   },
 ];
 
@@ -87,7 +89,9 @@ const TAB_TRIGGER_CLASS =
 const GUIDE_TAB_PANEL_CLASS =
   "col-start-1 row-start-1 mt-0 data-[state=inactive]:pointer-events-none data-[state=inactive]:invisible";
 const GUIDE_STEP_TITLE_CLASS = "text-center text-sm font-semibold text-orange-950";
-const GUIDE_STEP_BODY_CLASS = "text-justify text-last-center text-[13px] text-orange-900/55";
+const GUIDE_STEP_BODY_CLASS =
+  "mx-auto max-w-[22rem] text-pretty text-center text-[13px] leading-relaxed text-orange-900/55";
+const GUIDE_LIST_CLASS = "mt-2 space-y-1 text-center text-[13px] text-orange-900/55";
 
 const LITTLE_PRIZE_EXAMPLES = [
   "$5 Cash",
@@ -114,19 +118,19 @@ function getPrizeItems() {
     {
       icon: Gift,
       title: "Little Wheel Ticket",
-      body: "Each completed quest earns a Little Wheel Ticket — your entry into regular season prize draws.",
+      body: "Each completed quest earns a Little Wheel Ticket for regular season prize draws.",
     },
     {
       icon: Trophy,
       title: "Big Wheel Ticket",
-      body: "Every 5 completed quests earns a Big Wheel Ticket — your entry into the end-of-season prize draw.",
+      body: "Every 5 completed quests earns a Big Wheel Ticket for the end-of-season prize draw.",
     },
     {
       icon: Stamp,
       title: "Bonus Quest",
       body:
         fullPassport?.description ??
-        "Complete all five categories to unlock the Bonus Quest, plus a certificate and exclusive Discord role.",
+        "Complete all five categories to unlock the Bonus Quest, plus a certificate and Discord role.",
     },
   ] as const;
 }
@@ -146,7 +150,7 @@ export default function SummerSlamLandingPage() {
 
   const phase = getCampaignPhase(campaign ?? null);
   const statusMessage = isAdminPassportPreview(campaign ?? null, isAdmin)
-    ? "Admin preview is available before the season starts. Claim a passport to verify quests and layout."
+    ? "Admin preview is available before launch. Claim a passport to check quests and layout."
     : submissionsPendingMessage(campaign ?? null) ?? phaseMessage(phase);
   const canEnterPassport = isPassportAccessible(campaign ?? null, Date.now(), { adminPreview: isAdmin });
   const isAdminPreview = isAdminPassportPreview(campaign ?? null, isAdmin);
@@ -242,12 +246,16 @@ export default function SummerSlamLandingPage() {
                   {campaign === undefined ? (
                     <Skeleton className={cn("mx-auto h-6 w-full max-w-md", ssSkeleton)} />
                   ) : (
-                    <div className="mx-auto max-w-xl space-y-3 py-1">
-                      <p className="text-justify text-last-center text-lg font-semibold leading-relaxed text-orange-950 sm:text-xl">
-                        {LANDING_INTRO}
+                    <div className="mx-auto max-w-md space-y-3 py-1">
+                      <p className="text-center text-lg font-semibold leading-snug text-orange-950 sm:text-xl">
+                        {LANDING_INTRO_LINES.map((line) => (
+                          <span key={line} className="block">
+                            {line}
+                          </span>
+                        ))}
                       </p>
                       {statusMessage ? (
-                        <p className="rounded-lg border border-orange-200/60 bg-orange-50/50 px-2.5 py-1.5 text-justify text-last-center text-sm leading-relaxed text-orange-900/70">
+                        <p className="rounded-lg border border-orange-200/60 bg-orange-50/50 px-3 py-2 text-pretty text-center text-sm leading-relaxed text-orange-900/70">
                           {statusMessage}
                         </p>
                       ) : null}
@@ -275,7 +283,7 @@ export default function SummerSlamLandingPage() {
                             >
                               <step.icon className="h-4 w-4" />
                             </div>
-                            <div className="min-w-0 max-w-md">
+                            <div className="min-w-0 w-full max-w-[22rem]">
                               <p className={GUIDE_STEP_TITLE_CLASS}>
                                 {index + 1}. {step.title}
                               </p>
@@ -287,9 +295,8 @@ export default function SummerSlamLandingPage() {
                     </TabsContent>
 
                     <TabsContent forceMount value="prizes" className={GUIDE_TAB_PANEL_CLASS}>
-                      <p className={cn("mx-auto max-w-md leading-relaxed", GUIDE_STEP_BODY_CLASS)}>
-                        Complete quests, earn Little and Big Wheel Tickets, and compete for Little and
-                        Big Prizes.
+                      <p className={GUIDE_STEP_BODY_CLASS}>
+                        Complete quests, earn Little and Big Wheel Tickets, and compete for Little and Big Prizes.
                       </p>
                       <ul className="mt-3 space-y-3">
                         {prizeItems.map((prize) => (
@@ -302,7 +309,7 @@ export default function SummerSlamLandingPage() {
                             >
                               <prize.icon className="h-4 w-4" />
                             </div>
-                            <div className="min-w-0 max-w-md">
+                            <div className="min-w-0 w-full max-w-[22rem]">
                               <p className={GUIDE_STEP_TITLE_CLASS}>{prize.title}</p>
                               <p className={GUIDE_STEP_BODY_CLASS}>{prize.body}</p>
                             </div>
@@ -312,7 +319,7 @@ export default function SummerSlamLandingPage() {
                       <div className="mx-auto mt-6 grid w-full max-w-md gap-4 sm:grid-cols-2">
                         <div className="text-center">
                           <p className={GUIDE_STEP_TITLE_CLASS}>Little Prizes</p>
-                          <ul className={cn("mt-2 space-y-1", GUIDE_STEP_BODY_CLASS)}>
+                          <ul className={GUIDE_LIST_CLASS}>
                             {LITTLE_PRIZE_EXAMPLES.map((prize) => (
                               <li key={prize}>{prize}</li>
                             ))}
@@ -320,7 +327,7 @@ export default function SummerSlamLandingPage() {
                         </div>
                         <div className="text-center">
                           <p className={GUIDE_STEP_TITLE_CLASS}>Big Prizes</p>
-                          <ul className={cn("mt-2 space-y-1", GUIDE_STEP_BODY_CLASS)}>
+                          <ul className={GUIDE_LIST_CLASS}>
                             {BIG_PRIZE_EXAMPLES.map((prize) => (
                               <li key={prize}>{prize}</li>
                             ))}

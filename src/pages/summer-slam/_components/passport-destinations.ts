@@ -67,7 +67,7 @@ export const SEASON_REWARDS = [
     id: "passport",
     title: "Bonus Quest",
     description:
-      "Complete all five categories to unlock the Bonus Quest, plus a certificate and exclusive Discord role.",
+      "Complete all five categories to unlock the Bonus Quest, plus a certificate and Discord role.",
     icon: "passport" as const,
   },
 ];
