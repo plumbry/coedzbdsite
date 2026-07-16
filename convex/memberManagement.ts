@@ -34,6 +34,7 @@ export type AcceptedMemberListRow = {
   _id: Id<"players">;
   discordUsername: string;
   discordUserId?: string;
+  alternateDiscordUserIds?: string[];
   epicUsername: string;
   nickname?: string;
   tier?: string;
@@ -49,6 +50,7 @@ function buildAcceptedMemberSearchText(fields: {
   epicUsername: string;
   nickname?: string;
   discordUserId?: string;
+  alternateDiscordUserIds?: string[];
   tier?: string;
 }): string {
   return [
@@ -56,6 +58,7 @@ function buildAcceptedMemberSearchText(fields: {
     fields.epicUsername,
     fields.nickname,
     fields.discordUserId,
+    ...(fields.alternateDiscordUserIds ?? []),
     fields.tier,
   ]
     .filter(Boolean)
@@ -90,6 +93,7 @@ async function buildAcceptedMemberRows(ctx: QueryCtx): Promise<AcceptedMemberLis
         _id: player._id,
         discordUsername: player.discordUsername,
         discordUserId: player.discordUserId,
+        alternateDiscordUserIds: player.alternateDiscordUserIds,
         epicUsername: player.epicUsername,
         nickname: player.nickname,
         tier: player.tier,
@@ -102,6 +106,7 @@ async function buildAcceptedMemberRows(ctx: QueryCtx): Promise<AcceptedMemberLis
           epicUsername: player.epicUsername,
           nickname: player.nickname,
           discordUserId: player.discordUserId,
+          alternateDiscordUserIds: player.alternateDiscordUserIds,
           tier: player.tier,
         }),
       };

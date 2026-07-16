@@ -52,6 +52,30 @@ function resolveMemberManagementTab(
   return "applications";
 }
 
+function DiscordIdsCell({
+  primaryId,
+  alternateIds,
+}: {
+  primaryId?: string;
+  alternateIds?: string[];
+}) {
+  if (!primaryId) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  const alts = alternateIds ?? [];
+  return (
+    <div className="font-mono text-sm space-y-0.5">
+      <div>{primaryId}</div>
+      {alts.map((id) => (
+        <div key={id} className="text-xs text-muted-foreground">
+          + {id}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function filterAcceptedMembersBySearch<
   T extends { searchText: string; nickname?: string },
 >(members: T[], searchTerm: string): T[] {
@@ -975,7 +999,12 @@ export default function MemberManagement() {
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell className="font-mono text-sm">{member.discordUserId}</TableCell>
+                            <TableCell>
+                              <DiscordIdsCell
+                                primaryId={member.discordUserId}
+                                alternateIds={member.alternateDiscordUserIds}
+                              />
+                            </TableCell>
                             <TableCell>{member.epicUsername}</TableCell>
                             <TableCell>
                               {member.tier ? (
@@ -1234,7 +1263,12 @@ export default function MemberManagement() {
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell className="font-mono text-sm">{member.discordUserId}</TableCell>
+                            <TableCell>
+                              <DiscordIdsCell
+                                primaryId={member.discordUserId}
+                                alternateIds={member.alternateDiscordUserIds}
+                              />
+                            </TableCell>
                             <TableCell>{member.epicUsername}</TableCell>
                             <TableCell>
                               {format(new Date(member.serverJoinDate), "MMM d, yyyy")}
@@ -1441,7 +1475,12 @@ export default function MemberManagement() {
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell className="font-mono text-sm">{member.discordUserId}</TableCell>
+                            <TableCell>
+                              <DiscordIdsCell
+                                primaryId={member.discordUserId}
+                                alternateIds={member.alternateDiscordUserIds}
+                              />
+                            </TableCell>
                             <TableCell className="max-w-md truncate">
                               {member.rejectionReason || "No reason provided"}
                             </TableCell>
@@ -1659,7 +1698,12 @@ export default function MemberManagement() {
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell className="font-mono text-sm">{member.discordUserId}</TableCell>
+                            <TableCell>
+                              <DiscordIdsCell
+                                primaryId={member.discordUserId}
+                                alternateIds={member.alternateDiscordUserIds}
+                              />
+                            </TableCell>
                             <TableCell>{member.epicUsername}</TableCell>
                             <TableCell>
                               {member.archiveReason && (

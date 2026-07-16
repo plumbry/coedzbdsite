@@ -481,7 +481,14 @@ export default function DiscordMembers() {
                           </div>
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">
-                          {player.discordUserId || "—"}
+                          <div className="space-y-0.5">
+                            <div>{player.discordUserId || "—"}</div>
+                            {(player.alternateDiscordUserIds ?? []).map((id) => (
+                              <div key={id} className="text-[10px]">
+                                + {id}
+                              </div>
+                            ))}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {player.epicUsername || "—"}
