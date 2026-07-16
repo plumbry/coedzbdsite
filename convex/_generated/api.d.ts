@@ -163,7 +163,6 @@ import type * as potentialEventCalendar_queries from "../potentialEventCalendar/
 import type * as potentialEventCalendar_recurrence from "../potentialEventCalendar/recurrence.js";
 import type * as potentialEventCalendar_viewerAuth from "../potentialEventCalendar/viewerAuth.js";
 import type * as replays_mutations from "../replays/mutations.js";
-import type * as replays_parser from "../replays/parser.js";
 import type * as replays_queries from "../replays/queries.js";
 import type * as scores from "../scores.js";
 import type * as scrimSeries_importFromYunite from "../scrimSeries/importFromYunite.js";
@@ -374,7 +373,6 @@ declare const fullApi: ApiFromModules<{
   "potentialEventCalendar/recurrence": typeof potentialEventCalendar_recurrence;
   "potentialEventCalendar/viewerAuth": typeof potentialEventCalendar_viewerAuth;
   "replays/mutations": typeof replays_mutations;
-  "replays/parser": typeof replays_parser;
   "replays/queries": typeof replays_queries;
   scores: typeof scores;
   "scrimSeries/importFromYunite": typeof scrimSeries_importFromYunite;
