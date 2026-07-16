@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
+import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Alert, AlertDescription } from "@/components/ui/alert.tsx";
-import { Loader2, Search } from "lucide-react";
+import { ExternalLink, Loader2, Search } from "lucide-react";
 import { ConvexError } from "convex/values";
 
 type LookupState =
@@ -15,15 +16,21 @@ type LookupState =
       epicDisplayName?: string;
       epicAccountId?: string;
       verified?: boolean;
+      savedToPlayer?: boolean;
+      trackerLink?: string;
     }
   | { kind: "not_found" }
   | { kind: "error"; message: string };
 
 interface YuniteEpicLookupCardProps {
   discordUserId: string;
+  playerId?: Id<"players">;
 }
 
-export default function YuniteEpicLookupCard({ discordUserId }: YuniteEpicLookupCardProps) {
+export default function YuniteEpicLookupCard({
+  discordUserId,
+  playerId,
+}: YuniteEpicLookupCardProps) {
   const lookupEpicRegistration = useAction(
     api.yunite.lookupEpicRegistration.lookupEpicRegistrationByDiscordId,
   );
@@ -33,7 +40,10 @@ export default function YuniteEpicLookupCard({ discordUserId }: YuniteEpicLookup
     setLookupState({ kind: "loading" });
 
     try {
-      const result = await lookupEpicRegistration({ discordUserId });
+      const result = await lookupEpicRegistration({
+        discordUserId,
+        playerId,
+      });
 
       if (result.status === "success") {
         setLookupState({
@@ -41,6 +51,8 @@ export default function YuniteEpicLookupCard({ discordUserId }: YuniteEpicLookup
           epicDisplayName: result.epicDisplayName,
           epicAccountId: result.epicAccountId,
           verified: result.verified,
+          savedToPlayer: result.savedToPlayer,
+          trackerLink: result.trackerLink,
         });
         return;
       }
@@ -119,6 +131,25 @@ export default function YuniteEpicLookupCard({ discordUserId }: YuniteEpicLookup
                 Epic ID: {lookupState.epicAccountId ?? "—"}
               </p>
               <p>Verified via Yunite: {lookupState.verified ? "Yes" : "No"}</p>
+              {lookupState.trackerLink && (
+                <p className="break-all">
+                  Tracker:{" "}
+                  <a
+                    href={lookupState.trackerLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center text-primary hover:underline font-mono text-xs"
+                  >
+                    {lookupState.trackerLink}
+                    <ExternalLink className="ml-1 h-3 w-3 shrink-0" />
+                  </a>
+                </p>
+              )}
+              {lookupState.savedToPlayer && (
+                <p className="text-muted-foreground">
+                  Saved to player record — Summer Re-Eval will use this Epic ID in tracker links.
+                </p>
+              )}
             </AlertDescription>
           </Alert>
         )}
@@ -136,8 +167,6 @@ export default function YuniteEpicLookupCard({ discordUserId }: YuniteEpicLookup
             <AlertDescription>{lookupState.message}</AlertDescription>
           </Alert>
         )}
-
-        {/* TODO: Add "Save to player record" once staff can confirm lookup results. */}
       </CardContent>
     </Card>
   );

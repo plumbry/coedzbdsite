@@ -2,6 +2,7 @@
 
 import { v } from "convex/values";
 import { action } from "../_generated/server";
+import { api } from "../_generated/api";
 import { requireAdminAction } from "../auth_helpers";
 import {
   formatYuniteLookupError,
@@ -16,18 +17,24 @@ export type YuniteEpicLookupStatus = "success" | "not_found" | "error";
 export type YuniteEpicLookupResult = {
   status: YuniteEpicLookupStatus;
   epicDisplayName?: string;
+  /** Hex Epic account ID, e.g. d249eb8fff944ac4a55fa63f8a6a0d11 */
   epicAccountId?: string;
   verified?: boolean;
+  savedToPlayer?: boolean;
+  trackerLink?: string;
   errorMessage?: string;
 };
 
 /**
  * Look up a Discord user's Yunite-verified Epic registration via Get User Links.
- * Read-only: does not mutate player records.
+ * When playerId is provided, saves the hex Epic account ID onto the player record
+ * so Summer Re-Eval can build Fortnite Tracker URLs like:
+ * https://fortnitetracker.com/profile/all/{epicAccountId}
  */
 export const lookupEpicRegistrationByDiscordId = action({
   args: {
     discordUserId: v.string(),
+    playerId: v.optional(v.id("players")),
   },
   handler: async (ctx, args): Promise<YuniteEpicLookupResult> => {
     await requireAdminAction(ctx);
@@ -92,11 +99,24 @@ export const lookupEpicRegistrationByDiscordId = action({
         epicName: epicDisplayName,
       });
 
+      let savedToPlayer = false;
+      if (args.playerId && epicAccountId) {
+        await ctx.runMutation(api.yunite.updatePlayerEpicId, {
+          playerId: args.playerId,
+          epicId: epicAccountId,
+        });
+        savedToPlayer = true;
+      }
+
       return {
         status: "success",
         epicDisplayName,
         epicAccountId,
         verified: isYuniteVerifiedRegistration(registration),
+        savedToPlayer,
+        trackerLink: epicAccountId
+          ? `https://fortnitetracker.com/profile/all/${encodeURIComponent(epicAccountId)}`
+          : undefined,
       };
     }
 
@@ -107,10 +127,6 @@ export const lookupEpicRegistrationByDiscordId = action({
       notFound: linksResult.notFound,
       entryCount: linksResult.entries.length,
     });
-
     return { status: "not_found" };
   },
 });
-
-// TODO: Add an admin mutation to save/sync epicAccountId + epicUsername onto the
-// player record after staff confirm a lookup result (preserve previousEpicIds history).

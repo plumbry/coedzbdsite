@@ -725,10 +725,10 @@ export default function BigSummerReEvalDashboard() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-5">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between xl:gap-3">
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 2xl:grid-cols-5">
               <Select value={filter} onValueChange={(value) => setFilter(value as DashboardFilter)}>
-                <SelectTrigger className="w-full min-w-0 xl:w-[180px]">
+                <SelectTrigger size="sm" className="h-8 w-full min-w-0 px-2 text-xs xl:h-9 xl:w-[180px] xl:px-3 xl:text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -740,7 +740,9 @@ export default function BigSummerReEvalDashboard() {
                 </SelectContent>
               </Select>
               <Select value={eventsFilter} onValueChange={(value) => setEventsFilter(value as EventsFilter)}>
-                <SelectTrigger className="w-full min-w-0 xl:w-[150px]"><SelectValue placeholder="Events" /></SelectTrigger>
+                <SelectTrigger size="sm" className="h-8 w-full min-w-0 px-2 text-xs xl:h-9 xl:w-[150px] xl:px-3 xl:text-sm">
+                  <SelectValue placeholder="Events" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Events</SelectItem>
                   <SelectItem value="0">0 Events</SelectItem>
@@ -749,7 +751,9 @@ export default function BigSummerReEvalDashboard() {
                 </SelectContent>
               </Select>
               <Select value={triageFilter} onValueChange={(value) => setTriageFilter(value as TriageFilter)}>
-                <SelectTrigger className="w-full min-w-0 xl:w-[190px]"><SelectValue placeholder="Triage" /></SelectTrigger>
+                <SelectTrigger size="sm" className="h-8 w-full min-w-0 px-2 text-xs xl:h-9 xl:w-[190px] xl:px-3 xl:text-sm">
+                  <SelectValue placeholder="Triage" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Triage</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
@@ -759,7 +763,9 @@ export default function BigSummerReEvalDashboard() {
                 </SelectContent>
               </Select>
               <Select value={adminFilter} onValueChange={setAdminFilter}>
-                <SelectTrigger className="w-full min-w-0 xl:w-[180px]"><SelectValue placeholder="Admin" /></SelectTrigger>
+                <SelectTrigger size="sm" className="h-8 w-full min-w-0 px-2 text-xs xl:h-9 xl:w-[180px] xl:px-3 xl:text-sm">
+                  <SelectValue placeholder="Admin" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Admins</SelectItem>
                   <SelectItem value="unassigned">Unassigned</SelectItem>
@@ -769,7 +775,9 @@ export default function BigSummerReEvalDashboard() {
                 </SelectContent>
               </Select>
               <Select value={yuniteFilter} onValueChange={(value) => setYuniteFilter(value as YuniteFilter)}>
-                <SelectTrigger className="w-full min-w-0 xl:w-[160px]"><SelectValue placeholder="Yunite Data" /></SelectTrigger>
+                <SelectTrigger size="sm" className="col-span-2 h-8 w-full min-w-0 px-2 text-xs sm:col-span-1 xl:h-9 xl:w-[160px] xl:px-3 xl:text-sm">
+                  <SelectValue placeholder="Yunite Data" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Yunite</SelectItem>
                   <SelectItem value="yes">Yunite: Yes</SelectItem>
@@ -779,9 +787,9 @@ export default function BigSummerReEvalDashboard() {
             </div>
             <div className="w-full max-w-md">
               <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground xl:top-2.5 xl:h-4 xl:w-4" />
                 <Input
-                  className="pl-8"
+                  className="h-8 pl-8 text-xs xl:h-9 xl:text-sm"
                   placeholder="Search name, Discord, Epic, tier, admin, notes..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}

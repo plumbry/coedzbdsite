@@ -202,7 +202,10 @@ export default function PlayerProfileContent({ playerId }: PlayerProfileContentP
       </Card>
 
       {isAdmin && (
-        <YuniteEpicLookupCard discordUserId={player.discordUserId} />
+        <YuniteEpicLookupCard
+          discordUserId={player.discordUserId}
+          playerId={player._id}
+        />
       )}
       
       {/* Performance Tabs */}
