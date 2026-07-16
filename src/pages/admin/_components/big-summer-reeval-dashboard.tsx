@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -167,6 +167,8 @@ export default function BigSummerReEvalDashboard() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
   const [trackerLinkDraft, setTrackerLinkDraft] = useState("");
+  const [isSavingTrackerLink, setIsSavingTrackerLink] = useState(false);
+  const [detailLoadedFor, setDetailLoadedFor] = useState<Id<"bigSummerReEval"> | null>(null);
 
   const workflowState = useQuery(api.bigSummerReEval.queries.getWorkflowState, {});
   const finalReview = useQuery(
@@ -262,10 +264,46 @@ export default function BigSummerReEvalDashboard() {
     }
   };
 
-  const openDetail = (id: Id<"bigSummerReEval">, row?: { notes?: string; fortniteTrackerLink?: string }) => {
+  const openDetail = (id: Id<"bigSummerReEval">) => {
     setSelectedId(id);
-    setNotesDraft(row?.notes ?? "");
-    setTrackerLinkDraft(row?.fortniteTrackerLink ?? "");
+    setNotesDraft("");
+    setTrackerLinkDraft("");
+    setDetailLoadedFor(null);
+  };
+
+  useEffect(() => {
+    if (!selectedId) {
+      setDetailLoadedFor(null);
+      return;
+    }
+    if (!selectedDetail || selectedDetail._id !== selectedId) return;
+    if (detailLoadedFor === selectedId) return;
+    setNotesDraft(selectedDetail.notes ?? "");
+    setTrackerLinkDraft(selectedDetail.fortniteTrackerLink ?? "");
+    setDetailLoadedFor(selectedId);
+  }, [selectedId, selectedDetail, detailLoadedFor]);
+
+  const handleSaveTrackerLink = async () => {
+    if (!selectedId) return;
+    const normalizedLink = trackerLinkDraft.trim();
+    if (!normalizedLink) {
+      toast.error("Tracker link is required");
+      return;
+    }
+
+    setIsSavingTrackerLink(true);
+    try {
+      await updateTrackerLink({
+        reEvalId: selectedId,
+        fortniteTrackerLink: normalizedLink,
+      });
+      setTrackerLinkDraft(normalizedLink);
+      toast.success("Tracker link updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update tracker link");
+    } finally {
+      setIsSavingTrackerLink(false);
+    }
   };
 
   const openScoreDialog = (row: DashboardRow) => {
@@ -367,7 +405,7 @@ export default function BigSummerReEvalDashboard() {
           reEvalId: scoreRow._id,
           ...scores,
         });
-        openDetail(scoreRow._id, scoreRow);
+        openDetail(scoreRow._id);
       }}
     />
   ) : null;
@@ -631,9 +669,10 @@ export default function BigSummerReEvalDashboard() {
                 Summer Re-Eval
               </CardTitle>
               <CardDescription className="max-w-2xl">
-                Member Management re-eval mode. All active members are automatically
-                included — review everyone and record a Summer-only decision. These
-                results do not update the main player list or Discord roles.
+                Member Management re-eval mode. Only active members with the Yunite
+                Verified Discord role are included — review everyone in that set and
+                record a Summer-only decision. These results do not update the main
+                player list or Discord roles.
               </CardDescription>
               {progress.enrolled > 0 && (
                 <div className="mt-3 space-y-2 text-sm text-muted-foreground">
@@ -779,7 +818,7 @@ export default function BigSummerReEvalDashboard() {
                           <Button
                             size="sm"
                             className="h-7 shrink-0 px-2 text-xs"
-                            onClick={() => openDetail(row._id, row)}
+                            onClick={() => openDetail(row._id)}
                           >
                             Review
                           </Button>
@@ -908,7 +947,7 @@ export default function BigSummerReEvalDashboard() {
                             <Button
                               size="sm"
                               className="h-7 px-2 text-xs"
-                              onClick={() => openDetail(row._id, row)}
+                              onClick={() => openDetail(row._id)}
                             >
                               Review
                             </Button>
@@ -969,20 +1008,31 @@ export default function BigSummerReEvalDashboard() {
 
               <div className="space-y-2">
                 <Label>Fortnite Tracker Link</Label>
-                <div className="flex gap-2">
-                  <Input value={trackerLinkDraft} onChange={(e) => setTrackerLinkDraft(e.target.value)} />
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={trackerLinkDraft}
+                    onChange={(e) => setTrackerLinkDraft(e.target.value)}
+                    placeholder="https://fortnitetracker.com/profile/all/..."
+                  />
                   <Button
                     size="sm"
-                    onClick={() =>
-                      selectedId &&
-                      runAction("Tracker link updated", () =>
-                        updateTrackerLink({ reEvalId: selectedId, fortniteTrackerLink: trackerLinkDraft }),
-                      )
-                    }
+                    className="shrink-0"
+                    disabled={isSavingTrackerLink}
+                    onClick={() => void handleSaveTrackerLink()}
                   >
-                    Save
+                    {isSavingTrackerLink ? "Saving..." : "Save"}
                   </Button>
                 </div>
+                {selectedDetail.fortniteTrackerLink && (
+                  <a
+                    href={selectedDetail.fortniteTrackerLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center text-xs text-primary hover:underline"
+                  >
+                    Open saved link <ExternalLink className="ml-1 h-3 w-3" />
+                  </a>
+                )}
               </div>
 
               <div className="space-y-2">

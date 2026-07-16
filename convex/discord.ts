@@ -7,7 +7,7 @@ import { relinkEventResultsForPlayer } from "./helpers/playerResults";
 import { syncPlayerDiscordAliases } from "./helpers/playerDiscordAliases";
 import { internal } from "./_generated/api";
 import { diffPatch } from "./helpers/patchIfChanged";
-import { ensurePlayerEnrolledInReEval } from "./bigSummerReEval/helpers";
+import { ensurePlayerEnrolledInReEval, syncDashboardCacheForPlayer } from "./bigSummerReEval/helpers";
 import {
   syncPlayerImportLookupForPlayer,
   upsertPlayerImportLookup,
@@ -607,6 +607,7 @@ export const backfillEpicUsernamesFromDiscord = mutation({
         await ctx.db.patch(player._id, {
           epicUsername: expectedEpicUsername,
         });
+        await syncDashboardCacheForPlayer(ctx, player._id);
         updated++;
       }
     }
@@ -1185,6 +1186,13 @@ export const syncDiscordMembersBatch = internalMutation({
           });
           await syncPlayerImportLookupForPlayer(ctx, existingPlayer._id);
           if (
+            changedFields.nickname !== undefined ||
+            changedFields.epicUsername !== undefined ||
+            changedFields.discordRoles !== undefined
+          ) {
+            await syncDashboardCacheForPlayer(ctx, existingPlayer._id);
+          }
+          if (
             changedFields.currentMembershipStatus !== undefined ||
             changedFields.tier !== undefined
           ) {
@@ -1443,6 +1451,13 @@ export const upsertDiscordMember = internalMutation({
           alternateDiscordUserIds: existingPlayer.alternateDiscordUserIds,
         });
         await syncPlayerImportLookupForPlayer(ctx, existingPlayer._id);
+        if (
+          changedFields.nickname !== undefined ||
+          changedFields.epicUsername !== undefined ||
+          changedFields.discordRoles !== undefined
+        ) {
+          await syncDashboardCacheForPlayer(ctx, existingPlayer._id);
+        }
       }
 
       const autoAccepted = await autoAcceptPendingApplicationForDiscordMember(ctx, {

@@ -8,22 +8,12 @@ import {
 } from "../helpers/femaleVerification";
 import { getManualScoreForPlayer } from "../helpers/manualScores";
 import { compareTiers } from "../helpers/tierSort";
-
-// Tier role names expected in Discord
-const TIER_ROLE_NAMES = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
-
-/** Yunite verified — required to surface "missing tier role" mismatches */
-const YUNITE_VERIFIED_ROLE_ID = "1371623256855154818";
+import { hasYuniteVerifiedRole } from "../lib/tierDiscordRoles";
 
 /** Woman verified — female-scored players need this before missing tier role is flagged */
 const WOMAN_VERIFIED_ROLE_NAME = "Woman Verified";
 
-function hasDiscordRole(
-  roles: { id: string; name: string }[] | undefined,
-  roleId: string,
-): boolean {
-  return (roles ?? []).some((role) => role.id === roleId);
-}
+const TIER_ROLE_NAMES = ["Tier S", "Tier A", "Tier B", "Tier C", "Tier D"];
 
 function hasDiscordRoleNamed(
   roles: { id: string; name: string }[] | undefined,
@@ -167,7 +157,7 @@ export const getTierMismatches = query({
       let mismatchStatus: MismatchStatus | null = null;
 
       if (discordTierRoles.length === 0) {
-        if (hasDiscordRole(player.discordRoles, YUNITE_VERIFIED_ROLE_ID)) {
+        if (hasYuniteVerifiedRole(player.discordRoles)) {
           const gender = resolvePlayerGender(player, score);
           const isFemale = gender === 50;
           const lacksWomanVerified =

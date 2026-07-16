@@ -11,12 +11,64 @@ import {
   type ReEvalStatus,
   type TrackerStatus,
 } from "./constants";
-import { getDiscordTierRoleFromRoles } from "../lib/tierDiscordRoles";
+import { getDiscordTierRoleFromRoles, hasYuniteVerifiedRole } from "../lib/tierDiscordRoles";
 
 const RECENT_JOIN_MS = 30 * 24 * 60 * 60 * 1000;
 
+export function isSummerReEvalEligible(
+  player: Pick<Doc<"players">, "status" | "currentMembershipStatus" | "discordRoles">,
+): boolean {
+  return (
+    player.status === "active" &&
+    player.currentMembershipStatus === "accepted" &&
+    hasYuniteVerifiedRole(player.discordRoles)
+  );
+}
+
 export function defaultTrackerLink(epicUsername: string): string {
   return `https://fortnitetracker.com/profile/all/${encodeURIComponent(epicUsername)}`;
+}
+
+/** Discord server nickname is the Epic name when present. */
+export function resolveTrackerEpicUsername(
+  player: Pick<Doc<"players">, "nickname" | "epicUsername" | "discordUsername">,
+): string {
+  const nickname = player.nickname?.trim();
+  if (nickname) return nickname;
+  const epicUsername = player.epicUsername?.trim();
+  if (epicUsername) return epicUsername;
+  return player.discordUsername.trim();
+}
+
+export function isTrackerLinkManuallySet(reEval: Doc<"bigSummerReEval">): boolean {
+  return reEval.trackerLinkManuallySet === true;
+}
+
+export async function resolveAutoTrackerLink(
+  ctx: QueryCtx | MutationCtx,
+  player: Doc<"players">,
+): Promise<string | undefined> {
+  const nickname = player.nickname?.trim();
+  if (nickname) {
+    return defaultTrackerLink(nickname);
+  }
+
+  const epicUsername = resolveTrackerEpicUsername(player);
+  if (!epicUsername) return undefined;
+
+  const appLink = await getAcceptedApplicationTrackerLink(ctx, player._id);
+  return appLink ?? defaultTrackerLink(epicUsername);
+}
+
+export async function resolveTrackerLinkForReEval(
+  ctx: QueryCtx | MutationCtx,
+  player: Doc<"players">,
+  reEval: Doc<"bigSummerReEval">,
+): Promise<string | undefined> {
+  if (isTrackerLinkManuallySet(reEval) && reEval.fortniteTrackerLink?.trim()) {
+    return reEval.fortniteTrackerLink.trim();
+  }
+  return resolveAutoTrackerLink(ctx, player);
 }
 
 export async function getReEvalByPlayerId(
@@ -46,6 +98,28 @@ export function inferInitialTrackerStatus(
 ): TrackerStatus {
   if (!trackerLink?.trim()) return "private";
   return "public";
+}
+
+export function normalizeFortniteTrackerLink(link: string): string {
+  const trimmed = link.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+export async function syncAcceptedApplicationTrackerLink(
+  ctx: MutationCtx,
+  playerId: Id<"players">,
+  fortniteTrackerLink: string,
+) {
+  const application = await ctx.db
+    .query("applications")
+    .withIndex("by_player_id", (q) => q.eq("playerId", playerId))
+    .filter((q) => q.eq(q.field("status"), "accepted"))
+    .first();
+  if (application && application.fortniteProfileLink !== fortniteTrackerLink) {
+    await ctx.db.patch(application._id, { fortniteProfileLink: fortniteTrackerLink });
+  }
 }
 
 export function memberResponseBlocksDeadline(
@@ -185,7 +259,7 @@ export function enrichPlayerRow(
     discordId: player.discordUserId,
     discordUsername: player.discordUsername,
     epicId: player.epicId,
-    epicUsername: player.epicUsername,
+    epicUsername: resolveTrackerEpicUsername(player),
     fortniteTrackerLink: trackerLink ?? reEval.fortniteTrackerLink,
     currentTier: player.tier,
     currentDiscordTierRole: discordTierRole?.name ?? null,
@@ -238,7 +312,7 @@ function suggestTriageOutcome(
       reason: "Recently joined member with limited activity history.",
     };
   }
-  if (reEval.trackerStatus === "private" || !trackerLink?.trim()) {
+  if (!trackerLink?.trim()) {
     return {
       outcome: "private_tracker",
       reason: "Tracker unavailable.",
@@ -303,8 +377,7 @@ async function upsertDashboardCacheRow(
 ) {
   const row = enrichPlayerRow(reEval, player, trackerLink, null);
   const triageSuggestion = suggestTriageOutcome(reEval, player, trackerLink);
-  const isActiveAccepted =
-    player.status === "active" && player.currentMembershipStatus === "accepted";
+  const isActiveAccepted = isSummerReEvalEligible(player);
   const cachedAt = Date.now();
   const patch = {
     reEvalId: reEval._id,
@@ -325,8 +398,8 @@ async function upsertDashboardCacheRow(
     evaluationTargetTier: row.evaluationTargetTier,
     evaluatedAt: row.evaluatedAt,
     triageOutcome: row.triageOutcome,
-    triageSuggestedOutcome: row.triageSuggestedOutcome ?? triageSuggestion.outcome,
-    triageSuggestionReason: row.triageSuggestionReason ?? triageSuggestion.reason,
+    triageSuggestedOutcome: triageSuggestion.outcome,
+    triageSuggestionReason: triageSuggestion.reason,
     triagedAt: row.triagedAt,
     summerTotalScore: row.summerTotalScore,
     summerTier: row.summerTier,
@@ -356,16 +429,35 @@ export async function syncDashboardCacheForReEval(
   ctx: MutationCtx,
   reEvalId: Id<"bigSummerReEval">,
 ) {
-  const reEval = await ctx.db.get(reEvalId);
+  let reEval = await ctx.db.get(reEvalId);
   if (!reEval) return;
   const player = await ctx.db.get(reEval.playerId);
   if (!player) return;
-  const appLink = await getAcceptedApplicationTrackerLink(ctx, player._id);
-  const trackerLink =
-    reEval.fortniteTrackerLink ??
-    appLink ??
-    (player.epicUsername ? defaultTrackerLink(player.epicUsername) : undefined);
+
+  const trackerLink = await resolveTrackerLinkForReEval(ctx, player, reEval);
+  if (
+    !isTrackerLinkManuallySet(reEval) &&
+    trackerLink &&
+    reEval.fortniteTrackerLink !== trackerLink
+  ) {
+    await ctx.db.patch(reEvalId, {
+      fortniteTrackerLink: trackerLink,
+      lastUpdatedAt: Date.now(),
+    });
+    reEval = { ...reEval, fortniteTrackerLink: trackerLink };
+  }
+
   await upsertDashboardCacheRow(ctx, reEval, player, trackerLink);
+}
+
+export async function syncDashboardCacheForPlayer(
+  ctx: MutationCtx,
+  playerId: Id<"players">,
+) {
+  await ensurePlayerEnrolledInReEval(ctx, playerId);
+  const reEval = await getReEvalByPlayerId(ctx, playerId);
+  if (!reEval) return;
+  await syncDashboardCacheForReEval(ctx, reEval._id);
 }
 
 export async function rebuildDashboardCache(
@@ -374,14 +466,7 @@ export async function rebuildDashboardCache(
   const reEvalRows = await ctx.db.query("bigSummerReEval").collect();
   let cached = 0;
   for (const reEval of reEvalRows) {
-    const player = await ctx.db.get(reEval.playerId);
-    if (!player) continue;
-    const appLink = await getAcceptedApplicationTrackerLink(ctx, player._id);
-    const trackerLink =
-      reEval.fortniteTrackerLink ??
-      appLink ??
-      (player.epicUsername ? defaultTrackerLink(player.epicUsername) : undefined);
-    await upsertDashboardCacheRow(ctx, reEval, player, trackerLink);
+    await syncDashboardCacheForReEval(ctx, reEval._id);
     cached += 1;
   }
   return { cached };
@@ -532,15 +617,14 @@ export async function ensurePlayerEnrolledInReEval(
 ): Promise<boolean> {
   const player = await ctx.db.get(playerId);
   if (!player) return false;
-  if (player.status !== "active" || player.currentMembershipStatus !== "accepted") {
+  if (!isSummerReEvalEligible(player)) {
     return false;
   }
 
   const existing = await getReEvalByPlayerId(ctx, playerId);
   if (existing) return false;
 
-  const appLink = await getAcceptedApplicationTrackerLink(ctx, playerId);
-  const trackerLink = appLink ?? defaultTrackerLink(player.epicUsername);
+  const trackerLink = await resolveAutoTrackerLink(ctx, player);
   const now = Date.now();
 
   await ctx.db.insert("bigSummerReEval", {
@@ -548,6 +632,7 @@ export async function ensurePlayerEnrolledInReEval(
     trackerStatus: inferInitialTrackerStatus(trackerLink),
     reEvalStatus: "unchecked",
     fortniteTrackerLink: trackerLink,
+    trackerLinkManuallySet: false,
     memberResponse: "unset",
     lastUpdatedAt: now,
   });
@@ -565,7 +650,7 @@ export async function ensureAllActivePlayersEnrolled(
   let created = 0;
   let enrolled = 0;
   for (const player of activePlayers) {
-    if (player.status !== "active") continue;
+    if (!isSummerReEvalEligible(player)) continue;
     enrolled += 1;
     const wasCreated = await ensurePlayerEnrolledInReEval(ctx, player._id);
     if (wasCreated) created += 1;
@@ -579,7 +664,7 @@ export async function countActivePlayersForReEval(ctx: QueryCtx | MutationCtx) {
     .query("players")
     .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
     .collect();
-  return activePlayers.filter((player) => player.status === "active").length;
+  return activePlayers.filter((player) => isSummerReEvalEligible(player)).length;
 }
 
 export async function countEnrolledActivePlayers(ctx: QueryCtx | MutationCtx) {
@@ -588,7 +673,7 @@ export async function countEnrolledActivePlayers(ctx: QueryCtx | MutationCtx) {
   for (const reEval of reEvalRows) {
     const player = await ctx.db.get(reEval.playerId);
     if (!player) continue;
-    if (player.status === "active" && player.currentMembershipStatus === "accepted") {
+    if (player && isSummerReEvalEligible(player)) {
       enrolled += 1;
     }
   }

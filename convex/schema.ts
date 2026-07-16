@@ -2332,6 +2332,8 @@ export default defineSchema({
       v.literal("retired"),
     ),
     fortniteTrackerLink: v.optional(v.string()),
+    /** When true, fortniteTrackerLink was set manually and should not be auto-refreshed. */
+    trackerLinkManuallySet: v.optional(v.boolean()),
     trackerRequestSentAt: v.optional(v.number()),
     deadlineAt: v.optional(v.number()),
     extensionGranted: v.optional(v.boolean()),

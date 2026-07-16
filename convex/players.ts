@@ -26,6 +26,7 @@ import {
 } from "./helpers/playerImportLookup";
 import { syncPlayerDiscordAliases } from "./helpers/playerDiscordAliases";
 import { relinkEventResultsForPlayer } from "./helpers/playerResults";
+import { syncDashboardCacheForPlayer } from "./bigSummerReEval/helpers";
 
 export const getPlayers = query({
   args: {},
@@ -740,6 +741,9 @@ export const updatePlayer = mutation({
     // Update player
     await ctx.db.patch(args.playerId, patchData);
     await syncPlayerImportLookupForPlayer(ctx, args.playerId);
+    if (args.epicUsername !== existingPlayer.epicUsername) {
+      await syncDashboardCacheForPlayer(ctx, args.playerId);
+    }
     
     // Log audit
     await logAudit(ctx, {
@@ -816,6 +820,9 @@ export const updatePlayerProfile = mutation({
     // Update player
     await ctx.db.patch(args.playerId, patchData);
     await syncPlayerImportLookupForPlayer(ctx, args.playerId);
+    if (args.epicUsername !== existingPlayer.epicUsername) {
+      await syncDashboardCacheForPlayer(ctx, args.playerId);
+    }
     
     // Log audit
     await logAudit(ctx, {

@@ -7,10 +7,10 @@ import type { DashboardFilter } from "./constants";
 import { DASHBOARD_TIER_FILTERS } from "./constants";
 import {
   enrichPlayerRow,
-  getAcceptedApplicationTrackerLink,
   getReEvalByPlayerId,
   countActivePlayersForReEval,
   countEnrolledActivePlayers,
+  resolveTrackerLinkForReEval,
 } from "./helpers";
 
 const WORKFLOW_STATE_KEY = "summer_reeval";
@@ -215,13 +215,7 @@ export const getPlayerDetail = query({
     if (!reEval) return null;
     const player = await ctx.db.get(reEval.playerId);
     if (!player) return null;
-    const appLink = await getAcceptedApplicationTrackerLink(ctx, player._id);
-    const trackerLink =
-      reEval.fortniteTrackerLink ??
-      appLink ??
-      (player.epicUsername
-        ? `https://fortnitetracker.com/profile/all/${encodeURIComponent(player.epicUsername)}`
-        : undefined);
+    const trackerLink = await resolveTrackerLinkForReEval(ctx, player, reEval);
     const queueItems = await ctx.db
       .query("tierRoleChangeQueue")
       .withIndex("by_player", (q) => q.eq("playerId", player._id))

@@ -13,6 +13,8 @@ import {
 import {
   writeReEvalAudit,
   ensureAllActivePlayersEnrolled,
+  normalizeFortniteTrackerLink,
+  syncAcceptedApplicationTrackerLink,
   syncDashboardCacheForReEval,
 } from "./helpers";
 import { updateTierEvalForPlayerIfEligible } from "../lib/stats/updateTierEvalForPlayer";
@@ -350,18 +352,33 @@ export const updateTrackerLink = mutation({
     const reEval = await ctx.db.get(args.reEvalId);
     if (!reEval) throw new Error("Re-eval record not found");
 
-    await patchReEval(
-      ctx,
-      reEval._id,
-      reEval.playerId,
-      admin,
-      { fortniteTrackerLink: args.fortniteTrackerLink },
-      {
-        action: "big_summer_reeval_tracker_link_updated",
-        previousValue: reEval.fortniteTrackerLink,
-        newValue: args.fortniteTrackerLink,
-      },
-    );
+    const fortniteTrackerLink = normalizeFortniteTrackerLink(args.fortniteTrackerLink);
+    if (!fortniteTrackerLink) {
+      throw new Error("Tracker link is required");
+    }
+
+    const patch: Record<string, unknown> = {
+      fortniteTrackerLink,
+      trackerLinkManuallySet: true,
+      trackerStatus: "public",
+    };
+    if (
+      reEval.reEvalStatus === "private_tracker" ||
+      reEval.trackerStatus === "private" ||
+      reEval.triageOutcome === "private_tracker"
+    ) {
+      patch.reEvalStatus = "unchecked";
+      if (reEval.triageOutcome === "private_tracker") {
+        patch.triageOutcome = undefined;
+      }
+    }
+
+    await patchReEval(ctx, reEval._id, reEval.playerId, admin, patch, {
+      action: "big_summer_reeval_tracker_link_updated",
+      previousValue: reEval.fortniteTrackerLink,
+      newValue: fortniteTrackerLink,
+    });
+    await syncAcceptedApplicationTrackerLink(ctx, reEval.playerId, fortniteTrackerLink);
   },
 });
 
