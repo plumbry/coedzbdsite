@@ -165,7 +165,7 @@ function EvidenceFormFields({
       </div>
 
       <div className="space-y-2">
-        <Label>Notes (optional)</Label>
+        <Label>Notes (e.g. What Scrim is this from?)</Label>
         <Textarea
           value={notes}
           onChange={(event) => onNotesChange(event.target.value)}
