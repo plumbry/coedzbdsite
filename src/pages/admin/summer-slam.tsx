@@ -953,7 +953,7 @@ export default function SummerSlamAdminPage() {
                     className={fieldClass}
                     value={evidenceInstructions}
                     onChange={(event) => setEvidenceInstructions(event.target.value)}
-                    placeholder="Upload screenshots to https://postimages.org/ and paste the link. Video clips: YouTube, Twitch, TikTok, Medal, Streamable, Discord, etc."
+                    placeholder="Upload screenshots to https://postimages.org/ and paste the link. Video clips: Medal, Streamable, Twitch, TikTok, Discord, etc."
                   />
                   <p className="text-xs text-muted-foreground">Markdown supported for links and formatting.</p>
                 </div>

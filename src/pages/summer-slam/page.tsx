@@ -58,7 +58,7 @@ const STEPS = [
   {
     icon: Upload,
     title: "Submit Evidence",
-    body: "For manual quests, paste a public evidence link — screenshots via postimages.org, or clips via Medal/YouTube. Only submit when you meet the requirements.",
+    body: "For manual quests, paste a public evidence link — screenshots via postimages.org, or clips via Medal/Streamable. Only submit when you meet the requirements.",
   },
   {
     icon: UserCheck,
@@ -98,6 +98,7 @@ const LITTLE_PRIZE_EXAMPLES = [
   "Gifted Emotes",
   "Nitro Basic",
   "Discord Badge",
+  "Discord Role",
   "1 Week GIF Use in Scrim Chats",
 ] as const;
 
@@ -107,7 +108,6 @@ const BIG_PRIZE_EXAMPLES = [
   "Gifted Skins",
   "Steam Gift Cards",
   "Nitro",
-  "Discord Role",
 ] as const;
 
 function getPrizeItems() {
@@ -185,29 +185,29 @@ export default function SummerSlamLandingPage() {
           <PassportHero title={campaign?.title ?? "Summer Slam Passport"} />
 
           <div className="flex flex-col gap-4">
-            <div className="mx-auto flex w-full max-w-md flex-row items-center justify-center gap-2.5 sm:max-w-none sm:gap-3">
+            <div className="mx-auto flex w-full flex-row items-center justify-center gap-3 sm:gap-3">
               {!isLoaded || campaign === undefined || isPassportStatusLoading ? (
-                <Skeleton className={cn("h-11 flex-1 max-w-[11rem]", ssSkeleton)} />
+                <Skeleton className={cn("h-14 flex-1 sm:h-11 sm:max-w-[11rem]", ssSkeleton)} />
               ) : !canEnterPassport ? (
                 isSignedIn ? (
-                  <Button asChild className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6">
+                  <Button asChild className="min-h-14 flex-1 px-5 text-base font-semibold touch-manipulation sm:min-h-11 sm:flex-none sm:px-6 sm:text-sm">
                     <Link to="/summer-slam/passport">Coming Soon</Link>
                   </Button>
                 ) : (
-                  <Button disabled className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6">
+                  <Button disabled className="min-h-14 flex-1 px-5 text-base font-semibold touch-manipulation sm:min-h-11 sm:flex-none sm:px-6 sm:text-sm">
                     Coming Soon
                   </Button>
                 )
               ) : isSignedIn ? (
                   hasPassport ? (
-                    <Button asChild className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6">
+                    <Button asChild className="min-h-14 flex-1 px-5 text-base font-semibold touch-manipulation sm:min-h-11 sm:flex-none sm:px-6 sm:text-sm">
                       <Link to="/summer-slam/passport">
                         {isAdminPreview ? "Preview Passport" : "My Passport"}
                       </Link>
                     </Button>
                   ) : (
                     <Button
-                      className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6"
+                      className="min-h-14 flex-1 px-5 text-base font-semibold touch-manipulation sm:min-h-11 sm:flex-none sm:px-6 sm:text-sm"
                       disabled={isClaimingPassport}
                       onClick={() => void handleClaimPassport()}
                     >
@@ -220,7 +220,7 @@ export default function SummerSlamLandingPage() {
                   )
                 ) : (
                   <SignInButton
-                    className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6"
+                    className="min-h-14 flex-1 px-5 text-base font-semibold touch-manipulation sm:min-h-11 sm:flex-none sm:px-6 sm:text-sm"
                     signInText="Sign in with Discord"
                     showIcon={false}
                   />
@@ -229,7 +229,7 @@ export default function SummerSlamLandingPage() {
               <Button
                 asChild
                 variant="outline"
-                className="min-h-11 flex-1 px-4 text-sm touch-manipulation sm:flex-none sm:px-6"
+                className="min-h-14 flex-1 px-5 text-base font-semibold touch-manipulation sm:min-h-11 sm:flex-none sm:px-6 sm:text-sm"
               >
                 <Link to="/support">Site Support</Link>
               </Button>

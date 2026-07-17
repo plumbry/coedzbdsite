@@ -59,7 +59,7 @@ Watch Discord for the Summer Slam launch announcement.`;
 
 export const UPLOAD_FAILED_MESSAGE = `Host your screenshot on a public image site (we recommend postimages.org), then paste the direct link.
 
-Video clips should also be submitted as a link (Medal, YouTube, Twitch, etc.).`;
+Video clips should also be submitted as a link (Medal, Streamable, Twitch, etc.).`;
 
 export const SUBMISSION_ALREADY_SUBMITTED_MESSAGE = `This quest already has evidence waiting for staff review.
 
@@ -112,7 +112,7 @@ export function mapEnsurePassportError(message: string) {
 }
 
 export const CLIP_LINK_HELPER =
-  "Upload your clip to Discord, Medal, YouTube, Twitch, TikTok, Streamable or another hosting platform, then paste the link below.";
+  "Upload your clip to Discord, Medal, Streamable, Twitch, TikTok or another hosting platform, then paste the link below.";
 
 export const SCREENSHOT_LINK_HELPER =
   "Upload your screenshot to Postimages or another public image host, then paste the direct link below.";
