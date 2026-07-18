@@ -3,7 +3,7 @@ import type { SealProgress } from "@/pages/summer-slam/_components/passport-seal
 
 export function passportHolderSlug(name: string) {
   const slug = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return slug.length > 0 ? slug.slice(0, 16) : "HOLDER";
+  return slug.length > 0 ? slug.slice(0, 20) : "HOLDER";
 }
 
 export function buildPassportNumber(playerName: string) {

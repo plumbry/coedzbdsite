@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/utils.ts";
+import { passportHolderSlug } from "@/lib/passport-certificate-export.ts";
 import {
   Select,
   SelectContent,
@@ -159,11 +160,6 @@ function BonusSealButton({
       <p className={cn(STAMP_PROGRESS_CLASS, "text-violet-700/60")}>{progressLabel}</p>
     </div>
   );
-}
-
-function passportHolderSlug(name: string) {
-  const slug = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return slug.length > 0 ? slug.slice(0, 16) : "HOLDER";
 }
 
 function mrzPad(value: string, length: number) {
