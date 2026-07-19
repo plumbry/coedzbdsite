@@ -5,6 +5,8 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { getDisplayName, requireAdmin } from "./auth_helpers";
+import { getDiscordUserIdFromIdentity } from "./auth_discord";
+import { findPlayerByDiscordUserId } from "./helpers/playerDiscordAliases";
 
 const DEFAULT_CAMPAIGN_SLUG = "summer-slam";
 const DEFAULT_CAMPAIGN_TITLE = "Summer Slam Passport";
@@ -267,14 +269,29 @@ async function resolveCurrentPlayer(ctx: QueryCtx | MutationCtx) {
     .query("users")
     .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
     .first();
-  const discordUserId = user?.discordUserId ?? null;
-  if (!discordUserId) return { user, player: null, discordUserId: null };
 
-  const player = await ctx.db
-    .query("players")
-    .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", discordUserId))
-    .first();
-  return { user, player, discordUserId };
+  const storedDiscordId = user?.discordUserId ?? null;
+  const identityDiscordId = getDiscordUserIdFromIdentity(identity);
+  const discordCandidates = [...new Set(
+    [storedDiscordId, identityDiscordId].filter((id): id is string => Boolean(id)),
+  )];
+
+  if (discordCandidates.length === 0) {
+    return { user, player: null, discordUserId: null };
+  }
+
+  for (const discordUserId of discordCandidates) {
+    const player = await findPlayerByDiscordUserId(ctx, discordUserId);
+    if (player) {
+      return { user, player, discordUserId };
+    }
+  }
+
+  return {
+    user,
+    player: null,
+    discordUserId: storedDiscordId ?? identityDiscordId,
+  };
 }
 
 async function requireCurrentPassport(
@@ -291,6 +308,18 @@ async function requireCurrentPassport(
         "We couldn’t find a ZBD player profile linked to your Discord account. Please make sure you’ve played/registered with this Discord account or contact staff.",
       code: "PLAYER_NOT_LINKED",
     });
+  }
+
+  // Keep the site user Discord link in sync when JWT / alias resolution found a match.
+  if (user.discordUserId !== discordUserId) {
+    const owners = await ctx.db
+      .query("users")
+      .withIndex("by_discord_user_id", (q) => q.eq("discordUserId", discordUserId))
+      .collect();
+    const conflict = owners.find((owner) => owner._id !== user._id);
+    if (!conflict) {
+      await ctx.db.patch(user._id, { discordUserId });
+    }
   }
 
   const existing = await ctx.db
