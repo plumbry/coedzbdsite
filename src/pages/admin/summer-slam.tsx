@@ -284,7 +284,7 @@ export default function SummerSlamAdminPage() {
   const eventSort = useColumnSort<"event" | "date" | "type" | "mode" | "teamFormat" | "status">("date", "desc");
   const reviewSort = useColumnSort<"player" | "quest" | "submitted">("submitted", "desc");
   const passportSort = useColumnSort<
-    "player" | "discordUser" | "created" | "approvedPoints" | "littleTickets" | "bigTickets" | "completedQuests"
+    "player" | "discordUser" | "created" | "approvedPoints" | "littleTickets" | "bigTickets"
   >("created", "desc");
   const { isAdmin } = useUserRole();
 
@@ -450,9 +450,6 @@ export default function SummerSlamAdminPage() {
           break;
         case "bigTickets":
           comparison = a.bigWheelEntries - b.bigWheelEntries;
-          break;
-        case "completedQuests":
-          comparison = a.completedQuests - b.completedQuests;
           break;
       }
       return comparison * direction;
@@ -1437,9 +1434,34 @@ export default function SummerSlamAdminPage() {
 
           <TabsContent value="passports" className="mt-0">
             <Card>
-              <CardHeader>
-                <CardTitle>Player Passports</CardTitle>
-                <CardDescription>Automatically created passports for players who visited the campaign page.</CardDescription>
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1.5">
+                  <CardTitle>Player Passports</CardTitle>
+                  <CardDescription>
+                    Automatically created passports for players who visited the campaign page. Approved
+                    points drive Little/Big ticket totals (usually 1 point per completed quest).
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() =>
+                    downloadCsv(
+                      "summer-slam-passport-tickets.csv",
+                      sortedPassports.map((row) => ({
+                        discordUsername: row.player?.discordUsername ?? "",
+                        epicUsername: row.player?.epicUsername ?? "",
+                        siteUser: row.user?.discordUsername ?? row.user?.username ?? row.user?.name ?? "",
+                        approvedPoints: row.approvedStamps,
+                        littleTickets: row.littleWheelEntries,
+                        bigTickets: row.bigWheelEntries,
+                        createdAt: new Date(row.passport.createdAt).toISOString(),
+                      })),
+                    )
+                  }
+                >
+                  <Download className="mr-2 h-4 w-4" /> Export Tickets
+                </Button>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -1487,13 +1509,6 @@ export default function SummerSlamAdminPage() {
                         sortDirection={passportSort.sortDirection}
                         onSort={passportSort.handleSort}
                       />
-                      <SortableHead
-                        label="Completed Quests"
-                        column="completedQuests"
-                        sortColumn={passportSort.sortColumn}
-                        sortDirection={passportSort.sortDirection}
-                        onSort={passportSort.handleSort}
-                      />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1508,7 +1523,6 @@ export default function SummerSlamAdminPage() {
                         <TableCell>{row.approvedStamps}</TableCell>
                         <TableCell>{row.littleWheelEntries}</TableCell>
                         <TableCell>{row.bigWheelEntries}</TableCell>
-                        <TableCell>{row.completedQuests}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
