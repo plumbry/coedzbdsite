@@ -197,7 +197,7 @@ export async function provisionFromIdentity(
   return result.userId;
 }
 
-function readDiscordIdFromClerkUser(
+export function readDiscordIdFromClerkUser(
   externalAccounts: Array<{
     provider?: string;
     provider_user_id?: string;
@@ -254,6 +254,24 @@ export const assertAdminByToken = internalQuery({
   },
 });
 
+/** Stored Discord link for the signed-in site user (avoids Clerk round-trips on claim). */
+export const getDiscordLinkByToken = internalQuery({
+  args: { tokenIdentifier: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", args.tokenIdentifier))
+      .unique();
+    if (!user?.discordUserId) {
+      return null;
+    }
+    return {
+      discordUserId: user.discordUserId,
+      discordUsername: user.discordUsername,
+    };
+  },
+});
+
 export const provisionFromClerkData = internalMutation({
   args: {
     clerkUserId: v.string(),
@@ -300,6 +318,8 @@ type ClerkUserRecord = {
   }>;
 };
 
+const CLERK_FETCH_TIMEOUT_MS = 8_000;
+
 export async function fetchClerkUserById(
   clerkUserId: string,
 ): Promise<ClerkUserRecord | null> {
@@ -308,20 +328,30 @@ export async function fetchClerkUserById(
     return null;
   }
 
-  const response = await fetch(`https://api.clerk.com/v1/users/${clerkUserId}`, {
-    headers: {
-      Authorization: `Bearer ${secret}`,
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CLERK_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(`https://api.clerk.com/v1/users/${clerkUserId}`, {
+      headers: {
+        Authorization: `Bearer ${secret}`,
+      },
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    console.error(
-      `Clerk user fetch failed (${response.status}): ${(await response.text()).slice(0, 200)}`,
-    );
+    if (!response.ok) {
+      console.error(
+        `Clerk user fetch failed (${response.status}): ${(await response.text()).slice(0, 200)}`,
+      );
+      return null;
+    }
+
+    return (await response.json()) as ClerkUserRecord;
+  } catch (error) {
+    console.error("Clerk user fetch error:", error);
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return (await response.json()) as ClerkUserRecord;
 }
 
 export function clerkUserToProvisionArgs(clerkUser: ClerkUserRecord) {

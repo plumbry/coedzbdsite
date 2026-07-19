@@ -119,7 +119,7 @@ export function PassportNextDestination({
             className="mx-auto shrink-0 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 sm:mx-0 sm:self-center"
             aria-label={`View ${meta.title}`}
           >
-            <PassportSealImage meta={meta} state={state} seal={seal} size={ssStampSize.hero} showProgressRing />
+            <PassportSealImage meta={meta} state={state} seal={seal} size={ssStampSize.hero} />
           </button>
 
           <div className="min-w-0 flex-1 space-y-3">

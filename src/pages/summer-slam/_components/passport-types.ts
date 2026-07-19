@@ -49,6 +49,12 @@ Refresh the page and check your connection.
 
 If this continues, open a support ticket in Discord.`;
 
+export const PASSPORT_LOAD_FAILED_MESSAGE = `We couldn’t open your passport.
+
+Refresh the page and try again.
+
+If this continues, open a support ticket in Discord.`;
+
 export const NO_QUESTS_TITLE = "Season Setup In Progress";
 
 export const NO_QUESTS_MESSAGE = `Quests are not live yet.
@@ -90,6 +96,8 @@ export function getPassportErrorTitle(message: string) {
   if (message === CAMPAIGN_ENDED_MESSAGE || message === INACTIVE_CAMPAIGN_MESSAGE) {
     return INACTIVE_CAMPAIGN_TITLE;
   }
+  if (message === UNLINKED_MESSAGE) return UNLINKED_TITLE;
+  if (message === PASSPORT_LOAD_TIMEOUT_MESSAGE) return "Passport Unavailable";
   return "Passport Unavailable";
 }
 
@@ -108,7 +116,48 @@ export function mapEnsurePassportError(message: string) {
   ) {
     return UNLINKED_MESSAGE;
   }
-  return PASSPORT_LOAD_TIMEOUT_MESSAGE;
+  if (
+    message.includes("DISCORD_NOT_LINKED") ||
+    message.includes("Sign in with Discord to claim")
+  ) {
+    return `Sign in with the Discord account you use for ZBD events.
+
+Use “Sign in with Discord”, then try Claim Passport again.`;
+  }
+  if (
+    message.includes("taking too long") ||
+    message.includes("timed out") ||
+    message.includes("Timeout")
+  ) {
+    return PASSPORT_LOAD_TIMEOUT_MESSAGE;
+  }
+  return PASSPORT_LOAD_FAILED_MESSAGE;
+}
+
+/** Pull a usable message out of Convex action/mutation client errors. */
+export function extractConvexErrorMessage(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return String(error ?? "");
+  }
+  const record = error as { data?: unknown; message?: unknown };
+  const data = record.data;
+  if (typeof data === "string" && data.trim()) {
+    return data;
+  }
+  if (data && typeof data === "object") {
+    const payload = data as { message?: unknown; code?: unknown };
+    const parts = [
+      typeof payload.message === "string" ? payload.message : "",
+      typeof payload.code === "string" ? payload.code : "",
+    ].filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join(" ");
+    }
+  }
+  if (typeof record.message === "string") {
+    return record.message;
+  }
+  return "";
 }
 
 export const CLIP_LINK_HELPER =

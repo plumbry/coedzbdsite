@@ -5,8 +5,12 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { getDisplayName, requireAdmin } from "./auth_helpers";
-import { getDiscordUserIdFromIdentity } from "./auth_discord";
+import {
+  buildProfilePatch,
+  getDiscordUserIdFromIdentity,
+} from "./auth_discord";
 import { findPlayerByDiscordUserId } from "./helpers/playerDiscordAliases";
+import { provisionViewerUser } from "./userProvisioning";
 
 const DEFAULT_CAMPAIGN_SLUG = "summer-slam";
 const DEFAULT_CAMPAIGN_TITLE = "Summer Slam Passport";
@@ -275,10 +279,6 @@ async function resolveCurrentPlayer(ctx: QueryCtx | MutationCtx) {
   const discordCandidates = [...new Set(
     [storedDiscordId, identityDiscordId].filter((id): id is string => Boolean(id)),
   )];
-
-  if (discordCandidates.length === 0) {
-    return { user, player: null, discordUserId: null };
-  }
 
   for (const discordUserId of discordCandidates) {
     const player = await findPlayerByDiscordUserId(ctx, discordUserId);
@@ -1150,13 +1150,84 @@ export const updateCampaign = mutation({
   },
 });
 
-export const ensureMyPassport = mutation({
-  args: { slug: v.optional(v.string()) },
-  handler: async (ctx, args) => {
+/**
+ * Internal claim step after Discord ID is resolved from Clerk Discord OAuth.
+ */
+export const ensureMyPassportInternal = internalMutation({
+  args: {
+    slug: v.optional(v.string()),
+    discordUserId: v.string(),
+    discordUsername: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<{
+    passportId: Id<"seasonalPassports">;
+    player: {
+      _id: Id<"players">;
+      discordUsername?: string;
+      epicUsername?: string;
+    };
+  }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
+    }
+
+    await provisionViewerUser(ctx, {
+      tokenIdentifier: identity.tokenIdentifier,
+      profilePatch: buildProfilePatch(identity, args.discordUsername),
+      discordUserId: args.discordUserId,
+      auditSource: "passport-claim",
+    });
+
     const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
     const admin = await resolveCurrentAdmin(ctx);
     assertPassportAccessible(campaign, Date.now(), { allowAdminEarlyAccess: !!admin });
-    const { player, passportId } = await requireCurrentPassport(ctx, campaign);
+
+    const player = await findPlayerByDiscordUserId(ctx, args.discordUserId);
+    if (!player) {
+      throw new ConvexError({
+        message:
+          "We couldn’t find a ZBD player profile linked to your Discord account. Please make sure you’ve played/registered with this Discord account or contact staff.",
+        code: "PLAYER_NOT_LINKED",
+      });
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .first();
+    if (!user) {
+      throw new ConvexError({ message: "User not found", code: "NOT_FOUND" });
+    }
+
+    const existing = await ctx.db
+      .query("seasonalPassports")
+      .withIndex("by_campaign_and_player", (q) =>
+        q.eq("campaignId", campaign._id).eq("playerId", player._id),
+      )
+      .first();
+    const now = Date.now();
+    let passportId: Id<"seasonalPassports">;
+    if (existing) {
+      await ctx.db.patch(existing._id, { lastViewedAt: now, userId: user._id });
+      passportId = existing._id;
+    } else {
+      passportId = await ctx.db.insert("seasonalPassports", {
+        campaignId: campaign._id,
+        playerId: player._id,
+        userId: user._id,
+        createdAt: now,
+        lastViewedAt: now,
+      });
+      await logSeasonalAudit(ctx, {
+        campaignId: campaign._id,
+        playerId: player._id,
+        adminId: user._id,
+        action: "passport_created",
+        note: player.discordUsername ?? args.discordUserId,
+      });
+    }
+
     return {
       passportId,
       player: {
@@ -1165,6 +1236,49 @@ export const ensureMyPassport = mutation({
         epicUsername: player.epicUsername,
       },
     };
+  },
+});
+
+/**
+ * @deprecated Prefer seasonalClaim.ensureMyPassport (fetches Discord ID from Clerk).
+ * Kept so older clients keep working after Discord IDs were backfilled on users.
+ */
+export const ensureMyPassport = mutation({
+  args: { slug: v.optional(v.string()) },
+  handler: async (ctx, args): Promise<{
+    passportId: Id<"seasonalPassports">;
+    player: {
+      _id: Id<"players">;
+      discordUsername?: string;
+      epicUsername?: string;
+    };
+  }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError({ message: "Not authenticated", code: "UNAUTHENTICATED" });
+    }
+
+    const discordUserId =
+      getDiscordUserIdFromIdentity(identity) ??
+      (
+        await ctx.db
+          .query("users")
+          .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+          .first()
+      )?.discordUserId;
+
+    if (!discordUserId) {
+      throw new ConvexError({
+        message:
+          "Sign in with Discord to claim your passport. We couldn’t find a Discord account on your login.",
+        code: "DISCORD_NOT_LINKED",
+      });
+    }
+
+    return await ctx.runMutation(internal.seasonal.ensureMyPassportInternal, {
+      slug: args.slug,
+      discordUserId,
+    });
   },
 });
 

@@ -97,7 +97,7 @@ function SealDetailBody({
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-4">
-        <PassportSealImage meta={meta} state={seal.state} seal={seal} size={ssStampSize.detail} showProgressRing />
+        <PassportSealImage meta={meta} state={seal.state} seal={seal} size={ssStampSize.detail} />
         <div className="min-w-0 space-y-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-teal-700">
             {destination.name}

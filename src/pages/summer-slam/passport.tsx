@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import AuthGate from "@/components/auth-gate.tsx";
@@ -25,6 +25,7 @@ import {
   CAMPAIGN_ENDED_MESSAGE,
   CAMPAIGN_ENDED_TITLE,
   EVIDENCE_SUBMITTED_SUCCESS_MESSAGE,
+  extractConvexErrorMessage,
   getPassportErrorTitle,
   mapEnsurePassportError,
   PASSPORT_LOAD_TIMEOUT_MESSAGE,
@@ -108,7 +109,7 @@ function PassportContent() {
   const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const { isAdmin } = useUserRole();
 
-  const ensureMyPassport = useMutation(api.seasonal.ensureMyPassport);
+  const ensureMyPassport = useAction(api.seasonalClaim.ensureMyPassport);
   const setPassportAvatar = useMutation(api.seasonal.setPassportAvatar);
   const setPassportBirthplace = useMutation(api.seasonal.setPassportBirthplace);
   const submitEvidence = useMutation(api.seasonal.submitEvidence);
@@ -150,7 +151,7 @@ function PassportContent() {
         setPassportError(PASSPORT_LOAD_TIMEOUT_MESSAGE);
         setIsEnsuringPassport(false);
       }
-    }, 10000);
+    }, 15000);
 
     void ensureMyPassport({ slug: CAMPAIGN_SLUG })
       .then(() => {
@@ -158,9 +159,8 @@ function PassportContent() {
       })
       .catch((error) => {
         console.error(error);
-        const message = String(error?.data?.message || error?.message || "");
         if (!cancelled) {
-          setPassportError(mapEnsurePassportError(message));
+          setPassportError(mapEnsurePassportError(extractConvexErrorMessage(error)));
         }
       })
       .finally(() => {

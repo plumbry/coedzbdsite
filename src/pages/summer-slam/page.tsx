@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useConvexAuth } from "convex/react";
+import { useQuery, useConvexAuth, useAction } from "convex/react";
 import { useAuth } from "@clerk/react";
 import { api } from "@/convex/_generated/api.js";
 import { useUserRole } from "@/hooks/use-user-role.ts";
@@ -36,7 +36,12 @@ import { PassportTicketTotalsPanel } from "./_components/passport-ticket-totals-
 import { PassportLeaderboardPanel } from "./_components/passport-leaderboard-panel.tsx";
 import { PassportHero } from "./_components/passport-hero.tsx";
 import { SEASON_REWARDS } from "./_components/passport-destinations.ts";
-import { CAMPAIGN_SLUG, getPassportErrorTitle, mapEnsurePassportError } from "./_components/passport-types.ts";
+import {
+  CAMPAIGN_SLUG,
+  extractConvexErrorMessage,
+  getPassportErrorTitle,
+  mapEnsurePassportError,
+} from "./_components/passport-types.ts";
 import { Compass, Gift, Stamp, Sun, Trophy, Upload, UserCheck } from "lucide-react";
 
 const LANDING_INTRO_LINES = [
@@ -145,7 +150,7 @@ export default function SummerSlamLandingPage() {
     api.seasonal.getPassport,
     isSignedIn && isConvexAuthenticated ? { slug: CAMPAIGN_SLUG } : "skip",
   );
-  const ensureMyPassport = useMutation(api.seasonal.ensureMyPassport);
+  const ensureMyPassport = useAction(api.seasonalClaim.ensureMyPassport);
 
   const phase = getCampaignPhase(campaign ?? null);
   const statusMessage = isAdminPassportPreview(campaign ?? null, isAdmin)
@@ -164,13 +169,9 @@ export default function SummerSlamLandingPage() {
       await ensureMyPassport({ slug: CAMPAIGN_SLUG });
       navigate("/summer-slam/passport");
     } catch (error) {
-      const message = String(
-        (error as { data?: { message?: string }; message?: string })?.data?.message ||
-          (error as Error)?.message ||
-          "",
-      );
-      toast.error(getPassportErrorTitle(message), {
-        description: mapEnsurePassportError(message),
+      const mapped = mapEnsurePassportError(extractConvexErrorMessage(error));
+      toast.error(getPassportErrorTitle(mapped), {
+        description: mapped,
       });
     } finally {
       setIsClaimingPassport(false);

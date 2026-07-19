@@ -21,7 +21,6 @@ export function PassportSealImage({
   className,
   showBadge = true,
   animateEarned = false,
-  showProgressRing = false,
 }: {
   meta: SealMeta;
   state: SealState;
@@ -32,7 +31,6 @@ export function PassportSealImage({
   className?: string;
   showBadge?: boolean;
   animateEarned?: boolean;
-  showProgressRing?: boolean;
 }) {
   const badgeStatus = seal ? sealBadgeStatus(seal) : null;
   const locked = state === "locked";
@@ -40,13 +38,7 @@ export function PassportSealImage({
   const submitted = state === "submitted";
   const needsChanges = badgeStatus === "needs_changes";
   const inProgress = state === "in_progress" && !needsChanges;
-  const percent = earned ? 100 : (seal?.percent ?? 0);
-  const showRing = showProgressRing && seal && seal.total > 0;
   const hasArtwork = Boolean(meta.image);
-  const strokeWidth = 3;
-  const ringSize = size + 12;
-  const radius = (ringSize - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
   const artwork = hasArtwork ? resolveSealArtwork(meta) : null;
   const src = artwork?.src ?? "";
   const srcSet = artwork?.srcSet ?? "";
@@ -61,58 +53,6 @@ export function PassportSealImage({
       )}
       style={fill ? undefined : { width: size, height: size }}
     >
-      {showRing ? (
-        fill ? (
-          <svg
-            className="pointer-events-none absolute inset-0 h-full w-full -rotate-90"
-            viewBox="0 0 100 100"
-            aria-hidden
-          >
-            <circle cx={50} cy={50} r={46} fill="none" stroke="rgba(249,115,22,0.15)" strokeWidth={2.5} />
-            <circle
-              cx={50}
-              cy={50}
-              r={46}
-              fill="none"
-              stroke={earned ? "#14b8a6" : meta.accent}
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeDasharray={2 * Math.PI * 46}
-              strokeDashoffset={2 * Math.PI * 46 * (1 - percent / 100)}
-              className="transition-[stroke-dashoffset] duration-700"
-            />
-          </svg>
-        ) : (
-          <svg
-            className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90"
-            width={ringSize}
-            height={ringSize}
-            aria-hidden
-          >
-            <circle
-              cx={ringSize / 2}
-              cy={ringSize / 2}
-              r={radius}
-              fill="none"
-              stroke="rgba(249,115,22,0.15)"
-              strokeWidth={strokeWidth}
-            />
-            <circle
-              cx={ringSize / 2}
-              cy={ringSize / 2}
-              r={radius}
-              fill="none"
-              stroke={earned ? "#14b8a6" : meta.accent}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={circumference * (1 - percent / 100)}
-              className="transition-[stroke-dashoffset] duration-700"
-            />
-          </svg>
-        )
-      ) : null}
-
       {hasArtwork ? (
         <img
           src={src}

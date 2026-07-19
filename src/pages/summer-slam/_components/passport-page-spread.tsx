@@ -184,7 +184,6 @@ function LeftPage({
             state={seal.state}
             seal={seal}
             fill
-            showProgressRing
             animateEarned={celebrating}
           />
         </div>

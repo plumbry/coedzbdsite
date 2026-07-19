@@ -92,7 +92,6 @@ function CollectionSealButton({
           seal={seal}
           fill
           showBadge
-          showProgressRing
           animateEarned={isCelebrating}
           className={COLLECTION_STAMP_SLOT}
         />
@@ -152,7 +151,6 @@ function BonusSealButton({
           seal={showArtwork ? bonusSeal : undefined}
           fill
           showBadge={showArtwork}
-          showProgressRing={bonusUnlocked && !earned}
           className={COLLECTION_STAMP_SLOT}
         />
       </button>
@@ -288,7 +286,7 @@ function StampCollectionPanel({
           />
         </div>
       ) : null}
-      <p className="text-[9px] text-center text-orange-800/45 sm:text-[11px] max-sm:hidden">Tap a stamp to open its passport page</p>
+      <p className="text-[9px] text-center text-orange-800/45 sm:text-[11px]">Tap a stamp to open its passport page</p>
     </section>
   );
 }
