@@ -16,6 +16,8 @@ import { getDisplayName } from "./auth_helpers";
 import { logAudit } from "./helpers/audit";
 import type { Doc, Id } from "./_generated/dataModel";
 
+const CLERK_FETCH_TIMEOUT_MS = 8_000;
+
 /** Legacy Hercules rows awaiting a first Clerk Discord login. */
 export function isUnlinkedMigrationUser(user: Doc<"users">): boolean {
   return user.tokenIdentifier.startsWith("https://hercules.app|");
@@ -204,6 +206,7 @@ export function readDiscordIdFromClerkUser(
     username?: string;
     external_id?: string;
     account_id?: string;
+    [key: string]: unknown;
   }> | undefined,
 ): { discordUserId?: string; discordUsername?: string } {
   if (!externalAccounts) {
@@ -211,28 +214,121 @@ export function readDiscordIdFromClerkUser(
   }
 
   const discord = externalAccounts.find((account) =>
-    (account.provider ?? "").toLowerCase().includes("discord"),
+    String(account.provider ?? "")
+      .toLowerCase()
+      .includes("discord"),
   );
 
   if (!discord) {
     return {};
   }
 
-  const candidates = [
+  const preferred = [
     discord.provider_user_id,
     discord.external_id,
     discord.account_id,
   ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && isValidDiscordSnowflake(candidate)) {
+  for (const candidate of preferred) {
+    const snowflake = asDiscordSnowflake(candidate);
+    if (snowflake) {
       return {
-        discordUserId: candidate.trim(),
-        discordUsername: discord.username?.trim(),
+        discordUserId: snowflake,
+        discordUsername:
+          typeof discord.username === "string" ? discord.username.trim() : undefined,
+      };
+    }
+  }
+
+  // Clerk payloads vary by API version — scan the Discord account object for a snowflake.
+  for (const value of Object.values(discord)) {
+    const snowflake = asDiscordSnowflake(value);
+    if (snowflake) {
+      return {
+        discordUserId: snowflake,
+        discordUsername:
+          typeof discord.username === "string" ? discord.username.trim() : undefined,
       };
     }
   }
 
   return {};
+}
+
+function asDiscordSnowflake(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return asDiscordSnowflake(String(Math.trunc(value)));
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return isValidDiscordSnowflake(trimmed) ? trimmed : null;
+}
+
+function readDiscordIdFromPublicMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): string | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+  return (
+    asDiscordSnowflake(metadata.discord_id) ??
+    asDiscordSnowflake(metadata.discordId) ??
+    undefined
+  );
+}
+
+/**
+ * Ensure Clerk public_metadata.discord_id is set so the Convex JWT template claim works.
+ * The external_accounts shortcode does not populate in the convex JWT (see IMPLEMENTATION_NOTES.md).
+ */
+export async function ensureClerkPublicDiscordMetadata(
+  clerkUserId: string,
+  discordUserId: string,
+  existingPublicMetadata?: Record<string, unknown> | null,
+): Promise<boolean> {
+  const current = readDiscordIdFromPublicMetadata(existingPublicMetadata);
+  if (current === discordUserId) {
+    return false;
+  }
+
+  const secret = process.env.CLERK_SECRET_KEY;
+  if (!secret) {
+    return false;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CLERK_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      `https://api.clerk.com/v1/users/${clerkUserId}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          public_metadata: { discord_id: discordUserId },
+        }),
+        signal: controller.signal,
+      },
+    );
+
+    if (!response.ok) {
+      console.error(
+        `Clerk metadata patch failed (${response.status}): ${(await response.text()).slice(0, 200)}`,
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Clerk metadata patch error:", error);
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export const assertAdminByToken = internalQuery({
@@ -309,16 +405,16 @@ type ClerkUserRecord = {
   first_name?: string | null;
   last_name?: string | null;
   email_addresses?: Array<{ email_address?: string }>;
+  public_metadata?: Record<string, unknown> | null;
   external_accounts?: Array<{
     provider?: string;
     provider_user_id?: string;
     username?: string;
     external_id?: string;
     account_id?: string;
+    [key: string]: unknown;
   }>;
 };
-
-const CLERK_FETCH_TIMEOUT_MS = 8_000;
 
 export async function fetchClerkUserById(
   clerkUserId: string,
@@ -354,13 +450,30 @@ export async function fetchClerkUserById(
   }
 }
 
+export function resolveDiscordFromClerkUser(clerkUser: ClerkUserRecord): {
+  discordUserId?: string;
+  discordUsername?: string;
+} {
+  const fromAccounts = readDiscordIdFromClerkUser(clerkUser.external_accounts);
+  if (fromAccounts.discordUserId) {
+    return fromAccounts;
+  }
+
+  const fromMeta = readDiscordIdFromPublicMetadata(clerkUser.public_metadata ?? undefined);
+  if (fromMeta) {
+    return { discordUserId: fromMeta, discordUsername: fromAccounts.discordUsername };
+  }
+
+  return {};
+}
+
 export function clerkUserToProvisionArgs(clerkUser: ClerkUserRecord) {
   const primaryEmail = clerkUser.email_addresses?.[0]?.email_address;
   const fullName = [clerkUser.first_name, clerkUser.last_name]
     .filter(Boolean)
     .join(" ")
     .trim();
-  const discord = readDiscordIdFromClerkUser(clerkUser.external_accounts);
+  const discord = resolveDiscordFromClerkUser(clerkUser);
 
   return {
     clerkUserId: clerkUser.id,
@@ -400,6 +513,8 @@ export const syncUsersFromClerk = action({
     let created = 0;
     let updated = 0;
     let clerkTotal = 0;
+    let discordLinked = 0;
+    let metadataSynced = 0;
 
     while (true) {
       const response = await fetch(
@@ -429,6 +544,28 @@ export const syncUsersFromClerk = action({
       for (const clerkUser of clerkUsers) {
         const args = clerkUserToProvisionArgs(clerkUser);
 
+        if (args.discordUserId) {
+          discordLinked += 1;
+          const patched = await ensureClerkPublicDiscordMetadata(
+            clerkUser.id,
+            args.discordUserId,
+            clerkUser.public_metadata,
+          );
+          if (patched) {
+            metadataSynced += 1;
+          }
+        } else if (clerkUser.external_accounts?.length) {
+          console.warn(
+            `Clerk user ${clerkUser.id} has external_accounts but no Discord snowflake`,
+            clerkUser.external_accounts.map((account) => ({
+              provider: account.provider,
+              provider_user_id: account.provider_user_id,
+              external_id: account.external_id,
+              account_id: account.account_id,
+            })),
+          );
+        }
+
         const result = await ctx.runMutation(
           internal.userProvisioning.provisionFromClerkData,
           args,
@@ -447,6 +584,6 @@ export const syncUsersFromClerk = action({
       }
     }
 
-    return { created, updated, clerkTotal };
+    return { created, updated, clerkTotal, discordLinked, metadataSynced };
   },
 });

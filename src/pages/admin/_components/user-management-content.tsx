@@ -138,7 +138,7 @@ export default function UserManagement() {
     try {
       const result = await syncUsersFromClerk({});
       toast.success(
-        `Synced ${result.clerkTotal} Clerk users (${result.created} new, ${result.updated} updated)`,
+        `Synced ${result.clerkTotal} Clerk users (${result.created} new, ${result.updated} updated, ${result.discordLinked} with Discord${result.metadataSynced ? `, ${result.metadataSynced} metadata fixed` : ""})`,
       );
     } catch (error) {
       toast.error(

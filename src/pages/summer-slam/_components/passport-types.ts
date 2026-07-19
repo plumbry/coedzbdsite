@@ -125,6 +125,17 @@ export function mapEnsurePassportError(message: string) {
 Use “Sign in with Discord”, then try Claim Passport again.`;
   }
   if (
+    message.includes("CLERK_USER_FETCH_FAILED") ||
+    message.includes("couldn’t load your Clerk account") ||
+    message.includes("Clerk secret missing")
+  ) {
+    return `We couldn’t reach your login account to read Discord.
+
+Refresh the page and try Claim Passport again.
+
+If this continues, open a support ticket in Discord.`;
+  }
+  if (
     message.includes("taking too long") ||
     message.includes("timed out") ||
     message.includes("Timeout")

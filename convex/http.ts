@@ -3,7 +3,9 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
   clerkUserToProvisionArgs,
+  ensureClerkPublicDiscordMetadata,
   fetchClerkUserById,
+  readDiscordIdFromClerkUser,
 } from "./userProvisioning";
 
 const http = httpRouter();
@@ -595,7 +597,9 @@ http.route({
         );
       }
 
-      // session.created payloads omit external_accounts — fetch the full Clerk user.
+      // Prefer the full Clerk user — webhook payloads often omit or under-specify
+      // Discord external_accounts (especially session.created).
+      const clerkUser = await fetchClerkUserById(clerkUserId);
       let provisionArgs:
         | {
             clerkUserId: string;
@@ -605,14 +609,7 @@ http.route({
             discordUserId?: string;
             discordUsername?: string;
           }
-        | null = null;
-
-      if (event.type === "session.created" || !event.data.external_accounts) {
-        const clerkUser = await fetchClerkUserById(clerkUserId);
-        if (clerkUser) {
-          provisionArgs = clerkUserToProvisionArgs(clerkUser);
-        }
-      }
+        | null = clerkUser ? clerkUserToProvisionArgs(clerkUser) : null;
 
       if (!provisionArgs) {
         const primaryEmail = event.data.email_addresses?.[0]?.email_address;
@@ -620,26 +617,24 @@ http.route({
           .filter(Boolean)
           .join(" ")
           .trim();
-        const discordAccount = event.data.external_accounts?.find((account) =>
-          (account.provider ?? "").toLowerCase().includes("discord"),
-        );
-        const discordCandidates = [
-          discordAccount?.provider_user_id,
-          discordAccount?.external_id,
-          discordAccount?.account_id,
-        ];
-        const discordUserId = discordCandidates.find(
-          (value) => typeof value === "string" && /^\d{17,20}$/.test(value),
-        );
+        const fromAccounts = readDiscordIdFromClerkUser(event.data.external_accounts);
 
         provisionArgs = {
           clerkUserId,
           name: fullName || event.data.username || undefined,
           email: primaryEmail || undefined,
           username: event.data.username || undefined,
-          discordUserId,
-          discordUsername: discordAccount?.username || undefined,
+          discordUserId: fromAccounts.discordUserId,
+          discordUsername: fromAccounts.discordUsername,
         };
+      }
+
+      if (provisionArgs.discordUserId) {
+        await ensureClerkPublicDiscordMetadata(
+          clerkUserId,
+          provisionArgs.discordUserId,
+          clerkUser?.public_metadata,
+        );
       }
 
       await ctx.runMutation(internal.userProvisioning.provisionFromClerkData, provisionArgs);
