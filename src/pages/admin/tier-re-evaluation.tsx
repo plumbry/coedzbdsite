@@ -105,7 +105,7 @@ function TierReEvaluationContent() {
   const canView = isModeratorOrAdmin;
   
   // ALL HOOKS MUST BE CALLED FIRST (before any conditional returns)
-  const [rebuildRecentOnly, setRebuildRecentOnly] = useState(true);
+  const [rebuildRecentOnly, setRebuildRecentOnly] = useState(false);
   const [sortField, setSortField] = useState<SortField>("tier");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -439,6 +439,13 @@ function TierReEvaluationContent() {
             <p className="text-sm">
               Click the button below to build the cache. This will take approximately 30-60 seconds to compute holistic scores and tier comparisons for all players.
             </p>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+              <Checkbox
+                checked={rebuildRecentOnly}
+                onCheckedChange={(checked) => setRebuildRecentOnly(checked === true)}
+              />
+              6W only (faster; players active in the last 6 weeks)
+            </label>
             <PlayerStatsRebuildButton
               label="Build Cache Now"
               tierEvalOnly
@@ -471,6 +478,13 @@ function TierReEvaluationContent() {
           </CardHeader>
           <CardContent className="space-y-3 py-3">
             <p className="text-sm">Please check the browser console for more details, then try rebuilding the cache.</p>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+              <Checkbox
+                checked={rebuildRecentOnly}
+                onCheckedChange={(checked) => setRebuildRecentOnly(checked === true)}
+              />
+              6W only (faster; players active in the last 6 weeks)
+            </label>
             <PlayerStatsRebuildButton
               label="Rebuild Cache"
               tierEvalOnly
@@ -497,7 +511,14 @@ function TierReEvaluationContent() {
               The cached data has an unexpected format. Please rebuild the cache.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3 py-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+              <Checkbox
+                checked={rebuildRecentOnly}
+                onCheckedChange={(checked) => setRebuildRecentOnly(checked === true)}
+              />
+              6W only (faster; players active in the last 6 weeks)
+            </label>
             <PlayerStatsRebuildButton
               label="Rebuild Cache"
               tierEvalOnly
