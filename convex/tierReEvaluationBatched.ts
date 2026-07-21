@@ -38,7 +38,8 @@ function medianFromSorted(scores: number[]): number {
     : scores[mid];
 }
 
-const SIX_WEEKS_MS = 6 * 7 * 24 * 60 * 60 * 1000;
+const RECENT_EVAL_WEEKS = 8;
+const RECENT_EVAL_MS = RECENT_EVAL_WEEKS * 7 * 24 * 60 * 60 * 1000;
 
 /** Prefer playerStatsCache.lastEventAt; fall back to topFiveCache for older rows. */
 function recentActivityTimestampMs(
@@ -67,7 +68,7 @@ function isEligibleForTierEvalPlayer(
     return true;
   }
 
-  const cutoff = Date.now() - SIX_WEEKS_MS;
+  const cutoff = Date.now() - RECENT_EVAL_MS;
   const mostRecent = recentActivityTimestampMs(
     lastEventAt,
     player.topFiveCache?.mostRecentEventTime,
@@ -832,11 +833,10 @@ async function processBatchHandler(
         }
       }
 
-      // Calculate recent 6-week holistic score
-      const SIX_WEEKS_MS = 6 * 7 * 24 * 60 * 60 * 1000;
-      const recentCutoff = now - SIX_WEEKS_MS;
+      // Calculate recent holistic score (last N weeks)
+      const recentCutoff = now - RECENT_EVAL_MS;
       
-      // Filter results to last 6 weeks
+      // Filter results to the recent evaluation window
       const recentImportIds = new Set<string>();
       const recentResults = allPlayerResults.filter((r) => {
         const eventDate = importDateMap.get(r.importId as string);
@@ -1083,7 +1083,7 @@ export const finalizeRecentTierMediansFromBuild = internalMutation({
   },
 });
 
-// Step 4a: Compute 6-week tier medians from cached recentHolisticScore values.
+// Step 4a: Compute recent tier medians from cached recentHolisticScore values.
 export const computeRecentTierMedians = internalMutation({
   args: {},
   handler: async (

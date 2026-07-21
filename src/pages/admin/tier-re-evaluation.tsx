@@ -115,7 +115,7 @@ function TierReEvaluationContent() {
   const [showTop3sOnly, setShowTop3sOnly] = useState(false);
   const [hideInsufficientData, setHideInsufficientData] = useState(true);
   const [recentWeeksOnly, setRecentWeeksOnly] = useState(false);
-  const RECENT_WEEKS_CUTOFF = 6;
+  const RECENT_WEEKS_CUTOFF = 8;
   const [visibleColumns, setVisibleColumns] = useState({
     tier: true,
     events: true,
@@ -444,7 +444,7 @@ function TierReEvaluationContent() {
                 checked={rebuildRecentOnly}
                 onCheckedChange={(checked) => setRebuildRecentOnly(checked === true)}
               />
-              6W only (faster; players active in the last 6 weeks)
+              8W only (faster; players active in the last 8 weeks)
             </label>
             <PlayerStatsRebuildButton
               label="Build Cache Now"
@@ -483,7 +483,7 @@ function TierReEvaluationContent() {
                 checked={rebuildRecentOnly}
                 onCheckedChange={(checked) => setRebuildRecentOnly(checked === true)}
               />
-              6W only (faster; players active in the last 6 weeks)
+              8W only (faster; players active in the last 8 weeks)
             </label>
             <PlayerStatsRebuildButton
               label="Rebuild Cache"
@@ -517,7 +517,7 @@ function TierReEvaluationContent() {
                 checked={rebuildRecentOnly}
                 onCheckedChange={(checked) => setRebuildRecentOnly(checked === true)}
               />
-              6W only (faster; players active in the last 6 weeks)
+              8W only (faster; players active in the last 8 weeks)
             </label>
             <PlayerStatsRebuildButton
               label="Rebuild Cache"
@@ -665,13 +665,13 @@ function TierReEvaluationContent() {
                         checked={rebuildRecentOnly}
                         onCheckedChange={(checked) => setRebuildRecentOnly(checked === true)}
                       />
-                      6W only
+                      8W only
                     </label>
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
                     <p>
                       {rebuildRecentOnly
-                        ? "Rebuild cache for players active in the last 6 weeks only (faster)."
+                        ? "Rebuild cache for players active in the last 8 weeks only (faster)."
                         : "Rebuild cache for ALL players with match data (slower, 400+ players)."}
                     </p>
                   </TooltipContent>
@@ -691,7 +691,7 @@ function TierReEvaluationContent() {
                   <TooltipContent className="max-w-xs">
                     <p>
                       {rebuildRecentOnly
-                        ? "Rebuild cache for players active in the last 6 weeks only (faster)."
+                        ? "Rebuild cache for players active in the last 8 weeks only (faster)."
                         : "Rebuild cache for ALL players with match data (slower, 400+ players)."}
                     </p>
                   </TooltipContent>
@@ -1083,7 +1083,7 @@ function TierReEvaluationContent() {
                 onChange={(e) => setRecentWeeksOnly(e.target.checked)}
                 className="w-4 h-4"
               />
-              <span className="text-sm font-medium">Last 6 Weeks Holistic Score</span>
+              <span className="text-sm font-medium">Last 8 Weeks Holistic Score</span>
             </label>
           </div>
         </CardContent>
@@ -1095,12 +1095,12 @@ function TierReEvaluationContent() {
           <CardHeader>
             <Link to="/admin/holistic-score-stats">
               <CardTitle className="hover:underline cursor-pointer">
-                {recentWeeksOnly ? "6-Week Tier Medians (Holistic Score) →" : "Tier Medians (Holistic Score) →"}
+                {recentWeeksOnly ? "8-Week Tier Medians (Holistic Score) →" : "Tier Medians (Holistic Score) →"}
               </CardTitle>
             </Link>
             <CardDescription>
               {recentWeeksOnly
-                ? "Median holistic score from last 6 weeks of events per tier"
+                ? "Median holistic score from last 8 weeks of events per tier"
                 : "Median holistic score benchmarks for each tier (players with ≥5 events and score >10, less affected by outliers)"}
             </CardDescription>
           </CardHeader>
@@ -1204,12 +1204,12 @@ function TierReEvaluationContent() {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="cursor-help">
-                              {recentWeeksOnly ? "6W Holistic" : "Holistic Score"} {getSortIcon("holisticScore")}
+                              {recentWeeksOnly ? "8W Holistic" : "Holistic Score"} {getSortIcon("holisticScore")}
                             </div>
                           </TooltipTrigger>
                           <TooltipContent className="max-w-xs">
                             <p className="font-semibold mb-1">
-                              {recentWeeksOnly ? "Last 6 Weeks" : "All-Time"} Composite Score (0-100)
+                              {recentWeeksOnly ? "Last 8 Weeks" : "All-Time"} Composite Score (0-100)
                             </p>
                             <p className="text-xs">Weighted combination of:</p>
                             <ul className="text-xs list-disc list-inside">
@@ -1218,7 +1218,7 @@ function TierReEvaluationContent() {
                               <li>Kills per Match: 33%</li>
                             </ul>
                             {recentWeeksOnly && (
-                              <p className="text-xs mt-1 text-amber-500">Only uses data from events in the last 6 weeks</p>
+                              <p className="text-xs mt-1 text-amber-500">Only uses data from events in the last 8 weeks</p>
                             )}
                           </TooltipContent>
                         </Tooltip>
@@ -1421,7 +1421,7 @@ function TierReEvaluationContent() {
                               <div className="space-y-1">
                                 {recentWeeksOnly ? (
                                   <>
-                                    <p className="font-semibold text-xs">Last 6 Weeks Breakdown:</p>
+                                    <p className="font-semibold text-xs">Last 8 Weeks Breakdown:</p>
                                     <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
                                       <span>Placement:</span>
                                       <span className="font-mono">
@@ -1440,7 +1440,7 @@ function TierReEvaluationContent() {
                                       </span>
                                     </div>
                                     <p className="text-xs pt-1 border-t text-muted-foreground">
-                                      {evaluation.recentTotalEvents ?? 0} events in last 6 weeks
+                                      {evaluation.recentTotalEvents ?? 0} events in last 8 weeks
                                     </p>
                                     <p className="text-xs text-muted-foreground">
                                       All-time: {evaluation.holisticScore != null ? evaluation.holisticScore.toFixed(1) : "N/A"}

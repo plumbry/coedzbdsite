@@ -189,7 +189,7 @@ type PlayerStatsRebuildButtonProps = {
   topFiveOnly?: boolean;
   /** Population average stats cache only. */
   aggregateStatsOnly?: boolean;
-  /** Tier-eval phase: only players with activity in the last 6 weeks (faster). */
+  /** Tier-eval phase: only players with activity in the last 8 weeks (faster). */
   tierEvalRecentOnly?: boolean;
   showPhaseHint?: boolean;
   linkToDataCache?: boolean;
@@ -216,7 +216,7 @@ export function PlayerStatsRebuildProgress({
       {activeRebuildJob.rebuildKindLabel
         ? `${activeRebuildJob.rebuildKindLabel} · ${activeRebuildJob.phaseLabel}`
         : activeRebuildJob.phaseLabel}
-      {activeRebuildJob.tierEvalRecentOnly ? " (6-week tier eval)" : ""}
+      {activeRebuildJob.tierEvalRecentOnly ? " (8-week tier eval)" : ""}
       {activeRebuildJob.phase === "tier_eval" &&
         activeRebuildJob.tierEvalBatchCount > 0 &&
         activeRebuildJob.tierEvalBatch < activeRebuildJob.tierEvalBatchCount && (

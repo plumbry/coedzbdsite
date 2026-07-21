@@ -271,7 +271,7 @@ function DataCacheStatusContent() {
                 <PlayerStatsRebuildButton
                   size="sm"
                   variant="outline"
-                  label="6-week tier eval only"
+                  label="8-week tier eval only"
                   tierEvalOnly
                   tierEvalRecentOnly
                 />

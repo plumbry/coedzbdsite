@@ -1622,7 +1622,7 @@ export default defineSchema({
     recentEvaluationStatus: v.optional(v.string()),
     recentEvaluationStatusRaw: v.optional(v.string()),
     formulaVersion: v.optional(v.number()),
-    // Recent (last 6 weeks) holistic score fields
+    // Recent (last 8 weeks) holistic score fields
     recentHolisticScore: v.optional(v.number()),
     recentRawHolisticScore: v.optional(v.number()),
     recentKillsPerMatch: v.optional(v.number()),
@@ -1634,7 +1634,7 @@ export default defineSchema({
     recentWinRateScore: v.optional(v.number()),
     recentKillsScore: v.optional(v.number()),
     recentDeathsScore: v.optional(v.number()),
-    // Recent (last 6 weeks) tier comparison diffs
+    // Recent (last 8 weeks) tier comparison diffs
     recentHolisticVsSameTier: v.optional(v.number()),
     recentPromotionDiff: v.optional(v.number()),
     recentDemotionDiff: v.optional(v.number()),
@@ -1677,7 +1677,7 @@ export default defineSchema({
       B: v.optional(v.number()),
       C: v.optional(v.number()),
     }),
-    // Recent (last 6 weeks) holistic score medians
+    // Recent (last 8 weeks) holistic score medians
     recentTierHolisticMedians: v.optional(v.object({
       S: v.optional(v.number()),
       A: v.optional(v.number()),

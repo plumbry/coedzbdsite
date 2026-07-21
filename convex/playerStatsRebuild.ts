@@ -405,7 +405,7 @@ export const scheduleFullRebuild = internalMutation({
       if (tierEvalPlayerIds.length === 0) {
         throw new ConvexError({
           message: tierEvalRecentOnly
-            ? 'No players with activity in the last 6 weeks. Uncheck "6W only" and rebuild, or refresh player stats cache first.'
+            ? 'No players with activity in the last 8 weeks. Uncheck "8W only" and rebuild, or refresh player stats cache first.'
             : "No reevaluation-eligible players found. Rebuild the player stats cache first.",
           code: "FAILED_PRECONDITION",
         });
@@ -447,7 +447,7 @@ export const scheduleFullRebuild = internalMutation({
     });
 
     const recentNote = tierEvalRecentOnly
-      ? " (tier evaluation: last 6 weeks only)"
+      ? " (tier evaluation: last 8 weeks only)"
       : "";
     const playerCountNote =
       tierEvalPlayerIds != null ? ` ${tierEvalPlayerIds.length} players.` : "";
@@ -696,7 +696,7 @@ export const processRebuildStep = internalMutation({
           }
         } else if (!tierEvalClearDone) {
           // Resolve eligible players before wiping the cache so an empty
-          // 6-week filter cannot leave the page with no data.
+          // recent-window filter cannot leave the page with no data.
           if (!tierEvalPlayerIds || tierEvalPlayerIds.length === 0) {
             const init = await ctx.runMutation(
               internal.tierReEvaluationBatched.initTierEvalPlayerList,
@@ -707,7 +707,7 @@ export const processRebuildStep = internalMutation({
             if (tierEvalPlayerIds.length === 0) {
               throw new Error(
                 job.tierEvalRecentOnly
-                  ? 'No players with activity in the last 6 weeks. Uncheck "6W only" and rebuild, or refresh player stats cache first.'
+                  ? 'No players with activity in the last 8 weeks. Uncheck "8W only" and rebuild, or refresh player stats cache first.'
                   : "No reevaluation-eligible players found. Rebuild the player stats cache first.",
               );
             }
@@ -760,7 +760,7 @@ export const processRebuildStep = internalMutation({
             if (tierEvalPlayerIds.length === 0) {
               throw new Error(
                 job.tierEvalRecentOnly
-                  ? 'No players with activity in the last 6 weeks. Uncheck "6W only" and rebuild, or refresh player stats cache first.'
+                  ? 'No players with activity in the last 8 weeks. Uncheck "8W only" and rebuild, or refresh player stats cache first.'
                   : "No reevaluation-eligible players found. Rebuild the player stats cache first.",
               );
             }
