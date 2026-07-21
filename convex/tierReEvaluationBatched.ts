@@ -38,9 +38,26 @@ function medianFromSorted(scores: number[]): number {
     : scores[mid];
 }
 
+const SIX_WEEKS_MS = 6 * 7 * 24 * 60 * 60 * 1000;
+
+/** Prefer playerStatsCache.lastEventAt; fall back to topFiveCache for older rows. */
+function recentActivityTimestampMs(
+  lastEventAt: string | undefined,
+  topFiveMostRecent: number | undefined,
+): number | undefined {
+  if (lastEventAt) {
+    const ts = new Date(lastEventAt).getTime();
+    if (!Number.isNaN(ts)) {
+      return ts;
+    }
+  }
+  return topFiveMostRecent;
+}
+
 function isEligibleForTierEvalPlayer(
   player: Doc<"players">,
   recentOnly: boolean,
+  lastEventAt?: string,
 ): boolean {
   if (!isActivePlayerWithMatchData(player)) {
     return false;
@@ -50,10 +67,23 @@ function isEligibleForTierEvalPlayer(
     return true;
   }
 
-  const SIX_WEEKS_MS = 6 * 7 * 24 * 60 * 60 * 1000;
   const cutoff = Date.now() - SIX_WEEKS_MS;
-  const mostRecent = player.topFiveCache?.mostRecentEventTime;
+  const mostRecent = recentActivityTimestampMs(
+    lastEventAt,
+    player.topFiveCache?.mostRecentEventTime,
+  );
   return mostRecent !== undefined && mostRecent >= cutoff;
+}
+
+async function getPlayerStatsCacheLastEventAt(
+  ctx: MutationCtx,
+  playerId: Id<"players">,
+): Promise<string | undefined> {
+  const row = await ctx.db
+    .query("playerStatsCache")
+    .withIndex("by_player", (q) => q.eq("playerId", playerId))
+    .first();
+  return row?.lastEventAt;
 }
 
 async function buildTierMediansEligiblePlayerIds(
@@ -81,13 +111,40 @@ async function buildTierEvalEligiblePlayerIds(
   ctx: MutationCtx,
   recentOnly: boolean,
 ): Promise<Id<"players">[]> {
-  const ids = await listEligibleMatchDataPlayerIds(ctx);
-  const eligible: Id<"players">[] = [];
+  const fromCache = await ctx.db
+    .query("playerStatsCache")
+    .withIndex("by_reevaluation_eligible", (q) => q.eq("reevaluationEligible", true))
+    .collect();
 
-  for (const playerId of ids) {
-    const player = await ctx.db.get(playerId);
-    if (player && isEligibleForTierEvalPlayer(player, recentOnly)) {
-      eligible.push(playerId);
+  const players: Doc<"players">[] = [];
+  const lastEventAtByPlayer = new Map<Id<"players">, string | undefined>();
+
+  for (const row of fromCache) {
+    const player = await ctx.db.get(row.playerId);
+    if (
+      !player ||
+      !isActivePlayerWithMatchData(player) ||
+      !player.discordUserId ||
+      player.discordUserId === "" ||
+      player.discordUserId === "imported" ||
+      player.discordUserId.startsWith("placeholder_")
+    ) {
+      continue;
+    }
+    lastEventAtByPlayer.set(player._id, row.lastEventAt);
+    players.push(player);
+  }
+
+  const eligible: Id<"players">[] = [];
+  for (const player of filterVisibleMembers(players)) {
+    if (
+      isEligibleForTierEvalPlayer(
+        player,
+        recentOnly,
+        lastEventAtByPlayer.get(player._id),
+      )
+    ) {
+      eligible.push(player._id);
     }
   }
 
@@ -966,19 +1023,24 @@ export const processOneTierEvalPlayerStep = internalMutation({
     const nextPlayerIndex = args.playerIndex + 1;
     let processed = 0;
 
-    if (player && isEligibleForTierEvalPlayer(player, args.recentOnly)) {
-      try {
-        const result = await processBatchHandler(ctx, {
-          batchNumber: 0,
-          recentOnly: args.recentOnly,
-          playerIds: [player._id],
-        });
-        processed = result.processed;
-      } catch (error) {
-        console.error(
-          `[tierReEvaluationBatched] player eval failed for ${player.discordUsername}:`,
-          error,
-        );
+    if (player) {
+      const lastEventAt = args.recentOnly
+        ? await getPlayerStatsCacheLastEventAt(ctx, player._id)
+        : undefined;
+      if (isEligibleForTierEvalPlayer(player, args.recentOnly, lastEventAt)) {
+        try {
+          const result = await processBatchHandler(ctx, {
+            batchNumber: 0,
+            recentOnly: args.recentOnly,
+            playerIds: [player._id],
+          });
+          processed = result.processed;
+        } catch (error) {
+          console.error(
+            `[tierReEvaluationBatched] player eval failed for ${player.discordUsername}:`,
+            error,
+          );
+        }
       }
     }
 

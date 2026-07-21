@@ -1,6 +1,7 @@
 import { useEffect, type ComponentProps } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
@@ -22,6 +23,23 @@ function claimRebuildJobToast(jobId: string) {
 
 function watchRebuildJob(jobId: string) {
   watchedRebuildJobId = jobId;
+}
+
+function rebuildErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ConvexError) {
+    if (
+      typeof error.data === "object" &&
+      error.data !== null &&
+      "message" in error.data &&
+      typeof (error.data as { message: unknown }).message === "string"
+    ) {
+      return (error.data as { message: string }).message;
+    }
+    if (typeof error.data === "string") {
+      return error.data;
+    }
+  }
+  return error instanceof Error ? error.message : fallback;
 }
 
 /** Toast when a watched rebuild completes or fails (including stale-job auto-fail). */
@@ -112,7 +130,7 @@ export function PlayerStatsRebuildRunningAlert() {
       }
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to cancel player stats rebuild",
+        rebuildErrorMessage(error, "Failed to cancel player stats rebuild"),
       );
     }
   };
@@ -278,7 +296,7 @@ export function PlayerStatsRebuildButton({
       toast.success(result.message);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to start player stats rebuild",
+        rebuildErrorMessage(error, "Failed to start player stats rebuild"),
       );
     }
   };

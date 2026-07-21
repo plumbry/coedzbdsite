@@ -394,6 +394,24 @@ export const scheduleFullRebuild = internalMutation({
             ? "aggregate_stats"
             : args.stopAfterPhase;
 
+    const tierEvalRecentOnly = args.tierEvalRecentOnly ?? false;
+    let tierEvalPlayerIds: Id<"players">[] | undefined;
+    if (tierEvalOnly) {
+      const init = await ctx.runMutation(
+        internal.tierReEvaluationBatched.initTierEvalPlayerList,
+        { recentOnly: tierEvalRecentOnly },
+      );
+      tierEvalPlayerIds = init.playerIds;
+      if (tierEvalPlayerIds.length === 0) {
+        throw new ConvexError({
+          message: tierEvalRecentOnly
+            ? 'No players with activity in the last 6 weeks. Uncheck "6W only" and rebuild, or refresh player stats cache first.'
+            : "No reevaluation-eligible players found. Rebuild the player stats cache first.",
+          code: "FAILED_PRECONDITION",
+        });
+      }
+    }
+
     const now = Date.now();
     const jobId = await ctx.db.insert("playerStatsRebuildJobs", {
       status: "running",
@@ -401,6 +419,7 @@ export const scheduleFullRebuild = internalMutation({
       playersCursor: null,
       tierEvalBatch: 0,
       tierEvalBatchCount: 0,
+      tierEvalPlayerIds,
       tierEvalClearDone: false,
       tierEvalMediansDone: false,
       tierEvalInitialized: false,
@@ -411,7 +430,7 @@ export const scheduleFullRebuild = internalMutation({
           ? false
           : (args.includeAggregateStats ?? true),
       stopAfterPhase: endPhase,
-      tierEvalRecentOnly: args.tierEvalRecentOnly ?? false,
+      tierEvalRecentOnly,
       rebuildKind,
       applyDuoAdjustment: args.applyDuoAdjustment ?? false,
       applyTCPenalty: args.applyTCPenalty !== false,
@@ -427,11 +446,13 @@ export const scheduleFullRebuild = internalMutation({
       jobId,
     });
 
-    const recentNote = args.tierEvalRecentOnly
+    const recentNote = tierEvalRecentOnly
       ? " (tier evaluation: last 6 weeks only)"
       : "";
+    const playerCountNote =
+      tierEvalPlayerIds != null ? ` ${tierEvalPlayerIds.length} players.` : "";
     const message = tierEvalOnly
-      ? `Tier evaluation cache rebuild started${recentNote}.`
+      ? `Tier evaluation cache rebuild started${recentNote}.${playerCountNote}`
       : tcDcaOnly
         ? "TC/DCA rebuild started for all players with match data."
         : topFiveOnly
@@ -674,6 +695,34 @@ export const processRebuildStep = internalMutation({
             }
           }
         } else if (!tierEvalClearDone) {
+          // Resolve eligible players before wiping the cache so an empty
+          // 6-week filter cannot leave the page with no data.
+          if (!tierEvalPlayerIds || tierEvalPlayerIds.length === 0) {
+            const init = await ctx.runMutation(
+              internal.tierReEvaluationBatched.initTierEvalPlayerList,
+              { recentOnly: job.tierEvalRecentOnly },
+            );
+            tierEvalPlayerIds = init.playerIds;
+            tierEvalPageIndex = 0;
+            if (tierEvalPlayerIds.length === 0) {
+              throw new Error(
+                job.tierEvalRecentOnly
+                  ? 'No players with activity in the last 6 weeks. Uncheck "6W only" and rebuild, or refresh player stats cache first.'
+                  : "No reevaluation-eligible players found. Rebuild the player stats cache first.",
+              );
+            }
+            await ctx.db.patch(args.jobId, {
+              tierEvalPlayerIds,
+              tierEvalPageIndex,
+              lastProgressAt: Date.now(),
+              totalProcessed: totalProcessed + 1,
+            });
+            await ctx.scheduler.runAfter(0, internal.playerStatsRebuild.processRebuildStep, {
+              jobId: args.jobId,
+            });
+            return;
+          }
+
           const clearStep = await ctx.runMutation(
             internal.tierReEvaluationBatched.clearCacheBatch,
             { cursor: playersCursor },
@@ -708,6 +757,13 @@ export const processRebuildStep = internalMutation({
             );
             tierEvalPlayerIds = init.playerIds;
             tierEvalPageIndex = 0;
+            if (tierEvalPlayerIds.length === 0) {
+              throw new Error(
+                job.tierEvalRecentOnly
+                  ? 'No players with activity in the last 6 weeks. Uncheck "6W only" and rebuild, or refresh player stats cache first.'
+                  : "No reevaluation-eligible players found. Rebuild the player stats cache first.",
+              );
+            }
           }
 
           const playersStep = await ctx.runMutation(
