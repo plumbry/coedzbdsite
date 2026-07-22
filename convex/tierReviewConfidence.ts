@@ -36,7 +36,7 @@ type PlayerReviewRow = {
 
 /**
  * Tier Review Confidence — prioritisation aid for admins.
- * Compares within-tier percentile of Tier Evaluation Score vs Holistic Score.
+ * Includes every player with a holistic cache score (when evaluation score exists).
  * Does not auto-promote or demote anyone.
  */
 export const getTierReviewConfidence = query({
@@ -52,25 +52,25 @@ export const getTierReviewConfidence = query({
       ctx.db.query("tierReEvaluationCache").collect(),
     ]);
 
-    const eligiblePlayers = activePlayers.filter(
-      (p) =>
-        !p.isAlt &&
-        isReviewConfidenceTier(p.tier) &&
-        typeof p.totalScore === "number",
-    );
-
-    const cacheByPlayerId = new Map(
-      cacheRows.map((row) => [row.playerId, row] as const),
-    );
-
-    // Peer groups: evaluation uses all active players in the tier;
-    // holistic uses cache peers currently in that same tier.
+    // Evaluation peer set: all active players with a score in S/A/B/C.
     const evaluationPeersByTier: Record<string, number[]> = {
       S: [],
       A: [],
       B: [],
       C: [],
     };
+    for (const player of activePlayers) {
+      if (
+        player.isAlt ||
+        !isReviewConfidenceTier(player.tier) ||
+        typeof player.totalScore !== "number"
+      ) {
+        continue;
+      }
+      evaluationPeersByTier[player.tier].push(player.totalScore);
+    }
+
+    // Holistic peer set + review candidates: everyone in the holistic cache.
     const holisticPeersByTier: Record<string, number[]> = {
       S: [],
       A: [],
@@ -78,35 +78,75 @@ export const getTierReviewConfidence = query({
       C: [],
     };
 
-    for (const player of eligiblePlayers) {
-      const tier = player.tier!;
-      evaluationPeersByTier[tier].push(player.totalScore!);
+    const playersById = new Map(activePlayers.map((p) => [p._id, p] as const));
 
-      const cached = cacheByPlayerId.get(player._id);
-      if (cached && typeof cached.holisticScore === "number") {
-        holisticPeersByTier[tier].push(cached.holisticScore);
+    // Resolve any cache players not in the active set (still show if they have holistic).
+    const missingIds = cacheRows
+      .map((row) => row.playerId)
+      .filter((id) => !playersById.has(id));
+    if (missingIds.length > 0) {
+      const extras = await Promise.all(missingIds.map((id) => ctx.db.get(id)));
+      for (const player of extras) {
+        if (player) playersById.set(player._id, player);
       }
     }
 
-    const reviews: PlayerReviewRow[] = [];
-    let insufficientHolistic = 0;
+    type CacheCandidate = {
+      cache: (typeof cacheRows)[number];
+      tier: string;
+      evaluationScore: number;
+      discordUsername: string;
+      epicUsername: string;
+      nickname?: string;
+    };
 
-    for (const player of eligiblePlayers) {
-      const tier = player.tier!;
-      const evaluationScore = player.totalScore!;
-      const cached = cacheByPlayerId.get(player._id);
+    const candidates: CacheCandidate[] = [];
+    let insufficientEvaluation = 0;
+    let skippedInvalidTier = 0;
 
-      if (!cached || typeof cached.holisticScore !== "number") {
-        insufficientHolistic += 1;
+    for (const cache of cacheRows) {
+      if (typeof cache.holisticScore !== "number") continue;
+
+      const player = playersById.get(cache.playerId);
+      const tier =
+        (player && isReviewConfidenceTier(player.tier) && player.tier) ||
+        (isReviewConfidenceTier(cache.tier) ? cache.tier : null);
+
+      if (!tier) {
+        skippedInvalidTier += 1;
         continue;
       }
+
+      holisticPeersByTier[tier].push(cache.holisticScore);
+
+      const evaluationScore =
+        typeof player?.totalScore === "number" ? player.totalScore : null;
+      if (evaluationScore === null) {
+        insufficientEvaluation += 1;
+        continue;
+      }
+
+      candidates.push({
+        cache,
+        tier,
+        evaluationScore,
+        discordUsername: player?.discordUsername ?? cache.discordUsername,
+        epicUsername: player?.epicUsername ?? "",
+        nickname: player?.nickname,
+      });
+    }
+
+    const reviews: PlayerReviewRow[] = [];
+
+    for (const candidate of candidates) {
+      const { cache, tier, evaluationScore } = candidate;
 
       const evaluationPercentile = computePercentileRank(
         evaluationScore,
         evaluationPeersByTier[tier],
       );
       const holisticPercentile = computePercentileRank(
-        cached.holisticScore,
+        cache.holisticScore,
         holisticPeersByTier[tier],
       );
 
@@ -117,18 +157,18 @@ export const getTierReviewConfidence = query({
       );
 
       reviews.push({
-        playerId: player._id,
-        discordUsername: player.discordUsername,
-        epicUsername: player.epicUsername,
-        nickname: player.nickname,
+        playerId: cache.playerId,
+        discordUsername: candidate.discordUsername,
+        epicUsername: candidate.epicUsername,
+        nickname: candidate.nickname,
         currentTier: tier,
         evaluationScore,
         evaluationPercentile,
         evaluationLabel: formatPositionLabel(evaluationPercentile, tier),
-        holisticScore: cached.holisticScore,
+        holisticScore: cache.holisticScore,
         holisticPercentile,
         holisticLabel: formatPositionLabel(holisticPercentile, tier),
-        totalEvents: cached.totalEvents,
+        totalEvents: cache.totalEvents,
         confidence: result.confidence,
         confidenceLabel: confidenceLabel(result.confidence),
         stars: result.stars,
@@ -143,13 +183,18 @@ export const getTierReviewConfidence = query({
       const byConfidence =
         confidenceSortRank(a.confidence) - confidenceSortRank(b.confidence);
       if (byConfidence !== 0) return byConfidence;
-      // Within same confidence, larger disagreement / closer to boundary first
       if (a.confidence === "low") {
         return b.percentileGap - a.percentileGap;
       }
       if (a.confidence === "moderate") {
-        const aEdge = Math.min(a.evaluationPercentile, 100 - a.evaluationPercentile);
-        const bEdge = Math.min(b.evaluationPercentile, 100 - b.evaluationPercentile);
+        const aEdge = Math.min(
+          a.evaluationPercentile,
+          100 - a.evaluationPercentile,
+        );
+        const bEdge = Math.min(
+          b.evaluationPercentile,
+          100 - b.evaluationPercentile,
+        );
         return aEdge - bEdge;
       }
       return a.discordUsername.localeCompare(b.discordUsername);
@@ -157,7 +202,8 @@ export const getTierReviewConfidence = query({
 
     const summary = {
       totalCompared: reviews.length,
-      insufficientHolistic,
+      insufficientEvaluation,
+      skippedInvalidTier,
       byConfidence: {
         very_high: reviews.filter((r) => r.confidence === "very_high").length,
         high: reviews.filter((r) => r.confidence === "high").length,
@@ -165,8 +211,7 @@ export const getTierReviewConfidence = query({
         low: reviews.filter((r) => r.confidence === "low").length,
       },
       needsAttention: reviews.filter(
-        (r) =>
-          r.confidence === "low" || r.confidence === "moderate",
+        (r) => r.confidence === "low" || r.confidence === "moderate",
       ).length,
       evaluationPeerCounts: {
         S: evaluationPeersByTier.S.length,

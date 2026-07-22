@@ -138,7 +138,7 @@ function TierReviewConfidenceContent() {
 
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState("all");
-  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("attention");
+  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("all");
   const [sortField, setSortField] = useState<SortField>("confidence");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [displayLimit, setDisplayLimit] = useState(75);
@@ -286,11 +286,11 @@ function TierReviewConfidenceContent() {
               />
             </div>
 
-            {data.summary.insufficientHolistic > 0 && (
+            {data.summary.insufficientEvaluation > 0 && (
               <p className="text-xs text-muted-foreground flex items-start gap-1.5">
                 <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                {data.summary.insufficientHolistic} active players with an evaluation score
-                lack a holistic cache entry (usually under 8 events) and are omitted.
+                {data.summary.insufficientEvaluation} players with a holistic score lack an
+                evaluation score and are omitted from confidence.
               </p>
             )}
 
@@ -301,7 +301,11 @@ function TierReviewConfidenceContent() {
                     <CardTitle className="text-base">Players</CardTitle>
                     <CardDescription>
                       Showing {visible.length} of {filtered.length}
-                      {confidenceFilter === "attention" ? " needing attention" : ""}
+                      {confidenceFilter === "attention"
+                        ? " needing attention"
+                        : confidenceFilter === "all"
+                          ? " with holistic scores"
+                          : ""}
                     </CardDescription>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -339,8 +343,8 @@ function TierReviewConfidenceContent() {
                         setDisplayLimit(75);
                       }}
                     >
-                      <option value="attention">Needs attention</option>
                       <option value="all">All confidence</option>
+                      <option value="attention">Needs attention</option>
                       <option value="low">Low only</option>
                       <option value="moderate">Moderate only</option>
                       <option value="high">High only</option>
