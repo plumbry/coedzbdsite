@@ -11,6 +11,7 @@ import {
   Database,
   Wrench,
   Users,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card.tsx";
@@ -40,6 +41,13 @@ const statsSections: StatsSection[] = [
         description: "Review automatic tier promotion and demotion suggestions.",
         href: "/admin/tier-re-evaluation",
         icon: TrendingUp,
+      },
+      {
+        title: "Tier Review Confidence",
+        description:
+          "See where evaluation and holistic agree — and who is borderline or worth discussing.",
+        href: "/admin/tier-review-confidence",
+        icon: ShieldCheck,
       },
       {
         title: "Holistic Score Stats",

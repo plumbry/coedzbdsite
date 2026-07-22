@@ -7,6 +7,7 @@ import MembersPage from "./pages/Index.tsx";
 import PlayerProfile from "./pages/player-profile/page.tsx";
 
 import TierReEvaluation from "./pages/admin/tier-re-evaluation.tsx";
+import TierReviewConfidencePage from "./pages/admin/tier-review-confidence.tsx";
 import AverageStats from "./pages/admin/average-stats.tsx";
 import HolisticScoreStats from "./pages/admin/holistic-score-stats.tsx";
 import TopFiveDetails from "./pages/admin/top-five-details.tsx";
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminHubPage />} />
             <Route path="tier-re-evaluation" element={<TierReEvaluation />} />
+            <Route path="tier-review-confidence" element={<TierReviewConfidencePage />} />
             <Route path="average-stats" element={<AverageStats />} />
             <Route path="holistic-score-stats" element={<HolisticScoreStats />} />
             <Route path="top-five-details" element={<TopFiveDetails />} />

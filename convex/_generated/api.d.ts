@@ -128,6 +128,7 @@ import type * as lib_stats_playerStatsCacheStatus from "../lib/stats/playerStats
 import type * as lib_stats_rebuildKind from "../lib/stats/rebuildKind.js";
 import type * as lib_stats_syncInternalEventParticipation from "../lib/stats/syncInternalEventParticipation.js";
 import type * as lib_stats_thresholds from "../lib/stats/thresholds.js";
+import type * as lib_stats_tierReviewConfidence from "../lib/stats/tierReviewConfidence.js";
 import type * as lib_stats_types from "../lib/stats/types.js";
 import type * as lib_stats_updatePlayerStatsCache from "../lib/stats/updatePlayerStatsCache.js";
 import type * as lib_stats_updateTierEvalForPlayer from "../lib/stats/updateTierEvalForPlayer.js";
@@ -181,6 +182,7 @@ import type * as thirdParty_relinkResults from "../thirdParty/relinkResults.js";
 import type * as tierHistory from "../tierHistory.js";
 import type * as tierReEvaluation from "../tierReEvaluation.js";
 import type * as tierReEvaluationBatched from "../tierReEvaluationBatched.js";
+import type * as tierReviewConfidence from "../tierReviewConfidence.js";
 import type * as tierSnapshot from "../tierSnapshot.js";
 import type * as topFiveCache from "../topFiveCache.js";
 import type * as userMerge from "../userMerge.js";
@@ -339,6 +341,7 @@ declare const fullApi: ApiFromModules<{
   "lib/stats/rebuildKind": typeof lib_stats_rebuildKind;
   "lib/stats/syncInternalEventParticipation": typeof lib_stats_syncInternalEventParticipation;
   "lib/stats/thresholds": typeof lib_stats_thresholds;
+  "lib/stats/tierReviewConfidence": typeof lib_stats_tierReviewConfidence;
   "lib/stats/types": typeof lib_stats_types;
   "lib/stats/updatePlayerStatsCache": typeof lib_stats_updatePlayerStatsCache;
   "lib/stats/updateTierEvalForPlayer": typeof lib_stats_updateTierEvalForPlayer;
@@ -392,6 +395,7 @@ declare const fullApi: ApiFromModules<{
   tierHistory: typeof tierHistory;
   tierReEvaluation: typeof tierReEvaluation;
   tierReEvaluationBatched: typeof tierReEvaluationBatched;
+  tierReviewConfidence: typeof tierReviewConfidence;
   tierSnapshot: typeof tierSnapshot;
   topFiveCache: typeof topFiveCache;
   userMerge: typeof userMerge;

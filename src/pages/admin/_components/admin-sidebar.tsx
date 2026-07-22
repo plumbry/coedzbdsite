@@ -40,6 +40,7 @@ import {
   Wrench,
   PieChart,
   BarChart3,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role.ts";
@@ -323,6 +324,7 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
         items: [
           { path: "/admin/stats", label: "Analytics Hub", icon: BarChart3 },
           { path: "/admin/tier-re-evaluation", label: "Tier Re-Evaluation", icon: TrendingUp },
+          { path: "/admin/tier-review-confidence", label: "Tier Review Confidence", icon: ShieldCheck },
           { path: "/admin/audience-insights", label: "Audience Insights", icon: PieChart },
         ],
       });
