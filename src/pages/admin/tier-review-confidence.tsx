@@ -248,7 +248,7 @@ function TierRecommendationContent() {
           cmp = a.evaluationScore - b.evaluationScore;
           break;
         case "holistic":
-          cmp = a.holisticScore - b.holisticScore;
+          cmp = a.adjustedHolisticScore - b.adjustedHolisticScore;
           break;
         case "holisticConfidence":
           cmp =
@@ -309,7 +309,7 @@ function TierRecommendationContent() {
       <div className="space-y-6">
         <PageHeader
           title="Tier Recommendation"
-          description="Best-fit from evaluation and holistic scores. Holistic Confidence flags when teammate strength or duo concentration makes performance less trustworthy."
+          description="Best-fit from evaluation and restriction-adjusted holistic. Raw holistic is unchanged for display; adjusted score accounts for teammates vs what ZBD restrictions predict."
           actions={
             <Button variant="outline" size="sm" asChild>
               <Link to="/admin/stats">
@@ -328,11 +328,11 @@ function TierRecommendationContent() {
             </CardTitle>
             <CardDescription className="text-sky-900/80 dark:text-sky-200/80">
               <strong className="text-sky-950 dark:text-sky-100">Holistic Confidence</strong> —
-              how reliable the performance score is (teammate gap vs evaluation ability, duo
-              share, sample size).{" "}
+              reliability after comparing actual teammates to what ZBD tier restrictions
+              (and historical mixes) predict for the player&apos;s evaluation ability.{" "}
               <strong className="text-sky-950 dark:text-sky-100">Recommendation Confidence</strong> —
-              how certain the engine is in its action after reliability weighting. Assigned
-              tier only affects the final action.
+              certainty in the action after that reliability weighting. Expected strong
+              teammates under the rules are not treated as uncertainty.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -377,12 +377,13 @@ function TierRecommendationContent() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Learned tier centers</CardTitle>
+                <CardTitle className="text-base">Learned centers & teammate expectations</CardTitle>
                 <CardDescription>
-                  Median scores by currently assigned tier — classification anchors.
+                  Score medians by assigned tier, plus expected teammate strength by
+                  evaluation ability (restriction prior blended with observed history).
                 </CardDescription>
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent className="pt-0 space-y-3">
                 <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
@@ -396,7 +397,7 @@ function TierRecommendationContent() {
                     </TableHeader>
                     <TableBody>
                       <TableRow>
-                        <TableCell className="font-medium">Evaluation</TableCell>
+                        <TableCell className="font-medium">Evaluation median</TableCell>
                         <TableCell className="tabular-nums">
                           {formatCenter(data.summary.evaluationCenters.S)}
                         </TableCell>
@@ -411,7 +412,7 @@ function TierRecommendationContent() {
                         </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell className="font-medium">Holistic</TableCell>
+                        <TableCell className="font-medium">Holistic median (raw)</TableCell>
                         <TableCell className="tabular-nums">
                           {formatCenter(data.summary.holisticCenters.S)}
                         </TableCell>
@@ -425,9 +426,74 @@ function TierRecommendationContent() {
                           {formatCenter(data.summary.holisticCenters.C)}
                         </TableCell>
                       </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">
+                          Holistic median (adjusted)
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.adjustedHolisticCenters.S)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.adjustedHolisticCenters.A)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.adjustedHolisticCenters.B)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.adjustedHolisticCenters.C)}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">
+                          Expected teammate (ability)
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(
+                            data.summary.expectedTeammateStrengthByAbility.S,
+                          )}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(
+                            data.summary.expectedTeammateStrengthByAbility.A,
+                          )}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(
+                            data.summary.expectedTeammateStrengthByAbility.B,
+                          )}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(
+                            data.summary.expectedTeammateStrengthByAbility.C,
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium text-muted-foreground">
+                          Restriction prior only
+                        </TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          {formatCenter(data.summary.restrictionPriorsByAbility.S)}
+                        </TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          {formatCenter(data.summary.restrictionPriorsByAbility.A)}
+                        </TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          {formatCenter(data.summary.restrictionPriorsByAbility.B)}
+                        </TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          {formatCenter(data.summary.restrictionPriorsByAbility.C)}
+                        </TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Teammate strength scale: S=4, A=3, B=2, C=1. Adjustment uses ~
+                  {data.summary.holisticPointsPerTeammateStrength.toFixed(1)}{" "}
+                  holistic points per teammate-strength unit of residual (from raw
+                  tier-center gaps). Stored raw holistic scores are not modified.
+                </p>
               </CardContent>
             </Card>
 
@@ -680,8 +746,20 @@ function TierRecommendationContent() {
                               <div className="space-y-1">
                                 <FitBadge label={row.holisticFitLabel} />
                                 <div className="text-xs text-muted-foreground">
-                                  {row.holisticScore.toFixed(1)} · {row.totalEvents}{" "}
-                                  events
+                                  Adj {row.adjustedHolisticScore.toFixed(1)}
+                                  {row.holisticAdjustmentDelta !== 0
+                                    ? ` (${row.holisticAdjustmentDelta > 0 ? "+" : ""}${row.holisticAdjustmentDelta.toFixed(1)})`
+                                    : ""}
+                                  {" · "}
+                                  raw {row.holisticScore.toFixed(1)}
+                                </div>
+                                {row.rawHolisticFitLabel !== row.holisticFitLabel && (
+                                  <div className="text-[11px] text-muted-foreground">
+                                    Raw fit: {row.rawHolisticFitLabel}
+                                  </div>
+                                )}
+                                <div className="text-[11px] text-muted-foreground">
+                                  {row.totalEvents} events
                                 </div>
                               </div>
                             </TableCell>
@@ -711,6 +789,16 @@ function TierRecommendationContent() {
                                 <p className="text-xs text-muted-foreground leading-snug">
                                   {row.holisticConfidenceSummary}
                                 </p>
+                                {row.actualTeammateStrength !== undefined &&
+                                  row.expectedTeammateStrength !== undefined && (
+                                    <p className="text-[11px] text-muted-foreground tabular-nums">
+                                      Teammates {row.actualTeammateStrength.toFixed(2)} vs
+                                      expected {row.expectedTeammateStrength.toFixed(2)}
+                                      {row.compositionBiasLabel
+                                        ? ` · ${row.compositionBiasLabel}`
+                                        : ""}
+                                    </p>
+                                  )}
                               </div>
                             </TableCell>
                             <TableCell>
@@ -769,17 +857,20 @@ function TierRecommendationContent() {
                 </p>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>
-                    <strong className="text-foreground">High holistic confidence + disagreement</strong>{" "}
-                    — Review Required, high recommendation confidence (meaningful conflict).
+                    <strong className="text-foreground">Adjusted holistic</strong> nudges the
+                    raw score using actual vs expected teammates under Duos/Trios/Squads
+                    restrictions. Stronger-than-expected teams reduce the adjusted score;
+                    weaker-than-expected teams raise it.
                   </li>
                   <li>
-                    <strong className="text-foreground">Low holistic confidence + disagreement</strong>{" "}
-                    — Review Recommended; lean on evaluation; lower recommendation confidence.
+                    <strong className="text-foreground">Best-fit / recommendations</strong> use
+                    the adjusted score. Raw holistic stays unchanged in the cache and is
+                    shown for transparency.
                   </li>
                   <li>
-                    <strong className="text-foreground">Holistic Confidence</strong> uses evaluation
-                    ability (not assigned tier), teammate strength gap, duo concentration, and
-                    sample size. The Holistic Score itself is unchanged.
+                    <strong className="text-foreground">Holistic Confidence</strong> still
+                    reflects how trustworthy that composition context is (sample size, duo
+                    concentration, unexpected residual size).
                   </li>
                 </ul>
               </CardContent>

@@ -1,3 +1,9 @@
+import {
+  classifyCompositionResidual,
+  compositionBiasLabel,
+  type CompositionBias,
+} from "./tierRestrictions";
+
 /** Competitive tiers used for recommendations (excludes D / Unranked). */
 export const REVIEW_TIERS = ["S", "A", "B", "C"] as const;
 export type ReviewTier = (typeof REVIEW_TIERS)[number];
@@ -184,15 +190,22 @@ export function tierFitStrength(fit: TierFit): number {
   return (TIER_STRENGTH[fit.higher] + TIER_STRENGTH[fit.lower]) / 2;
 }
 
+/** Primary evaluation tier used for restriction priors (borderline → higher). */
+export function primaryAbilityTier(fit: TierFit): ReviewTier {
+  if (fit.kind === "best_fit") return fit.tier;
+  return fit.higher;
+}
+
 export type HolisticConfidenceInput = {
   totalEvents: number;
-  /** Average unique-teammate tier strength (S=4 … C=1). */
-  avgTeammateTier?: number;
-  /** Player ability anchor for gap (typically evaluation best-fit strength). */
-  playerAbilityStrength: number;
-  /** Matches analyzed for TC / duo context. */
+  /** Observed average teammate strength (S=4 … C=1). */
+  actualTeammateStrength?: number;
+  /**
+   * Expected teammate strength given evaluation ability + tier restrictions
+   * (optionally blended with historical composition for that ability band).
+   */
+  expectedTeammateStrength?: number;
   matchesAnalyzed?: number;
-  /** Matches without the consistent duo partner. */
   withoutDuoCount?: number;
   hasConsistentDuo?: boolean;
   hasMutualDependency?: boolean;
@@ -204,8 +217,12 @@ export type HolisticConfidenceResult = {
   stars: number;
   /** 0–1 composite reliability. */
   score: number;
-  teammateGap?: number;
-  /** Estimated fraction of matches with the consistent duo (0–1). */
+  /** actual − expected teammate strength. */
+  compositionResidual?: number;
+  compositionBias?: CompositionBias;
+  compositionBiasLabel?: string;
+  actualTeammateStrength?: number;
+  expectedTeammateStrength?: number;
   duoShare?: number;
   reasons: string[];
   summary: string;
@@ -218,29 +235,44 @@ function sampleSizeFactor(totalEvents: number): number {
   return 0.35;
 }
 
-function teammateGapFactor(gap: number | undefined): {
+/**
+ * Only penalize *unexpected* composition (large residual vs restriction/
+ * empirical expectation). Expected strong/weak teammates under the rules
+ * do not reduce confidence by themselves.
+ */
+function compositionResidualFactor(residual: number | undefined): {
   factor: number;
   reason?: string;
 } {
-  if (gap === undefined) {
-    return { factor: 0.7 };
+  if (residual === undefined) {
+    return { factor: 0.75 };
   }
-  if (gap < 0.4) return { factor: 1 };
-  if (gap < 0.85) {
+  const abs = Math.abs(residual);
+  if (abs < 0.35) return { factor: 1 };
+  if (abs < 0.7) {
     return {
-      factor: 0.75,
-      reason: "Average teammates differ somewhat from evaluation level.",
+      factor: 0.85,
+      reason:
+        residual > 0
+          ? "Teammates somewhat stronger than restriction/historical expectation."
+          : "Teammates somewhat weaker than restriction/historical expectation.",
     };
   }
-  if (gap < 1.35) {
+  if (abs < 1.1) {
     return {
-      factor: 0.45,
-      reason: "Average teammates differ by about a tier from evaluation level.",
+      factor: 0.65,
+      reason:
+        residual > 0
+          ? "Teammates stronger than expected under tier restrictions."
+          : "Teammates weaker than expected under tier restrictions.",
     };
   }
   return {
-    factor: 0.2,
-    reason: "Average teammates differ by well over a tier from evaluation level.",
+    factor: 0.45,
+    reason:
+      residual > 0
+        ? "Teammate strength well above what restrictions predict for this ability."
+        : "Teammate strength well below what restrictions predict for this ability.",
   };
 }
 
@@ -249,7 +281,6 @@ function duoConcentrationFactor(input: {
   withoutDuoCount?: number;
   hasConsistentDuo?: boolean;
   hasMutualDependency?: boolean;
-  teammateGap?: number;
 }): { factor: number; duoShare?: number; reason?: string } {
   const { matchesAnalyzed, withoutDuoCount, hasConsistentDuo, hasMutualDependency } =
     input;
@@ -276,16 +307,10 @@ function duoConcentrationFactor(input: {
   }
 
   if (duoShare >= 0.8) {
-    const direction =
-      input.teammateGap !== undefined && input.teammateGap >= 0.85
-        ? "stronger"
-        : "the same";
     return {
       factor: hasMutualDependency ? 0.3 : 0.4,
       duoShare,
-      reason: `Played ${Math.round(duoShare * 100)}% of matches with a consistent duo${
-        direction === "stronger" ? " (often stronger teammates)" : ""
-      }.`,
+      reason: `Played ${Math.round(duoShare * 100)}% of matches with a consistent duo.`,
     };
   }
 
@@ -302,28 +327,34 @@ function duoConcentrationFactor(input: {
 
 /**
  * How trustworthy the Holistic Score is as an individual-ability signal.
- * Separate from recommendation agreement confidence.
+ * Teammate strength only reduces confidence when it differs from what the
+ * restriction system + historical mix predict for the player's ability.
  */
 export function computeHolisticConfidence(
   input: HolisticConfidenceInput,
 ): HolisticConfidenceResult {
-  const teammateGap =
-    input.avgTeammateTier !== undefined
-      ? Math.abs(input.avgTeammateTier - input.playerAbilityStrength)
+  const residual =
+    input.actualTeammateStrength !== undefined &&
+    input.expectedTeammateStrength !== undefined
+      ? input.actualTeammateStrength - input.expectedTeammateStrength
       : undefined;
 
+  const bias =
+    residual !== undefined ? classifyCompositionResidual(residual) : undefined;
+
   const sample = sampleSizeFactor(input.totalEvents);
-  const gap = teammateGapFactor(teammateGap);
+  const composition = compositionResidualFactor(residual);
   const duo = duoConcentrationFactor({
     matchesAnalyzed: input.matchesAnalyzed,
     withoutDuoCount: input.withoutDuoCount,
     hasConsistentDuo: input.hasConsistentDuo,
     hasMutualDependency: input.hasMutualDependency,
-    teammateGap,
   });
 
-  // Geometric-ish blend: any weak factor pulls reliability down.
-  const score = Math.pow(sample * gap.factor * duo.factor, 1 / 1.15);
+  const score = Math.pow(
+    sample * composition.factor * duo.factor,
+    1 / 1.15,
+  );
 
   const reasons: string[] = [];
   if (input.totalEvents < 13) {
@@ -331,53 +362,44 @@ export function computeHolisticConfidence(
       `Small sample (${input.totalEvents} events) limits reliability.`,
     );
   }
-  if (gap.reason) reasons.push(gap.reason);
+  if (composition.reason) reasons.push(composition.reason);
   if (duo.reason) reasons.push(duo.reason);
 
-  // Directional teammate note when gap is large
-  if (
-    input.avgTeammateTier !== undefined &&
-    teammateGap !== undefined &&
-    teammateGap >= 0.85
-  ) {
-    if (input.avgTeammateTier > input.playerAbilityStrength + 0.4) {
-      reasons.unshift(
-        duo.duoShare !== undefined && duo.duoShare >= 0.6
-          ? `Played ${Math.round(duo.duoShare * 100)}% of matches with higher-tier teammates.`
-          : "Average teammates are significantly stronger than evaluation level.",
-      );
-      // Avoid duplicate duo reason when we already said % with higher-tier
-      if (duo.reason?.includes("% of matches with a consistent duo")) {
-        const idx = reasons.indexOf(duo.reason);
-        if (idx >= 0) reasons.splice(idx, 1);
-      }
-    } else if (input.avgTeammateTier < input.playerAbilityStrength - 0.4) {
-      reasons.unshift(
-        "Average teammates are significantly weaker than evaluation level.",
-      );
-    }
+  if (bias === "as_expected" && residual !== undefined) {
+    reasons.unshift(
+      "Teammate strength matches what tier restrictions predict for this ability.",
+    );
+  } else if (bias === "stronger_than_expected") {
+    reasons.unshift(
+      "Stronger teammates than expected for this evaluation level under ZBD restrictions.",
+    );
+  } else if (bias === "weaker_than_expected") {
+    reasons.unshift(
+      "Weaker teammates than expected for this evaluation level under ZBD restrictions.",
+    );
   }
+
+  // Dedupe near-identical composition reasons
+  const uniqueReasons = [...new Set(reasons)];
 
   let level: ConfidenceLevel;
   if (score >= 0.72) level = "high";
   else if (score >= 0.45) level = "medium";
   else level = "low";
 
-  // Prefer a clear positive summary when reliability is high and no risk flags fired.
-  if (level === "high" && reasons.length === 0) {
-    if (input.totalEvents >= 20 && (duo.duoShare === undefined || duo.duoShare < 0.6)) {
-      reasons.push("Large sample with varied teammates.");
+  if (level === "high" && uniqueReasons.length <= 1 && bias === "as_expected") {
+    if (
+      input.totalEvents >= 20 &&
+      (duo.duoShare === undefined || duo.duoShare < 0.6)
+    ) {
+      uniqueReasons.push("Large sample with varied teammates.");
     } else if (input.totalEvents >= 20) {
-      reasons.push("Large event sample supports the holistic score.");
-    } else {
-      reasons.push(
-        "Holistic score looks reasonably representative of individual ability.",
-      );
+      uniqueReasons.push("Large event sample supports the holistic score.");
     }
   }
 
   const summary =
-    reasons[0] ??
+    uniqueReasons[0] ??
     (level === "high"
       ? "Holistic score looks reasonably representative of individual ability."
       : "Holistic reliability is uncertain.");
@@ -387,9 +409,13 @@ export function computeHolisticConfidence(
     label: confidenceLabel(level),
     stars: confidenceStars(level),
     score,
-    teammateGap,
+    compositionResidual: residual,
+    compositionBias: bias,
+    compositionBiasLabel: bias ? compositionBiasLabel(bias) : undefined,
+    actualTeammateStrength: input.actualTeammateStrength,
+    expectedTeammateStrength: input.expectedTeammateStrength,
     duoShare: duo.duoShare,
-    reasons,
+    reasons: uniqueReasons,
     summary,
   };
 }
@@ -446,7 +472,8 @@ export type RecommendationResult = {
 
 /**
  * Combine evaluation + holistic fits (tier-independent), weighting holistic
- * by Holistic Confidence, then compare to assigned tier for the action only.
+ * by Holistic Confidence and composition residual (actual vs expected
+ * teammates under tier restrictions), then compare to assigned tier for action.
  */
 export function computeTierRecommendation(
   evaluationFit: TierFit,
@@ -460,10 +487,16 @@ export function computeTierRecommendation(
   const overlap = evalTiers.filter((t) => holisticTiers.includes(t));
   const span = spanOfTiers(union);
   const hc = holisticConfidence.level;
+  const bias = holisticConfidence.compositionBias;
+  const holisticStrength = tierFitStrength(holisticFit);
+  const evalStrength = tierFitStrength(evaluationFit);
+  const holisticHigher = holisticStrength > evalStrength + 0.25;
+  const holisticLower = holisticStrength < evalStrength - 0.25;
 
   let overallFit: OverallFit;
   let recommendationConfidence: ConfidenceLevel;
   let reason: string;
+  let softReview = false;
 
   const sameBestFit =
     evaluationFit.kind === "best_fit" &&
@@ -476,22 +509,63 @@ export function computeTierRecommendation(
     evaluationFit.higher === holisticFit.higher &&
     evaluationFit.lower === holisticFit.lower;
 
+  // Directional composition effects when signals disagree.
+  const inflatedUp =
+    span >= 1 &&
+    holisticHigher &&
+    bias === "stronger_than_expected";
+  const outperformance =
+    span >= 1 &&
+    holisticHigher &&
+    bias === "weaker_than_expected";
+  const teammateDrag =
+    span >= 1 &&
+    holisticLower &&
+    bias === "weaker_than_expected";
+  const underperformedWithHelp =
+    span >= 1 &&
+    holisticLower &&
+    bias === "stronger_than_expected";
+
   if (sameBestFit || sameBorderline) {
     overallFit = evaluationFit;
-    // Agreement is strong; low holistic confidence still slightly softens certainty.
     recommendationConfidence = hc === "low" ? "medium" : "high";
     reason =
       evaluationFit.kind === "best_fit"
         ? "Evaluation and performance agree on the same best-fit tier."
         : "Evaluation and performance agree the player sits on the same boundary.";
-    if (hc === "low") {
-      reason += ` Holistic confidence is low (${holisticConfidence.summary}).`;
+    if (bias && bias !== "as_expected") {
+      reason += ` ${holisticConfidence.compositionBiasLabel}.`;
     }
-  } else if (hc === "low" && span >= 1) {
-    // Unreliable holistic: lean on evaluation; soften disagreement.
+  } else if (inflatedUp) {
+    // Holistic looks higher but teammates stronger than restrictions predict.
     overallFit = evaluationFit;
+    softReview = true;
     recommendationConfidence = span >= 2 ? "low" : "medium";
-    reason = `Holistic performance may be inflated by teammate strength (${holisticConfidence.summary}). Evaluation should carry more weight (${evaluationFit.label}).`;
+    reason =
+      "Holistic performance may be inflated by stronger-than-expected teammates under ZBD restrictions. Evaluation should carry more weight.";
+  } else if (outperformance) {
+    // Holistic higher despite weaker-than-expected teammates — credit it.
+    overallFit = fitFromTier(union.length <= 2 ? union : holisticTiers);
+    recommendationConfidence = hc === "high" ? "high" : "medium";
+    reason =
+      "Holistic exceeds evaluation despite weaker-than-expected teammates — performance deserves extra weight.";
+  } else if (teammateDrag) {
+    overallFit = evaluationFit;
+    softReview = true;
+    recommendationConfidence = "medium";
+    reason =
+      "Holistic sits below evaluation with weaker-than-expected teammates — results may reflect team drag more than individual decline.";
+  } else if (underperformedWithHelp) {
+    overallFit = fitFromTier(union.length <= 2 ? union : holisticTiers);
+    recommendationConfidence = hc === "high" ? "high" : "medium";
+    reason =
+      "Holistic sits below evaluation despite stronger-than-expected teammates — underperformance looks more individual.";
+  } else if (hc === "low" && span >= 1) {
+    overallFit = evaluationFit;
+    softReview = true;
+    recommendationConfidence = span >= 2 ? "low" : "medium";
+    reason = `Holistic reliability is low (${holisticConfidence.summary}). Evaluation should carry more weight (${evaluationFit.label}).`;
   } else if (overlap.length > 0 && span <= 1) {
     overallFit = fitFromTier(union);
     recommendationConfidence = "medium";
@@ -505,13 +579,12 @@ export function computeTierRecommendation(
         ? "Evaluation and performance point to adjacent tiers — meaningful borderline case."
         : `Adjacent-tier signals with ${hc} holistic confidence — ${holisticConfidence.summary}`;
   } else if (hc === "high") {
-    // Strong, reliable disagreement → high certainty that review is needed.
     overallFit = { kind: "disagreement", label: "Review Required" };
     recommendationConfidence = "high";
     reason = "Evaluation and performance disagree.";
   } else {
-    // Medium HC + large span: review, but less certain.
     overallFit = fitFromTier(evalTiers);
+    softReview = true;
     recommendationConfidence = "medium";
     reason = `Evaluation and holistic disagree across non-adjacent tiers, but holistic confidence is only ${hc}. ${holisticConfidence.summary}`;
   }
@@ -519,7 +592,7 @@ export function computeTierRecommendation(
   const { action, actionLabel } = deriveAction(
     overallFit,
     currentTier,
-    hc,
+    softReview,
     span,
   );
 
@@ -542,15 +615,14 @@ export function computeTierRecommendation(
 function deriveAction(
   overallFit: OverallFit,
   currentTier: ReviewTier,
-  holisticConfidence: ConfidenceLevel,
+  softReview: boolean,
   fitSpan: number,
 ): { action: ActionKind; actionLabel: string } {
   if (overallFit.kind === "disagreement") {
     return { action: "review_required", actionLabel: "Review Required" };
   }
 
-  // Soften hard disagreement when holistic is unreliable.
-  if (holisticConfidence === "low" && fitSpan >= 1) {
+  if (softReview && fitSpan >= 1) {
     if (overallFit.kind === "best_fit" && overallFit.tier !== currentTier) {
       return {
         action: "review_recommended",

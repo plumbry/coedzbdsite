@@ -8,12 +8,20 @@ import {
   computeTierRecommendation,
   confidenceSortRank,
   isReviewTier,
+  median,
   overallFitLabel,
-  tierFitStrength,
+  primaryAbilityTier,
   type ActionKind,
   type ConfidenceLevel,
   type ReviewTier,
 } from "./lib/stats/tierReviewConfidence";
+import {
+  adjustHolisticForTeammateComposition,
+  blendExpectedTeammateStrength,
+  estimateHolisticPointsPerTeammateStrength,
+  restrictionPriorTeammateStrength,
+  type RestrictionTier,
+} from "./lib/stats/tierRestrictions";
 
 type PlayerReviewRow = {
   playerId: string;
@@ -24,13 +32,20 @@ type PlayerReviewRow = {
   evaluationScore: number;
   evaluationFitLabel: string;
   holisticScore: number;
+  /** Restriction-adjusted holistic used for best-fit / recommendations. */
+  adjustedHolisticScore: number;
+  holisticAdjustmentDelta: number;
+  rawHolisticFitLabel: string;
   holisticFitLabel: string;
   holisticConfidence: ConfidenceLevel;
   holisticConfidenceLabel: string;
   holisticConfidenceStars: number;
   holisticConfidenceSummary: string;
   holisticConfidenceReasons: string[];
-  avgTeammateTier?: number;
+  actualTeammateStrength?: number;
+  expectedTeammateStrength?: number;
+  compositionResidual?: number;
+  compositionBiasLabel?: string;
   duoShare?: number;
   totalEvents: number;
   overallFitLabel: string;
@@ -44,8 +59,8 @@ type PlayerReviewRow = {
 };
 
 /**
- * Tier recommendation — best-fit from evaluation + holistic distributions,
- * with Holistic Confidence so teammate-inflated stats weigh less.
+ * Tier recommendation — best-fit from evaluation + restriction-adjusted
+ * holistic. Raw holistic is preserved for display; adjusted score drives fits.
  */
 export const getTierReviewConfidence = query({
   args: {},
@@ -150,26 +165,104 @@ export const getTierReviewConfidence = query({
     }
 
     const evaluationCenters = buildTierCenters(evaluationScoresByTier);
-    const holisticCenters = buildTierCenters(holisticScoresByTier);
+    const rawHolisticCenters = buildTierCenters(holisticScoresByTier);
+    const pointsPerStrengthUnit =
+      estimateHolisticPointsPerTeammateStrength(rawHolisticCenters);
+
+    // Empirical teammate-strength distributions by *evaluation ability* band
+    // (not assigned tier) — used to adapt expectation as the player base shifts.
+    const actualByAbility: Record<ReviewTier, number[]> = {
+      S: [],
+      A: [],
+      B: [],
+      C: [],
+    };
+
+    const provisionalFits = candidates.map((candidate) => {
+      const evaluationFit = classifyScoreAgainstCenters(
+        candidate.evaluationScore,
+        evaluationCenters,
+      );
+      const ability = primaryAbilityTier(evaluationFit);
+      if (typeof candidate.cache.avgTeammateTier === "number") {
+        actualByAbility[ability].push(candidate.cache.avgTeammateTier);
+      }
+      return { candidate, evaluationFit, ability };
+    });
+
+    const expectedByAbility: Record<ReviewTier, number> = {
+      S: 0,
+      A: 0,
+      B: 0,
+      C: 0,
+    };
+    for (const tier of ["S", "A", "B", "C"] as ReviewTier[]) {
+      expectedByAbility[tier] = blendExpectedTeammateStrength({
+        empiricalMedian: median(actualByAbility[tier]),
+        empiricalCount: actualByAbility[tier].length,
+        restrictionPrior: restrictionPriorTeammateStrength(
+          tier as RestrictionTier,
+        ),
+      });
+    }
+
+    // Build restriction-adjusted holistic scores, then centers from those.
+    const adjustedHolisticByTier: Record<ReviewTier, number[]> = {
+      S: [],
+      A: [],
+      B: [],
+      C: [],
+    };
+
+    const withAdjusted = provisionalFits.map((row) => {
+      const actualTeammateStrength = row.candidate.cache.avgTeammateTier;
+      const expectedTeammateStrength = expectedByAbility[row.ability];
+      const residual =
+        actualTeammateStrength !== undefined
+          ? actualTeammateStrength - expectedTeammateStrength
+          : undefined;
+
+      const { adjustedHolistic, adjustmentDelta } =
+        adjustHolisticForTeammateComposition({
+          rawHolistic: row.candidate.cache.holisticScore,
+          residual,
+          pointsPerStrengthUnit,
+        });
+
+      adjustedHolisticByTier[row.candidate.currentTier].push(adjustedHolistic);
+
+      return {
+        ...row,
+        actualTeammateStrength,
+        expectedTeammateStrength,
+        residual,
+        adjustedHolistic,
+        adjustmentDelta,
+      };
+    });
+
+    const adjustedHolisticCenters = buildTierCenters(adjustedHolisticByTier);
 
     const reviews: PlayerReviewRow[] = [];
 
-    for (const candidate of candidates) {
+    for (const row of withAdjusted) {
+      const { candidate, evaluationFit, adjustedHolistic, adjustmentDelta } =
+        row;
       const { cache, currentTier, evaluationScore } = candidate;
 
-      const evaluationFit = classifyScoreAgainstCenters(
-        evaluationScore,
-        evaluationCenters,
+      const rawHolisticFit = classifyScoreAgainstCenters(
+        cache.holisticScore,
+        rawHolisticCenters,
       );
       const holisticFit = classifyScoreAgainstCenters(
-        cache.holisticScore,
-        holisticCenters,
+        adjustedHolistic,
+        adjustedHolisticCenters,
       );
 
       const holisticConfidence = computeHolisticConfidence({
         totalEvents: cache.totalEvents,
-        avgTeammateTier: cache.avgTeammateTier,
-        playerAbilityStrength: tierFitStrength(evaluationFit),
+        actualTeammateStrength: row.actualTeammateStrength,
+        expectedTeammateStrength: row.expectedTeammateStrength,
         matchesAnalyzed: candidate.matchesAnalyzed,
         withoutDuoCount: candidate.withoutDuoCount,
         hasConsistentDuo: candidate.hasConsistentDuo,
@@ -192,13 +285,19 @@ export const getTierReviewConfidence = query({
         evaluationScore,
         evaluationFitLabel: evaluationFit.label,
         holisticScore: cache.holisticScore,
+        adjustedHolisticScore: adjustedHolistic,
+        holisticAdjustmentDelta: adjustmentDelta,
+        rawHolisticFitLabel: rawHolisticFit.label,
         holisticFitLabel: holisticFit.label,
         holisticConfidence: holisticConfidence.level,
         holisticConfidenceLabel: holisticConfidence.label,
         holisticConfidenceStars: holisticConfidence.stars,
         holisticConfidenceSummary: holisticConfidence.summary,
         holisticConfidenceReasons: holisticConfidence.reasons,
-        avgTeammateTier: cache.avgTeammateTier,
+        actualTeammateStrength: row.actualTeammateStrength,
+        expectedTeammateStrength: row.expectedTeammateStrength,
+        compositionResidual: holisticConfidence.compositionResidual,
+        compositionBiasLabel: holisticConfidence.compositionBiasLabel,
         duoShare: holisticConfidence.duoShare,
         totalEvents: cache.totalEvents,
         overallFitLabel: overallFitLabel(result.overallFit),
@@ -255,7 +354,16 @@ export const getTierReviewConfidence = query({
       },
       needsAttention: reviews.filter((r) => r.action !== "no_change").length,
       evaluationCenters,
-      holisticCenters,
+      holisticCenters: rawHolisticCenters,
+      adjustedHolisticCenters,
+      holisticPointsPerTeammateStrength: pointsPerStrengthUnit,
+      expectedTeammateStrengthByAbility: expectedByAbility,
+      restrictionPriorsByAbility: {
+        S: restrictionPriorTeammateStrength("S"),
+        A: restrictionPriorTeammateStrength("A"),
+        B: restrictionPriorTeammateStrength("B"),
+        C: restrictionPriorTeammateStrength("C"),
+      },
       evaluationPeerCounts: {
         S: evaluationScoresByTier.S.length,
         A: evaluationScoresByTier.A.length,

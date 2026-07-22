@@ -768,32 +768,46 @@ async function processBatchHandler(
         .withIndex("by_player", (q) => q.eq("playerId", player._id))
         .collect();
       
-      // Calculate average teammate tier from all results
-      const teammateTiers: number[] = [];
-      const uniqueTeammates = new Set<string>();
+      // Event-weighted average teammate tier (each event contributes equally).
+      // Uses live teammate tiers; missing/unknown tiers are skipped per seat.
+      const eventTeammateAverages: number[] = [];
+      const teammateTierCache = new Map<string, number | null>();
 
       for (const result of allPlayerResults) {
         if (!result.teamMembers || result.teamMembers.length === 0) continue;
-        
+
+        const seatTiers: number[] = [];
         for (const teammateEpic of result.teamMembers) {
           if (teammateEpic === player.epicUsername) continue;
-          if (uniqueTeammates.has(teammateEpic)) continue;
-          
-          uniqueTeammates.add(teammateEpic);
-          const teammate = await lookupPlayerByEpicUsername(ctx, teammateEpic);
-          if (teammate?.tier) {
-            teammateTiers.push(tierToNumeric(teammate.tier));
+
+          let numeric: number | null | undefined =
+            teammateTierCache.get(teammateEpic);
+          if (numeric === undefined) {
+            const teammate = await lookupPlayerByEpicUsername(ctx, teammateEpic);
+            numeric = teammate?.tier ? tierToNumeric(teammate.tier) : null;
+            teammateTierCache.set(teammateEpic, numeric);
           }
+          if (numeric !== null && numeric > 0) {
+            seatTiers.push(numeric);
+          }
+        }
+
+        if (seatTiers.length > 0) {
+          eventTeammateAverages.push(
+            seatTiers.reduce((sum, t) => sum + t, 0) / seatTiers.length,
+          );
         }
       }
 
-      const avgTeammateTierNumeric = teammateTiers.length > 0
-        ? teammateTiers.reduce((sum, t) => sum + t, 0) / teammateTiers.length
-        : undefined;
-      
+      const avgTeammateTierNumeric =
+        eventTeammateAverages.length > 0
+          ? eventTeammateAverages.reduce((sum, t) => sum + t, 0) /
+            eventTeammateAverages.length
+          : undefined;
+
       // Get the tier detail string if we have a value
-      const avgTeammateTierDetail = avgTeammateTierNumeric !== undefined 
-        ? numericToTier(avgTeammateTierNumeric) 
+      const avgTeammateTierDetail = avgTeammateTierNumeric !== undefined
+        ? numericToTier(avgTeammateTierNumeric)
         : undefined;
 
       // Get last event date from most recent result
