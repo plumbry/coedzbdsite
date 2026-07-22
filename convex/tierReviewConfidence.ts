@@ -1,15 +1,16 @@
 import { query } from "./_generated/server";
 import { requireModeratorOrAdmin } from "./auth_helpers";
 import {
-  computePercentileRank,
-  computeReviewConfidence,
-  confidenceLabel,
+  actionSortRank,
+  buildTierCenters,
+  classifyScoreAgainstCenters,
+  computeTierRecommendation,
   confidenceSortRank,
-  formatPositionLabel,
-  isReviewConfidenceTier,
-  recommendationLabel,
+  isReviewTier,
+  overallFitLabel,
+  type ActionKind,
   type ConfidenceLevel,
-  type ReviewRecommendation,
+  type ReviewTier,
 } from "./lib/stats/tierReviewConfidence";
 
 type PlayerReviewRow = {
@@ -17,27 +18,25 @@ type PlayerReviewRow = {
   discordUsername: string;
   epicUsername: string;
   nickname?: string;
-  currentTier: string;
+  currentTier: ReviewTier;
   evaluationScore: number;
-  evaluationPercentile: number;
-  evaluationLabel: string;
+  evaluationFitLabel: string;
   holisticScore: number;
-  holisticPercentile: number;
-  holisticLabel: string;
+  holisticFitLabel: string;
   totalEvents: number;
+  overallFitLabel: string;
   confidence: ConfidenceLevel;
   confidenceLabel: string;
   stars: number;
-  recommendation: ReviewRecommendation;
-  recommendationLabel: string;
+  action: ActionKind;
+  actionLabel: string;
   reason: string;
-  percentileGap: number;
+  suggestedTier?: ReviewTier;
 };
 
 /**
- * Tier Review Confidence — prioritisation aid for admins.
- * Includes every player with a holistic cache score (when evaluation score exists).
- * Does not auto-promote or demote anyone.
+ * Tier recommendation — best-fit from evaluation + holistic distributions.
+ * Current assigned tier is used only for the action (promote / demote / none).
  */
 export const getTierReviewConfidence = query({
   args: {},
@@ -52,35 +51,8 @@ export const getTierReviewConfidence = query({
       ctx.db.query("tierReEvaluationCache").collect(),
     ]);
 
-    // Evaluation peer set: all active players with a score in S/A/B/C.
-    const evaluationPeersByTier: Record<string, number[]> = {
-      S: [],
-      A: [],
-      B: [],
-      C: [],
-    };
-    for (const player of activePlayers) {
-      if (
-        player.isAlt ||
-        !isReviewConfidenceTier(player.tier) ||
-        typeof player.totalScore !== "number"
-      ) {
-        continue;
-      }
-      evaluationPeersByTier[player.tier].push(player.totalScore);
-    }
-
-    // Holistic peer set + review candidates: everyone in the holistic cache.
-    const holisticPeersByTier: Record<string, number[]> = {
-      S: [],
-      A: [],
-      B: [],
-      C: [],
-    };
-
     const playersById = new Map(activePlayers.map((p) => [p._id, p] as const));
 
-    // Resolve any cache players not in the active set (still show if they have holistic).
     const missingIds = cacheRows
       .map((row) => row.playerId)
       .filter((id) => !playersById.has(id));
@@ -91,9 +63,34 @@ export const getTierReviewConfidence = query({
       }
     }
 
+    // Population distributions by *assigned* tier — used only to learn centers.
+    const evaluationScoresByTier: Record<ReviewTier, number[]> = {
+      S: [],
+      A: [],
+      B: [],
+      C: [],
+    };
+    const holisticScoresByTier: Record<ReviewTier, number[]> = {
+      S: [],
+      A: [],
+      B: [],
+      C: [],
+    };
+
+    for (const player of activePlayers) {
+      if (
+        player.isAlt ||
+        !isReviewTier(player.tier) ||
+        typeof player.totalScore !== "number"
+      ) {
+        continue;
+      }
+      evaluationScoresByTier[player.tier].push(player.totalScore);
+    }
+
     type CacheCandidate = {
       cache: (typeof cacheRows)[number];
-      tier: string;
+      currentTier: ReviewTier;
       evaluationScore: number;
       discordUsername: string;
       epicUsername: string;
@@ -108,16 +105,17 @@ export const getTierReviewConfidence = query({
       if (typeof cache.holisticScore !== "number") continue;
 
       const player = playersById.get(cache.playerId);
-      const tier =
-        (player && isReviewConfidenceTier(player.tier) && player.tier) ||
-        (isReviewConfidenceTier(cache.tier) ? cache.tier : null);
+      const currentTier: ReviewTier | null =
+        (player && isReviewTier(player.tier) && player.tier) ||
+        (isReviewTier(cache.tier) ? cache.tier : null);
 
-      if (!tier) {
+      if (!currentTier) {
         skippedInvalidTier += 1;
         continue;
       }
 
-      holisticPeersByTier[tier].push(cache.holisticScore);
+      // Holistic center learning uses assigned tier of the population.
+      holisticScoresByTier[currentTier].push(cache.holisticScore);
 
       const evaluationScore =
         typeof player?.totalScore === "number" ? player.totalScore : null;
@@ -128,7 +126,7 @@ export const getTierReviewConfidence = query({
 
       candidates.push({
         cache,
-        tier,
+        currentTier,
         evaluationScore,
         discordUsername: player?.discordUsername ?? cache.discordUsername,
         epicUsername: player?.epicUsername ?? "",
@@ -136,24 +134,28 @@ export const getTierReviewConfidence = query({
       });
     }
 
+    const evaluationCenters = buildTierCenters(evaluationScoresByTier);
+    const holisticCenters = buildTierCenters(holisticScoresByTier);
+
     const reviews: PlayerReviewRow[] = [];
 
     for (const candidate of candidates) {
-      const { cache, tier, evaluationScore } = candidate;
+      const { cache, currentTier, evaluationScore } = candidate;
 
-      const evaluationPercentile = computePercentileRank(
+      // Classification uses scores vs centers only — not the player's tier.
+      const evaluationFit = classifyScoreAgainstCenters(
         evaluationScore,
-        evaluationPeersByTier[tier],
+        evaluationCenters,
       );
-      const holisticPercentile = computePercentileRank(
+      const holisticFit = classifyScoreAgainstCenters(
         cache.holisticScore,
-        holisticPeersByTier[tier],
+        holisticCenters,
       );
 
-      const result = computeReviewConfidence(
-        evaluationPercentile,
-        holisticPercentile,
-        tier,
+      const result = computeTierRecommendation(
+        evaluationFit,
+        holisticFit,
+        currentTier,
       );
 
       reviews.push({
@@ -161,42 +163,29 @@ export const getTierReviewConfidence = query({
         discordUsername: candidate.discordUsername,
         epicUsername: candidate.epicUsername,
         nickname: candidate.nickname,
-        currentTier: tier,
+        currentTier,
         evaluationScore,
-        evaluationPercentile,
-        evaluationLabel: formatPositionLabel(evaluationPercentile, tier),
+        evaluationFitLabel: evaluationFit.label,
         holisticScore: cache.holisticScore,
-        holisticPercentile,
-        holisticLabel: formatPositionLabel(holisticPercentile, tier),
+        holisticFitLabel: holisticFit.label,
         totalEvents: cache.totalEvents,
+        overallFitLabel: overallFitLabel(result.overallFit),
         confidence: result.confidence,
-        confidenceLabel: confidenceLabel(result.confidence),
+        confidenceLabel: result.confidenceLabel,
         stars: result.stars,
-        recommendation: result.recommendation,
-        recommendationLabel: recommendationLabel(result.recommendation),
+        action: result.action,
+        actionLabel: result.actionLabel,
         reason: result.reason,
-        percentileGap: result.percentileGap,
+        suggestedTier: result.suggestedTier,
       });
     }
 
     reviews.sort((a, b) => {
+      const byAction = actionSortRank(a.action) - actionSortRank(b.action);
+      if (byAction !== 0) return byAction;
       const byConfidence =
         confidenceSortRank(a.confidence) - confidenceSortRank(b.confidence);
       if (byConfidence !== 0) return byConfidence;
-      if (a.confidence === "low") {
-        return b.percentileGap - a.percentileGap;
-      }
-      if (a.confidence === "moderate") {
-        const aEdge = Math.min(
-          a.evaluationPercentile,
-          100 - a.evaluationPercentile,
-        );
-        const bEdge = Math.min(
-          b.evaluationPercentile,
-          100 - b.evaluationPercentile,
-        );
-        return aEdge - bEdge;
-      }
       return a.discordUsername.localeCompare(b.discordUsername);
     });
 
@@ -205,25 +194,32 @@ export const getTierReviewConfidence = query({
       insufficientEvaluation,
       skippedInvalidTier,
       byConfidence: {
-        very_high: reviews.filter((r) => r.confidence === "very_high").length,
         high: reviews.filter((r) => r.confidence === "high").length,
-        moderate: reviews.filter((r) => r.confidence === "moderate").length,
+        medium: reviews.filter((r) => r.confidence === "medium").length,
         low: reviews.filter((r) => r.confidence === "low").length,
       },
-      needsAttention: reviews.filter(
-        (r) => r.confidence === "low" || r.confidence === "moderate",
-      ).length,
+      byAction: {
+        review_required: reviews.filter((r) => r.action === "review_required")
+          .length,
+        review_move: reviews.filter((r) => r.action === "review_move").length,
+        optional_review: reviews.filter((r) => r.action === "optional_review")
+          .length,
+        no_change: reviews.filter((r) => r.action === "no_change").length,
+      },
+      needsAttention: reviews.filter((r) => r.action !== "no_change").length,
+      evaluationCenters,
+      holisticCenters,
       evaluationPeerCounts: {
-        S: evaluationPeersByTier.S.length,
-        A: evaluationPeersByTier.A.length,
-        B: evaluationPeersByTier.B.length,
-        C: evaluationPeersByTier.C.length,
+        S: evaluationScoresByTier.S.length,
+        A: evaluationScoresByTier.A.length,
+        B: evaluationScoresByTier.B.length,
+        C: evaluationScoresByTier.C.length,
       },
       holisticPeerCounts: {
-        S: holisticPeersByTier.S.length,
-        A: holisticPeersByTier.A.length,
-        B: holisticPeersByTier.B.length,
-        C: holisticPeersByTier.C.length,
+        S: holisticScoresByTier.S.length,
+        A: holisticScoresByTier.A.length,
+        B: holisticScoresByTier.B.length,
+        C: holisticScoresByTier.C.length,
       },
     };
 

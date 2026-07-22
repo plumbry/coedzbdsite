@@ -1,89 +1,158 @@
-/** Competitive tiers used for review confidence (excludes D / Unranked). */
-export const REVIEW_CONFIDENCE_TIERS = ["S", "A", "B", "C"] as const;
-export type ReviewConfidenceTier = (typeof REVIEW_CONFIDENCE_TIERS)[number];
+/** Competitive tiers used for recommendations (excludes D / Unranked). */
+export const REVIEW_TIERS = ["S", "A", "B", "C"] as const;
+export type ReviewTier = (typeof REVIEW_TIERS)[number];
 
-export type PositionBand = "top" | "middle" | "bottom";
+export type ConfidenceLevel = "high" | "medium" | "low";
 
-export type ConfidenceLevel = "very_high" | "high" | "moderate" | "low";
+export type TierFit =
+  | { kind: "best_fit"; tier: ReviewTier; label: string }
+  | {
+      kind: "borderline";
+      higher: ReviewTier;
+      lower: ReviewTier;
+      label: string;
+    };
 
-export type ReviewRecommendation =
-  | "no_review"
-  | "borderline_promotion"
-  | "borderline_demotion"
+export type OverallFit =
+  | TierFit
+  | { kind: "disagreement"; label: string };
+
+export type ActionKind =
+  | "no_change"
+  | "optional_review"
+  | "review_move"
   | "review_required";
 
-/** Percentile cutoffs for within-tier position bands. */
-export const TOP_BAND_MIN_PERCENTILE = 75;
-export const BOTTOM_BAND_MAX_PERCENTILE = 25;
+/**
+ * How close to a midpoint (as a fraction of the gap between adjacent
+ * tier centers) counts as borderline. Derived from distributions — not
+ * absolute score cutoffs.
+ */
+export const BORDERLINE_GAP_FRACTION = 0.2;
 
-/** Absolute percentile gap treated as substantial disagreement. */
-export const DISAGREEMENT_PERCENTILE_GAP = 35;
+const TIER_RANK: Record<ReviewTier, number> = {
+  S: 3,
+  A: 2,
+  B: 1,
+  C: 0,
+};
 
-/** Max gap for "very high" agreement in a comfortable zone. */
-export const VERY_HIGH_MAX_GAP = 15;
+export function isReviewTier(tier: string | undefined | null): tier is ReviewTier {
+  return tier === "S" || tier === "A" || tier === "B" || tier === "C";
+}
 
-/** Minimum percentile for both scores to count as comfortably mid/upper. */
-export const COMFORTABLE_MIN_PERCENTILE = 40;
+export function tierRank(tier: ReviewTier): number {
+  return TIER_RANK[tier];
+}
 
-export function isReviewConfidenceTier(
-  tier: string | undefined | null,
-): tier is ReviewConfidenceTier {
-  return (
-    tier === "S" || tier === "A" || tier === "B" || tier === "C"
-  );
+/** Median of a numeric list. Returns undefined for empty input. */
+export function median(values: readonly number[]): number | undefined {
+  if (values.length === 0) return undefined;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1]! + sorted[mid]!) / 2;
+  }
+  return sorted[mid];
+}
+
+/** Per-tier centers (medians) from score distributions. */
+export function buildTierCenters(
+  scoresByTier: Partial<Record<ReviewTier, readonly number[]>>,
+): Partial<Record<ReviewTier, number>> {
+  const centers: Partial<Record<ReviewTier, number>> = {};
+  for (const tier of REVIEW_TIERS) {
+    const m = median(scoresByTier[tier] ?? []);
+    if (m !== undefined) centers[tier] = m;
+  }
+  return centers;
+}
+
+function borderlineLabel(a: ReviewTier, b: ReviewTier): string {
+  const [first, second] = [a, b].sort((x, y) => x.localeCompare(y));
+  return `Borderline ${first}/${second}`;
 }
 
 /**
- * Percentile rank of `score` among `peerScores` (higher score = higher %).
- * Uses midrank ties. Returns 50 when the peer set is empty or singleton.
+ * Classify a score against data-driven tier centers.
+ * Independent of the player's assigned tier — only the score and the
+ * population centers matter.
  */
-export function computePercentileRank(
+export function classifyScoreAgainstCenters(
   score: number,
-  peerScores: readonly number[],
-): number {
-  if (peerScores.length === 0) return 50;
-  if (peerScores.length === 1) return 50;
+  centers: Partial<Record<ReviewTier, number>>,
+): TierFit {
+  const entries = (
+    Object.entries(centers) as [ReviewTier, number][]
+  ).filter(([, value]) => Number.isFinite(value));
 
-  let below = 0;
-  let equal = 0;
-  for (const peer of peerScores) {
-    if (peer < score) below += 1;
-    else if (peer === score) equal += 1;
+  // Highest score center first (typically S → A → B → C).
+  entries.sort((a, b) => b[1] - a[1]);
+
+  if (entries.length === 0) {
+    return { kind: "best_fit", tier: "C", label: "Best Fit: C" };
+  }
+  if (entries.length === 1) {
+    const tier = entries[0]![0];
+    return { kind: "best_fit", tier, label: `Best Fit: ${tier}` };
   }
 
-  return ((below + 0.5 * equal) / peerScores.length) * 100;
-}
-
-export function bandFromPercentile(percentile: number): PositionBand {
-  if (percentile >= TOP_BAND_MIN_PERCENTILE) return "top";
-  if (percentile <= BOTTOM_BAND_MAX_PERCENTILE) return "bottom";
-  return "middle";
-}
-
-/**
- * Human-readable placement within a tier.
- * Examples: "Top 8% of B", "Bottom 18% of A", "Middle 65% of A"
- */
-export function formatPositionLabel(percentile: number, tier: string): string {
-  const rounded = Math.round(percentile);
-  if (percentile >= TOP_BAND_MIN_PERCENTILE) {
-    const topPct = Math.max(1, Math.round(100 - percentile));
-    return `Top ${topPct}% of ${tier}`;
+  let nearestIdx = 0;
+  let nearestDist = Math.abs(score - entries[0]![1]);
+  for (let i = 1; i < entries.length; i++) {
+    const dist = Math.abs(score - entries[i]![1]);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearestIdx = i;
+    }
   }
-  if (percentile <= BOTTOM_BAND_MAX_PERCENTILE) {
-    const bottomPct = Math.max(1, rounded);
-    return `Bottom ${bottomPct}% of ${tier}`;
+
+  const neighborIdxs = [nearestIdx];
+  if (nearestIdx > 0) neighborIdxs.push(nearestIdx - 1);
+  if (nearestIdx < entries.length - 1) neighborIdxs.push(nearestIdx + 1);
+
+  let bestPair: { i: number; j: number; distToMid: number; gap: number } | null =
+    null;
+
+  for (const i of neighborIdxs) {
+    for (const j of neighborIdxs) {
+      if (j <= i) continue;
+      if (Math.abs(i - j) !== 1) continue; // only adjacent centers
+      const gap = Math.abs(entries[i]![1] - entries[j]![1]);
+      if (gap <= 0) continue;
+      const midpoint = (entries[i]![1] + entries[j]![1]) / 2;
+      const distToMid = Math.abs(score - midpoint);
+      if (
+        distToMid <= BORDERLINE_GAP_FRACTION * gap &&
+        (!bestPair || distToMid < bestPair.distToMid)
+      ) {
+        bestPair = { i, j, distToMid, gap };
+      }
+    }
   }
-  return `Middle ${rounded}% of ${tier}`;
+
+  if (bestPair) {
+    const t1 = entries[bestPair.i]![0];
+    const t2 = entries[bestPair.j]![0];
+    const higher = tierRank(t1) >= tierRank(t2) ? t1 : t2;
+    const lower = higher === t1 ? t2 : t1;
+    return {
+      kind: "borderline",
+      higher,
+      lower,
+      label: borderlineLabel(higher, lower),
+    };
+  }
+
+  const tier = entries[nearestIdx]![0];
+  return { kind: "best_fit", tier, label: `Best Fit: ${tier}` };
 }
 
 export function confidenceStars(level: ConfidenceLevel): number {
   switch (level) {
-    case "very_high":
-      return 5;
     case "high":
       return 4;
-    case "moderate":
+    case "medium":
       return 3;
     case "low":
       return 1;
@@ -92,167 +161,199 @@ export function confidenceStars(level: ConfidenceLevel): number {
 
 export function confidenceLabel(level: ConfidenceLevel): string {
   switch (level) {
-    case "very_high":
-      return "Very High";
     case "high":
       return "High";
-    case "moderate":
-      return "Moderate";
+    case "medium":
+      return "Medium";
     case "low":
       return "Low";
   }
 }
 
-export function recommendationLabel(recommendation: ReviewRecommendation): string {
-  switch (recommendation) {
-    case "no_review":
-      return "No Review Required";
-    case "borderline_promotion":
-      return "Borderline — Promotion Candidate";
-    case "borderline_demotion":
-      return "Borderline — Optional Review";
-    case "review_required":
-      return "Review Required";
-  }
+function tiersInFit(fit: TierFit): ReviewTier[] {
+  if (fit.kind === "best_fit") return [fit.tier];
+  return [fit.higher, fit.lower];
 }
 
-export type ConfidenceResult = {
+function spanOfTiers(tiers: readonly ReviewTier[]): number {
+  if (tiers.length === 0) return 0;
+  const ranks = tiers.map(tierRank);
+  return Math.max(...ranks) - Math.min(...ranks);
+}
+
+function fitFromTier(tiers: ReviewTier[]): OverallFit {
+  const unique = [...new Set(tiers)];
+  if (unique.length === 1) {
+    const tier = unique[0]!;
+    return { kind: "best_fit", tier, label: `Best Fit: ${tier}` };
+  }
+  if (unique.length === 2 && spanOfTiers(unique) === 1) {
+    const higher =
+      tierRank(unique[0]!) >= tierRank(unique[1]!) ? unique[0]! : unique[1]!;
+    const lower = higher === unique[0] ? unique[1]! : unique[0]!;
+    return {
+      kind: "borderline",
+      higher,
+      lower,
+      label: borderlineLabel(higher, lower),
+    };
+  }
+  return { kind: "disagreement", label: "Review Required" };
+}
+
+export type RecommendationResult = {
+  evaluationFit: TierFit;
+  holisticFit: TierFit;
+  overallFit: OverallFit;
   confidence: ConfidenceLevel;
+  confidenceLabel: string;
   stars: number;
-  recommendation: ReviewRecommendation;
+  action: ActionKind;
+  actionLabel: string;
   reason: string;
-  evaluationBand: PositionBand;
-  holisticBand: PositionBand;
-  percentileGap: number;
+  /** Clear single-tier suggestion when overall is a best fit. */
+  suggestedTier?: ReviewTier;
 };
 
-/** S cannot promote; C cannot demote. Other edge boundaries remain review-worthy. */
-export function hasPromotionOpportunity(tier: string): boolean {
-  return tier !== "S";
-}
-
-export function hasDemotionOpportunity(tier: string): boolean {
-  return tier !== "C";
-}
-
 /**
- * Compare evaluation vs holistic within-tier positions.
- * Agreement matters more than absolute score — final tier calls stay with admins.
+ * Combine evaluation + holistic fits (tier-independent), then compare to
+ * assigned tier only for the action label.
  */
-export function computeReviewConfidence(
-  evaluationPercentile: number,
-  holisticPercentile: number,
-  currentTier: string,
-): ConfidenceResult {
-  const evaluationBand = bandFromPercentile(evaluationPercentile);
-  const holisticBand = bandFromPercentile(holisticPercentile);
-  const percentileGap = Math.abs(evaluationPercentile - holisticPercentile);
+export function computeTierRecommendation(
+  evaluationFit: TierFit,
+  holisticFit: TierFit,
+  currentTier: ReviewTier,
+): RecommendationResult {
+  const evalTiers = tiersInFit(evaluationFit);
+  const holisticTiers = tiersInFit(holisticFit);
+  const union = [...new Set([...evalTiers, ...holisticTiers])];
+  const overlap = evalTiers.filter((t) => holisticTiers.includes(t));
+  const span = spanOfTiers(union);
 
-  const oppositeBoundaries =
-    (evaluationBand === "top" && holisticBand === "bottom") ||
-    (evaluationBand === "bottom" && holisticBand === "top");
+  let overallFit: OverallFit;
+  let confidence: ConfidenceLevel;
+  let reason: string;
 
-  if (oppositeBoundaries || percentileGap >= DISAGREEMENT_PERCENTILE_GAP) {
-    return {
-      confidence: "low",
-      stars: confidenceStars("low"),
-      recommendation: "review_required",
-      reason: "Evaluation and performance disagree.",
-      evaluationBand,
-      holisticBand,
-      percentileGap,
-    };
+  const sameBestFit =
+    evaluationFit.kind === "best_fit" &&
+    holisticFit.kind === "best_fit" &&
+    evaluationFit.tier === holisticFit.tier;
+
+  const sameBorderline =
+    evaluationFit.kind === "borderline" &&
+    holisticFit.kind === "borderline" &&
+    evaluationFit.higher === holisticFit.higher &&
+    evaluationFit.lower === holisticFit.lower;
+
+  if (sameBestFit || sameBorderline) {
+    overallFit = evaluationFit;
+    confidence = "high";
+    reason =
+      evaluationFit.kind === "best_fit"
+        ? "Evaluation and performance agree on the same best-fit tier."
+        : "Evaluation and performance agree the player sits on the same boundary.";
+  } else if (overlap.length > 0 && span <= 1) {
+    overallFit = fitFromTier(union);
+    confidence = "medium";
+    reason =
+      "Evaluation and performance partially agree; player sits near a tier boundary.";
+  } else if (span <= 1) {
+    overallFit = fitFromTier(union);
+    confidence = "medium";
+    reason =
+      "Evaluation and performance point to adjacent tiers — borderline case.";
+  } else {
+    overallFit = { kind: "disagreement", label: "Review Required" };
+    confidence = "low";
+    reason =
+      "Large disagreement between evaluation and performance.";
   }
 
-  if (
-    evaluationBand === holisticBand &&
-    (evaluationBand === "top" || evaluationBand === "bottom")
-  ) {
-    const isPromotionEdge = evaluationBand === "top";
-    const actionableBoundary = isPromotionEdge
-      ? hasPromotionOpportunity(currentTier)
-      : hasDemotionOpportunity(currentTier);
-
-    // Top of S / bottom of C are not tier-move boundaries — treat as settled agreement.
-    if (!actionableBoundary) {
-      if (percentileGap <= VERY_HIGH_MAX_GAP) {
-        return {
-          confidence: "very_high",
-          stars: confidenceStars("very_high"),
-          recommendation: "no_review",
-          reason: isPromotionEdge
-            ? "Both systems place the player near the top of S (no promotion tier)."
-            : "Both systems place the player near the bottom of C (no demotion tier).",
-          evaluationBand,
-          holisticBand,
-          percentileGap,
-        };
-      }
-      return {
-        confidence: "high",
-        stars: confidenceStars("high"),
-        recommendation: "no_review",
-        reason: isPromotionEdge
-          ? "Both systems place the player near the top of S (no promotion tier)."
-          : "Both systems place the player near the bottom of C (no demotion tier).",
-        evaluationBand,
-        holisticBand,
-        percentileGap,
-      };
-    }
-
-    return {
-      confidence: "moderate",
-      stars: confidenceStars("moderate"),
-      recommendation: isPromotionEdge
-        ? "borderline_promotion"
-        : "borderline_demotion",
-      reason: isPromotionEdge
-        ? "Both systems place the player near the top of their tier."
-        : "Both systems place the player near the bottom of their tier.",
-      evaluationBand,
-      holisticBand,
-      percentileGap,
-    };
-  }
-
-  if (
-    percentileGap <= VERY_HIGH_MAX_GAP &&
-    evaluationPercentile >= COMFORTABLE_MIN_PERCENTILE &&
-    holisticPercentile >= COMFORTABLE_MIN_PERCENTILE
-  ) {
-    return {
-      confidence: "very_high",
-      stars: confidenceStars("very_high"),
-      recommendation: "no_review",
-      reason: "Both systems place the player comfortably in their tier.",
-      evaluationBand,
-      holisticBand,
-      percentileGap,
-    };
-  }
+  const { action, actionLabel } = deriveAction(
+    overallFit,
+    confidence,
+    currentTier,
+  );
 
   return {
-    confidence: "high",
-    stars: confidenceStars("high"),
-    recommendation: "no_review",
-    reason: "Evaluation and performance generally agree.",
-    evaluationBand,
-    holisticBand,
-    percentileGap,
+    evaluationFit,
+    holisticFit,
+    overallFit,
+    confidence,
+    confidenceLabel: confidenceLabel(confidence),
+    stars: confidenceStars(confidence),
+    action,
+    actionLabel,
+    reason,
+    suggestedTier:
+      overallFit.kind === "best_fit" ? overallFit.tier : undefined,
   };
 }
 
-/** Sort priority: review-needed first, then borderline, then stable. */
+function deriveAction(
+  overallFit: OverallFit,
+  confidence: ConfidenceLevel,
+  currentTier: ReviewTier,
+): { action: ActionKind; actionLabel: string } {
+  if (confidence === "low" || overallFit.kind === "disagreement") {
+    return { action: "review_required", actionLabel: "Review Required" };
+  }
+
+  if (overallFit.kind === "best_fit") {
+    if (overallFit.tier === currentTier) {
+      return { action: "no_change", actionLabel: "No Change" };
+    }
+    return {
+      action: "review_move",
+      actionLabel: `Review ${currentTier} → ${overallFit.tier}`,
+    };
+  }
+
+  // Borderline between two tiers
+  if (
+    currentTier === overallFit.higher ||
+    currentTier === overallFit.lower
+  ) {
+    return { action: "optional_review", actionLabel: "Optional Review" };
+  }
+
+  // Assigned tier is outside the indicated band — suggest moving toward it.
+  const target =
+    Math.abs(tierRank(currentTier) - tierRank(overallFit.higher)) <=
+    Math.abs(tierRank(currentTier) - tierRank(overallFit.lower))
+      ? overallFit.higher
+      : overallFit.lower;
+  return {
+    action: "review_move",
+    actionLabel: `Review ${currentTier} → ${target}`,
+  };
+}
+
+/** Sort priority: actionable reviews first. */
+export function actionSortRank(action: ActionKind): number {
+  switch (action) {
+    case "review_required":
+      return 0;
+    case "review_move":
+      return 1;
+    case "optional_review":
+      return 2;
+    case "no_change":
+      return 3;
+  }
+}
+
 export function confidenceSortRank(level: ConfidenceLevel): number {
   switch (level) {
     case "low":
       return 0;
-    case "moderate":
+    case "medium":
       return 1;
     case "high":
       return 2;
-    case "very_high":
-      return 3;
   }
+}
+
+export function overallFitLabel(fit: OverallFit): string {
+  return fit.label;
 }

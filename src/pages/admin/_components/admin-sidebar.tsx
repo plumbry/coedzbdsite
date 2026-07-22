@@ -324,7 +324,7 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
         items: [
           { path: "/admin/stats", label: "Analytics Hub", icon: BarChart3 },
           { path: "/admin/tier-re-evaluation", label: "Tier Re-Evaluation", icon: TrendingUp },
-          { path: "/admin/tier-review-confidence", label: "Tier Review Confidence", icon: ShieldCheck },
+          { path: "/admin/tier-review-confidence", label: "Tier Recommendation", icon: ShieldCheck },
           { path: "/admin/audience-insights", label: "Audience Insights", icon: PieChart },
         ],
       });

@@ -26,12 +26,6 @@ import {
   TableRow,
 } from "@/components/ui/table.tsx";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip.tsx";
-import {
   ArrowLeft,
   ArrowDown,
   ArrowUp,
@@ -42,28 +36,41 @@ import {
 } from "lucide-react";
 import { compareTierField } from "@/lib/tier-sort.ts";
 
-type ConfidenceFilter = "all" | "low" | "moderate" | "high" | "very_high" | "attention";
+type ActionFilter = "all" | "attention" | "review_required" | "review_move" | "optional_review" | "no_change";
+type ConfidenceFilter = "all" | "low" | "medium" | "high";
 type SortField =
   | "playerName"
   | "tier"
   | "evaluation"
   | "holistic"
+  | "overall"
   | "confidence"
-  | "gap";
+  | "action";
 type SortDirection = "asc" | "desc";
 
 const CONFIDENCE_RANK: Record<string, number> = {
   low: 0,
-  moderate: 1,
+  medium: 1,
   high: 2,
-  very_high: 3,
+};
+
+const ACTION_RANK: Record<string, number> = {
+  review_required: 0,
+  review_move: 1,
+  optional_review: 2,
+  no_change: 3,
 };
 
 function Stars({ count }: { count: number }) {
   return (
-    <span className="tracking-tight text-amber-600 dark:text-amber-400" aria-label={`${count} of 5 stars`}>
+    <span
+      className="tracking-tight text-amber-600 dark:text-amber-400"
+      aria-label={`${count} of 5 stars`}
+    >
       {"★".repeat(count)}
-      <span className="text-muted-foreground/40">{"☆".repeat(Math.max(0, 5 - count))}</span>
+      <span className="text-muted-foreground/40">
+        {"☆".repeat(Math.max(0, 5 - count))}
+      </span>
     </span>
   );
 }
@@ -78,26 +85,17 @@ function ConfidenceBadge({
   const variant =
     confidence === "low"
       ? "destructive"
-      : confidence === "moderate"
+      : confidence === "medium"
         ? "default"
         : "secondary";
   return <Badge variant={variant}>{label}</Badge>;
 }
 
-function RecommendationBadge({
-  recommendation,
-  label,
-}: {
-  recommendation: string;
-  label: string;
-}) {
-  if (recommendation === "review_required") {
+function ActionBadge({ action, label }: { action: string; label: string }) {
+  if (action === "review_required" || action === "review_move") {
     return <Badge variant="destructive">{label}</Badge>;
   }
-  if (
-    recommendation === "borderline_promotion" ||
-    recommendation === "borderline_demotion"
-  ) {
+  if (action === "optional_review") {
     return (
       <Badge
         variant="outline"
@@ -110,6 +108,25 @@ function RecommendationBadge({
   return <Badge variant="secondary">{label}</Badge>;
 }
 
+function FitBadge({ label }: { label: string }) {
+  const isBorderline = label.startsWith("Borderline");
+  const isDisagreement = label === "Review Required";
+  if (isDisagreement) {
+    return <Badge variant="destructive">{label}</Badge>;
+  }
+  if (isBorderline) {
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-400 text-amber-800 dark:text-amber-300"
+      >
+        {label}
+      </Badge>
+    );
+  }
+  return <Badge variant="outline">{label}</Badge>;
+}
+
 function SortIcon({
   field,
   sortField,
@@ -119,7 +136,9 @@ function SortIcon({
   sortField: SortField;
   sortDirection: SortDirection;
 }) {
-  if (sortField !== field) return <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />;
+  if (sortField !== field) {
+    return <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />;
+  }
   return sortDirection === "asc" ? (
     <ArrowUp className="h-3.5 w-3.5" />
   ) : (
@@ -127,7 +146,12 @@ function SortIcon({
   );
 }
 
-function TierReviewConfidenceContent() {
+function formatCenter(value: number | undefined): string {
+  if (value === undefined) return "—";
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function TierRecommendationContent() {
   const { isModeratorOrAdmin, isLoading: isLoadingUser } = useUserRole();
   const canView = isModeratorOrAdmin;
 
@@ -138,8 +162,10 @@ function TierReviewConfidenceContent() {
 
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState("all");
-  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>("all");
-  const [sortField, setSortField] = useState<SortField>("confidence");
+  const [actionFilter, setActionFilter] = useState<ActionFilter>("all");
+  const [confidenceFilter, setConfidenceFilter] =
+    useState<ConfidenceFilter>("all");
+  const [sortField, setSortField] = useState<SortField>("action");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [displayLimit, setDisplayLimit] = useState(75);
 
@@ -148,8 +174,11 @@ function TierReviewConfidenceContent() {
       setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortField(field);
-      setSortDirection(field === "playerName" ? "asc" : "desc");
-      if (field === "confidence") setSortDirection("asc");
+      setSortDirection(
+        field === "playerName" || field === "action" || field === "confidence"
+          ? "asc"
+          : "desc",
+      );
     }
   };
 
@@ -162,11 +191,13 @@ function TierReviewConfidenceContent() {
       rows = rows.filter((r) => r.currentTier === tierFilter);
     }
 
-    if (confidenceFilter === "attention") {
-      rows = rows.filter(
-        (r) => r.confidence === "low" || r.confidence === "moderate",
-      );
-    } else if (confidenceFilter !== "all") {
+    if (actionFilter === "attention") {
+      rows = rows.filter((r) => r.action !== "no_change");
+    } else if (actionFilter !== "all") {
+      rows = rows.filter((r) => r.action === actionFilter);
+    }
+
+    if (confidenceFilter !== "all") {
       rows = rows.filter((r) => r.confidence === confidenceFilter);
     }
 
@@ -190,26 +221,42 @@ function TierReviewConfidenceContent() {
           cmp = compareTierField(a.currentTier, b.currentTier, "asc");
           break;
         case "evaluation":
-          cmp = a.evaluationPercentile - b.evaluationPercentile;
+          cmp = a.evaluationScore - b.evaluationScore;
           break;
         case "holistic":
-          cmp = a.holisticPercentile - b.holisticPercentile;
+          cmp = a.holisticScore - b.holisticScore;
+          break;
+        case "overall":
+          cmp = a.overallFitLabel.localeCompare(b.overallFitLabel);
           break;
         case "confidence":
           cmp =
             (CONFIDENCE_RANK[a.confidence] ?? 9) -
             (CONFIDENCE_RANK[b.confidence] ?? 9);
-          if (cmp === 0) cmp = b.percentileGap - a.percentileGap;
           break;
-        case "gap":
-          cmp = a.percentileGap - b.percentileGap;
+        case "action":
+          cmp =
+            (ACTION_RANK[a.action] ?? 9) - (ACTION_RANK[b.action] ?? 9);
+          if (cmp === 0) {
+            cmp =
+              (CONFIDENCE_RANK[a.confidence] ?? 9) -
+              (CONFIDENCE_RANK[b.confidence] ?? 9);
+          }
           break;
       }
       return sortDirection === "asc" ? cmp : -cmp;
     });
 
     return sorted;
-  }, [confidenceFilter, data?.reviews, search, sortDirection, sortField, tierFilter]);
+  }, [
+    actionFilter,
+    confidenceFilter,
+    data?.reviews,
+    search,
+    sortDirection,
+    sortField,
+    tierFilter,
+  ]);
 
   const visible = filtered.slice(0, displayLimit);
   const hasMore = filtered.length > displayLimit;
@@ -228,12 +275,12 @@ function TierReviewConfidenceContent() {
     <RoleGate
       allowed={canView}
       title="Moderator access required"
-      description="Tier review confidence is available to moderators and admins."
+      description="Tier recommendations are available to moderators and admins."
     >
       <div className="space-y-6">
         <PageHeader
-          title="Tier Review Confidence"
-          description="Compare evaluation placement vs ZBD performance within each tier. Surfaces who is clearly placed, borderline, or worth discussing — without auto-changing tiers."
+          title="Tier Recommendation"
+          description="Best-fit tier from evaluation and holistic scores — independent of the player's assigned tier. Assigned tier is only used to suggest No Change, promotion, or demotion."
           actions={
             <Button variant="outline" size="sm" asChild>
               <Link to="/admin/stats">
@@ -248,12 +295,12 @@ function TierReviewConfidenceContent() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base text-sky-950 dark:text-sky-100">
               <ShieldCheck className="h-4 w-4" />
-              Review prioritisation — not auto-tiering
+              Decision support — not auto-tiering
             </CardTitle>
             <CardDescription className="text-sky-900/80 dark:text-sky-200/80">
-              Relative within-tier position for both metrics. Agreement raises confidence;
-              disagreement or shared proximity to a tier boundary flags discussion. Final
-              decisions always stay with admins.
+              Boundaries are learned from current score distributions (medians per
+              assigned tier). Each player is then classified by score alone, so changing
+              their assigned tier does not change their best-fit recommendation.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -274,23 +321,89 @@ function TierReviewConfidenceContent() {
               <SummaryTile
                 label="Needs attention"
                 value={data.summary.needsAttention}
-                hint="Low + Moderate"
+                hint="Any action ≠ No Change"
                 emphasize
               />
-              <SummaryTile label="Low" value={data.summary.byConfidence.low} />
-              <SummaryTile label="Moderate" value={data.summary.byConfidence.moderate} />
-              <SummaryTile label="High" value={data.summary.byConfidence.high} />
               <SummaryTile
-                label="Very High"
-                value={data.summary.byConfidence.very_high}
+                label="Review move"
+                value={data.summary.byAction.review_move}
+              />
+              <SummaryTile
+                label="Optional"
+                value={data.summary.byAction.optional_review}
+              />
+              <SummaryTile
+                label="Required"
+                value={data.summary.byAction.review_required}
+              />
+              <SummaryTile
+                label="No change"
+                value={data.summary.byAction.no_change}
               />
             </div>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Learned tier centers</CardTitle>
+                <CardDescription>
+                  Median scores by currently assigned tier — used as classification
+                  anchors.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Metric</TableHead>
+                        <TableHead>S</TableHead>
+                        <TableHead>A</TableHead>
+                        <TableHead>B</TableHead>
+                        <TableHead>C</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-medium">Evaluation</TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.evaluationCenters.S)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.evaluationCenters.A)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.evaluationCenters.B)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.evaluationCenters.C)}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Holistic</TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.holisticCenters.S)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.holisticCenters.A)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.holisticCenters.B)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatCenter(data.summary.holisticCenters.C)}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
 
             {data.summary.insufficientEvaluation > 0 && (
               <p className="text-xs text-muted-foreground flex items-start gap-1.5">
                 <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                {data.summary.insufficientEvaluation} players with a holistic score lack an
-                evaluation score and are omitted from confidence.
+                {data.summary.insufficientEvaluation} players with a holistic score
+                lack an evaluation score and are omitted.
               </p>
             )}
 
@@ -301,11 +414,6 @@ function TierReviewConfidenceContent() {
                     <CardTitle className="text-base">Players</CardTitle>
                     <CardDescription>
                       Showing {visible.length} of {filtered.length}
-                      {confidenceFilter === "attention"
-                        ? " needing attention"
-                        : confidenceFilter === "all"
-                          ? " with holistic scores"
-                          : ""}
                     </CardDescription>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -329,11 +437,26 @@ function TierReviewConfidenceContent() {
                         setDisplayLimit(75);
                       }}
                     >
-                      <option value="all">All tiers</option>
-                      <option value="S">S</option>
-                      <option value="A">A</option>
-                      <option value="B">B</option>
-                      <option value="C">C</option>
+                      <option value="all">All current tiers</option>
+                      <option value="S">Current S</option>
+                      <option value="A">Current A</option>
+                      <option value="B">Current B</option>
+                      <option value="C">Current C</option>
+                    </select>
+                    <select
+                      className="h-9 rounded-md border bg-background px-2 text-sm"
+                      value={actionFilter}
+                      onChange={(e) => {
+                        setActionFilter(e.target.value as ActionFilter);
+                        setDisplayLimit(75);
+                      }}
+                    >
+                      <option value="all">All actions</option>
+                      <option value="attention">Needs attention</option>
+                      <option value="review_required">Review required</option>
+                      <option value="review_move">Review move</option>
+                      <option value="optional_review">Optional review</option>
+                      <option value="no_change">No change</option>
                     </select>
                     <select
                       className="h-9 rounded-md border bg-background px-2 text-sm"
@@ -344,11 +467,9 @@ function TierReviewConfidenceContent() {
                       }}
                     >
                       <option value="all">All confidence</option>
-                      <option value="attention">Needs attention</option>
-                      <option value="low">Low only</option>
-                      <option value="moderate">Moderate only</option>
-                      <option value="high">High only</option>
-                      <option value="very_high">Very High only</option>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
                     </select>
                   </div>
                 </div>
@@ -378,7 +499,7 @@ function TierReviewConfidenceContent() {
                             className="inline-flex items-center gap-1"
                             onClick={() => toggleSort("tier")}
                           >
-                            Tier
+                            Current
                             <SortIcon
                               field="tier"
                               sortField={sortField}
@@ -418,6 +539,20 @@ function TierReviewConfidenceContent() {
                           <button
                             type="button"
                             className="inline-flex items-center gap-1"
+                            onClick={() => toggleSort("overall")}
+                          >
+                            Overall
+                            <SortIcon
+                              field="overall"
+                              sortField={sortField}
+                              sortDirection={sortDirection}
+                            />
+                          </button>
+                        </TableHead>
+                        <TableHead>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1"
                             onClick={() => toggleSort("confidence")}
                           >
                             Confidence
@@ -428,36 +563,29 @@ function TierReviewConfidenceContent() {
                             />
                           </button>
                         </TableHead>
-                        <TableHead>Recommendation</TableHead>
                         <TableHead>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center gap-1"
-                                  onClick={() => toggleSort("gap")}
-                                >
-                                  Gap
-                                  <SortIcon
-                                    field="gap"
-                                    sortField={sortField}
-                                    sortDirection={sortDirection}
-                                  />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                Absolute percentile difference between evaluation and holistic
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1"
+                            onClick={() => toggleSort("action")}
+                          >
+                            Action
+                            <SortIcon
+                              field="action"
+                              sortField={sortField}
+                              sortDirection={sortDirection}
+                            />
+                          </button>
                         </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {visible.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
+                          <TableCell
+                            colSpan={7}
+                            className="text-center text-muted-foreground py-10"
+                          >
                             No players match these filters.
                           </TableCell>
                         </TableRow>
@@ -479,16 +607,24 @@ function TierReviewConfidenceContent() {
                               <Badge variant="outline">{row.currentTier}</Badge>
                             </TableCell>
                             <TableCell>
-                              <div className="text-sm">{row.evaluationLabel}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {Math.round(row.evaluationScore)} pts
+                              <div className="space-y-1">
+                                <FitBadge label={row.evaluationFitLabel} />
+                                <div className="text-xs text-muted-foreground">
+                                  {Math.round(row.evaluationScore)} pts
+                                </div>
                               </div>
                             </TableCell>
                             <TableCell>
-                              <div className="text-sm">{row.holisticLabel}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {row.holisticScore.toFixed(1)} · {row.totalEvents} events
+                              <div className="space-y-1">
+                                <FitBadge label={row.holisticFitLabel} />
+                                <div className="text-xs text-muted-foreground">
+                                  {row.holisticScore.toFixed(1)} · {row.totalEvents}{" "}
+                                  events
+                                </div>
                               </div>
+                            </TableCell>
+                            <TableCell>
+                              <FitBadge label={row.overallFitLabel} />
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-col gap-1 items-start">
@@ -501,17 +637,14 @@ function TierReviewConfidenceContent() {
                             </TableCell>
                             <TableCell>
                               <div className="space-y-1 max-w-[14rem]">
-                                <RecommendationBadge
-                                  recommendation={row.recommendation}
-                                  label={row.recommendationLabel}
+                                <ActionBadge
+                                  action={row.action}
+                                  label={row.actionLabel}
                                 />
                                 <p className="text-xs text-muted-foreground leading-snug">
                                   {row.reason}
                                 </p>
                               </div>
-                            </TableCell>
-                            <TableCell className="tabular-nums text-sm text-muted-foreground">
-                              {Math.round(row.percentileGap)} pts
                             </TableCell>
                           </TableRow>
                         ))
@@ -535,26 +668,31 @@ function TierReviewConfidenceContent() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">How confidence is decided</CardTitle>
+                <CardTitle className="text-base">How recommendations work</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground space-y-2">
                 <p>
-                  Each player is ranked <em>within their current tier</em> for evaluation score
-                  and for holistic score. Raw scores are never compared directly.
+                  Evaluation and holistic scores are each matched to the nearest
+                  learned tier center (or a borderline between adjacent centers). The
+                  player's <em>assigned</em> tier is ignored until the final action.
                 </p>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>
-                    <strong className="text-foreground">Very High / High</strong> — both systems
-                    agree the player sits comfortably in the tier. No review.
+                    <strong className="text-foreground">High</strong> — both systems
+                    agree on the same best fit or boundary.
                   </li>
                   <li>
-                    <strong className="text-foreground">Moderate</strong> — both agree the player
-                    is near an actionable boundary (not top of S or bottom of C). Optional
-                    discussion.
+                    <strong className="text-foreground">Medium</strong> — adjacent /
+                    overlapping signals (e.g. Best Fit A vs Best Fit B).
                   </li>
                   <li>
-                    <strong className="text-foreground">Low</strong> — systems disagree
-                    substantially. Review recommended.
+                    <strong className="text-foreground">Low</strong> — large
+                    disagreement across non-adjacent tiers. Review required.
+                  </li>
+                  <li>
+                    <strong className="text-foreground">Action</strong> — compares the
+                    overall best fit to the current tier (No Change, Review X → Y, or
+                    Optional Review on a boundary).
                   </li>
                 </ul>
               </CardContent>
@@ -582,7 +720,9 @@ function SummaryTile({
       <CardContent className="py-3 px-4">
         <div className="text-xs text-muted-foreground">{label}</div>
         <div className="text-2xl font-semibold tabular-nums">{value}</div>
-        {hint ? <div className="text-[11px] text-muted-foreground">{hint}</div> : null}
+        {hint ? (
+          <div className="text-[11px] text-muted-foreground">{hint}</div>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -593,9 +733,9 @@ export default function TierReviewConfidencePage() {
     <AdminPageLayout
       skipHeader
       requireModerator
-      authTitle="Sign in to access tier review confidence"
+      authTitle="Sign in to access tier recommendations"
     >
-      <TierReviewConfidenceContent />
+      <TierRecommendationContent />
     </AdminPageLayout>
   );
 }

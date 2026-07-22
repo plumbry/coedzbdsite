@@ -43,9 +43,9 @@ const statsSections: StatsSection[] = [
         icon: TrendingUp,
       },
       {
-        title: "Tier Review Confidence",
+        title: "Tier Recommendation",
         description:
-          "See where evaluation and holistic agree — and who is borderline or worth discussing.",
+          "Best-fit tier from evaluation + holistic scores, independent of current assignment.",
         href: "/admin/tier-review-confidence",
         icon: ShieldCheck,
       },
