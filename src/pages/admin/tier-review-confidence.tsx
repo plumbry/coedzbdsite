@@ -51,12 +51,14 @@ type ActionFilter =
   | "optional_review"
   | "no_change";
 type ConfidenceFilter = "all" | "low" | "medium" | "high";
+type PveFilter = "all" | "above" | "around" | "below" | "insufficient";
 type SortField =
   | "playerName"
   | "tier"
   | "evaluation"
   | "holistic"
   | "holisticConfidence"
+  | "performanceVsExpected"
   | "overall"
   | "recommendationConfidence"
   | "action";
@@ -66,6 +68,12 @@ const CONFIDENCE_RANK: Record<string, number> = {
   low: 0,
   medium: 1,
   high: 2,
+};
+
+const PVE_RANK: Record<string, number> = {
+  above: 0,
+  around: 1,
+  below: 2,
 };
 
 const ACTION_RANK: Record<string, number> = {
@@ -79,7 +87,7 @@ const ACTION_RANK: Record<string, number> = {
 function Stars({ count }: { count: number }) {
   return (
     <span
-      className="tracking-tight text-amber-600 dark:text-amber-400"
+      className="inline-block whitespace-nowrap text-xs tracking-tight text-amber-600 dark:text-amber-400"
       aria-label={`${count} of 5 stars`}
     >
       {"★".repeat(count)}
@@ -103,43 +111,143 @@ function ConfidenceBadge({
       : confidence === "medium"
         ? "default"
         : "secondary";
-  return <Badge variant={variant}>{label}</Badge>;
+  return (
+    <Badge variant={variant} className="whitespace-nowrap">
+      {label}
+    </Badge>
+  );
 }
 
 function ActionBadge({ action, label }: { action: string; label: string }) {
   if (action === "review_required" || action === "review_move") {
-    return <Badge variant="destructive">{label}</Badge>;
+    return (
+      <Badge variant="destructive" className="whitespace-nowrap">
+        {label}
+      </Badge>
+    );
   }
   if (action === "review_recommended" || action === "optional_review") {
     return (
       <Badge
         variant="outline"
-        className="border-amber-400 text-amber-800 dark:text-amber-300"
+        className="whitespace-nowrap border-amber-400 text-amber-800 dark:text-amber-300"
       >
         {label}
       </Badge>
     );
   }
-  return <Badge variant="secondary">{label}</Badge>;
+  return (
+    <Badge variant="secondary" className="whitespace-nowrap">
+      {label}
+    </Badge>
+  );
 }
 
 function FitBadge({ label }: { label: string }) {
   const isBorderline = label.startsWith("Borderline");
   const isDisagreement = label === "Review Required";
   if (isDisagreement) {
-    return <Badge variant="destructive">{label}</Badge>;
+    return (
+      <Badge variant="destructive" className="whitespace-nowrap">
+        {label}
+      </Badge>
+    );
   }
   if (isBorderline) {
     return (
       <Badge
         variant="outline"
-        className="border-amber-400 text-amber-800 dark:text-amber-300"
+        className="whitespace-nowrap border-amber-400 text-amber-800 dark:text-amber-300"
       >
         {label}
       </Badge>
     );
   }
-  return <Badge variant="outline">{label}</Badge>;
+  return (
+    <Badge variant="outline" className="whitespace-nowrap">
+      {label}
+    </Badge>
+  );
+}
+
+function PerformanceVsExpectedBadge({
+  level,
+  label,
+}: {
+  level?: string;
+  label?: string;
+}) {
+  if (!level || !label) {
+    return (
+      <Badge variant="secondary" className="whitespace-nowrap">
+        Insufficient data
+      </Badge>
+    );
+  }
+  if (level === "above") {
+    return (
+      <Badge
+        variant="outline"
+        className="whitespace-nowrap border-emerald-500 text-emerald-800 dark:text-emerald-300"
+      >
+        {label}
+      </Badge>
+    );
+  }
+  if (level === "below") {
+    return (
+      <Badge
+        variant="outline"
+        className="whitespace-nowrap border-rose-400 text-rose-800 dark:text-rose-300"
+      >
+        {label}
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="whitespace-nowrap">
+      {label}
+    </Badge>
+  );
+}
+
+function ConfidenceCell({
+  stars,
+  confidence,
+  label,
+  tooltipLines,
+}: {
+  stars: number;
+  confidence: string;
+  label: string;
+  tooltipLines: string[];
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="flex flex-col items-start gap-1 text-left cursor-help"
+        >
+          <Stars count={stars} />
+          <ConfidenceBadge confidence={confidence} label={label} />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs space-y-1">
+        {tooltipLines.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function MetaLine({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-xs text-muted-foreground leading-snug break-words">
+      {children}
+    </div>
+  );
 }
 
 function SortIcon({
@@ -182,6 +290,7 @@ function TierRecommendationContent() {
     useState<ConfidenceFilter>("all");
   const [holisticConfidenceFilter, setHolisticConfidenceFilter] =
     useState<ConfidenceFilter>("all");
+  const [pveFilter, setPveFilter] = useState<PveFilter>("all");
   const [sortField, setSortField] = useState<SortField>("action");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [displayLimit, setDisplayLimit] = useState(75);
@@ -195,7 +304,8 @@ function TierRecommendationContent() {
         field === "playerName" ||
           field === "action" ||
           field === "recommendationConfidence" ||
-          field === "holisticConfidence"
+          field === "holisticConfidence" ||
+          field === "performanceVsExpected"
           ? "asc"
           : "desc",
       );
@@ -223,6 +333,12 @@ function TierRecommendationContent() {
 
     if (holisticConfidenceFilter !== "all") {
       rows = rows.filter((r) => r.holisticConfidence === holisticConfidenceFilter);
+    }
+
+    if (pveFilter === "insufficient") {
+      rows = rows.filter((r) => !r.performanceVsExpected);
+    } else if (pveFilter !== "all") {
+      rows = rows.filter((r) => r.performanceVsExpected === pveFilter);
     }
 
     if (search.trim()) {
@@ -255,6 +371,11 @@ function TierRecommendationContent() {
             (CONFIDENCE_RANK[a.holisticConfidence] ?? 9) -
             (CONFIDENCE_RANK[b.holisticConfidence] ?? 9);
           break;
+        case "performanceVsExpected":
+          cmp =
+            (PVE_RANK[a.performanceVsExpected ?? ""] ?? 9) -
+            (PVE_RANK[b.performanceVsExpected ?? ""] ?? 9);
+          break;
         case "overall":
           cmp = a.overallFitLabel.localeCompare(b.overallFitLabel);
           break;
@@ -280,6 +401,7 @@ function TierRecommendationContent() {
     actionFilter,
     data?.reviews,
     holisticConfidenceFilter,
+    pveFilter,
     recConfidenceFilter,
     search,
     sortDirection,
@@ -309,7 +431,7 @@ function TierRecommendationContent() {
       <div className="space-y-6">
         <PageHeader
           title="Tier Recommendation"
-          description="Best-fit from evaluation and restriction-adjusted holistic. Raw holistic is unchanged for display; adjusted score accounts for teammates vs what ZBD restrictions predict."
+          description="Four complementary signals: Evaluation Score, Holistic Score, Performance vs Expected (teams vs similar-strength peers), and the recommendation that combines them. Does not auto-tier."
           actions={
             <Button variant="outline" size="sm" asChild>
               <Link to="/admin/stats">
@@ -324,15 +446,23 @@ function TierRecommendationContent() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base text-sky-950 dark:text-sky-100">
               <ShieldCheck className="h-4 w-4" />
-              Two confidence signals
+              Decision-support signals
             </CardTitle>
-            <CardDescription className="text-sky-900/80 dark:text-sky-200/80">
-              <strong className="text-sky-950 dark:text-sky-100">Holistic Confidence</strong> —
-              reliability after comparing actual teammates to what ZBD tier restrictions
-              (and historical mixes) predict for the player&apos;s evaluation ability.{" "}
-              <strong className="text-sky-950 dark:text-sky-100">Recommendation Confidence</strong> —
-              certainty in the action after that reliability weighting. Expected strong
-              teammates under the rules are not treated as uncertainty.
+            <CardDescription className="text-sky-900/80 dark:text-sky-200/80 space-y-1.5">
+              <p>
+                <strong className="text-sky-950 dark:text-sky-100">Holistic Confidence</strong> —
+                reliability after comparing actual teammates to what ZBD tier
+                restrictions (and historical mixes) predict for evaluation ability.
+              </p>
+              <p>
+                <strong className="text-sky-950 dark:text-sky-100">Performance vs Expected</strong> —
+                whether the player&apos;s teams outperform or underperform historically
+                similar-strength teams (learned from match data; not individual kill attribution).
+              </p>
+              <p>
+                <strong className="text-sky-950 dark:text-sky-100">Recommendation Confidence</strong> —
+                certainty in the suggested action after weighing those signals.
+              </p>
             </CardDescription>
           </CardHeader>
         </Card>
@@ -357,17 +487,18 @@ function TierRecommendationContent() {
                 emphasize
               />
               <SummaryTile
-                label="Low holistic conf."
-                value={data.summary.byHolisticConfidence.low}
-                hint="Teammate / sample risk"
+                label="Above expected"
+                value={data.summary.byPerformanceVsExpected.above}
+                hint="Teams beat strength peers"
+              />
+              <SummaryTile
+                label="Below expected"
+                value={data.summary.byPerformanceVsExpected.below}
+                hint="Teams lag strength peers"
               />
               <SummaryTile
                 label="Review move"
                 value={data.summary.byAction.review_move}
-              />
-              <SummaryTile
-                label="Review recommended"
-                value={data.summary.byAction.review_recommended}
               />
               <SummaryTile
                 label="No change"
@@ -504,6 +635,13 @@ function TierRecommendationContent() {
                 lack an evaluation score and are omitted.
               </p>
             )}
+            <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              Performance vs Expected uses {data.summary.teamStrengthSampleCount}{" "}
+              team-event samples across {data.summary.teamStrengthExpectationBuckets}{" "}
+              strength buckets. Rebuild the tier re-evaluation cache if samples are
+              missing (Insufficient data).
+            </p>
 
             <Card>
               <CardHeader className="pb-3">
@@ -574,6 +712,20 @@ function TierRecommendationContent() {
                     </select>
                     <select
                       className="h-9 rounded-md border bg-background px-2 text-sm"
+                      value={pveFilter}
+                      onChange={(e) => {
+                        setPveFilter(e.target.value as PveFilter);
+                        setDisplayLimit(75);
+                      }}
+                    >
+                      <option value="all">All vs expected</option>
+                      <option value="above">Above expected</option>
+                      <option value="around">Around expected</option>
+                      <option value="below">Below expected</option>
+                      <option value="insufficient">Insufficient data</option>
+                    </select>
+                    <select
+                      className="h-9 rounded-md border bg-background px-2 text-sm"
                       value={recConfidenceFilter}
                       onChange={(e) => {
                         setRecConfidenceFilter(e.target.value as ConfidenceFilter);
@@ -589,247 +741,314 @@ function TierRecommendationContent() {
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1"
-                            onClick={() => toggleSort("playerName")}
-                          >
-                            Player
-                            <SortIcon
-                              field="playerName"
-                              sortField={sortField}
-                              sortDirection={sortDirection}
-                            />
-                          </button>
-                        </TableHead>
-                        <TableHead>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1"
-                            onClick={() => toggleSort("tier")}
-                          >
-                            Current
-                            <SortIcon
-                              field="tier"
-                              sortField={sortField}
-                              sortDirection={sortDirection}
-                            />
-                          </button>
-                        </TableHead>
-                        <TableHead>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1"
-                            onClick={() => toggleSort("evaluation")}
-                          >
-                            Evaluation
-                            <SortIcon
-                              field="evaluation"
-                              sortField={sortField}
-                              sortDirection={sortDirection}
-                            />
-                          </button>
-                        </TableHead>
-                        <TableHead>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1"
-                            onClick={() => toggleSort("holistic")}
-                          >
-                            Holistic
-                            <SortIcon
-                              field="holistic"
-                              sortField={sortField}
-                              sortDirection={sortDirection}
-                            />
-                          </button>
-                        </TableHead>
-                        <TableHead>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1"
-                            onClick={() => toggleSort("holisticConfidence")}
-                          >
-                            Holistic conf.
-                            <SortIcon
-                              field="holisticConfidence"
-                              sortField={sortField}
-                              sortDirection={sortDirection}
-                            />
-                          </button>
-                        </TableHead>
-                        <TableHead>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1"
-                            onClick={() => toggleSort("overall")}
-                          >
-                            Overall
-                            <SortIcon
-                              field="overall"
-                              sortField={sortField}
-                              sortDirection={sortDirection}
-                            />
-                          </button>
-                        </TableHead>
-                        <TableHead>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1"
-                            onClick={() => toggleSort("recommendationConfidence")}
-                          >
-                            Rec. conf.
-                            <SortIcon
-                              field="recommendationConfidence"
-                              sortField={sortField}
-                              sortDirection={sortDirection}
-                            />
-                          </button>
-                        </TableHead>
-                        <TableHead>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1"
-                            onClick={() => toggleSort("action")}
-                          >
-                            Action
-                            <SortIcon
-                              field="action"
-                              sortField={sortField}
-                              sortDirection={sortDirection}
-                            />
-                          </button>
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {visible.length === 0 ? (
+                <TooltipProvider delayDuration={200}>
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table className="min-w-[1100px]">
+                      <TableHeader>
                         <TableRow>
-                          <TableCell
-                            colSpan={8}
-                            className="text-center text-muted-foreground py-10"
-                          >
-                            No players match these filters.
-                          </TableCell>
+                          <TableHead className="w-[140px]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1"
+                              onClick={() => toggleSort("playerName")}
+                            >
+                              Player
+                              <SortIcon
+                                field="playerName"
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                              />
+                            </button>
+                          </TableHead>
+                          <TableHead className="w-[72px]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1"
+                              onClick={() => toggleSort("tier")}
+                            >
+                              Tier
+                              <SortIcon
+                                field="tier"
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                              />
+                            </button>
+                          </TableHead>
+                          <TableHead className="w-[130px]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1"
+                              onClick={() => toggleSort("evaluation")}
+                            >
+                              Evaluation
+                              <SortIcon
+                                field="evaluation"
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                              />
+                            </button>
+                          </TableHead>
+                          <TableHead className="w-[160px]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1"
+                              onClick={() => toggleSort("holistic")}
+                            >
+                              Holistic
+                              <SortIcon
+                                field="holistic"
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                              />
+                            </button>
+                          </TableHead>
+                          <TableHead className="w-[100px]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1"
+                              onClick={() => toggleSort("holisticConfidence")}
+                            >
+                              Hol. conf.
+                              <SortIcon
+                                field="holisticConfidence"
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                              />
+                            </button>
+                          </TableHead>
+                          <TableHead className="w-[150px]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1"
+                              onClick={() => toggleSort("performanceVsExpected")}
+                            >
+                              Vs expected
+                              <SortIcon
+                                field="performanceVsExpected"
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                              />
+                            </button>
+                          </TableHead>
+                          <TableHead className="w-[130px]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1"
+                              onClick={() => toggleSort("overall")}
+                            >
+                              Overall
+                              <SortIcon
+                                field="overall"
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                              />
+                            </button>
+                          </TableHead>
+                          <TableHead className="w-[100px]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1"
+                              onClick={() =>
+                                toggleSort("recommendationConfidence")
+                              }
+                            >
+                              Rec. conf.
+                              <SortIcon
+                                field="recommendationConfidence"
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                              />
+                            </button>
+                          </TableHead>
+                          <TableHead className="min-w-[180px]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1"
+                              onClick={() => toggleSort("action")}
+                            >
+                              Action
+                              <SortIcon
+                                field="action"
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                              />
+                            </button>
+                          </TableHead>
                         </TableRow>
-                      ) : (
-                        visible.map((row) => (
-                          <TableRow key={row.playerId}>
-                            <TableCell>
-                              <Link
-                                to={`/player/${encodeURIComponent(row.discordUsername)}`}
-                                className="font-medium hover:underline"
-                              >
-                                {row.discordUsername}
-                              </Link>
-                              <div className="text-xs text-muted-foreground">
-                                {row.epicUsername}
-                              </div>
+                      </TableHeader>
+                      <TableBody>
+                        {visible.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={9}
+                              className="text-center text-muted-foreground py-10"
+                            >
+                              No players match these filters.
                             </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{row.currentTier}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <FitBadge label={row.evaluationFitLabel} />
-                                <div className="text-xs text-muted-foreground">
-                                  {Math.round(row.evaluationScore)} pts
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <FitBadge label={row.holisticFitLabel} />
-                                <div className="text-xs text-muted-foreground">
-                                  Adj {row.adjustedHolisticScore.toFixed(1)}
-                                  {row.holisticAdjustmentDelta !== 0
-                                    ? ` (${row.holisticAdjustmentDelta > 0 ? "+" : ""}${row.holisticAdjustmentDelta.toFixed(1)})`
-                                    : ""}
-                                  {" · "}
-                                  raw {row.holisticScore.toFixed(1)}
-                                </div>
-                                {row.rawHolisticFitLabel !== row.holisticFitLabel && (
-                                  <div className="text-[11px] text-muted-foreground">
-                                    Raw fit: {row.rawHolisticFitLabel}
+                          </TableRow>
+                        ) : (
+                          visible.map((row) => {
+                            const holConfTips = [
+                              ...(row.holisticConfidenceReasons.length > 0
+                                ? row.holisticConfidenceReasons
+                                : [row.holisticConfidenceSummary]),
+                            ];
+                            if (
+                              row.actualTeammateStrength !== undefined &&
+                              row.expectedTeammateStrength !== undefined
+                            ) {
+                              holConfTips.push(
+                                `Teammates ${row.actualTeammateStrength.toFixed(2)} vs expected ${row.expectedTeammateStrength.toFixed(2)}`,
+                              );
+                            }
+                            if (row.compositionBiasLabel) {
+                              holConfTips.push(row.compositionBiasLabel);
+                            }
+
+                            const pveTips: string[] = [];
+                            if (row.performanceVsExpectedSummary) {
+                              pveTips.push(row.performanceVsExpectedSummary);
+                            }
+                            if (
+                              row.expectedAvgPlacement !== undefined &&
+                              row.actualAvgPlacement !== undefined
+                            ) {
+                              pveTips.push(
+                                `Placement — expected ${row.expectedAvgPlacement.toFixed(1)}, actual ${row.actualAvgPlacement.toFixed(1)}`,
+                              );
+                            }
+                            if (
+                              row.expectedAvgTeamKills !== undefined &&
+                              row.actualAvgTeamKills !== undefined
+                            ) {
+                              pveTips.push(
+                                `Team kills — expected ${row.expectedAvgTeamKills.toFixed(1)}, actual ${row.actualAvgTeamKills.toFixed(1)}`,
+                              );
+                            }
+                            if (row.performanceVsExpectedEvents !== undefined) {
+                              pveTips.push(
+                                `${row.performanceVsExpectedEvents} team-events compared`,
+                              );
+                            }
+                            if (pveTips.length === 0) {
+                              pveTips.push(
+                                "Rebuild tier re-evaluation cache to populate team strength samples.",
+                              );
+                            }
+
+                            return (
+                              <TableRow key={row.playerId} className="align-top">
+                                <TableCell className="align-top">
+                                  <Link
+                                    to={`/player/${encodeURIComponent(row.discordUsername)}`}
+                                    className="font-medium hover:underline"
+                                  >
+                                    {row.discordUsername}
+                                  </Link>
+                                  <MetaLine>{row.epicUsername}</MetaLine>
+                                </TableCell>
+                                <TableCell className="align-top">
+                                  <Badge variant="outline">{row.currentTier}</Badge>
+                                </TableCell>
+                                <TableCell className="align-top">
+                                  <div className="flex flex-col items-start gap-1">
+                                    <FitBadge label={row.evaluationFitLabel} />
+                                    <MetaLine>
+                                      {Math.round(row.evaluationScore)} pts
+                                    </MetaLine>
                                   </div>
-                                )}
-                                <div className="text-[11px] text-muted-foreground">
-                                  {row.totalEvents} events
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1 max-w-[12rem]">
-                                <TooltipProvider>
+                                </TableCell>
+                                <TableCell className="align-top">
+                                  <div className="flex flex-col items-start gap-1">
+                                    <FitBadge label={row.holisticFitLabel} />
+                                    <MetaLine>
+                                      {row.adjustedHolisticScore.toFixed(1)}
+                                      {row.holisticAdjustmentDelta !== 0
+                                        ? ` (${row.holisticAdjustmentDelta > 0 ? "+" : ""}${row.holisticAdjustmentDelta.toFixed(1)})`
+                                        : ""}
+                                    </MetaLine>
+                                    <MetaLine>
+                                      raw {row.holisticScore.toFixed(1)} ·{" "}
+                                      {row.totalEvents} events
+                                    </MetaLine>
+                                    {row.rawHolisticFitLabel !==
+                                      row.holisticFitLabel && (
+                                      <MetaLine>
+                                        Raw: {row.rawHolisticFitLabel}
+                                      </MetaLine>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="align-top">
+                                  <ConfidenceCell
+                                    stars={row.holisticConfidenceStars}
+                                    confidence={row.holisticConfidence}
+                                    label={row.holisticConfidenceLabel}
+                                    tooltipLines={holConfTips}
+                                  />
+                                </TableCell>
+                                <TableCell className="align-top">
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <div className="flex flex-col gap-1 items-start cursor-help">
-                                        <Stars count={row.holisticConfidenceStars} />
-                                        <ConfidenceBadge
-                                          confidence={row.holisticConfidence}
-                                          label={row.holisticConfidenceLabel}
+                                      <div className="flex flex-col items-start gap-1 cursor-help">
+                                        <PerformanceVsExpectedBadge
+                                          level={row.performanceVsExpected}
+                                          label={row.performanceVsExpectedLabel}
                                         />
+                                        {row.actualAvgPlacement !== undefined &&
+                                          row.expectedAvgPlacement !==
+                                            undefined && (
+                                            <MetaLine>
+                                              Place {row.actualAvgPlacement.toFixed(1)}{" "}
+                                              vs {row.expectedAvgPlacement.toFixed(1)}
+                                            </MetaLine>
+                                          )}
                                       </div>
                                     </TooltipTrigger>
                                     <TooltipContent className="max-w-xs space-y-1">
-                                      {(row.holisticConfidenceReasons.length > 0
-                                        ? row.holisticConfidenceReasons
-                                        : [row.holisticConfidenceSummary]
-                                      ).map((line) => (
+                                      {pveTips.map((line) => (
                                         <p key={line}>{line}</p>
                                       ))}
                                     </TooltipContent>
                                   </Tooltip>
-                                </TooltipProvider>
-                                <p className="text-xs text-muted-foreground leading-snug">
-                                  {row.holisticConfidenceSummary}
-                                </p>
-                                {row.actualTeammateStrength !== undefined &&
-                                  row.expectedTeammateStrength !== undefined && (
-                                    <p className="text-[11px] text-muted-foreground tabular-nums">
-                                      Teammates {row.actualTeammateStrength.toFixed(2)} vs
-                                      expected {row.expectedTeammateStrength.toFixed(2)}
-                                      {row.compositionBiasLabel
-                                        ? ` · ${row.compositionBiasLabel}`
-                                        : ""}
-                                    </p>
-                                  )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <FitBadge label={row.overallFitLabel} />
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex flex-col gap-1 items-start">
-                                <Stars count={row.stars} />
-                                <ConfidenceBadge
-                                  confidence={row.recommendationConfidence}
-                                  label={row.recommendationConfidenceLabel}
-                                />
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1 max-w-[15rem]">
-                                <ActionBadge
-                                  action={row.action}
-                                  label={row.actionLabel}
-                                />
-                                <p className="text-xs text-muted-foreground leading-snug">
-                                  {row.reason}
-                                </p>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                                </TableCell>
+                                <TableCell className="align-top">
+                                  <FitBadge label={row.overallFitLabel} />
+                                </TableCell>
+                                <TableCell className="align-top">
+                                  <ConfidenceCell
+                                    stars={row.stars}
+                                    confidence={row.recommendationConfidence}
+                                    label={row.recommendationConfidenceLabel}
+                                    tooltipLines={[row.reason]}
+                                  />
+                                </TableCell>
+                                <TableCell className="align-top">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex flex-col items-start gap-1 max-w-[220px] cursor-help">
+                                        <ActionBadge
+                                          action={row.action}
+                                          label={row.actionLabel}
+                                        />
+                                        <p className="text-xs text-muted-foreground leading-snug line-clamp-2">
+                                          {row.reason}
+                                        </p>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-sm">
+                                      <p>{row.reason}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TooltipProvider>
 
                 {hasMore && (
                   <div className="flex justify-center pt-4">

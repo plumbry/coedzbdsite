@@ -22,6 +22,12 @@ import {
   restrictionPriorTeammateStrength,
   type RestrictionTier,
 } from "./lib/stats/tierRestrictions";
+import {
+  buildStrengthExpectations,
+  computePerformanceVsExpected,
+  type PerformanceVsExpectedLevel,
+  type TeamPerfSample,
+} from "./lib/stats/teamAdjustedPerformance";
 
 type PlayerReviewRow = {
   playerId: string;
@@ -47,6 +53,15 @@ type PlayerReviewRow = {
   compositionResidual?: number;
   compositionBiasLabel?: string;
   duoShare?: number;
+  /** Performance vs Expected — teams vs similar-strength historical peers. */
+  performanceVsExpected?: PerformanceVsExpectedLevel;
+  performanceVsExpectedLabel?: string;
+  performanceVsExpectedSummary?: string;
+  expectedAvgPlacement?: number;
+  actualAvgPlacement?: number;
+  expectedAvgTeamKills?: number;
+  actualAvgTeamKills?: number;
+  performanceVsExpectedEvents?: number;
   totalEvents: number;
   overallFitLabel: string;
   recommendationConfidence: ConfidenceLevel;
@@ -243,6 +258,21 @@ export const getTierReviewConfidence = query({
 
     const adjustedHolisticCenters = buildTierCenters(adjustedHolisticByTier);
 
+    // Learn expected team outcomes by strength from historical samples.
+    const globalTeamSamples: TeamPerfSample[] = [];
+    for (const cache of cacheRows) {
+      const samples = cache.teamPerfSamples;
+      if (!samples) continue;
+      for (const sample of samples) {
+        globalTeamSamples.push({
+          strength: sample.strength,
+          placement: sample.placement,
+          teamKills: sample.teamKills,
+        });
+      }
+    }
+    const strengthExpectations = buildStrengthExpectations(globalTeamSamples);
+
     const reviews: PlayerReviewRow[] = [];
 
     for (const row of withAdjusted) {
@@ -269,11 +299,24 @@ export const getTierReviewConfidence = query({
         hasMutualDependency: candidate.hasMutualDependency,
       });
 
+      const playerSamples: TeamPerfSample[] = (cache.teamPerfSamples ?? []).map(
+        (s) => ({
+          strength: s.strength,
+          placement: s.placement,
+          teamKills: s.teamKills,
+        }),
+      );
+      const performanceVsExpected = computePerformanceVsExpected(
+        playerSamples,
+        strengthExpectations,
+      );
+
       const result = computeTierRecommendation(
         evaluationFit,
         holisticFit,
         currentTier,
         holisticConfidence,
+        performanceVsExpected,
       );
 
       reviews.push({
@@ -299,6 +342,14 @@ export const getTierReviewConfidence = query({
         compositionResidual: holisticConfidence.compositionResidual,
         compositionBiasLabel: holisticConfidence.compositionBiasLabel,
         duoShare: holisticConfidence.duoShare,
+        performanceVsExpected: performanceVsExpected?.level,
+        performanceVsExpectedLabel: performanceVsExpected?.label,
+        performanceVsExpectedSummary: performanceVsExpected?.summary,
+        expectedAvgPlacement: performanceVsExpected?.expectedAvgPlacement,
+        actualAvgPlacement: performanceVsExpected?.actualAvgPlacement,
+        expectedAvgTeamKills: performanceVsExpected?.expectedAvgTeamKills,
+        actualAvgTeamKills: performanceVsExpected?.actualAvgTeamKills,
+        performanceVsExpectedEvents: performanceVsExpected?.eventCount,
         totalEvents: cache.totalEvents,
         overallFitLabel: overallFitLabel(result.overallFit),
         recommendationConfidence: result.recommendationConfidence,
@@ -341,6 +392,15 @@ export const getTierReviewConfidence = query({
         medium: reviews.filter((r) => r.holisticConfidence === "medium").length,
         low: reviews.filter((r) => r.holisticConfidence === "low").length,
       },
+      byPerformanceVsExpected: {
+        above: reviews.filter((r) => r.performanceVsExpected === "above")
+          .length,
+        around: reviews.filter((r) => r.performanceVsExpected === "around")
+          .length,
+        below: reviews.filter((r) => r.performanceVsExpected === "below")
+          .length,
+        insufficient: reviews.filter((r) => !r.performanceVsExpected).length,
+      },
       byAction: {
         review_required: reviews.filter((r) => r.action === "review_required")
           .length,
@@ -364,6 +424,8 @@ export const getTierReviewConfidence = query({
         B: restrictionPriorTeammateStrength("B"),
         C: restrictionPriorTeammateStrength("C"),
       },
+      teamStrengthExpectationBuckets: strengthExpectations.length,
+      teamStrengthSampleCount: globalTeamSamples.length,
       evaluationPeerCounts: {
         S: evaluationScoresByTier.S.length,
         A: evaluationScoresByTier.A.length,

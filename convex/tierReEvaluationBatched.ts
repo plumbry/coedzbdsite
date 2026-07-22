@@ -768,27 +768,50 @@ async function processBatchHandler(
         .withIndex("by_player", (q) => q.eq("playerId", player._id))
         .collect();
       
-      // Event-weighted average teammate tier (each event contributes equally).
-      // Uses live teammate tiers; missing/unknown tiers are skipped per seat.
+      // Event-weighted average teammate tier + team performance samples.
       const eventTeammateAverages: number[] = [];
-      const teammateTierCache = new Map<string, number | null>();
+      const teammateLookupCache = new Map<
+        string,
+        { tierNumeric: number | null; totalScore: number | null }
+      >();
+      const teamPerfSamples: {
+        strength: number;
+        placement: number;
+        teamKills?: number;
+      }[] = [];
+
+      const selfEvalScore =
+        typeof player.totalScore === "number" ? player.totalScore : null;
 
       for (const result of allPlayerResults) {
         if (!result.teamMembers || result.teamMembers.length === 0) continue;
 
         const seatTiers: number[] = [];
+        const seatScores: number[] = [];
+        if (selfEvalScore !== null) {
+          seatScores.push(selfEvalScore);
+        }
+
         for (const teammateEpic of result.teamMembers) {
           if (teammateEpic === player.epicUsername) continue;
 
-          let numeric: number | null | undefined =
-            teammateTierCache.get(teammateEpic);
-          if (numeric === undefined) {
+          let cached = teammateLookupCache.get(teammateEpic);
+          if (cached === undefined) {
             const teammate = await lookupPlayerByEpicUsername(ctx, teammateEpic);
-            numeric = teammate?.tier ? tierToNumeric(teammate.tier) : null;
-            teammateTierCache.set(teammateEpic, numeric);
+            cached = {
+              tierNumeric: teammate?.tier ? tierToNumeric(teammate.tier) : null,
+              totalScore:
+                typeof teammate?.totalScore === "number"
+                  ? teammate.totalScore
+                  : null,
+            };
+            teammateLookupCache.set(teammateEpic, cached);
           }
-          if (numeric !== null && numeric > 0) {
-            seatTiers.push(numeric);
+          if (cached.tierNumeric !== null && cached.tierNumeric > 0) {
+            seatTiers.push(cached.tierNumeric);
+          }
+          if (cached.totalScore !== null) {
+            seatScores.push(cached.totalScore);
           }
         }
 
@@ -797,7 +820,31 @@ async function processBatchHandler(
             seatTiers.reduce((sum, t) => sum + t, 0) / seatTiers.length,
           );
         }
+
+        const rosterSize = result.teamMembers.length;
+        const requiredScores = Math.max(2, Math.ceil(rosterSize * 0.5));
+        if (
+          seatScores.length >= requiredScores &&
+          typeof result.placement === "number"
+        ) {
+          const strength =
+            seatScores.reduce((sum, s) => sum + s, 0) / seatScores.length;
+          teamPerfSamples.push({
+            strength,
+            placement: result.placement,
+            teamKills:
+              typeof result.teamKills === "number"
+                ? result.teamKills
+                : undefined,
+          });
+        }
       }
+
+      // Keep most recent samples only (results are not guaranteed ordered; cap size)
+      const cappedTeamPerfSamples =
+        teamPerfSamples.length > 40
+          ? teamPerfSamples.slice(-40)
+          : teamPerfSamples;
 
       const avgTeammateTierNumeric =
         eventTeammateAverages.length > 0
@@ -965,6 +1012,8 @@ async function processBatchHandler(
         rawHolisticScore,
         avgTeammateTier: avgTeammateTierNumeric,
         tierGapAdjustment: undefined,
+        teamPerfSamples:
+          cappedTeamPerfSamples.length > 0 ? cappedTeamPerfSamples : undefined,
         tierAbove,
         tierAboveAvg: tierAbove ? (tierAverages as Record<string, number>)[tierAbove] : undefined,
         tierAboveHolistic,

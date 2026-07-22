@@ -3,6 +3,7 @@ import {
   compositionBiasLabel,
   type CompositionBias,
 } from "./tierRestrictions";
+import type { PerformanceVsExpectedResult } from "./teamAdjustedPerformance";
 
 /** Competitive tiers used for recommendations (excludes D / Unranked). */
 export const REVIEW_TIERS = ["S", "A", "B", "C"] as const;
@@ -480,6 +481,7 @@ export function computeTierRecommendation(
   holisticFit: TierFit,
   currentTier: ReviewTier,
   holisticConfidence: HolisticConfidenceResult,
+  performanceVsExpected?: PerformanceVsExpectedResult | null,
 ): RecommendationResult {
   const evalTiers = tiersInFit(evaluationFit);
   const holisticTiers = tiersInFit(holisticFit);
@@ -488,6 +490,7 @@ export function computeTierRecommendation(
   const span = spanOfTiers(union);
   const hc = holisticConfidence.level;
   const bias = holisticConfidence.compositionBias;
+  const pve = performanceVsExpected?.level;
   const holisticStrength = tierFitStrength(holisticFit);
   const evalStrength = tierFitStrength(evaluationFit);
   const holisticHigher = holisticStrength > evalStrength + 0.25;
@@ -513,19 +516,26 @@ export function computeTierRecommendation(
   const inflatedUp =
     span >= 1 &&
     holisticHigher &&
-    bias === "stronger_than_expected";
+    (bias === "stronger_than_expected" || pve === "below");
   const outperformance =
     span >= 1 &&
     holisticHigher &&
-    bias === "weaker_than_expected";
+    (bias === "weaker_than_expected" || pve === "above");
   const teammateDrag =
     span >= 1 &&
     holisticLower &&
-    bias === "weaker_than_expected";
+    (bias === "weaker_than_expected" || pve === "below");
   const underperformedWithHelp =
     span >= 1 &&
     holisticLower &&
-    bias === "stronger_than_expected";
+    (bias === "stronger_than_expected" || pve === "above");
+
+  // Strong promotion case: holistic higher + teams beat strength peers
+  const pveSupportsPromotion =
+    span >= 1 && holisticHigher && pve === "above";
+  // Holistic higher but teams underperform peers → likely roster strength
+  const pveUndercutsHolistic =
+    span >= 1 && holisticHigher && pve === "below";
 
   if (sameBestFit || sameBorderline) {
     overallFit = evaluationFit;
@@ -534,33 +544,44 @@ export function computeTierRecommendation(
       evaluationFit.kind === "best_fit"
         ? "Evaluation and performance agree on the same best-fit tier."
         : "Evaluation and performance agree the player sits on the same boundary.";
-    if (bias && bias !== "as_expected") {
-      reason += ` ${holisticConfidence.compositionBiasLabel}.`;
+    if (pve === "above") {
+      reason += " Teams also outperform similar-strength peers.";
+    } else if (pve === "below") {
+      reason += " Teams underperform similar-strength peers.";
     }
+  } else if (pveSupportsPromotion && !pveUndercutsHolistic) {
+    overallFit = fitFromTier(union.length <= 2 ? union : holisticTiers);
+    recommendationConfidence = "high";
+    reason =
+      "Holistic exceeds evaluation and teams outperform similar-strength teams — promotion case is stronger.";
+  } else if (pveUndercutsHolistic) {
+    overallFit = evaluationFit;
+    softReview = true;
+    recommendationConfidence = "medium";
+    reason =
+      "Strong holistic may largely reflect roster strength — teams underperform similar-strength peers. Evaluation should carry more weight.";
   } else if (inflatedUp) {
-    // Holistic looks higher but teammates stronger than restrictions predict.
     overallFit = evaluationFit;
     softReview = true;
     recommendationConfidence = span >= 2 ? "low" : "medium";
     reason =
       "Holistic performance may be inflated by stronger-than-expected teammates under ZBD restrictions. Evaluation should carry more weight.";
   } else if (outperformance) {
-    // Holistic higher despite weaker-than-expected teammates — credit it.
     overallFit = fitFromTier(union.length <= 2 ? union : holisticTiers);
     recommendationConfidence = hc === "high" ? "high" : "medium";
     reason =
-      "Holistic exceeds evaluation despite weaker-than-expected teammates — performance deserves extra weight.";
+      "Holistic exceeds evaluation with supportive team-context signals — performance deserves extra weight.";
   } else if (teammateDrag) {
     overallFit = evaluationFit;
     softReview = true;
     recommendationConfidence = "medium";
     reason =
-      "Holistic sits below evaluation with weaker-than-expected teammates — results may reflect team drag more than individual decline.";
+      "Holistic sits below evaluation with weaker team-context signals — results may reflect team drag more than individual decline.";
   } else if (underperformedWithHelp) {
     overallFit = fitFromTier(union.length <= 2 ? union : holisticTiers);
     recommendationConfidence = hc === "high" ? "high" : "medium";
     reason =
-      "Holistic sits below evaluation despite stronger-than-expected teammates — underperformance looks more individual.";
+      "Holistic sits below evaluation despite stronger team context — underperformance looks more individual.";
   } else if (hc === "low" && span >= 1) {
     overallFit = evaluationFit;
     softReview = true;
@@ -571,6 +592,11 @@ export function computeTierRecommendation(
     recommendationConfidence = "medium";
     reason =
       "Evaluation and performance partially agree; player sits near a tier boundary.";
+    if (pve === "above") {
+      reason += " Teams outperform similar-strength peers.";
+    } else if (pve === "below") {
+      reason += " Teams underperform similar-strength peers.";
+    }
   } else if (span <= 1) {
     overallFit = fitFromTier(union);
     recommendationConfidence = hc === "high" ? "high" : "medium";
@@ -582,6 +608,9 @@ export function computeTierRecommendation(
     overallFit = { kind: "disagreement", label: "Review Required" };
     recommendationConfidence = "high";
     reason = "Evaluation and performance disagree.";
+    if (pve) {
+      reason += ` Performance vs expected: ${performanceVsExpected!.label}.`;
+    }
   } else {
     overallFit = fitFromTier(evalTiers);
     softReview = true;

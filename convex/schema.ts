@@ -1598,6 +1598,19 @@ export default defineSchema({
     preTierGapHolisticScore: v.optional(v.number()), // Holistic before tier-gap placement adjustment
     avgTeammateTier: v.optional(v.number()), // Average teammate tier (1=C, 2=B, 3=A, 4=S)
     tierGapAdjustment: v.optional(v.number()), // Multiplier applied (1.0, 0.85, 0.70, 0.55)
+    /**
+     * Per-event team strength samples for Performance vs Expected.
+     * strength = mean evaluation score of roster; placement/teamKills = team outcomes.
+     */
+    teamPerfSamples: v.optional(
+      v.array(
+        v.object({
+          strength: v.number(),
+          placement: v.number(),
+          teamKills: v.optional(v.number()),
+        }),
+      ),
+    ),
     // Tier comparisons
     tierAbove: v.optional(v.string()),
     tierAboveAvg: v.optional(v.number()),
