@@ -126,6 +126,15 @@ export type ConfidenceResult = {
   percentileGap: number;
 };
 
+/** S cannot promote; C cannot demote. Other edge boundaries remain review-worthy. */
+export function hasPromotionOpportunity(tier: string): boolean {
+  return tier !== "S";
+}
+
+export function hasDemotionOpportunity(tier: string): boolean {
+  return tier !== "C";
+}
+
 /**
  * Compare evaluation vs holistic within-tier positions.
  * Agreement matters more than absolute score — final tier calls stay with admins.
@@ -133,6 +142,7 @@ export type ConfidenceResult = {
 export function computeReviewConfidence(
   evaluationPercentile: number,
   holisticPercentile: number,
+  currentTier: string,
 ): ConfidenceResult {
   const evaluationBand = bandFromPercentile(evaluationPercentile);
   const holisticBand = bandFromPercentile(holisticPercentile);
@@ -158,14 +168,46 @@ export function computeReviewConfidence(
     evaluationBand === holisticBand &&
     (evaluationBand === "top" || evaluationBand === "bottom")
   ) {
-    const isPromotion = evaluationBand === "top";
+    const isPromotionEdge = evaluationBand === "top";
+    const actionableBoundary = isPromotionEdge
+      ? hasPromotionOpportunity(currentTier)
+      : hasDemotionOpportunity(currentTier);
+
+    // Top of S / bottom of C are not tier-move boundaries — treat as settled agreement.
+    if (!actionableBoundary) {
+      if (percentileGap <= VERY_HIGH_MAX_GAP) {
+        return {
+          confidence: "very_high",
+          stars: confidenceStars("very_high"),
+          recommendation: "no_review",
+          reason: isPromotionEdge
+            ? "Both systems place the player near the top of S (no promotion tier)."
+            : "Both systems place the player near the bottom of C (no demotion tier).",
+          evaluationBand,
+          holisticBand,
+          percentileGap,
+        };
+      }
+      return {
+        confidence: "high",
+        stars: confidenceStars("high"),
+        recommendation: "no_review",
+        reason: isPromotionEdge
+          ? "Both systems place the player near the top of S (no promotion tier)."
+          : "Both systems place the player near the bottom of C (no demotion tier).",
+        evaluationBand,
+        holisticBand,
+        percentileGap,
+      };
+    }
+
     return {
       confidence: "moderate",
       stars: confidenceStars("moderate"),
-      recommendation: isPromotion
+      recommendation: isPromotionEdge
         ? "borderline_promotion"
         : "borderline_demotion",
-      reason: isPromotion
+      reason: isPromotionEdge
         ? "Both systems place the player near the top of their tier."
         : "Both systems place the player near the bottom of their tier.",
       evaluationBand,

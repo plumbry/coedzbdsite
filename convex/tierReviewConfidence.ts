@@ -113,6 +113,7 @@ export const getTierReviewConfidence = query({
       const result = computeReviewConfidence(
         evaluationPercentile,
         holisticPercentile,
+        tier,
       );
 
       reviews.push({

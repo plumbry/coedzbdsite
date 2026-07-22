@@ -545,7 +545,8 @@ function TierReviewConfidenceContent() {
                   </li>
                   <li>
                     <strong className="text-foreground">Moderate</strong> — both agree the player
-                    is near the top or bottom boundary. Optional discussion.
+                    is near an actionable boundary (not top of S or bottom of C). Optional
+                    discussion.
                   </li>
                   <li>
                     <strong className="text-foreground">Low</strong> — systems disagree
