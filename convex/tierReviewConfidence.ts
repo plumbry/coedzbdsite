@@ -4,10 +4,12 @@ import {
   actionSortRank,
   buildTierCenters,
   classifyScoreAgainstCenters,
+  computeHolisticConfidence,
   computeTierRecommendation,
   confidenceSortRank,
   isReviewTier,
   overallFitLabel,
+  tierFitStrength,
   type ActionKind,
   type ConfidenceLevel,
   type ReviewTier,
@@ -23,10 +25,16 @@ type PlayerReviewRow = {
   evaluationFitLabel: string;
   holisticScore: number;
   holisticFitLabel: string;
+  holisticConfidence: ConfidenceLevel;
+  holisticConfidenceLabel: string;
+  holisticConfidenceStars: number;
+  holisticConfidenceSummary: string;
+  avgTeammateTier?: number;
+  duoShare?: number;
   totalEvents: number;
   overallFitLabel: string;
-  confidence: ConfidenceLevel;
-  confidenceLabel: string;
+  recommendationConfidence: ConfidenceLevel;
+  recommendationConfidenceLabel: string;
   stars: number;
   action: ActionKind;
   actionLabel: string;
@@ -35,8 +43,8 @@ type PlayerReviewRow = {
 };
 
 /**
- * Tier recommendation — best-fit from evaluation + holistic distributions.
- * Current assigned tier is used only for the action (promote / demote / none).
+ * Tier recommendation — best-fit from evaluation + holistic distributions,
+ * with Holistic Confidence so teammate-inflated stats weigh less.
  */
 export const getTierReviewConfidence = query({
   args: {},
@@ -63,7 +71,6 @@ export const getTierReviewConfidence = query({
       }
     }
 
-    // Population distributions by *assigned* tier — used only to learn centers.
     const evaluationScoresByTier: Record<ReviewTier, number[]> = {
       S: [],
       A: [],
@@ -95,6 +102,10 @@ export const getTierReviewConfidence = query({
       discordUsername: string;
       epicUsername: string;
       nickname?: string;
+      matchesAnalyzed?: number;
+      withoutDuoCount?: number;
+      hasConsistentDuo: boolean;
+      hasMutualDependency: boolean;
     };
 
     const candidates: CacheCandidate[] = [];
@@ -114,7 +125,6 @@ export const getTierReviewConfidence = query({
         continue;
       }
 
-      // Holistic center learning uses assigned tier of the population.
       holisticScoresByTier[currentTier].push(cache.holisticScore);
 
       const evaluationScore =
@@ -131,6 +141,10 @@ export const getTierReviewConfidence = query({
         discordUsername: player?.discordUsername ?? cache.discordUsername,
         epicUsername: player?.epicUsername ?? "",
         nickname: player?.nickname,
+        matchesAnalyzed: player?.contributionScore?.matchesAnalyzed,
+        withoutDuoCount: player?.dcaCache?.withoutDuoCount,
+        hasConsistentDuo: !!player?.dcaCache?.consistentDuoEpic,
+        hasMutualDependency: !!player?.dcaCache?.hasMutualDependency,
       });
     }
 
@@ -142,7 +156,6 @@ export const getTierReviewConfidence = query({
     for (const candidate of candidates) {
       const { cache, currentTier, evaluationScore } = candidate;
 
-      // Classification uses scores vs centers only — not the player's tier.
       const evaluationFit = classifyScoreAgainstCenters(
         evaluationScore,
         evaluationCenters,
@@ -152,10 +165,21 @@ export const getTierReviewConfidence = query({
         holisticCenters,
       );
 
+      const holisticConfidence = computeHolisticConfidence({
+        totalEvents: cache.totalEvents,
+        avgTeammateTier: cache.avgTeammateTier,
+        playerAbilityStrength: tierFitStrength(evaluationFit),
+        matchesAnalyzed: candidate.matchesAnalyzed,
+        withoutDuoCount: candidate.withoutDuoCount,
+        hasConsistentDuo: candidate.hasConsistentDuo,
+        hasMutualDependency: candidate.hasMutualDependency,
+      });
+
       const result = computeTierRecommendation(
         evaluationFit,
         holisticFit,
         currentTier,
+        holisticConfidence,
       );
 
       reviews.push({
@@ -168,10 +192,16 @@ export const getTierReviewConfidence = query({
         evaluationFitLabel: evaluationFit.label,
         holisticScore: cache.holisticScore,
         holisticFitLabel: holisticFit.label,
+        holisticConfidence: holisticConfidence.level,
+        holisticConfidenceLabel: holisticConfidence.label,
+        holisticConfidenceStars: holisticConfidence.stars,
+        holisticConfidenceSummary: holisticConfidence.summary,
+        avgTeammateTier: cache.avgTeammateTier,
+        duoShare: holisticConfidence.duoShare,
         totalEvents: cache.totalEvents,
         overallFitLabel: overallFitLabel(result.overallFit),
-        confidence: result.confidence,
-        confidenceLabel: result.confidenceLabel,
+        recommendationConfidence: result.recommendationConfidence,
+        recommendationConfidenceLabel: result.recommendationConfidenceLabel,
         stars: result.stars,
         action: result.action,
         actionLabel: result.actionLabel,
@@ -184,8 +214,13 @@ export const getTierReviewConfidence = query({
       const byAction = actionSortRank(a.action) - actionSortRank(b.action);
       if (byAction !== 0) return byAction;
       const byConfidence =
-        confidenceSortRank(a.confidence) - confidenceSortRank(b.confidence);
+        confidenceSortRank(a.recommendationConfidence) -
+        confidenceSortRank(b.recommendationConfidence);
       if (byConfidence !== 0) return byConfidence;
+      const byHolistic =
+        confidenceSortRank(a.holisticConfidence) -
+        confidenceSortRank(b.holisticConfidence);
+      if (byHolistic !== 0) return byHolistic;
       return a.discordUsername.localeCompare(b.discordUsername);
     });
 
@@ -193,15 +228,25 @@ export const getTierReviewConfidence = query({
       totalCompared: reviews.length,
       insufficientEvaluation,
       skippedInvalidTier,
-      byConfidence: {
-        high: reviews.filter((r) => r.confidence === "high").length,
-        medium: reviews.filter((r) => r.confidence === "medium").length,
-        low: reviews.filter((r) => r.confidence === "low").length,
+      byRecommendationConfidence: {
+        high: reviews.filter((r) => r.recommendationConfidence === "high")
+          .length,
+        medium: reviews.filter((r) => r.recommendationConfidence === "medium")
+          .length,
+        low: reviews.filter((r) => r.recommendationConfidence === "low").length,
+      },
+      byHolisticConfidence: {
+        high: reviews.filter((r) => r.holisticConfidence === "high").length,
+        medium: reviews.filter((r) => r.holisticConfidence === "medium").length,
+        low: reviews.filter((r) => r.holisticConfidence === "low").length,
       },
       byAction: {
         review_required: reviews.filter((r) => r.action === "review_required")
           .length,
         review_move: reviews.filter((r) => r.action === "review_move").length,
+        review_recommended: reviews.filter(
+          (r) => r.action === "review_recommended",
+        ).length,
         optional_review: reviews.filter((r) => r.action === "optional_review")
           .length,
         no_change: reviews.filter((r) => r.action === "no_change").length,

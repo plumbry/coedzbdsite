@@ -20,6 +20,7 @@ export type OverallFit =
 export type ActionKind =
   | "no_change"
   | "optional_review"
+  | "review_recommended"
   | "review_move"
   | "review_required";
 
@@ -29,6 +30,14 @@ export type ActionKind =
  * absolute score cutoffs.
  */
 export const BORDERLINE_GAP_FRACTION = 0.2;
+
+/** Numeric tier scale matching avgTeammateTier (S=4 … C=1). */
+const TIER_STRENGTH: Record<ReviewTier, number> = {
+  S: 4,
+  A: 3,
+  B: 2,
+  C: 1,
+};
 
 const TIER_RANK: Record<ReviewTier, number> = {
   S: 3,
@@ -170,6 +179,208 @@ export function confidenceLabel(level: ConfidenceLevel): string {
   }
 }
 
+export function tierFitStrength(fit: TierFit): number {
+  if (fit.kind === "best_fit") return TIER_STRENGTH[fit.tier];
+  return (TIER_STRENGTH[fit.higher] + TIER_STRENGTH[fit.lower]) / 2;
+}
+
+export type HolisticConfidenceInput = {
+  totalEvents: number;
+  /** Average unique-teammate tier strength (S=4 … C=1). */
+  avgTeammateTier?: number;
+  /** Player ability anchor for gap (typically evaluation best-fit strength). */
+  playerAbilityStrength: number;
+  /** Matches analyzed for TC / duo context. */
+  matchesAnalyzed?: number;
+  /** Matches without the consistent duo partner. */
+  withoutDuoCount?: number;
+  hasConsistentDuo?: boolean;
+  hasMutualDependency?: boolean;
+};
+
+export type HolisticConfidenceResult = {
+  level: ConfidenceLevel;
+  label: string;
+  stars: number;
+  /** 0–1 composite reliability. */
+  score: number;
+  teammateGap?: number;
+  /** Estimated fraction of matches with the consistent duo (0–1). */
+  duoShare?: number;
+  reasons: string[];
+  summary: string;
+};
+
+function sampleSizeFactor(totalEvents: number): number {
+  if (totalEvents >= 20) return 1;
+  if (totalEvents >= 13) return 0.8;
+  if (totalEvents >= 8) return 0.6;
+  return 0.35;
+}
+
+function teammateGapFactor(gap: number | undefined): {
+  factor: number;
+  reason?: string;
+} {
+  if (gap === undefined) {
+    return { factor: 0.7 };
+  }
+  if (gap < 0.4) return { factor: 1 };
+  if (gap < 0.85) {
+    return {
+      factor: 0.75,
+      reason: "Average teammates differ somewhat from evaluation level.",
+    };
+  }
+  if (gap < 1.35) {
+    return {
+      factor: 0.45,
+      reason: "Average teammates differ by about a tier from evaluation level.",
+    };
+  }
+  return {
+    factor: 0.2,
+    reason: "Average teammates differ by well over a tier from evaluation level.",
+  };
+}
+
+function duoConcentrationFactor(input: {
+  matchesAnalyzed?: number;
+  withoutDuoCount?: number;
+  hasConsistentDuo?: boolean;
+  hasMutualDependency?: boolean;
+  teammateGap?: number;
+}): { factor: number; duoShare?: number; reason?: string } {
+  const { matchesAnalyzed, withoutDuoCount, hasConsistentDuo, hasMutualDependency } =
+    input;
+
+  if (
+    matchesAnalyzed === undefined ||
+    matchesAnalyzed <= 0 ||
+    withoutDuoCount === undefined
+  ) {
+    if (hasConsistentDuo && hasMutualDependency) {
+      return {
+        factor: 0.65,
+        reason: "Consistent mutual duo may concentrate performance.",
+      };
+    }
+    return { factor: 0.85 };
+  }
+
+  const withDuo = Math.max(0, matchesAnalyzed - withoutDuoCount);
+  const duoShare = Math.min(1, withDuo / matchesAnalyzed);
+
+  if (!hasConsistentDuo || duoShare < 0.45) {
+    return { factor: 1, duoShare };
+  }
+
+  if (duoShare >= 0.8) {
+    const direction =
+      input.teammateGap !== undefined && input.teammateGap >= 0.85
+        ? "stronger"
+        : "the same";
+    return {
+      factor: hasMutualDependency ? 0.3 : 0.4,
+      duoShare,
+      reason: `Played ${Math.round(duoShare * 100)}% of matches with a consistent duo${
+        direction === "stronger" ? " (often stronger teammates)" : ""
+      }.`,
+    };
+  }
+
+  if (duoShare >= 0.6) {
+    return {
+      factor: 0.6,
+      duoShare,
+      reason: `Played ${Math.round(duoShare * 100)}% of matches with a consistent duo.`,
+    };
+  }
+
+  return { factor: 0.8, duoShare };
+}
+
+/**
+ * How trustworthy the Holistic Score is as an individual-ability signal.
+ * Separate from recommendation agreement confidence.
+ */
+export function computeHolisticConfidence(
+  input: HolisticConfidenceInput,
+): HolisticConfidenceResult {
+  const teammateGap =
+    input.avgTeammateTier !== undefined
+      ? Math.abs(input.avgTeammateTier - input.playerAbilityStrength)
+      : undefined;
+
+  const sample = sampleSizeFactor(input.totalEvents);
+  const gap = teammateGapFactor(teammateGap);
+  const duo = duoConcentrationFactor({
+    matchesAnalyzed: input.matchesAnalyzed,
+    withoutDuoCount: input.withoutDuoCount,
+    hasConsistentDuo: input.hasConsistentDuo,
+    hasMutualDependency: input.hasMutualDependency,
+    teammateGap,
+  });
+
+  // Geometric-ish blend: any weak factor pulls reliability down.
+  const score = Math.pow(sample * gap.factor * duo.factor, 1 / 1.15);
+
+  const reasons: string[] = [];
+  if (input.totalEvents < 13) {
+    reasons.push(
+      `Small sample (${input.totalEvents} events) limits reliability.`,
+    );
+  }
+  if (gap.reason) reasons.push(gap.reason);
+  if (duo.reason) reasons.push(duo.reason);
+
+  // Directional teammate note when gap is large
+  if (
+    input.avgTeammateTier !== undefined &&
+    teammateGap !== undefined &&
+    teammateGap >= 0.85
+  ) {
+    if (input.avgTeammateTier > input.playerAbilityStrength + 0.4) {
+      reasons.unshift(
+        duo.duoShare !== undefined && duo.duoShare >= 0.6
+          ? `Played ${Math.round(duo.duoShare * 100)}% of matches with higher-tier teammates.`
+          : "Average teammates are significantly stronger than evaluation level.",
+      );
+      // Avoid duplicate duo reason when we already said % with higher-tier
+      if (duo.reason?.includes("% of matches with a consistent duo")) {
+        const idx = reasons.indexOf(duo.reason);
+        if (idx >= 0) reasons.splice(idx, 1);
+      }
+    } else if (input.avgTeammateTier < input.playerAbilityStrength - 0.4) {
+      reasons.unshift(
+        "Average teammates are significantly weaker than evaluation level.",
+      );
+    }
+  }
+
+  let level: ConfidenceLevel;
+  if (score >= 0.72) level = "high";
+  else if (score >= 0.45) level = "medium";
+  else level = "low";
+
+  const summary =
+    reasons[0] ??
+    (level === "high"
+      ? "Holistic score looks reasonably representative of individual ability."
+      : "Holistic reliability is uncertain.");
+
+  return {
+    level,
+    label: confidenceLabel(level),
+    stars: confidenceStars(level),
+    score,
+    teammateGap,
+    duoShare: duo.duoShare,
+    reasons,
+    summary,
+  };
+}
+
 function tiersInFit(fit: TierFit): ReviewTier[] {
   if (fit.kind === "best_fit") return [fit.tier];
   return [fit.higher, fit.lower];
@@ -205,33 +416,36 @@ export type RecommendationResult = {
   evaluationFit: TierFit;
   holisticFit: TierFit;
   overallFit: OverallFit;
-  confidence: ConfidenceLevel;
-  confidenceLabel: string;
+  /** Agreement between evaluation and holistic (weights holistic by reliability). */
+  recommendationConfidence: ConfidenceLevel;
+  recommendationConfidenceLabel: string;
   stars: number;
+  holisticConfidence: HolisticConfidenceResult;
   action: ActionKind;
   actionLabel: string;
   reason: string;
-  /** Clear single-tier suggestion when overall is a best fit. */
   suggestedTier?: ReviewTier;
 };
 
 /**
- * Combine evaluation + holistic fits (tier-independent), then compare to
- * assigned tier only for the action label.
+ * Combine evaluation + holistic fits (tier-independent), weighting holistic
+ * by Holistic Confidence, then compare to assigned tier for the action only.
  */
 export function computeTierRecommendation(
   evaluationFit: TierFit,
   holisticFit: TierFit,
   currentTier: ReviewTier,
+  holisticConfidence: HolisticConfidenceResult,
 ): RecommendationResult {
   const evalTiers = tiersInFit(evaluationFit);
   const holisticTiers = tiersInFit(holisticFit);
   const union = [...new Set([...evalTiers, ...holisticTiers])];
   const overlap = evalTiers.filter((t) => holisticTiers.includes(t));
   const span = spanOfTiers(union);
+  const hc = holisticConfidence.level;
 
   let overallFit: OverallFit;
-  let confidence: ConfidenceLevel;
+  let recommendationConfidence: ConfidenceLevel;
   let reason: string;
 
   const sameBestFit =
@@ -247,41 +461,59 @@ export function computeTierRecommendation(
 
   if (sameBestFit || sameBorderline) {
     overallFit = evaluationFit;
-    confidence = "high";
+    recommendationConfidence = "high";
     reason =
       evaluationFit.kind === "best_fit"
         ? "Evaluation and performance agree on the same best-fit tier."
         : "Evaluation and performance agree the player sits on the same boundary.";
+    if (hc === "low") {
+      reason += ` Holistic confidence is low (${holisticConfidence.summary})`;
+    }
+  } else if (hc === "low" && span >= 1) {
+    // Unreliable holistic: lean on evaluation; soften disagreement.
+    overallFit = evaluationFit;
+    recommendationConfidence = "medium";
+    reason = `Holistic result may not represent individual ability (${holisticConfidence.summary}). Place less weight on holistic; evaluation suggests ${evaluationFit.label}.`;
   } else if (overlap.length > 0 && span <= 1) {
     overallFit = fitFromTier(union);
-    confidence = "medium";
+    recommendationConfidence = "medium";
     reason =
       "Evaluation and performance partially agree; player sits near a tier boundary.";
   } else if (span <= 1) {
     overallFit = fitFromTier(union);
-    confidence = "medium";
+    recommendationConfidence = "medium";
     reason =
-      "Evaluation and performance point to adjacent tiers — borderline case.";
-  } else {
+      hc === "high"
+        ? "Evaluation and performance point to adjacent tiers — meaningful borderline case."
+        : `Adjacent-tier signals with ${hc} holistic confidence — ${holisticConfidence.summary}`;
+  } else if (hc === "high") {
     overallFit = { kind: "disagreement", label: "Review Required" };
-    confidence = "low";
+    recommendationConfidence = "low";
     reason =
-      "Large disagreement between evaluation and performance.";
+      "Large disagreement between evaluation and a high-confidence holistic score.";
+  } else {
+    // Medium HC + large span: still review, but note uncertainty
+    overallFit = fitFromTier(evalTiers);
+    recommendationConfidence = "medium";
+    reason = `Evaluation and holistic disagree across non-adjacent tiers, but holistic confidence is only ${hc}. ${holisticConfidence.summary}`;
   }
 
   const { action, actionLabel } = deriveAction(
     overallFit,
-    confidence,
+    recommendationConfidence,
     currentTier,
+    hc,
+    span,
   );
 
   return {
     evaluationFit,
     holisticFit,
     overallFit,
-    confidence,
-    confidenceLabel: confidenceLabel(confidence),
-    stars: confidenceStars(confidence),
+    recommendationConfidence,
+    recommendationConfidenceLabel: confidenceLabel(recommendationConfidence),
+    stars: confidenceStars(recommendationConfidence),
+    holisticConfidence,
     action,
     actionLabel,
     reason,
@@ -292,10 +524,40 @@ export function computeTierRecommendation(
 
 function deriveAction(
   overallFit: OverallFit,
-  confidence: ConfidenceLevel,
+  recommendationConfidence: ConfidenceLevel,
   currentTier: ReviewTier,
+  holisticConfidence: ConfidenceLevel,
+  fitSpan: number,
 ): { action: ActionKind; actionLabel: string } {
-  if (confidence === "low" || overallFit.kind === "disagreement") {
+  if (overallFit.kind === "disagreement") {
+    return { action: "review_required", actionLabel: "Review Required" };
+  }
+
+  // Soften hard disagreement when holistic is unreliable.
+  if (
+    holisticConfidence === "low" &&
+    fitSpan >= 1 &&
+    recommendationConfidence !== "high"
+  ) {
+    if (overallFit.kind === "best_fit" && overallFit.tier === currentTier) {
+      return {
+        action: "review_recommended",
+        actionLabel: "Review Recommended",
+      };
+    }
+    if (overallFit.kind === "best_fit" && overallFit.tier !== currentTier) {
+      return {
+        action: "review_recommended",
+        actionLabel: `Review Recommended (${currentTier} → ${overallFit.tier}?)`,
+      };
+    }
+    return {
+      action: "review_recommended",
+      actionLabel: "Review Recommended",
+    };
+  }
+
+  if (recommendationConfidence === "low") {
     return { action: "review_required", actionLabel: "Review Required" };
   }
 
@@ -309,7 +571,6 @@ function deriveAction(
     };
   }
 
-  // Borderline between two tiers
   if (
     currentTier === overallFit.higher ||
     currentTier === overallFit.lower
@@ -317,7 +578,6 @@ function deriveAction(
     return { action: "optional_review", actionLabel: "Optional Review" };
   }
 
-  // Assigned tier is outside the indicated band — suggest moving toward it.
   const target =
     Math.abs(tierRank(currentTier) - tierRank(overallFit.higher)) <=
     Math.abs(tierRank(currentTier) - tierRank(overallFit.lower))
@@ -336,10 +596,12 @@ export function actionSortRank(action: ActionKind): number {
       return 0;
     case "review_move":
       return 1;
-    case "optional_review":
+    case "review_recommended":
       return 2;
-    case "no_change":
+    case "optional_review":
       return 3;
+    case "no_change":
+      return 4;
   }
 }
 
