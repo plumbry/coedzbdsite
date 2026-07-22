@@ -34,6 +34,12 @@ import {
   Search,
   ShieldCheck,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip.tsx";
 import { compareTierField } from "@/lib/tier-sort.ts";
 
 type ActionFilter =
@@ -322,9 +328,10 @@ function TierRecommendationContent() {
             </CardTitle>
             <CardDescription className="text-sky-900/80 dark:text-sky-200/80">
               <strong className="text-sky-950 dark:text-sky-100">Holistic Confidence</strong> —
-              how reliable the performance score is (teammate gap, duo share, sample size).{" "}
+              how reliable the performance score is (teammate gap vs evaluation ability, duo
+              share, sample size).{" "}
               <strong className="text-sky-950 dark:text-sky-100">Recommendation Confidence</strong> —
-              how strongly evaluation and holistic agree after weighting reliability. Assigned
+              how certain the engine is in its action after reliability weighting. Assigned
               tier only affects the final action.
             </CardDescription>
           </CardHeader>
@@ -680,13 +687,27 @@ function TierRecommendationContent() {
                             </TableCell>
                             <TableCell>
                               <div className="space-y-1 max-w-[12rem]">
-                                <div className="flex flex-col gap-1 items-start">
-                                  <Stars count={row.holisticConfidenceStars} />
-                                  <ConfidenceBadge
-                                    confidence={row.holisticConfidence}
-                                    label={row.holisticConfidenceLabel}
-                                  />
-                                </div>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex flex-col gap-1 items-start cursor-help">
+                                        <Stars count={row.holisticConfidenceStars} />
+                                        <ConfidenceBadge
+                                          confidence={row.holisticConfidence}
+                                          label={row.holisticConfidenceLabel}
+                                        />
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs space-y-1">
+                                      {(row.holisticConfidenceReasons.length > 0
+                                        ? row.holisticConfidenceReasons
+                                        : [row.holisticConfidenceSummary]
+                                      ).map((line) => (
+                                        <p key={line}>{line}</p>
+                                      ))}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                                 <p className="text-xs text-muted-foreground leading-snug">
                                   {row.holisticConfidenceSummary}
                                 </p>
@@ -749,15 +770,16 @@ function TierRecommendationContent() {
                 <ul className="list-disc pl-5 space-y-1">
                   <li>
                     <strong className="text-foreground">High holistic confidence + disagreement</strong>{" "}
-                    — Review Required (meaningful conflict).
+                    — Review Required, high recommendation confidence (meaningful conflict).
                   </li>
                   <li>
                     <strong className="text-foreground">Low holistic confidence + disagreement</strong>{" "}
-                    — Review Recommended; lean on evaluation and surface teammate context.
+                    — Review Recommended; lean on evaluation; lower recommendation confidence.
                   </li>
                   <li>
-                    <strong className="text-foreground">Recommendation confidence</strong> —
-                    agreement after reliability weighting (separate from holistic confidence).
+                    <strong className="text-foreground">Holistic Confidence</strong> uses evaluation
+                    ability (not assigned tier), teammate strength gap, duo concentration, and
+                    sample size. The Holistic Score itself is unchanged.
                   </li>
                 </ul>
               </CardContent>

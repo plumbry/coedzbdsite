@@ -363,6 +363,19 @@ export function computeHolisticConfidence(
   else if (score >= 0.45) level = "medium";
   else level = "low";
 
+  // Prefer a clear positive summary when reliability is high and no risk flags fired.
+  if (level === "high" && reasons.length === 0) {
+    if (input.totalEvents >= 20 && (duo.duoShare === undefined || duo.duoShare < 0.6)) {
+      reasons.push("Large sample with varied teammates.");
+    } else if (input.totalEvents >= 20) {
+      reasons.push("Large event sample supports the holistic score.");
+    } else {
+      reasons.push(
+        "Holistic score looks reasonably representative of individual ability.",
+      );
+    }
+  }
+
   const summary =
     reasons[0] ??
     (level === "high"
@@ -416,7 +429,11 @@ export type RecommendationResult = {
   evaluationFit: TierFit;
   holisticFit: TierFit;
   overallFit: OverallFit;
-  /** Agreement between evaluation and holistic (weights holistic by reliability). */
+  /**
+   * Certainty in the recommendation after reliability weighting.
+   * High disagreement + high holistic confidence → high certainty (review required).
+   * Disagreement + low holistic confidence → lower certainty (soft review).
+   */
   recommendationConfidence: ConfidenceLevel;
   recommendationConfidenceLabel: string;
   stars: number;
@@ -461,19 +478,20 @@ export function computeTierRecommendation(
 
   if (sameBestFit || sameBorderline) {
     overallFit = evaluationFit;
-    recommendationConfidence = "high";
+    // Agreement is strong; low holistic confidence still slightly softens certainty.
+    recommendationConfidence = hc === "low" ? "medium" : "high";
     reason =
       evaluationFit.kind === "best_fit"
         ? "Evaluation and performance agree on the same best-fit tier."
         : "Evaluation and performance agree the player sits on the same boundary.";
     if (hc === "low") {
-      reason += ` Holistic confidence is low (${holisticConfidence.summary})`;
+      reason += ` Holistic confidence is low (${holisticConfidence.summary}).`;
     }
   } else if (hc === "low" && span >= 1) {
     // Unreliable holistic: lean on evaluation; soften disagreement.
     overallFit = evaluationFit;
-    recommendationConfidence = "medium";
-    reason = `Holistic result may not represent individual ability (${holisticConfidence.summary}). Place less weight on holistic; evaluation suggests ${evaluationFit.label}.`;
+    recommendationConfidence = span >= 2 ? "low" : "medium";
+    reason = `Holistic performance may be inflated by teammate strength (${holisticConfidence.summary}). Evaluation should carry more weight (${evaluationFit.label}).`;
   } else if (overlap.length > 0 && span <= 1) {
     overallFit = fitFromTier(union);
     recommendationConfidence = "medium";
@@ -481,18 +499,18 @@ export function computeTierRecommendation(
       "Evaluation and performance partially agree; player sits near a tier boundary.";
   } else if (span <= 1) {
     overallFit = fitFromTier(union);
-    recommendationConfidence = "medium";
+    recommendationConfidence = hc === "high" ? "high" : "medium";
     reason =
       hc === "high"
         ? "Evaluation and performance point to adjacent tiers — meaningful borderline case."
         : `Adjacent-tier signals with ${hc} holistic confidence — ${holisticConfidence.summary}`;
   } else if (hc === "high") {
+    // Strong, reliable disagreement → high certainty that review is needed.
     overallFit = { kind: "disagreement", label: "Review Required" };
-    recommendationConfidence = "low";
-    reason =
-      "Large disagreement between evaluation and a high-confidence holistic score.";
+    recommendationConfidence = "high";
+    reason = "Evaluation and performance disagree.";
   } else {
-    // Medium HC + large span: still review, but note uncertainty
+    // Medium HC + large span: review, but less certain.
     overallFit = fitFromTier(evalTiers);
     recommendationConfidence = "medium";
     reason = `Evaluation and holistic disagree across non-adjacent tiers, but holistic confidence is only ${hc}. ${holisticConfidence.summary}`;
@@ -500,7 +518,6 @@ export function computeTierRecommendation(
 
   const { action, actionLabel } = deriveAction(
     overallFit,
-    recommendationConfidence,
     currentTier,
     hc,
     span,
@@ -524,7 +541,6 @@ export function computeTierRecommendation(
 
 function deriveAction(
   overallFit: OverallFit,
-  recommendationConfidence: ConfidenceLevel,
   currentTier: ReviewTier,
   holisticConfidence: ConfidenceLevel,
   fitSpan: number,
@@ -534,17 +550,7 @@ function deriveAction(
   }
 
   // Soften hard disagreement when holistic is unreliable.
-  if (
-    holisticConfidence === "low" &&
-    fitSpan >= 1 &&
-    recommendationConfidence !== "high"
-  ) {
-    if (overallFit.kind === "best_fit" && overallFit.tier === currentTier) {
-      return {
-        action: "review_recommended",
-        actionLabel: "Review Recommended",
-      };
-    }
+  if (holisticConfidence === "low" && fitSpan >= 1) {
     if (overallFit.kind === "best_fit" && overallFit.tier !== currentTier) {
       return {
         action: "review_recommended",
@@ -555,10 +561,6 @@ function deriveAction(
       action: "review_recommended",
       actionLabel: "Review Recommended",
     };
-  }
-
-  if (recommendationConfidence === "low") {
-    return { action: "review_required", actionLabel: "Review Required" };
   }
 
   if (overallFit.kind === "best_fit") {

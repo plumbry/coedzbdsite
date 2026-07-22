@@ -29,6 +29,7 @@ type PlayerReviewRow = {
   holisticConfidenceLabel: string;
   holisticConfidenceStars: number;
   holisticConfidenceSummary: string;
+  holisticConfidenceReasons: string[];
   avgTeammateTier?: number;
   duoShare?: number;
   totalEvents: number;
@@ -196,6 +197,7 @@ export const getTierReviewConfidence = query({
         holisticConfidenceLabel: holisticConfidence.label,
         holisticConfidenceStars: holisticConfidence.stars,
         holisticConfidenceSummary: holisticConfidence.summary,
+        holisticConfidenceReasons: holisticConfidence.reasons,
         avgTeammateTier: cache.avgTeammateTier,
         duoShare: holisticConfidence.duoShare,
         totalEvents: cache.totalEvents,
