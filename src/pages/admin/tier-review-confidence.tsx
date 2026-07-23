@@ -525,7 +525,7 @@ function TierRecommendationContent() {
               <p>
                 <strong className="text-sky-950 dark:text-sky-100">Recent Trend</strong> —
                 whether recent form is improving, stable, or declining versus the
-                player&apos;s own earlier baseline (placement, kills, vs expected).
+                player&apos;s own earlier placement/kills baseline (not team strength).
               </p>
               <p>
                 <strong className="text-sky-950 dark:text-sky-100">Recommendation Confidence</strong> —
@@ -1221,8 +1221,8 @@ function TierRecommendationContent() {
                   </li>
                   <li>
                     <strong className="text-foreground">Recent Trend</strong> compares the
-                    player&apos;s recent placements/kills/vs-expected to their own earlier
-                    baseline, requiring a sustained difference after accounting for variance.
+                    player&apos;s recent placements and kills to their own earlier baseline.
+                    It does not use team strength or Performance vs Expected.
                   </li>
                   <li>
                     <strong className="text-foreground">Best-fit / recommendations</strong> use

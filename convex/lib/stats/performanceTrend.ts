@@ -1,24 +1,16 @@
 /**
  * Recent Performance Trend.
  *
- * Compares a player's recent events to their own earlier baseline
- * (placement, kills, and optional Performance vs Expected residuals).
- * Detects sustained improving / stable / declining form — not absolute skill.
+ * Compares a player's recent placement/kills to their own earlier baseline.
+ * Independent of team strength and Performance vs Expected.
  */
 
-import {
-  lookupExpectation,
-  mean,
-  type StrengthBucketExpectation,
-  type TeamPerfSample,
-} from "./teamAdjustedPerformance";
+import { mean, type TeamPerfSample } from "./teamAdjustedPerformance";
 
 export type TrendSample = {
   /** Event play time (ms). Required for chronological trend. */
   asOfMs: number;
   placement: number;
-  /** Optional — enables PvE residual trend when present. */
-  strength?: number;
   teamKills?: number;
   playerKills?: number;
 };
@@ -105,7 +97,6 @@ export function meanDiffZ(
 }
 
 function recentWindowSize(total: number): number {
-  // Prefer ~35% recent, clamped so both windows can meet TREND_MIN_WINDOW.
   const preferred = Math.min(
     20,
     Math.max(TREND_MIN_WINDOW, Math.floor(total * 0.35)),
@@ -130,53 +121,30 @@ function killsForSample(sample: TrendSample): number | undefined {
   return undefined;
 }
 
-function pveResidual(
-  sample: TrendSample,
-  expectations: readonly StrengthBucketExpectation[],
-): number | undefined {
-  if (typeof sample.strength !== "number" || !Number.isFinite(sample.strength)) {
-    return undefined;
-  }
-  const expected = lookupExpectation(sample.strength, expectations);
-  if (!expected) return undefined;
-
-  const placementComponent =
-    expected.medianPlacement > 0
-      ? (expected.medianPlacement - sample.placement) / expected.medianPlacement
-      : 0;
-
-  if (
-    typeof sample.teamKills === "number" &&
-    expected.medianTeamKills !== undefined &&
-    expected.medianTeamKills > 0
-  ) {
-    const killsComponent =
-      (sample.teamKills - expected.medianTeamKills) / expected.medianTeamKills;
-    return placementComponent * 0.65 + killsComponent * 0.35;
-  }
-
-  return placementComponent;
-}
-
 export function toTrendSamples(
   samples: readonly TeamPerfSample[],
 ): TrendSample[] {
-  return samples.filter(
-    (s): s is TrendSample =>
-      typeof s.asOfMs === "number" &&
-      Number.isFinite(s.asOfMs) &&
-      Number.isFinite(s.placement),
-  );
+  return samples
+    .filter(
+      (s) =>
+        typeof s.asOfMs === "number" &&
+        Number.isFinite(s.asOfMs) &&
+        Number.isFinite(s.placement),
+    )
+    .map((s) => ({
+      asOfMs: s.asOfMs!,
+      placement: s.placement,
+      teamKills: s.teamKills,
+      playerKills: s.playerKills,
+    }));
 }
 
 /**
- * Classify recent form vs the same player's earlier events.
- * Placement/kills trends do not require team strength; PvE is optional.
- * Returns null when dated sample size is insufficient.
+ * Classify recent form vs the same player's earlier events using placement
+ * and kills only (not team strength / Performance vs Expected).
  */
 export function computePerformanceTrend(
   samples: readonly TrendSample[],
-  expectations: readonly StrengthBucketExpectation[] = [],
   options?: {
     minWindow?: number;
     zThreshold?: number;
@@ -215,23 +183,9 @@ export function computePerformanceTrend(
       ? meanDiffZ(recentKills, baselineKills, true, minWindow)
       : null;
 
-  let pveZ: number | null = null;
-  if (expectations.length > 0) {
-    const recentPve = recent
-      .map((s) => pveResidual(s, expectations))
-      .filter((v): v is number => v !== undefined);
-    const baselinePve = baseline
-      .map((s) => pveResidual(s, expectations))
-      .filter((v): v is number => v !== undefined);
-    if (recentPve.length >= minWindow && baselinePve.length >= minWindow) {
-      pveZ = meanDiffZ(recentPve, baselinePve, true, minWindow);
-    }
-  }
-
   const components: { key: string; z: number }[] = [];
   if (placementZ !== null) components.push({ key: "placement", z: placementZ });
   if (killsZ !== null) components.push({ key: "kills", z: killsZ });
-  if (pveZ !== null) components.push({ key: "pve", z: pveZ });
   if (components.length === 0) return null;
 
   const score = mean(components.map((c) => c.z))!;
@@ -246,8 +200,6 @@ export function computePerformanceTrend(
   const placementDeclining = placementZ !== null && placementZ <= -zThreshold;
   const killsImproving = killsZ !== null && killsZ >= zThreshold;
   const killsDeclining = killsZ !== null && killsZ <= -zThreshold;
-  const pveImproving = pveZ !== null && pveZ >= zThreshold;
-  const pveDeclining = pveZ !== null && pveZ <= -zThreshold;
 
   if (level === "stable") {
     reasons.push(
@@ -264,35 +216,25 @@ export function computePerformanceTrend(
       );
     } else if (killsImproving) {
       reasons.push("Average kills increasing versus earlier events.");
-    }
-    if (pveImproving) {
-      reasons.push("Performance vs expected also trending up recently.");
-    }
-    if (reasons.length === 0) {
+    } else {
       reasons.push(
         `Recent form (${recent.length} events) exceeds the player's earlier baseline.`,
       );
     }
+  } else if (placementDeclining && killsDeclining) {
+    reasons.push(
+      `Placings and kills declining over the last ${recent.length} events.`,
+    );
+  } else if (placementDeclining) {
+    reasons.push(
+      `Placements declining over the last ${recent.length} events.`,
+    );
+  } else if (killsDeclining) {
+    reasons.push("Average kills falling versus earlier events.");
   } else {
-    if (placementDeclining && killsDeclining) {
-      reasons.push(
-        `Placings and kills declining over the last ${recent.length} events.`,
-      );
-    } else if (placementDeclining) {
-      reasons.push(
-        `Placements declining over the last ${recent.length} events.`,
-      );
-    } else if (killsDeclining) {
-      reasons.push("Average kills falling versus earlier events.");
-    }
-    if (pveDeclining) {
-      reasons.push("Performance vs expected also trending down recently.");
-    }
-    if (reasons.length === 0) {
-      reasons.push(
-        `Recent form (${recent.length} events) sits below the player's earlier baseline.`,
-      );
-    }
+    reasons.push(
+      `Recent form (${recent.length} events) sits below the player's earlier baseline.`,
+    );
   }
 
   const label = performanceTrendLabel(level);

@@ -329,10 +329,7 @@ export const getTierReviewConfidence = query({
       );
 
       const trendSamples = toTrendSamples(playerSamples);
-      const performanceTrend = computePerformanceTrend(
-        trendSamples,
-        strengthExpectations,
-      );
+      const performanceTrend = computePerformanceTrend(trendSamples);
 
       const result = computeTierRecommendation(
         evaluationFit,
