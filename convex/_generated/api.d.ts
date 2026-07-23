@@ -123,11 +123,15 @@ import type * as lib_stats_holisticScore from "../lib/stats/holisticScore.js";
 import type * as lib_stats_importRecordCache from "../lib/stats/importRecordCache.js";
 import type * as lib_stats_listEligiblePlayers from "../lib/stats/listEligiblePlayers.js";
 import type * as lib_stats_matchPlayerFromLookup from "../lib/stats/matchPlayerFromLookup.js";
+import type * as lib_stats_performanceTrend from "../lib/stats/performanceTrend.js";
 import type * as lib_stats_playerStatsCacheEligibility from "../lib/stats/playerStatsCacheEligibility.js";
 import type * as lib_stats_playerStatsCacheStatus from "../lib/stats/playerStatsCacheStatus.js";
 import type * as lib_stats_rebuildKind from "../lib/stats/rebuildKind.js";
 import type * as lib_stats_syncInternalEventParticipation from "../lib/stats/syncInternalEventParticipation.js";
+import type * as lib_stats_teamAdjustedPerformance from "../lib/stats/teamAdjustedPerformance.js";
 import type * as lib_stats_thresholds from "../lib/stats/thresholds.js";
+import type * as lib_stats_tierAtTime from "../lib/stats/tierAtTime.js";
+import type * as lib_stats_tierRestrictions from "../lib/stats/tierRestrictions.js";
 import type * as lib_stats_tierReviewConfidence from "../lib/stats/tierReviewConfidence.js";
 import type * as lib_stats_types from "../lib/stats/types.js";
 import type * as lib_stats_updatePlayerStatsCache from "../lib/stats/updatePlayerStatsCache.js";
@@ -137,6 +141,8 @@ import type * as lib_stats_zbdPerformanceStats from "../lib/stats/zbdPerformance
 import type * as lib_tierDiscordRoles from "../lib/tierDiscordRoles.js";
 import type * as lib_yunite from "../lib/yunite.js";
 import type * as lib_yuniteRateLimit from "../lib/yuniteRateLimit.js";
+import type * as lib_zbdRaw_mappers from "../lib/zbdRaw/mappers.js";
+import type * as lib_zbdRaw_types from "../lib/zbdRaw/types.js";
 import type * as memberManagement from "../memberManagement.js";
 import type * as migrateHasMatchData from "../migrateHasMatchData.js";
 import type * as migrateMembershipStatus from "../migrateMembershipStatus.js";
@@ -213,6 +219,7 @@ import type * as yunite_populateTeamMembersHelpers from "../yunite/populateTeamM
 import type * as yunite_recalculateStats from "../yunite/recalculateStats.js";
 import type * as yunite_registrationApi from "../yunite/registrationApi.js";
 import type * as yunite_sync from "../yunite/sync.js";
+import type * as zbdRawExport from "../zbdRawExport.js";
 
 import type {
   ApiFromModules,
@@ -336,11 +343,15 @@ declare const fullApi: ApiFromModules<{
   "lib/stats/importRecordCache": typeof lib_stats_importRecordCache;
   "lib/stats/listEligiblePlayers": typeof lib_stats_listEligiblePlayers;
   "lib/stats/matchPlayerFromLookup": typeof lib_stats_matchPlayerFromLookup;
+  "lib/stats/performanceTrend": typeof lib_stats_performanceTrend;
   "lib/stats/playerStatsCacheEligibility": typeof lib_stats_playerStatsCacheEligibility;
   "lib/stats/playerStatsCacheStatus": typeof lib_stats_playerStatsCacheStatus;
   "lib/stats/rebuildKind": typeof lib_stats_rebuildKind;
   "lib/stats/syncInternalEventParticipation": typeof lib_stats_syncInternalEventParticipation;
+  "lib/stats/teamAdjustedPerformance": typeof lib_stats_teamAdjustedPerformance;
   "lib/stats/thresholds": typeof lib_stats_thresholds;
+  "lib/stats/tierAtTime": typeof lib_stats_tierAtTime;
+  "lib/stats/tierRestrictions": typeof lib_stats_tierRestrictions;
   "lib/stats/tierReviewConfidence": typeof lib_stats_tierReviewConfidence;
   "lib/stats/types": typeof lib_stats_types;
   "lib/stats/updatePlayerStatsCache": typeof lib_stats_updatePlayerStatsCache;
@@ -350,6 +361,8 @@ declare const fullApi: ApiFromModules<{
   "lib/tierDiscordRoles": typeof lib_tierDiscordRoles;
   "lib/yunite": typeof lib_yunite;
   "lib/yuniteRateLimit": typeof lib_yuniteRateLimit;
+  "lib/zbdRaw/mappers": typeof lib_zbdRaw_mappers;
+  "lib/zbdRaw/types": typeof lib_zbdRaw_types;
   memberManagement: typeof memberManagement;
   migrateHasMatchData: typeof migrateHasMatchData;
   migrateMembershipStatus: typeof migrateMembershipStatus;
@@ -426,6 +439,7 @@ declare const fullApi: ApiFromModules<{
   "yunite/recalculateStats": typeof yunite_recalculateStats;
   "yunite/registrationApi": typeof yunite_registrationApi;
   "yunite/sync": typeof yunite_sync;
+  zbdRawExport: typeof zbdRawExport;
 }>;
 
 /**
