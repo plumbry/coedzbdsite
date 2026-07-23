@@ -2,7 +2,8 @@
  * Team-Adjusted Performance (Performance vs Expected).
  *
  * Compares a player's teams' outcomes to historically similar-strength teams.
- * Team strength = mean of member evaluation scores (totalScore).
+ * Team strength = mean of member evaluation scores (totalScore) as of each
+ * event (resolved from tierHistory), not current scores.
  * Expectations are learned dynamically from the dataset (bucket medians).
  */
 
@@ -12,6 +13,10 @@ export type TeamPerfSample = {
   placement: number;
   /** Team kills for the event when available. */
   teamKills?: number;
+  /** Individual eliminations when available. */
+  playerKills?: number;
+  /** Event play time (ms) for chronological trend analysis. */
+  asOfMs?: number;
 };
 
 export type StrengthBucketExpectation = {

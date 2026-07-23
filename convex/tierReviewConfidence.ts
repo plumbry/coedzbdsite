@@ -28,6 +28,11 @@ import {
   type PerformanceVsExpectedLevel,
   type TeamPerfSample,
 } from "./lib/stats/teamAdjustedPerformance";
+import {
+  computePerformanceTrend,
+  type PerformanceTrendLevel,
+  type TrendSample,
+} from "./lib/stats/performanceTrend";
 
 type PlayerReviewRow = {
   playerId: string;
@@ -62,6 +67,14 @@ type PlayerReviewRow = {
   expectedAvgTeamKills?: number;
   actualAvgTeamKills?: number;
   performanceVsExpectedEvents?: number;
+  /** Recent form vs the player's own historical baseline. */
+  performanceTrend?: PerformanceTrendLevel;
+  performanceTrendLabel?: string;
+  performanceTrendDisplayLabel?: string;
+  performanceTrendSummary?: string;
+  performanceTrendReasons?: string[];
+  performanceTrendRecentEvents?: number;
+  performanceTrendBaselineEvents?: number;
   totalEvents: number;
   overallFitLabel: string;
   recommendationConfidence: ConfidenceLevel;
@@ -268,6 +281,8 @@ export const getTierReviewConfidence = query({
           strength: sample.strength,
           placement: sample.placement,
           teamKills: sample.teamKills,
+          playerKills: sample.playerKills,
+          asOfMs: sample.asOfMs,
         });
       }
     }
@@ -304,10 +319,20 @@ export const getTierReviewConfidence = query({
           strength: s.strength,
           placement: s.placement,
           teamKills: s.teamKills,
+          playerKills: s.playerKills,
+          asOfMs: s.asOfMs,
         }),
       );
       const performanceVsExpected = computePerformanceVsExpected(
         playerSamples,
+        strengthExpectations,
+      );
+
+      const trendSamples: TrendSample[] = playerSamples.filter(
+        (s): s is TrendSample => typeof s.asOfMs === "number",
+      );
+      const performanceTrend = computePerformanceTrend(
+        trendSamples,
         strengthExpectations,
       );
 
@@ -317,6 +342,7 @@ export const getTierReviewConfidence = query({
         currentTier,
         holisticConfidence,
         performanceVsExpected,
+        performanceTrend,
       );
 
       reviews.push({
@@ -350,6 +376,13 @@ export const getTierReviewConfidence = query({
         expectedAvgTeamKills: performanceVsExpected?.expectedAvgTeamKills,
         actualAvgTeamKills: performanceVsExpected?.actualAvgTeamKills,
         performanceVsExpectedEvents: performanceVsExpected?.eventCount,
+        performanceTrend: performanceTrend?.level,
+        performanceTrendLabel: performanceTrend?.label,
+        performanceTrendDisplayLabel: performanceTrend?.displayLabel,
+        performanceTrendSummary: performanceTrend?.summary,
+        performanceTrendReasons: performanceTrend?.reasons,
+        performanceTrendRecentEvents: performanceTrend?.recentEventCount,
+        performanceTrendBaselineEvents: performanceTrend?.baselineEventCount,
         totalEvents: cache.totalEvents,
         overallFitLabel: overallFitLabel(result.overallFit),
         recommendationConfidence: result.recommendationConfidence,
@@ -400,6 +433,14 @@ export const getTierReviewConfidence = query({
         below: reviews.filter((r) => r.performanceVsExpected === "below")
           .length,
         insufficient: reviews.filter((r) => !r.performanceVsExpected).length,
+      },
+      byPerformanceTrend: {
+        improving: reviews.filter((r) => r.performanceTrend === "improving")
+          .length,
+        stable: reviews.filter((r) => r.performanceTrend === "stable").length,
+        declining: reviews.filter((r) => r.performanceTrend === "declining")
+          .length,
+        insufficient: reviews.filter((r) => !r.performanceTrend).length,
       },
       byAction: {
         review_required: reviews.filter((r) => r.action === "review_required")

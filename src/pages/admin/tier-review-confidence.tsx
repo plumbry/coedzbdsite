@@ -52,6 +52,7 @@ type ActionFilter =
   | "no_change";
 type ConfidenceFilter = "all" | "low" | "medium" | "high";
 type PveFilter = "all" | "above" | "around" | "below" | "insufficient";
+type TrendFilter = "all" | "improving" | "stable" | "declining" | "insufficient";
 type SortField =
   | "playerName"
   | "tier"
@@ -59,6 +60,7 @@ type SortField =
   | "holistic"
   | "holisticConfidence"
   | "performanceVsExpected"
+  | "performanceTrend"
   | "overall"
   | "recommendationConfidence"
   | "action";
@@ -74,6 +76,12 @@ const PVE_RANK: Record<string, number> = {
   above: 0,
   around: 1,
   below: 2,
+};
+
+const TREND_RANK: Record<string, number> = {
+  improving: 0,
+  stable: 1,
+  declining: 2,
 };
 
 const ACTION_RANK: Record<string, number> = {
@@ -211,6 +219,47 @@ function PerformanceVsExpectedBadge({
   );
 }
 
+function PerformanceTrendBadge({
+  level,
+  displayLabel,
+}: {
+  level?: string;
+  displayLabel?: string;
+}) {
+  if (!level || !displayLabel) {
+    return (
+      <Badge variant="secondary" className="whitespace-nowrap">
+        Insufficient data
+      </Badge>
+    );
+  }
+  if (level === "improving") {
+    return (
+      <Badge
+        variant="outline"
+        className="whitespace-nowrap border-emerald-500 text-emerald-800 dark:text-emerald-300"
+      >
+        {displayLabel}
+      </Badge>
+    );
+  }
+  if (level === "declining") {
+    return (
+      <Badge
+        variant="outline"
+        className="whitespace-nowrap border-rose-400 text-rose-800 dark:text-rose-300"
+      >
+        {displayLabel}
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="whitespace-nowrap">
+      {displayLabel}
+    </Badge>
+  );
+}
+
 function ConfidenceCell({
   stars,
   confidence,
@@ -291,6 +340,7 @@ function TierRecommendationContent() {
   const [holisticConfidenceFilter, setHolisticConfidenceFilter] =
     useState<ConfidenceFilter>("all");
   const [pveFilter, setPveFilter] = useState<PveFilter>("all");
+  const [trendFilter, setTrendFilter] = useState<TrendFilter>("all");
   const [sortField, setSortField] = useState<SortField>("action");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [displayLimit, setDisplayLimit] = useState(75);
@@ -305,7 +355,8 @@ function TierRecommendationContent() {
           field === "action" ||
           field === "recommendationConfidence" ||
           field === "holisticConfidence" ||
-          field === "performanceVsExpected"
+          field === "performanceVsExpected" ||
+          field === "performanceTrend"
           ? "asc"
           : "desc",
       );
@@ -339,6 +390,12 @@ function TierRecommendationContent() {
       rows = rows.filter((r) => !r.performanceVsExpected);
     } else if (pveFilter !== "all") {
       rows = rows.filter((r) => r.performanceVsExpected === pveFilter);
+    }
+
+    if (trendFilter === "insufficient") {
+      rows = rows.filter((r) => !r.performanceTrend);
+    } else if (trendFilter !== "all") {
+      rows = rows.filter((r) => r.performanceTrend === trendFilter);
     }
 
     if (search.trim()) {
@@ -376,6 +433,11 @@ function TierRecommendationContent() {
             (PVE_RANK[a.performanceVsExpected ?? ""] ?? 9) -
             (PVE_RANK[b.performanceVsExpected ?? ""] ?? 9);
           break;
+        case "performanceTrend":
+          cmp =
+            (TREND_RANK[a.performanceTrend ?? ""] ?? 9) -
+            (TREND_RANK[b.performanceTrend ?? ""] ?? 9);
+          break;
         case "overall":
           cmp = a.overallFitLabel.localeCompare(b.overallFitLabel);
           break;
@@ -407,6 +469,7 @@ function TierRecommendationContent() {
     sortDirection,
     sortField,
     tierFilter,
+    trendFilter,
   ]);
 
   const visible = filtered.slice(0, displayLimit);
@@ -431,7 +494,7 @@ function TierRecommendationContent() {
       <div className="space-y-6">
         <PageHeader
           title="Tier Recommendation"
-          description="Four complementary signals: Evaluation Score, Holistic Score, Performance vs Expected (teams vs similar-strength peers), and the recommendation that combines them. Does not auto-tier."
+          description="Decision-support signals: Evaluation, Holistic, Performance vs Expected, Recent Trend, and a combined recommendation. Does not auto-tier."
           actions={
             <Button variant="outline" size="sm" asChild>
               <Link to="/admin/stats">
@@ -458,6 +521,11 @@ function TierRecommendationContent() {
                 <strong className="text-sky-950 dark:text-sky-100">Performance vs Expected</strong> —
                 whether the player&apos;s teams outperform or underperform historically
                 similar-strength teams (learned from match data; not individual kill attribution).
+              </p>
+              <p>
+                <strong className="text-sky-950 dark:text-sky-100">Recent Trend</strong> —
+                whether recent form is improving, stable, or declining versus the
+                player&apos;s own earlier baseline (placement, kills, vs expected).
               </p>
               <p>
                 <strong className="text-sky-950 dark:text-sky-100">Recommendation Confidence</strong> —
@@ -492,13 +560,14 @@ function TierRecommendationContent() {
                 hint="Teams beat strength peers"
               />
               <SummaryTile
-                label="Below expected"
-                value={data.summary.byPerformanceVsExpected.below}
-                hint="Teams lag strength peers"
+                label="Improving"
+                value={data.summary.byPerformanceTrend.improving}
+                hint="Above own baseline"
               />
               <SummaryTile
-                label="Review move"
-                value={data.summary.byAction.review_move}
+                label="Declining"
+                value={data.summary.byPerformanceTrend.declining}
+                hint="Below own baseline"
               />
               <SummaryTile
                 label="No change"
@@ -639,8 +708,8 @@ function TierRecommendationContent() {
               <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               Performance vs Expected uses {data.summary.teamStrengthSampleCount}{" "}
               team-event samples across {data.summary.teamStrengthExpectationBuckets}{" "}
-              strength buckets. Rebuild the tier re-evaluation cache if samples are
-              missing (Insufficient data).
+              strength buckets (roster evaluation scores as of each event). Rebuild the
+              tier re-evaluation cache after deploying so samples refresh.
             </p>
 
             <Card>
@@ -722,6 +791,20 @@ function TierRecommendationContent() {
                       <option value="above">Above expected</option>
                       <option value="around">Around expected</option>
                       <option value="below">Below expected</option>
+                      <option value="insufficient">Insufficient data</option>
+                    </select>
+                    <select
+                      className="h-9 rounded-md border bg-background px-2 text-sm"
+                      value={trendFilter}
+                      onChange={(e) => {
+                        setTrendFilter(e.target.value as TrendFilter);
+                        setDisplayLimit(75);
+                      }}
+                    >
+                      <option value="all">All trends</option>
+                      <option value="improving">Improving</option>
+                      <option value="stable">Stable</option>
+                      <option value="declining">Declining</option>
                       <option value="insufficient">Insufficient data</option>
                     </select>
                     <select
@@ -834,6 +917,20 @@ function TierRecommendationContent() {
                             <button
                               type="button"
                               className="inline-flex items-center gap-1"
+                              onClick={() => toggleSort("performanceTrend")}
+                            >
+                              Trend
+                              <SortIcon
+                                field="performanceTrend"
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                              />
+                            </button>
+                          </TableHead>
+                          <TableHead className="w-[130px]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1"
                               onClick={() => toggleSort("overall")}
                             >
                               Overall
@@ -880,7 +977,7 @@ function TierRecommendationContent() {
                         {visible.length === 0 ? (
                           <TableRow>
                             <TableCell
-                              colSpan={9}
+                              colSpan={10}
                               className="text-center text-muted-foreground py-10"
                             >
                               No players match these filters.
@@ -933,6 +1030,23 @@ function TierRecommendationContent() {
                             if (pveTips.length === 0) {
                               pveTips.push(
                                 "Rebuild tier re-evaluation cache to populate team strength samples.",
+                              );
+                            }
+
+                            const trendTips: string[] = [
+                              ...(row.performanceTrendReasons ?? []),
+                            ];
+                            if (
+                              row.performanceTrendRecentEvents !== undefined &&
+                              row.performanceTrendBaselineEvents !== undefined
+                            ) {
+                              trendTips.push(
+                                `Compared last ${row.performanceTrendRecentEvents} events to prior ${row.performanceTrendBaselineEvents}.`,
+                              );
+                            }
+                            if (trendTips.length === 0) {
+                              trendTips.push(
+                                "Need dated team samples from a cache rebuild (at least 16 events).",
                               );
                             }
 
@@ -1013,6 +1127,25 @@ function TierRecommendationContent() {
                                   </Tooltip>
                                 </TableCell>
                                 <TableCell className="align-top">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="cursor-help">
+                                        <PerformanceTrendBadge
+                                          level={row.performanceTrend}
+                                          displayLabel={
+                                            row.performanceTrendDisplayLabel
+                                          }
+                                        />
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs space-y-1">
+                                      {trendTips.map((line) => (
+                                        <p key={line}>{line}</p>
+                                      ))}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TableCell>
+                                <TableCell className="align-top">
                                   <FitBadge label={row.overallFitLabel} />
                                 </TableCell>
                                 <TableCell className="align-top">
@@ -1082,14 +1215,19 @@ function TierRecommendationContent() {
                     weaker-than-expected teams raise it.
                   </li>
                   <li>
-                    <strong className="text-foreground">Best-fit / recommendations</strong> use
-                    the adjusted score. Raw holistic stays unchanged in the cache and is
-                    shown for transparency.
+                    <strong className="text-foreground">Performance vs Expected</strong> compares
+                    each player&apos;s teams to historically similar-strength teams (event-time
+                    evaluation scores).
                   </li>
                   <li>
-                    <strong className="text-foreground">Holistic Confidence</strong> still
-                    reflects how trustworthy that composition context is (sample size, duo
-                    concentration, unexpected residual size).
+                    <strong className="text-foreground">Recent Trend</strong> compares the
+                    player&apos;s recent placements/kills/vs-expected to their own earlier
+                    baseline, requiring a sustained difference after accounting for variance.
+                  </li>
+                  <li>
+                    <strong className="text-foreground">Best-fit / recommendations</strong> use
+                    the adjusted score plus vs-expected and trend context. Raw holistic stays
+                    unchanged in the cache.
                   </li>
                 </ul>
               </CardContent>

@@ -19,6 +19,13 @@ import {
 import { deriveEvaluationStatus } from "./lib/stats/evaluationStatus";
 import { FORMULA_VERSION } from "./lib/stats/versions";
 import { STATS_REEVAL_MIN_EVENTS } from "./lib/stats/thresholds";
+import { MAX_TEAM_PERF_SAMPLES } from "./lib/stats/teamAdjustedPerformance";
+import {
+  eventAsOfTimestamp,
+  resolveTierStateAtTime,
+  type TierHistoryEntryLike,
+} from "./lib/stats/tierAtTime";
+import { yuniteImportPlayTime } from "./lib/yunite";
 
 const BATCH_SIZE = 1; // One player per batch — heavy per-player reads (results, imports, match stats)
 const CACHE_CLEAR_BATCH = 50;
@@ -767,51 +774,133 @@ async function processBatchHandler(
         .query("thirdPartyResults")
         .withIndex("by_player", (q) => q.eq("playerId", player._id))
         .collect();
-      
+
+      // Resolve event dates / timestamps first — team strength uses as-of-event ability.
+      const importDateMap = new Map<string, string>();
+      const importAsOfMs = new Map<string, number>();
+      const importRecordCache = new Map<string, Doc<"thirdPartyImports"> | null>();
+
+      for (const result of allPlayerResults) {
+        const importKey = result.importId as string;
+        if (importDateMap.has(importKey)) continue;
+
+        let importData = importRecordCache.get(importKey);
+        if (importData === undefined) {
+          importData = await ctx.db.get(result.importId);
+          importRecordCache.set(importKey, importData);
+        }
+        if (!importData) continue;
+
+        // Prefer Yunite tournament start when present (precise play time).
+        const yunitePlay = yuniteImportPlayTime(importData);
+        if (yunitePlay) {
+          importDateMap.set(importKey, yunitePlay.lastEventDate);
+          importAsOfMs.set(importKey, yunitePlay.lastActiveAt);
+          continue;
+        }
+
+        let dateStr: string | undefined;
+        if (importData.eventId) {
+          const event = await ctx.db.get(importData.eventId);
+          if (event?.startDate) {
+            dateStr = event.startDate;
+          }
+        }
+        if (!dateStr && importData.eventDate) {
+          dateStr = importData.eventDate;
+        }
+        if (!dateStr) continue;
+
+        const asOf = eventAsOfTimestamp(dateStr);
+        if (asOf === undefined) continue;
+        importDateMap.set(importKey, dateStr);
+        importAsOfMs.set(importKey, asOf);
+      }
+
+      type AbilityCacheEntry = {
+        currentTier?: string;
+        currentTotalScore: number | null;
+        history: TierHistoryEntryLike[];
+      };
+
+      const abilityByEpic = new Map<string, AbilityCacheEntry | null>();
+
+      const loadAbilityForPlayer = async (
+        playerDoc: Doc<"players">,
+      ): Promise<AbilityCacheEntry> => {
+        const historyDocs = await ctx.db
+          .query("tierHistory")
+          .withIndex("by_player", (q) => q.eq("playerId", playerDoc._id))
+          .collect();
+        return {
+          currentTier: playerDoc.tier,
+          currentTotalScore:
+            typeof playerDoc.totalScore === "number" ? playerDoc.totalScore : null,
+          history: historyDocs.map((h) => ({
+            _creationTime: h._creationTime,
+            tier: h.tier,
+            previousTier: h.previousTier,
+            totalScore: h.totalScore,
+          })),
+        };
+      };
+
+      const resolveAbilityAtTime = (
+        ability: AbilityCacheEntry,
+        asOfMs: number,
+      ) =>
+        resolveTierStateAtTime(ability.history, asOfMs, {
+          tier: ability.currentTier,
+          totalScore: ability.currentTotalScore,
+        });
+
+      const selfAbility = await loadAbilityForPlayer(player);
+
       // Event-weighted average teammate tier + team performance samples.
+      // Both use tier/score as of the event (from tierHistory), not current values.
       const eventTeammateAverages: number[] = [];
-      const teammateLookupCache = new Map<
-        string,
-        { tierNumeric: number | null; totalScore: number | null }
-      >();
       const teamPerfSamples: {
         strength: number;
         placement: number;
         teamKills?: number;
+        playerKills?: number;
+        asOfMs: number;
       }[] = [];
-
-      const selfEvalScore =
-        typeof player.totalScore === "number" ? player.totalScore : null;
 
       for (const result of allPlayerResults) {
         if (!result.teamMembers || result.teamMembers.length === 0) continue;
 
+        const asOfMs = importAsOfMs.get(result.importId as string);
+        if (asOfMs === undefined) continue;
+
         const seatTiers: number[] = [];
         const seatScores: number[] = [];
-        if (selfEvalScore !== null) {
-          seatScores.push(selfEvalScore);
+
+        const selfState = resolveAbilityAtTime(selfAbility, asOfMs);
+        if (typeof selfState?.totalScore === "number") {
+          seatScores.push(selfState.totalScore);
         }
 
         for (const teammateEpic of result.teamMembers) {
           if (teammateEpic === player.epicUsername) continue;
 
-          let cached = teammateLookupCache.get(teammateEpic);
-          if (cached === undefined) {
+          let ability = abilityByEpic.get(teammateEpic);
+          if (ability === undefined) {
             const teammate = await lookupPlayerByEpicUsername(ctx, teammateEpic);
-            cached = {
-              tierNumeric: teammate?.tier ? tierToNumeric(teammate.tier) : null,
-              totalScore:
-                typeof teammate?.totalScore === "number"
-                  ? teammate.totalScore
-                  : null,
-            };
-            teammateLookupCache.set(teammateEpic, cached);
+            ability = teammate ? await loadAbilityForPlayer(teammate) : null;
+            abilityByEpic.set(teammateEpic, ability);
           }
-          if (cached.tierNumeric !== null && cached.tierNumeric > 0) {
-            seatTiers.push(cached.tierNumeric);
+          if (!ability) continue;
+
+          const state = resolveAbilityAtTime(ability, asOfMs);
+          if (!state) continue;
+
+          if (state.tier) {
+            const tierNumeric = tierToNumeric(state.tier);
+            if (tierNumeric > 0) seatTiers.push(tierNumeric);
           }
-          if (cached.totalScore !== null) {
-            seatScores.push(cached.totalScore);
+          if (typeof state.totalScore === "number") {
+            seatScores.push(state.totalScore);
           }
         }
 
@@ -836,14 +925,20 @@ async function processBatchHandler(
               typeof result.teamKills === "number"
                 ? result.teamKills
                 : undefined,
+            playerKills:
+              typeof result.eliminations === "number"
+                ? result.eliminations
+                : undefined,
+            asOfMs,
           });
         }
       }
 
-      // Keep most recent samples only (results are not guaranteed ordered; cap size)
+      // Keep most recent samples by event time (chronological, not insertion order)
+      teamPerfSamples.sort((a, b) => a.asOfMs - b.asOfMs);
       const cappedTeamPerfSamples =
-        teamPerfSamples.length > 40
-          ? teamPerfSamples.slice(-40)
+        teamPerfSamples.length > MAX_TEAM_PERF_SAMPLES
+          ? teamPerfSamples.slice(-MAX_TEAM_PERF_SAMPLES)
           : teamPerfSamples;
 
       const avgTeammateTierNumeric =
@@ -859,35 +954,11 @@ async function processBatchHandler(
 
       // Get last event date from most recent result
       let lastEventDate: string | undefined = undefined;
-      // Build a map of importId -> eventDate for all results
-      // Use the linked event's startDate (from the events table), NOT the import's eventDate
-      const importDateMap = new Map<string, string>();
-      
-      for (const result of allPlayerResults) {
-        const importData = await ctx.db.get(result.importId);
-        if (!importData) continue;
-        
-        // Prefer the linked event's startDate over the import's eventDate
-        let dateStr: string | undefined;
-        if (importData.eventId) {
-          const event = await ctx.db.get(importData.eventId);
-          if (event?.startDate) {
-            dateStr = event.startDate;
-          }
-        }
-        // Fallback to import eventDate only if no linked event
-        if (!dateStr && importData.eventDate) {
-          dateStr = importData.eventDate;
-        }
-        if (dateStr) {
-          importDateMap.set(result.importId as string, dateStr);
-        }
-      }
       
       // Find last event date from the map
       let latestTimestamp = 0;
-      for (const [, dateStr] of importDateMap) {
-        const ts = new Date(dateStr).getTime();
+      for (const [importKey, dateStr] of importDateMap) {
+        const ts = importAsOfMs.get(importKey) ?? new Date(dateStr).getTime();
         if (ts > latestTimestamp) {
           latestTimestamp = ts;
           lastEventDate = dateStr;

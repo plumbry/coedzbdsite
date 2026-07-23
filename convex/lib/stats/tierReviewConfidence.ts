@@ -4,6 +4,7 @@ import {
   type CompositionBias,
 } from "./tierRestrictions";
 import type { PerformanceVsExpectedResult } from "./teamAdjustedPerformance";
+import type { PerformanceTrendResult } from "./performanceTrend";
 
 /** Competitive tiers used for recommendations (excludes D / Unranked). */
 export const REVIEW_TIERS = ["S", "A", "B", "C"] as const;
@@ -482,6 +483,7 @@ export function computeTierRecommendation(
   currentTier: ReviewTier,
   holisticConfidence: HolisticConfidenceResult,
   performanceVsExpected?: PerformanceVsExpectedResult | null,
+  performanceTrend?: PerformanceTrendResult | null,
 ): RecommendationResult {
   const evalTiers = tiersInFit(evaluationFit);
   const holisticTiers = tiersInFit(holisticFit);
@@ -491,6 +493,7 @@ export function computeTierRecommendation(
   const hc = holisticConfidence.level;
   const bias = holisticConfidence.compositionBias;
   const pve = performanceVsExpected?.level;
+  const trend = performanceTrend?.level;
   const holisticStrength = tierFitStrength(holisticFit);
   const evalStrength = tierFitStrength(evaluationFit);
   const holisticHigher = holisticStrength > evalStrength + 0.25;
@@ -537,6 +540,13 @@ export function computeTierRecommendation(
   const pveUndercutsHolistic =
     span >= 1 && holisticHigher && pve === "below";
 
+  // Improving + above expected while holistic already looks higher
+  const trendSupportsPromotion =
+    span >= 1 && holisticHigher && trend === "improving";
+  // Declining form undercuts a strong holistic look
+  const trendUndercutsHolistic =
+    span >= 1 && holisticHigher && trend === "declining";
+
   if (sameBestFit || sameBorderline) {
     overallFit = evaluationFit;
     recommendationConfidence = hc === "low" ? "medium" : "high";
@@ -549,17 +559,35 @@ export function computeTierRecommendation(
     } else if (pve === "below") {
       reason += " Teams underperform similar-strength peers.";
     }
-  } else if (pveSupportsPromotion && !pveUndercutsHolistic) {
+
+    if (trend === "improving") {
+      softReview = true;
+      reason +=
+        " Recent performance exceeds the player's historical baseline — promotion more likely.";
+    } else if (trend === "declining") {
+      softReview = true;
+      recommendationConfidence = "medium";
+      reason +=
+        " Recent performance has fallen below the player's historical level.";
+    }
+  } else if (
+    (pveSupportsPromotion || trendSupportsPromotion) &&
+    !pveUndercutsHolistic &&
+    !trendUndercutsHolistic
+  ) {
     overallFit = fitFromTier(union.length <= 2 ? union : holisticTiers);
     recommendationConfidence = "high";
     reason =
-      "Holistic exceeds evaluation and teams outperform similar-strength teams — promotion case is stronger.";
-  } else if (pveUndercutsHolistic) {
+      trend === "improving"
+        ? "Holistic exceeds evaluation with improving recent form — promotion case is stronger."
+        : "Holistic exceeds evaluation and teams outperform similar-strength teams — promotion case is stronger.";
+  } else if (pveUndercutsHolistic || trendUndercutsHolistic) {
     overallFit = evaluationFit;
     softReview = true;
     recommendationConfidence = "medium";
-    reason =
-      "Strong holistic may largely reflect roster strength — teams underperform similar-strength peers. Evaluation should carry more weight.";
+    reason = trendUndercutsHolistic
+      ? "Strong holistic is undercut by a declining recent trend versus the player's own baseline. Evaluation should carry more weight."
+      : "Strong holistic may largely reflect roster strength — teams underperform similar-strength peers. Evaluation should carry more weight.";
   } else if (inflatedUp) {
     overallFit = evaluationFit;
     softReview = true;
@@ -571,6 +599,10 @@ export function computeTierRecommendation(
     recommendationConfidence = hc === "high" ? "high" : "medium";
     reason =
       "Holistic exceeds evaluation with supportive team-context signals — performance deserves extra weight.";
+    if (trend === "improving") {
+      recommendationConfidence = "high";
+      reason += " Improving recent trend reinforces this.";
+    }
   } else if (teammateDrag) {
     overallFit = evaluationFit;
     softReview = true;
@@ -582,6 +614,10 @@ export function computeTierRecommendation(
     recommendationConfidence = hc === "high" ? "high" : "medium";
     reason =
       "Holistic sits below evaluation despite stronger team context — underperformance looks more individual.";
+    if (trend === "declining") {
+      softReview = true;
+      reason += " Declining recent trend supports a closer look.";
+    }
   } else if (hc === "low" && span >= 1) {
     overallFit = evaluationFit;
     softReview = true;
@@ -597,6 +633,13 @@ export function computeTierRecommendation(
     } else if (pve === "below") {
       reason += " Teams underperform similar-strength peers.";
     }
+    if (trend === "improving") {
+      softReview = true;
+      reason += " Improving recent form increases promotion likelihood.";
+    } else if (trend === "declining") {
+      softReview = true;
+      reason += " Declining recent form warrants review.";
+    }
   } else if (span <= 1) {
     overallFit = fitFromTier(union);
     recommendationConfidence = hc === "high" ? "high" : "medium";
@@ -604,12 +647,19 @@ export function computeTierRecommendation(
       hc === "high"
         ? "Evaluation and performance point to adjacent tiers — meaningful borderline case."
         : `Adjacent-tier signals with ${hc} holistic confidence — ${holisticConfidence.summary}`;
+    if (trend === "improving" || trend === "declining") {
+      softReview = true;
+      reason += ` Recent trend: ${performanceTrend!.label}.`;
+    }
   } else if (hc === "high") {
     overallFit = { kind: "disagreement", label: "Review Required" };
     recommendationConfidence = "high";
     reason = "Evaluation and performance disagree.";
     if (pve) {
       reason += ` Performance vs expected: ${performanceVsExpected!.label}.`;
+    }
+    if (trend) {
+      reason += ` Trend: ${performanceTrend!.label}.`;
     }
   } else {
     overallFit = fitFromTier(evalTiers);
