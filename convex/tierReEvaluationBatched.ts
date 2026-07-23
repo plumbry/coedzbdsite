@@ -938,6 +938,23 @@ async function processBatchHandler(
           ? teamPerfSamples.slice(-MAX_TEAM_PERF_SAMPLES)
           : teamPerfSamples;
 
+      let avgTeamStrength: number | undefined;
+      let avgTeamStrengthEvents: number | undefined;
+      {
+        let strengthSum = 0;
+        let strengthCount = 0;
+        for (const sample of cappedTeamPerfSamples) {
+          if (typeof sample.strength === "number") {
+            strengthSum += sample.strength;
+            strengthCount += 1;
+          }
+        }
+        if (strengthCount > 0) {
+          avgTeamStrength = strengthSum / strengthCount;
+          avgTeamStrengthEvents = strengthCount;
+        }
+      }
+
       const avgTeammateTierNumeric =
         eventTeammateAverages.length > 0
           ? eventTeammateAverages.reduce((sum, t) => sum + t, 0) /
@@ -1080,6 +1097,8 @@ async function processBatchHandler(
         rawHolisticScore,
         avgTeammateTier: avgTeammateTierNumeric,
         tierGapAdjustment: undefined,
+        avgTeamStrength,
+        avgTeamStrengthEvents,
         teamPerfSamples:
           cappedTeamPerfSamples.length > 0 ? cappedTeamPerfSamples : undefined,
         tierAbove,

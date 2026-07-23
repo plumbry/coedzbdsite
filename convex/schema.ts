@@ -1599,6 +1599,13 @@ export default defineSchema({
     avgTeammateTier: v.optional(v.number()), // Average teammate tier (1=C, 2=B, 3=A, 4=S)
     tierGapAdjustment: v.optional(v.number()), // Multiplier applied (1.0, 0.85, 0.70, 0.55)
     /**
+     * Mean roster evaluation strength across dated teamPerfSamples that have strength.
+     * Precomputed at rebuild so admin queries avoid re-aggregating samples for display.
+     */
+    avgTeamStrength: v.optional(v.number()),
+    /** Number of samples included in avgTeamStrength. */
+    avgTeamStrengthEvents: v.optional(v.number()),
+    /**
      * Per-event samples for Performance vs Expected + trend.
      * strength = mean evaluation score of roster as of the event when available;
      * placement/kills = outcomes; asOfMs = event play time for chronological trend.

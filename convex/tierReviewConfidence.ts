@@ -25,6 +25,7 @@ import {
 import {
   buildStrengthExpectations,
   computePerformanceVsExpected,
+  mean,
   type PerformanceVsExpectedLevel,
   type TeamPerfSample,
 } from "./lib/stats/teamAdjustedPerformance";
@@ -58,6 +59,9 @@ type PlayerReviewRow = {
   compositionResidual?: number;
   compositionBiasLabel?: string;
   duoShare?: number;
+  /** Mean roster evaluation strength from cached teamPerfSamples. */
+  avgTeamStrength?: number;
+  avgTeamStrengthEvents?: number;
   /** Performance vs Expected — teams vs similar-strength historical peers. */
   performanceVsExpected?: PerformanceVsExpectedLevel;
   performanceVsExpectedLabel?: string;
@@ -86,9 +90,26 @@ type PlayerReviewRow = {
   suggestedTier?: ReviewTier;
 };
 
+function avgTeamStrengthFromSamples(
+  samples: readonly TeamPerfSample[] | undefined,
+): { avgTeamStrength?: number; avgTeamStrengthEvents?: number } {
+  if (!samples || samples.length === 0) return {};
+  const strengths: number[] = [];
+  for (const sample of samples) {
+    if (typeof sample.strength === "number" && Number.isFinite(sample.strength)) {
+      strengths.push(sample.strength);
+    }
+  }
+  if (strengths.length === 0) return {};
+  return {
+    avgTeamStrength: mean(strengths),
+    avgTeamStrengthEvents: strengths.length,
+  };
+}
+
 /**
  * Tier recommendation — best-fit from evaluation + restriction-adjusted
- * holistic. Raw holistic is preserved for display; adjusted score drives fits.
+ * holistic. Reads only players + tierReEvaluationCache (no per-event tables).
  */
 export const getTierReviewConfidence = query({
   args: {},
@@ -271,19 +292,19 @@ export const getTierReviewConfidence = query({
 
     const adjustedHolisticCenters = buildTierCenters(adjustedHolisticByTier);
 
-    // Learn expected team outcomes by strength from historical samples.
+    // Learn expected team outcomes by strength from cached samples only
+    // (no thirdPartyResults / match reads on this page).
     const globalTeamSamples: TeamPerfSample[] = [];
     for (const cache of cacheRows) {
       const samples = cache.teamPerfSamples;
       if (!samples) continue;
       for (const sample of samples) {
-        globalTeamSamples.push({
-          strength: sample.strength,
-          placement: sample.placement,
-          teamKills: sample.teamKills,
-          playerKills: sample.playerKills,
-          asOfMs: sample.asOfMs,
-        });
+        if (
+          typeof sample.strength === "number" &&
+          Number.isFinite(sample.strength)
+        ) {
+          globalTeamSamples.push(sample);
+        }
       }
     }
     const strengthExpectations = buildStrengthExpectations(globalTeamSamples);
@@ -314,22 +335,23 @@ export const getTierReviewConfidence = query({
         hasMutualDependency: candidate.hasMutualDependency,
       });
 
-      const playerSamples: TeamPerfSample[] = (cache.teamPerfSamples ?? []).map(
-        (s) => ({
-          strength: s.strength,
-          placement: s.placement,
-          teamKills: s.teamKills,
-          playerKills: s.playerKills,
-          asOfMs: s.asOfMs,
-        }),
-      );
+      // Use cached sample arrays in place — no remapping copies.
+      const playerSamples = (cache.teamPerfSamples ?? []) as TeamPerfSample[];
       const performanceVsExpected = computePerformanceVsExpected(
         playerSamples,
         strengthExpectations,
       );
+      const performanceTrend = computePerformanceTrend(
+        toTrendSamples(playerSamples),
+      );
 
-      const trendSamples = toTrendSamples(playerSamples);
-      const performanceTrend = computePerformanceTrend(trendSamples);
+      const cachedAvgStrength =
+        typeof cache.avgTeamStrength === "number"
+          ? {
+              avgTeamStrength: cache.avgTeamStrength,
+              avgTeamStrengthEvents: cache.avgTeamStrengthEvents,
+            }
+          : avgTeamStrengthFromSamples(playerSamples);
 
       const result = computeTierRecommendation(
         evaluationFit,
@@ -363,6 +385,8 @@ export const getTierReviewConfidence = query({
         compositionResidual: holisticConfidence.compositionResidual,
         compositionBiasLabel: holisticConfidence.compositionBiasLabel,
         duoShare: holisticConfidence.duoShare,
+        avgTeamStrength: cachedAvgStrength.avgTeamStrength,
+        avgTeamStrengthEvents: cachedAvgStrength.avgTeamStrengthEvents,
         performanceVsExpected: performanceVsExpected?.level,
         performanceVsExpectedLabel: performanceVsExpected?.label,
         performanceVsExpectedSummary: performanceVsExpected?.summary,

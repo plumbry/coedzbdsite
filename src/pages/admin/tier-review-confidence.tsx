@@ -59,6 +59,7 @@ type SortField =
   | "evaluation"
   | "holistic"
   | "holisticConfidence"
+  | "avgTeamStrength"
   | "performanceVsExpected"
   | "performanceTrend"
   | "overall"
@@ -428,6 +429,9 @@ function TierRecommendationContent() {
             (CONFIDENCE_RANK[a.holisticConfidence] ?? 9) -
             (CONFIDENCE_RANK[b.holisticConfidence] ?? 9);
           break;
+        case "avgTeamStrength":
+          cmp = (a.avgTeamStrength ?? -1) - (b.avgTeamStrength ?? -1);
+          break;
         case "performanceVsExpected":
           cmp =
             (PVE_RANK[a.performanceVsExpected ?? ""] ?? 9) -
@@ -494,7 +498,7 @@ function TierRecommendationContent() {
       <div className="space-y-6">
         <PageHeader
           title="Tier Recommendation"
-          description="Decision-support signals: Evaluation, Holistic, Performance vs Expected, Recent Trend, and a combined recommendation. Does not auto-tier."
+          description="Cache-backed decision support: Evaluation, Holistic, avg team strength, Performance vs Expected, Recent Trend, and recommendation. Does not auto-tier."
           actions={
             <Button variant="outline" size="sm" asChild>
               <Link to="/admin/stats">
@@ -516,6 +520,11 @@ function TierRecommendationContent() {
                 <strong className="text-sky-950 dark:text-sky-100">Holistic Confidence</strong> —
                 reliability after comparing actual teammates to what ZBD tier
                 restrictions (and historical mixes) predict for evaluation ability.
+              </p>
+              <p>
+                <strong className="text-sky-950 dark:text-sky-100">Avg team strength</strong> —
+                mean roster evaluation score across the player&apos;s dated events
+                (from tier re-evaluation cache).
               </p>
               <p>
                 <strong className="text-sky-950 dark:text-sky-100">Performance vs Expected</strong> —
@@ -706,10 +715,12 @@ function TierRecommendationContent() {
             )}
             <p className="text-xs text-muted-foreground flex items-start gap-1.5">
               <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              Performance vs Expected uses {data.summary.teamStrengthSampleCount}{" "}
-              team-event samples across {data.summary.teamStrengthExpectationBuckets}{" "}
-              strength buckets (roster evaluation scores as of each event). Rebuild the
-              tier re-evaluation cache after deploying so samples refresh.
+              This page reads only active players + tier re-evaluation cache (no
+              live match/result scans). Performance vs Expected uses{" "}
+              {data.summary.teamStrengthSampleCount} team-event samples across{" "}
+              {data.summary.teamStrengthExpectationBuckets} strength buckets.
+              Rebuild the cache after deploy so avg team strength and dated
+              samples refresh.
             </p>
 
             <Card>
@@ -899,6 +910,20 @@ function TierRecommendationContent() {
                               />
                             </button>
                           </TableHead>
+                          <TableHead className="w-[110px]">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1"
+                              onClick={() => toggleSort("avgTeamStrength")}
+                            >
+                              Team str.
+                              <SortIcon
+                                field="avgTeamStrength"
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                              />
+                            </button>
+                          </TableHead>
                           <TableHead className="w-[150px]">
                             <button
                               type="button"
@@ -977,7 +1002,7 @@ function TierRecommendationContent() {
                         {visible.length === 0 ? (
                           <TableRow>
                             <TableCell
-                              colSpan={10}
+                              colSpan={11}
                               className="text-center text-muted-foreground py-10"
                             >
                               No players match these filters.
@@ -1100,6 +1125,42 @@ function TierRecommendationContent() {
                                     label={row.holisticConfidenceLabel}
                                     tooltipLines={holConfTips}
                                   />
+                                </TableCell>
+                                <TableCell className="align-top">
+                                  {row.avgTeamStrength !== undefined ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="cursor-help">
+                                          <div className="tabular-nums font-medium">
+                                            {Math.round(row.avgTeamStrength)}
+                                          </div>
+                                          {row.avgTeamStrengthEvents !==
+                                            undefined && (
+                                            <MetaLine>
+                                              {row.avgTeamStrengthEvents} events
+                                            </MetaLine>
+                                          )}
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs space-y-1">
+                                        <p>
+                                          Mean roster evaluation strength across
+                                          dated events (cached).
+                                        </p>
+                                        {row.actualTeammateStrength !==
+                                          undefined && (
+                                          <p>
+                                            Avg teammate tier (1–4 scale):{" "}
+                                            {row.actualTeammateStrength.toFixed(2)}
+                                          </p>
+                                        )}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">
+                                      —
+                                    </span>
+                                  )}
                                 </TableCell>
                                 <TableCell className="align-top">
                                   <Tooltip>
