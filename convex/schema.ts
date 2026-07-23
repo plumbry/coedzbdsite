@@ -1599,15 +1599,15 @@ export default defineSchema({
     avgTeammateTier: v.optional(v.number()), // Average teammate tier (1=C, 2=B, 3=A, 4=S)
     tierGapAdjustment: v.optional(v.number()), // Multiplier applied (1.0, 0.85, 0.70, 0.55)
     /**
-     * Per-event team strength samples for Performance vs Expected + trend.
-     * strength = mean evaluation score of roster as of the event (tierHistory);
-     * placement/teamKills = team outcomes; playerKills = individual eliminations;
-     * asOfMs = event play time for chronological trend.
+     * Per-event samples for Performance vs Expected + trend.
+     * strength = mean evaluation score of roster as of the event when available;
+     * placement/kills = outcomes; asOfMs = event play time for chronological trend.
+     * Samples without strength still count toward trend (placement/kills).
      */
     teamPerfSamples: v.optional(
       v.array(
         v.object({
-          strength: v.number(),
+          strength: v.optional(v.number()),
           placement: v.number(),
           teamKills: v.optional(v.number()),
           playerKills: v.optional(v.number()),

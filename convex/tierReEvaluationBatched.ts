@@ -858,9 +858,10 @@ async function processBatchHandler(
 
       // Event-weighted average teammate tier + team performance samples.
       // Both use tier/score as of the event (from tierHistory), not current values.
+      // Trend needs every dated placement; strength is optional (for PvE only).
       const eventTeammateAverages: number[] = [];
       const teamPerfSamples: {
-        strength: number;
+        strength?: number;
         placement: number;
         teamKills?: number;
         playerKills?: number;
@@ -868,10 +869,9 @@ async function processBatchHandler(
       }[] = [];
 
       for (const result of allPlayerResults) {
-        if (!result.teamMembers || result.teamMembers.length === 0) continue;
-
         const asOfMs = importAsOfMs.get(result.importId as string);
         if (asOfMs === undefined) continue;
+        if (typeof result.placement !== "number") continue;
 
         const seatTiers: number[] = [];
         const seatScores: number[] = [];
@@ -881,7 +881,8 @@ async function processBatchHandler(
           seatScores.push(selfState.totalScore);
         }
 
-        for (const teammateEpic of result.teamMembers) {
+        const teamMembers = result.teamMembers ?? [];
+        for (const teammateEpic of teamMembers) {
           if (teammateEpic === player.epicUsername) continue;
 
           let ability = abilityByEpic.get(teammateEpic);
@@ -910,28 +911,24 @@ async function processBatchHandler(
           );
         }
 
-        const rosterSize = result.teamMembers.length;
+        const rosterSize = Math.max(teamMembers.length, 1);
         const requiredScores = Math.max(2, Math.ceil(rosterSize * 0.5));
-        if (
-          seatScores.length >= requiredScores &&
-          typeof result.placement === "number"
-        ) {
-          const strength =
-            seatScores.reduce((sum, s) => sum + s, 0) / seatScores.length;
-          teamPerfSamples.push({
-            strength,
-            placement: result.placement,
-            teamKills:
-              typeof result.teamKills === "number"
-                ? result.teamKills
-                : undefined,
-            playerKills:
-              typeof result.eliminations === "number"
-                ? result.eliminations
-                : undefined,
-            asOfMs,
-          });
-        }
+        const strength =
+          seatScores.length >= requiredScores
+            ? seatScores.reduce((sum, s) => sum + s, 0) / seatScores.length
+            : undefined;
+
+        teamPerfSamples.push({
+          ...(strength !== undefined ? { strength } : {}),
+          placement: result.placement,
+          ...(typeof result.teamKills === "number"
+            ? { teamKills: result.teamKills }
+            : {}),
+          ...(typeof result.eliminations === "number"
+            ? { playerKills: result.eliminations }
+            : {}),
+          asOfMs,
+        });
       }
 
       // Keep most recent samples by event time (chronological, not insertion order)

@@ -8,8 +8,11 @@
  */
 
 export type TeamPerfSample = {
-  /** Mean evaluation score of team members (including self). */
-  strength: number;
+  /**
+   * Mean evaluation score of team members (including self) as of the event.
+   * Optional when teammate scores weren't available — still useful for trend.
+   */
+  strength?: number;
   placement: number;
   /** Team kills for the event when available. */
   teamKills?: number;
@@ -46,7 +49,7 @@ export type PerformanceVsExpectedResult = {
 export const TEAM_STRENGTH_BUCKET_WIDTH = 75;
 
 /** Cap stored samples per player to keep cache docs small. */
-export const MAX_TEAM_PERF_SAMPLES = 40;
+export const MAX_TEAM_PERF_SAMPLES = 60;
 
 export function mean(values: readonly number[]): number | undefined {
   if (values.length === 0) return undefined;
@@ -99,7 +102,11 @@ export function buildStrengthExpectations(
   >();
 
   for (const team of teams) {
-    if (!Number.isFinite(team.strength) || !Number.isFinite(team.placement)) {
+    if (
+      typeof team.strength !== "number" ||
+      !Number.isFinite(team.strength) ||
+      !Number.isFinite(team.placement)
+    ) {
       continue;
     }
     const key = strengthBucketKey(team.strength, bucketWidth);
@@ -195,6 +202,9 @@ export function computePerformanceVsExpected(
   const actualKills: number[] = [];
 
   for (const sample of samples) {
+    if (typeof sample.strength !== "number" || !Number.isFinite(sample.strength)) {
+      continue;
+    }
     const expected = lookupExpectation(sample.strength, expectations, bucketWidth);
     if (!expected) continue;
 

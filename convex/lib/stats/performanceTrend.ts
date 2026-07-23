@@ -13,10 +13,13 @@ import {
   type TeamPerfSample,
 } from "./teamAdjustedPerformance";
 
-export type TrendSample = TeamPerfSample & {
+export type TrendSample = {
   /** Event play time (ms). Required for chronological trend. */
   asOfMs: number;
-  /** Individual eliminations when available. */
+  placement: number;
+  /** Optional — enables PvE residual trend when present. */
+  strength?: number;
+  teamKills?: number;
   playerKills?: number;
 };
 
@@ -103,16 +106,25 @@ export function meanDiffZ(
 
 function recentWindowSize(total: number): number {
   // Prefer ~35% recent, clamped so both windows can meet TREND_MIN_WINDOW.
-  const preferred = Math.min(20, Math.max(TREND_MIN_WINDOW, Math.floor(total * 0.35)));
+  const preferred = Math.min(
+    20,
+    Math.max(TREND_MIN_WINDOW, Math.floor(total * 0.35)),
+  );
   const maxRecent = total - TREND_MIN_WINDOW;
   return Math.min(preferred, maxRecent);
 }
 
 function killsForSample(sample: TrendSample): number | undefined {
-  if (typeof sample.playerKills === "number" && Number.isFinite(sample.playerKills)) {
+  if (
+    typeof sample.playerKills === "number" &&
+    Number.isFinite(sample.playerKills)
+  ) {
     return sample.playerKills;
   }
-  if (typeof sample.teamKills === "number" && Number.isFinite(sample.teamKills)) {
+  if (
+    typeof sample.teamKills === "number" &&
+    Number.isFinite(sample.teamKills)
+  ) {
     return sample.teamKills;
   }
   return undefined;
@@ -122,6 +134,9 @@ function pveResidual(
   sample: TrendSample,
   expectations: readonly StrengthBucketExpectation[],
 ): number | undefined {
+  if (typeof sample.strength !== "number" || !Number.isFinite(sample.strength)) {
+    return undefined;
+  }
   const expected = lookupExpectation(sample.strength, expectations);
   if (!expected) return undefined;
 
@@ -143,9 +158,21 @@ function pveResidual(
   return placementComponent;
 }
 
+export function toTrendSamples(
+  samples: readonly TeamPerfSample[],
+): TrendSample[] {
+  return samples.filter(
+    (s): s is TrendSample =>
+      typeof s.asOfMs === "number" &&
+      Number.isFinite(s.asOfMs) &&
+      Number.isFinite(s.placement),
+  );
+}
+
 /**
  * Classify recent form vs the same player's earlier events.
- * Returns null when sample size / timestamps are insufficient.
+ * Placement/kills trends do not require team strength; PvE is optional.
+ * Returns null when dated sample size is insufficient.
  */
 export function computePerformanceTrend(
   samples: readonly TrendSample[],
@@ -159,10 +186,7 @@ export function computePerformanceTrend(
   const zThreshold = options?.zThreshold ?? TREND_Z_THRESHOLD;
 
   const dated = samples.filter(
-    (s) =>
-      Number.isFinite(s.asOfMs) &&
-      Number.isFinite(s.placement) &&
-      Number.isFinite(s.strength),
+    (s) => Number.isFinite(s.asOfMs) && Number.isFinite(s.placement),
   );
   if (dated.length < minWindow * 2) return null;
 
@@ -180,7 +204,9 @@ export function computePerformanceTrend(
     minWindow,
   );
 
-  const recentKills = recent.map(killsForSample).filter((v): v is number => v !== undefined);
+  const recentKills = recent
+    .map(killsForSample)
+    .filter((v): v is number => v !== undefined);
   const baselineKills = baseline
     .map(killsForSample)
     .filter((v): v is number => v !== undefined);
@@ -224,14 +250,18 @@ export function computePerformanceTrend(
   const pveDeclining = pveZ !== null && pveZ <= -zThreshold;
 
   if (level === "stable") {
-    reasons.push("No statistically meaningful change versus own historical baseline.");
+    reasons.push(
+      "No statistically meaningful change versus own historical baseline.",
+    );
   } else if (level === "improving") {
     if (placementImproving && killsImproving) {
       reasons.push(
         `Placements and kills improving over the last ${recent.length} events.`,
       );
     } else if (placementImproving) {
-      reasons.push(`Placements improving over the last ${recent.length} events.`);
+      reasons.push(
+        `Placements improving over the last ${recent.length} events.`,
+      );
     } else if (killsImproving) {
       reasons.push("Average kills increasing versus earlier events.");
     }

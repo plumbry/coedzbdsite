@@ -30,8 +30,8 @@ import {
 } from "./lib/stats/teamAdjustedPerformance";
 import {
   computePerformanceTrend,
+  toTrendSamples,
   type PerformanceTrendLevel,
-  type TrendSample,
 } from "./lib/stats/performanceTrend";
 
 type PlayerReviewRow = {
@@ -328,9 +328,7 @@ export const getTierReviewConfidence = query({
         strengthExpectations,
       );
 
-      const trendSamples: TrendSample[] = playerSamples.filter(
-        (s): s is TrendSample => typeof s.asOfMs === "number",
-      );
+      const trendSamples = toTrendSamples(playerSamples);
       const performanceTrend = computePerformanceTrend(
         trendSamples,
         strengthExpectations,

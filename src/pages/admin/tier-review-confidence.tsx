@@ -1046,7 +1046,7 @@ function TierRecommendationContent() {
                             }
                             if (trendTips.length === 0) {
                               trendTips.push(
-                                "Need dated team samples from a cache rebuild (at least 16 events).",
+                                "Need at least 16 dated event samples after a cache rebuild (placement history with event dates).",
                               );
                             }
 
