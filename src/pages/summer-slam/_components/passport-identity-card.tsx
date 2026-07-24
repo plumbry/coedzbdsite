@@ -286,7 +286,7 @@ function StampCollectionPanel({
           />
         </div>
       ) : null}
-      <p className="text-[9px] text-center text-orange-800/45 sm:text-[11px]">Tap a stamp to open its passport page</p>
+      <p className="text-[9px] text-center text-orange-800/45 sm:text-[11px]">Tap a stamp to view quests</p>
     </section>
   );
 }
