@@ -196,7 +196,7 @@ export default function AdminHubPage() {
       links: [
         {
           title: "Analytics Hub",
-          description: "Tier evaluation, holistic scores, earnings, and cache rebuilds.",
+          description: "Tier Tool recommendations, audience insights, earnings, and operational caches.",
           href: "/admin/stats",
           icon: BarChart3,
         },

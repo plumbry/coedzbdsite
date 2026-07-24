@@ -1197,6 +1197,7 @@ export default defineSchema({
     rebuildKind: v.optional(
       v.union(
         v.literal("full"),
+        v.literal("through_top_five"),
         v.literal("through_tier_eval"),
         v.literal("event_participation"),
         v.literal("tc_dca"),
@@ -1669,6 +1670,92 @@ export default defineSchema({
   })
     .index("by_player", ["playerId"])
     .index("by_tier", ["tier"]),
+
+  /** Latest Tier Tool review-metrics import (Phase 5 bridge). */
+  ttReviewMetricsImport: defineTable({
+    contract: v.string(),
+    schemaVersion: v.string(),
+    generatedAt: v.string(),
+    importedAt: v.number(),
+    playerCount: v.number(),
+  }),
+
+  /** Per-player Tier Tool ECP consensus snapshot for Website recommendations. */
+  ttReviewMetricsByPlayer: defineTable({
+    playerId: v.id("players"),
+    slug: v.optional(v.string()),
+    discordUsername: v.string(),
+    epicUsername: v.optional(v.string()),
+    currentTier: v.string(),
+    evaluationTotalScore: v.optional(v.number()),
+    eligible: v.boolean(),
+    conclusion: v.optional(
+      v.union(
+        v.literal("supports"),
+        v.literal("mixed"),
+        v.literal("challenges"),
+        v.literal("inconclusive"),
+      ),
+    ),
+    decisionConfidence: v.optional(
+      v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
+    ),
+    adminAction: v.optional(
+      v.union(
+        v.literal("none"),
+        v.literal("monitor"),
+        v.literal("consider_re_evaluation"),
+      ),
+    ),
+    directionHint: v.optional(v.string()),
+    experienceScore: v.optional(v.number()),
+    formTrendLevel: v.optional(
+      v.union(
+        v.literal("improving"),
+        v.literal("stable"),
+        v.literal("declining"),
+      ),
+    ),
+    pillarSkillRating: v.optional(
+      v.union(
+        v.literal("supports"),
+        v.literal("neutral"),
+        v.literal("challenges"),
+      ),
+    ),
+    pillarCompetitiveRating: v.optional(
+      v.union(
+        v.literal("supports"),
+        v.literal("neutral"),
+        v.literal("challenges"),
+      ),
+    ),
+    pillarCarry: v.optional(
+      v.union(
+        v.literal("supports"),
+        v.literal("neutral"),
+        v.literal("challenges"),
+      ),
+    ),
+    pillarSkillTrend: v.optional(
+      v.union(
+        v.literal("supports"),
+        v.literal("neutral"),
+        v.literal("challenges"),
+      ),
+    ),
+    pillarFormTrend: v.optional(
+      v.union(
+        v.literal("supports"),
+        v.literal("neutral"),
+        v.literal("challenges"),
+      ),
+    ),
+    snapshotGeneratedAt: v.string(),
+    importedAt: v.number(),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_discord_username", ["discordUsername"]),
   
   // Tier medians for re-evaluation
   tierMediansCache: defineTable({

@@ -14,8 +14,6 @@ export default function GoogleSheetsManager() {
   const exportPlayersToSheets = useAction(api.googleSheets.exportPlayersToSheets);
   const exportArchivedPlayersToSheets = useAction(api.googleSheets.exportArchivedPlayersToSheets);
   const exportRejectedPlayersToSheets = useAction(api.googleSheets.exportRejectedPlayersToSheets);
-  const exportReEvaluationsToSheets = useAction(api.googleSheets.exportReEvaluationsToSheets);
-  const exportHolisticScoresToSheets = useAction(api.googleSheets.exportHolisticScoresToSheets);
   const exportAllToSheets = useAction(api.googleSheets.exportAllToSheets);
   const importApplicationsFromSheets = useAction(api.googleSheets.importApplicationsFromSheets);
   const updatePlayersFromSheets = useAction(api.googleSheets.updatePlayersFromSheets);
@@ -24,8 +22,6 @@ export default function GoogleSheetsManager() {
   const [isExportingPlayers, setIsExportingPlayers] = useState(false);
   const [isExportingArchivedPlayers, setIsExportingArchivedPlayers] = useState(false);
   const [isExportingRejectedPlayers, setIsExportingRejectedPlayers] = useState(false);
-  const [isExportingReEvaluations, setIsExportingReEvaluations] = useState(false);
-  const [isExportingHolisticScores, setIsExportingHolisticScores] = useState(false);
   const [isExportingAll, setIsExportingAll] = useState(false);
   const [isImportingApplications, setIsImportingApplications] = useState(false);
   const [isUpdatingPlayers, setIsUpdatingPlayers] = useState(false);
@@ -106,56 +102,6 @@ export default function GoogleSheetsManager() {
     }
   };
 
-  const handleExportReEvaluations = async () => {
-    if (!spreadsheetId.trim()) {
-      toast.error("Please enter a Spreadsheet ID");
-      return;
-    }
-    
-    setIsExportingReEvaluations(true);
-    try {
-      const result = await exportReEvaluationsToSheets({
-        spreadsheetId: spreadsheetId.trim(),
-      });
-      
-      toast.success(
-        `Exported ${result.playersExported} tier re-evaluations to Google Sheets!`,
-        { duration: 5000 }
-      );
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Export failed: ${errorMessage}`, { duration: 7000 });
-      console.error(error);
-    } finally {
-      setIsExportingReEvaluations(false);
-    }
-  };
-
-  const handleExportHolisticScores = async () => {
-    if (!spreadsheetId.trim()) {
-      toast.error("Please enter a Spreadsheet ID");
-      return;
-    }
-    
-    setIsExportingHolisticScores(true);
-    try {
-      const result = await exportHolisticScoresToSheets({
-        spreadsheetId: spreadsheetId.trim(),
-      });
-      
-      toast.success(
-        `Exported ${result.playersExported} holistic scores to Google Sheets!`,
-        { duration: 5000 }
-      );
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Export failed: ${errorMessage}`, { duration: 7000 });
-      console.error(error);
-    } finally {
-      setIsExportingHolisticScores(false);
-    }
-  };
-
   const handleExportAll = async () => {
     if (!spreadsheetId.trim()) {
       toast.error("Please enter a Spreadsheet ID");
@@ -169,15 +115,13 @@ export default function GoogleSheetsManager() {
       });
       
       if (result.success) {
-        const totalExported = 
+        const totalExported =
           (result.results.players?.playersExported || 0) +
           (result.results.archived?.playersExported || 0) +
-          (result.results.rejected?.playersExported || 0) +
-          (result.results.reEvaluations?.playersExported || 0) +
-          (result.results.holisticScores?.playersExported || 0);
-        
+          (result.results.rejected?.playersExported || 0);
+
         toast.success(
-          `Successfully exported all data! Total: ${totalExported} records across 5 sheets.`,
+          `Successfully exported membership data! Total: ${totalExported} records.`,
           { duration: 7000 }
         );
       } else {
@@ -381,7 +325,7 @@ export default function GoogleSheetsManager() {
             <div className="mb-1.5">
               <h3 className="text-xs font-medium">Export Data</h3>
               <p className="text-xs text-muted-foreground">
-                Export player data to Google Sheets (Players, Archived, Rejected, Re-Evaluations, Holistic Scores)
+                Export player membership data to Google Sheets (active, archived, rejected)
               </p>
             </div>
             <div className="space-y-2">
@@ -402,26 +346,6 @@ export default function GoogleSheetsManager() {
                 >
                   {isExportingPlayers ? "Exporting..." : "Export Players"}
                 </Button>
-                <Button
-                  onClick={handleExportReEvaluations}
-                  disabled={isExportingReEvaluations || isExportingAll || !spreadsheetId.trim()}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  {isExportingReEvaluations ? "Exporting..." : "Export Re-Evaluations"}
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleExportHolisticScores}
-                  disabled={isExportingHolisticScores || isExportingAll || !spreadsheetId.trim()}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  {isExportingHolisticScores ? "Exporting..." : "Export Holistic Scores"}
-                </Button>
-              </div>
-              <div className="flex gap-2">
                 <Button
                   onClick={handleExportArchivedPlayers}
                   disabled={isExportingArchivedPlayers || isExportingAll || !spreadsheetId.trim()}

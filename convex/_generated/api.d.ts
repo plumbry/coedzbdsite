@@ -191,6 +191,7 @@ import type * as tierReEvaluationBatched from "../tierReEvaluationBatched.js";
 import type * as tierReviewConfidence from "../tierReviewConfidence.js";
 import type * as tierSnapshot from "../tierSnapshot.js";
 import type * as topFiveCache from "../topFiveCache.js";
+import type * as ttReviewMetrics from "../ttReviewMetrics.js";
 import type * as userMerge from "../userMerge.js";
 import type * as userProvisioning from "../userProvisioning.js";
 import type * as users from "../users.js";
@@ -411,6 +412,7 @@ declare const fullApi: ApiFromModules<{
   tierReviewConfidence: typeof tierReviewConfidence;
   tierSnapshot: typeof tierSnapshot;
   topFiveCache: typeof topFiveCache;
+  ttReviewMetrics: typeof ttReviewMetrics;
   userMerge: typeof userMerge;
   userProvisioning: typeof userProvisioning;
   users: typeof users;

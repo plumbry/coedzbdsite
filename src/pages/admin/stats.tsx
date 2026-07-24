@@ -3,11 +3,7 @@ import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import {
   Trophy,
-  TrendingUp,
   DollarSign,
-  Target,
-  Brain,
-  LineChart,
   Database,
   Wrench,
   Users,
@@ -33,33 +29,15 @@ type StatsSection = {
 
 const statsSections: StatsSection[] = [
   {
-    title: "Tier & holistic",
-    description: "Promotion/demotion signals and holistic score components.",
+    title: "Tier recommendations",
+    description: "Decision support from Tier Tool ECP consensus imports.",
     links: [
-      {
-        title: "Tier Re-Evaluation",
-        description: "Review automatic tier promotion and demotion suggestions.",
-        href: "/admin/tier-re-evaluation",
-        icon: TrendingUp,
-      },
       {
         title: "Tier Recommendation",
         description:
-          "Best-fit tier from evaluation + holistic scores, independent of current assignment.",
+          "Import Tier Tool review metrics and review evidence-based tier recommendations.",
         href: "/admin/tier-review-confidence",
         icon: ShieldCheck,
-      },
-      {
-        title: "Holistic Score Stats",
-        description: "Component breakdowns and distributions from the tier-eval cache.",
-        href: "/admin/holistic-score-stats",
-        icon: Brain,
-      },
-      {
-        title: "Tier Impact",
-        description: "How tier placement affects performance over time.",
-        href: "/admin/tier-impact",
-        icon: Target,
       },
     ],
   },
@@ -74,18 +52,6 @@ const statsSections: StatsSection[] = [
         href: "/admin/audience-insights",
         icon: Users,
         analyticsVisible: true,
-      },
-      {
-        title: "Average Stats",
-        description: "Population placement, kills, and win-rate averages by tier.",
-        href: "/admin/average-stats",
-        icon: LineChart,
-      },
-      {
-        title: "Leaderboard Stats",
-        description: "Event leaderboard participation and top-finisher rates.",
-        href: "/admin/leaderboard-stats",
-        icon: Trophy,
       },
     ],
   },
@@ -103,13 +69,13 @@ const statsSections: StatsSection[] = [
         title: "In-Game Earnings",
         description: "In-game currency and reward earnings.",
         href: "/admin/in-game-earnings",
-        icon: TrendingUp,
+        icon: Trophy,
       },
     ],
   },
   {
-    title: "Caches & rebuilds",
-    description: "Unified player-stats pipeline health and one-time migrations.",
+    title: "Operational caches",
+    description: "Yunite ingestion health and operational cache rebuilds.",
     links: [
       {
         title: "Data Cache",
@@ -119,7 +85,7 @@ const statsSections: StatsSection[] = [
       },
       {
         title: "Data Maintenance",
-        description: "PR field cleanup, full rebuild, migrations, and destructive tools.",
+        description: "Migrations, Yunite fixes, and destructive tools.",
         href: "/admin/data-maintenance",
         icon: Wrench,
       },
@@ -170,7 +136,9 @@ function filterSectionsForAnalytics(sections: StatsSection[]): StatsSection[] {
 export default function StatsPage() {
   const { isAnalytics, isAdmin } = useUserRole();
   const visibleSections =
-    isAnalytics && !isAdmin ? filterSectionsForAnalytics(statsSections) : statsSections;
+    isAnalytics && !isAdmin
+      ? filterSectionsForAnalytics(statsSections)
+      : statsSections;
 
   return (
     <AdminPageLayout
@@ -179,7 +147,7 @@ export default function StatsPage() {
       description={
         isAnalytics && !isAdmin
           ? "Audience insights for analytics staff."
-          : "Tier evaluation, holistic scores, earnings, and unified stat rebuilds."
+          : "Tier Tool recommendations, audience insights, earnings, and operational caches."
       }
       authTitle="Sign in to access analytics"
     >

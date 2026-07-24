@@ -973,25 +973,7 @@ export const exportAllToSheets = action({
       errors.push(`Rejected players export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
     
-    // Export Re-Evaluations
-    try {
-      const reEvaluationsResult = await ctx.runAction(api.googleSheets.exportReEvaluationsToSheets, {
-        spreadsheetId: args.spreadsheetId,
-      });
-      results.reEvaluations = { playersExported: reEvaluationsResult.playersExported };
-    } catch (error) {
-      errors.push(`Re-evaluations export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-    }
-    
-    // Export Holistic Scores
-    try {
-      const holisticScoresResult = await ctx.runAction(api.googleSheets.exportHolisticScoresToSheets, {
-        spreadsheetId: args.spreadsheetId,
-      });
-      results.holisticScores = { playersExported: holisticScoresResult.playersExported };
-    } catch (error) {
-      errors.push(`Holistic scores export failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-    }
+    // Phase 6: modelling exports removed — membership data only.
     
     const timestamp = new Date().toISOString();
     return {

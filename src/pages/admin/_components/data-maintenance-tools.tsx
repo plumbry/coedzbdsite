@@ -62,7 +62,6 @@ export default function DataMaintenanceTools() {
   const recalculateAffectedPlayerStatsCache = useMutation(
     api.playerStatsCache.recalculateAffectedPlayerStatsCache,
   );
-  const rebuildTierReevaluation = useMutation(api.playerStatsCache.rebuildTierReevaluationForEligible);
   const startRecomputeActivityFromLastEventDate = useMutation(
     api.memberManagement.startRecomputeActivityFromLastEventDate,
   );
@@ -311,8 +310,8 @@ export default function DataMaintenanceTools() {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm text-primary">Rebuild Player Stats</CardTitle>
           <CardDescription className="text-xs">
-            Unified pipeline: event participation, TC, DCA, top-five cache, and tier-eval holistic
-            scores (with raw + TC/DCA-adjusted values).
+            Operational pipeline: event participation, TC, DCA, and top-five cache (Yunite /
+            raw export). Analytics modelling runs in Tier Tool.
           </CardDescription>
         </CardHeader>
         <CardContent className="py-3 space-y-2">
@@ -351,18 +350,6 @@ export default function DataMaintenanceTools() {
             />
             <PlayerStatsRebuildButton size="sm" variant="outline" label="TC/DCA only" tcDcaOnly />
             <PlayerStatsRebuildButton size="sm" variant="outline" label="Top 5 only" topFiveOnly />
-            <PlayerStatsRebuildButton
-              size="sm"
-              variant="outline"
-              label="Tier-eval only"
-              tierEvalOnly
-            />
-            <PlayerStatsRebuildButton
-              size="sm"
-              variant="outline"
-              label="Average stats only"
-              aggregateStatsOnly
-            />
             <Button
               size="sm"
               variant="outline"
@@ -390,25 +377,6 @@ export default function DataMaintenanceTools() {
               }
             >
               Emergency: full stats cache rebuild
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!!activeStatsRebuild}
-              onClick={() =>
-                setPendingConfirm({
-                  title: "Rebuild tier re-evaluation cache?",
-                  description:
-                    "Rebuilds tier evaluation entries for players with 8+ Yunite import events only.",
-                  confirmLabel: "Rebuild tier eval",
-                  onConfirm: async () => {
-                    const result = await rebuildTierReevaluation({ confirm: true });
-                    toast.success(result.message);
-                  },
-                })
-              }
-            >
-              Rebuild tier re-eval
             </Button>
           </div>
         </CardContent>

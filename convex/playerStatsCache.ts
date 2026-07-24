@@ -14,7 +14,6 @@ import {
   collectAffectedPlayerIdsSince,
   getLastSuccessfulCacheRebuildAt,
 } from "./lib/stats/playerStatsCacheStatus";
-import { updateTierEvalForPlayerIfEligible } from "./lib/stats/updateTierEvalForPlayer";
 import {
   updateStatsForPlayer,
   updateStatsForPlayers,
@@ -73,8 +72,7 @@ export const recalculateStatsForPlayer = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
     const outcome = await updateStatsForPlayer(ctx, args.playerId);
-    const tierEval = await updateTierEvalForPlayerIfEligible(ctx, args.playerId);
-    return { ...outcome, tierEval };
+    return outcome;
   },
 });
 
@@ -85,19 +83,10 @@ export const recalculateStatsForImport = mutation({
     const playerIds = await collectAffectedPlayerIdsForImport(ctx, args.importId);
     const summary = await updateStatsForPlayers(ctx, playerIds);
 
-    let tierEvalUpdated = 0;
-    for (const playerId of playerIds) {
-      const result = await updateTierEvalForPlayerIfEligible(ctx, playerId);
-      if (result.tierEvalUpdated) {
-        tierEvalUpdated += 1;
-      }
-    }
-
     return {
       importId: args.importId,
       affectedPlayers: playerIds.length,
       ...summary,
-      tierEvalUpdated,
     };
   },
 });
@@ -232,24 +221,12 @@ export const recalculateAffectedPlayerStatsCache = mutation({
 
 export const rebuildTierReevaluationForEligible = mutation({
   args: { confirm: v.literal(true) },
-  handler: async (
-    ctx,
-  ): Promise<{ jobId: Id<"playerStatsRebuildJobs">; message: string }> => {
+  handler: async (ctx) => {
     await requireAdmin(ctx);
-
-    const running = await ctx.db
-      .query("playerStatsRebuildJobs")
-      .withIndex("by_status", (q) => q.eq("status", "running"))
-      .first();
-    if (running) {
-      throw new ConvexError({
-        message: "A player stats rebuild is already running",
-        code: "CONFLICT",
-      });
-    }
-
-    return await ctx.runMutation(internal.playerStatsRebuild.scheduleFullRebuild, {
-      tierEvalOnly: true,
+    throw new ConvexError({
+      message:
+        "Tier re-evaluation cache rebuilds were removed in Phase 6. Use the Tier Tool for analytics and export review metrics to Tier Recommendation.",
+      code: "FAILED_PRECONDITION",
     });
   },
 });
@@ -289,14 +266,7 @@ export const updateStatsBatchInternal = internalMutation({
     const summary = await updateStatsForPlayers(ctx, args.playerIds, {
       matchDataChangedPlayerIds,
     });
-    let tierEvalUpdated = 0;
-    for (const playerId of args.playerIds) {
-      const result = await updateTierEvalForPlayerIfEligible(ctx, playerId);
-      if (result.tierEvalUpdated) {
-        tierEvalUpdated += 1;
-      }
-    }
-    return { ...summary, tierEvalUpdated };
+    return summary;
   },
 });
 
@@ -357,10 +327,6 @@ export const processCacheRebuildStep = internalMutation({
       playersUpdated += batchSummary.playersUpdated;
       skippedNoChange += batchSummary.skippedNoChange;
       errors.push(...batchSummary.errors);
-
-      for (const playerId of batch) {
-        await updateTierEvalForPlayerIfEligible(ctx, playerId);
-      }
 
       nextPlayerIndex = end;
       const done = nextPlayerIndex >= playerIds.length;

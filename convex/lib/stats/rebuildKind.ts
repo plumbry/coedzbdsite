@@ -1,5 +1,6 @@
 export const PLAYER_STATS_REBUILD_KINDS = [
   "full",
+  "through_top_five",
   "through_tier_eval",
   "event_participation",
   "tc_dca",
@@ -23,14 +24,17 @@ export function resolvePlayerStatsRebuildKind(args: {
   if (args.topFiveOnly) return "top_five";
   if (args.aggregateStatsOnly) return "aggregate_stats";
   if (args.stopAfterPhase === "event_participation") return "event_participation";
-  if (args.includeAggregateStats === false) return "through_tier_eval";
-  return "full";
+  if (args.includeAggregateStats) return "full";
+  if (args.stopAfterPhase === "tier_eval") return "through_tier_eval";
+  return "through_top_five";
 }
 
 export function rebuildKindLabel(kind: PlayerStatsRebuildKind): string {
   switch (kind) {
     case "full":
       return "Full player stats rebuild";
+    case "through_top_five":
+      return "Operational player stats rebuild";
     case "through_tier_eval":
       return "Rebuild through tier evaluation";
     case "event_participation":

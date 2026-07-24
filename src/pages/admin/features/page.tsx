@@ -1,12 +1,9 @@
-import { useTierEvaluationCache } from "@/hooks/use-tier-evaluation-cache.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Download, Users, Zap, Wrench, ArrowRight } from "lucide-react";
+import { Users, Zap, Wrench, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { toast } from "sonner";
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
-import ExportOptionsDialog from "../_components/export-options-dialog.tsx";
 import MergePlayersDialog from "../_components/merge-players-dialog.tsx";
 import ImportPlayersDialog from "../../_components/import-players-dialog.tsx";
 import RelinkResultsButton from "../_components/relink-results-button.tsx";
@@ -18,85 +15,8 @@ import ZbdRawExportCard from "../_components/zbd-raw-export-card.tsx";
 import { DiscordSyncTools } from "../_components/discord-sync-tools.tsx";
 
 function FeaturesContent() {
-  const evaluations = useTierEvaluationCache();
-
-  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [isImportPlayersDialogOpen, setIsImportPlayersDialogOpen] = useState(false);
-  const handleExportEvaluations = (filters?: { tiers: string[]; statuses: string[] }) => {
-    if (!evaluations?.evaluations || evaluations.evaluations.length === 0) {
-      toast.error("No evaluations to export");
-      return;
-    }
-
-    let filteredEvaluations = evaluations.evaluations;
-    if (filters) {
-      filteredEvaluations = evaluations.evaluations.filter((evaluation) => {
-        const tierMatch = filters.tiers.includes(evaluation.tier);
-        const statusMatch = filters.statuses.includes(evaluation.evaluationStatus);
-        return tierMatch && statusMatch;
-      });
-    }
-
-    if (filteredEvaluations.length === 0) {
-      toast.error("No evaluations match the selected filters");
-      return;
-    }
-
-    const headers = [
-      "Player Name",
-      "Discord Username",
-      "Tier",
-      "Events",
-      "Holistic Score",
-      "Placement Score",
-      "Win Rate Score",
-      "Kills Score",
-      "Deaths Score",
-      "Avg Placement",
-      "Win Rate %",
-      "Kills/Match",
-      "Deaths/Match",
-      "vs Tier %",
-      "vs Above %",
-      "vs Below %",
-      "Evaluation Status",
-    ];
-
-    const rows = filteredEvaluations.map((p) => [
-      p.playerName,
-      p.discordUsername,
-      p.tier,
-      p.totalEvents,
-      p.holisticScore.toFixed(1),
-      p.placementScore.toFixed(1),
-      p.winRateScore.toFixed(1),
-      p.killsScore.toFixed(1),
-      (p.deathsScore ?? 0).toFixed(1),
-      p.avgPlacement.toFixed(1),
-      p.winRate.toFixed(1),
-      p.killsPerMatch.toFixed(1),
-      (p.deathsPerMatch ?? 0).toFixed(1),
-      (p.holisticVsSameTier ?? 0).toFixed(1),
-      (p.promotionDiff ?? 0).toFixed(1),
-      (p.demotionDiff ?? 0).toFixed(1),
-      p.evaluationStatus,
-    ]);
-
-    const csv = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `player-evaluations-${new Date().toISOString().split("T")[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    toast.success(`Exported ${filteredEvaluations.length} evaluations to CSV`);
-  };
 
   return (
     <div className="space-y-4">
@@ -141,25 +61,6 @@ function FeaturesContent() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Export Player Evaluations</CardTitle>
-            <CardDescription className="text-xs">
-              Export all player evaluation data to CSV
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="py-3">
-            <Button
-              size="sm"
-              onClick={() => setIsExportDialogOpen(true)}
-              disabled={!evaluations || !evaluations.evaluations || evaluations.evaluations.length === 0}
-            >
-              <Download className="mr-2 h-3 w-3" />
-              Export Evaluations
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
             <CardTitle className="text-sm">Merge Duplicate Players</CardTitle>
             <CardDescription className="text-xs">
               Merge duplicate player records into a single record
@@ -196,12 +97,6 @@ function FeaturesContent() {
 
       <TierSnapshotTool />
       <GoogleSheetsManager />
-
-      <ExportOptionsDialog
-        open={isExportDialogOpen}
-        onOpenChange={setIsExportDialogOpen}
-        onExport={handleExportEvaluations}
-      />
 
       <MergePlayersDialog open={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen} />
       <ImportPlayersDialog

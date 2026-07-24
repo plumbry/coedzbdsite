@@ -6,12 +6,7 @@ import LandingPage from "./pages/landing/page.tsx";
 import MembersPage from "./pages/Index.tsx";
 import PlayerProfile from "./pages/player-profile/page.tsx";
 
-import TierReEvaluation from "./pages/admin/tier-re-evaluation.tsx";
 import TierReviewConfidencePage from "./pages/admin/tier-review-confidence.tsx";
-import AverageStats from "./pages/admin/average-stats.tsx";
-import HolisticScoreStats from "./pages/admin/holistic-score-stats.tsx";
-import TopFiveDetails from "./pages/admin/top-five-details.tsx";
-import LeaderboardStats from "./pages/admin/leaderboard-stats.tsx";
 import DataCacheStatus from "./pages/admin/data-cache-status.tsx";
 import DataBackup from "./pages/admin/data-backup.tsx";
 import UserManagementPage from "./pages/admin/user-management.tsx";
@@ -27,7 +22,6 @@ import AuditPage from "./pages/admin/audit.tsx";
 import FeaturesPage from "./pages/admin/features/page.tsx";
 import PlayerEarningsPage from "./pages/admin/player-earnings.tsx";
 import MemberManagement from "./pages/admin/member-management.tsx";
-import TierImpactPage from "./pages/admin/tier-impact.tsx";
 import StatsPage from "./pages/admin/stats.tsx";
 import AudienceInsightsPage from "./pages/admin/audience-insights.tsx";
 import AudienceInsightsSegmentPage from "./pages/admin/audience-insights-segment.tsx";
@@ -67,12 +61,13 @@ export default function App() {
 
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminHubPage />} />
-            <Route path="tier-re-evaluation" element={<TierReEvaluation />} />
             <Route path="tier-review-confidence" element={<TierReviewConfidencePage />} />
-            <Route path="average-stats" element={<AverageStats />} />
-            <Route path="holistic-score-stats" element={<HolisticScoreStats />} />
-            <Route path="top-five-details" element={<TopFiveDetails />} />
-            <Route path="leaderboard-stats" element={<LeaderboardStats />} />
+            <Route path="tier-re-evaluation" element={<Navigate to="/admin/tier-review-confidence" replace />} />
+            <Route path="average-stats" element={<Navigate to="/admin/stats" replace />} />
+            <Route path="holistic-score-stats" element={<Navigate to="/admin/stats" replace />} />
+            <Route path="top-five-details" element={<Navigate to="/admin/stats" replace />} />
+            <Route path="leaderboard-stats" element={<Navigate to="/admin/stats" replace />} />
+            <Route path="tier-impact" element={<Navigate to="/admin/stats" replace />} />
             <Route path="data-cache-status" element={<DataCacheStatus />} />
             <Route path="data-backup" element={<DataBackup />} />
             <Route path="data-maintenance" element={<DataMaintenancePage />} />
@@ -91,7 +86,6 @@ export default function App() {
             <Route path="player-earnings" element={<PlayerEarningsPage />} />
             <Route path="member-management/:tab?" element={<MemberManagement />} />
             <Route path="members/:tab?" element={<MemberManagement />} />
-            <Route path="tier-impact" element={<TierImpactPage />} />
             <Route path="stats" element={<StatsPage />} />
             <Route
               path="audience-insights/:chart/:segment"

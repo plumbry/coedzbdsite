@@ -392,7 +392,7 @@ export const scheduleFullRebuild = internalMutation({
           ? "top_five"
           : aggregateStatsOnly
             ? "aggregate_stats"
-            : args.stopAfterPhase;
+            : (args.stopAfterPhase ?? "top_five");
 
     const tierEvalRecentOnly = args.tierEvalRecentOnly ?? false;
     let tierEvalPlayerIds: Id<"players">[] | undefined;
@@ -428,7 +428,7 @@ export const scheduleFullRebuild = internalMutation({
         ? true
         : partialOnly
           ? false
-          : (args.includeAggregateStats ?? true),
+          : (args.includeAggregateStats ?? false),
       stopAfterPhase: endPhase,
       tierEvalRecentOnly,
       rebuildKind,
@@ -461,9 +461,11 @@ export const scheduleFullRebuild = internalMutation({
             ? "Population average stats rebuild started."
             : args.stopAfterPhase === "event_participation"
             ? "Yunite event count sync started for all players."
-            : args.includeAggregateStats === false
-              ? `Player stats rebuild started (event counts through tier evaluation)${recentNote}.`
-              : `Player stats rebuild started: event counts → TC → DCA → top-five → tier evaluation → averages${recentNote}.`;
+            : args.includeAggregateStats
+              ? `Player stats rebuild started: event counts through tier evaluation and population averages${recentNote}.`
+              : endPhase === "top_five"
+                ? `Operational player stats rebuild started: event counts → TC → DCA → top-five${recentNote}.`
+                : `Player stats rebuild started (stops after ${endPhase})${recentNote}.`;
 
     return { jobId, message };
   },

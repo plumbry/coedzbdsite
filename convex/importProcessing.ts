@@ -1730,30 +1730,7 @@ export const runUpdatePlayerStatsStep = internalMutation({
     const summary = await updateStatsForPlayers(ctx, playerIds);
 
     let tierEvalUpdated = 0;
-    for (const playerId of playerIds) {
-      const cacheRow = await ctx.db
-        .query("playerStatsCache")
-        .withIndex("by_player", (q) => q.eq("playerId", playerId))
-        .first();
-      if (cacheRow?.reevaluationEligible) {
-        const medians = await ctx.db.query("tierMediansCache").first();
-        if (medians) {
-          await ctx.runMutation(internal.tierReEvaluationBatched.processBatch, {
-            batchNumber: 0,
-            playerIds: [playerId],
-          });
-          tierEvalUpdated += 1;
-        }
-      } else {
-        const existing = await ctx.db
-          .query("tierReEvaluationCache")
-          .withIndex("by_player", (q) => q.eq("playerId", playerId))
-          .first();
-        if (existing) {
-          await ctx.db.delete(existing._id);
-        }
-      }
-    }
+    // Phase 6: tier-eval cache updates removed — analytics modelling lives in Tier Tool.
 
     await ctx.db.patch(args.jobId, {
       affectedPlayerIds: playerIds,

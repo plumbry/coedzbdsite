@@ -4,7 +4,7 @@ import {
   type CompositionBias,
 } from "./tierRestrictions";
 import type { PerformanceVsExpectedResult } from "./teamAdjustedPerformance";
-import type { PerformanceTrendResult } from "./performanceTrend";
+import type { PerformanceTrendResult, PerformanceTrendLevel } from "./performanceTrend";
 
 /** Competitive tiers used for recommendations (excludes D / Unranked). */
 export const REVIEW_TIERS = ["S", "A", "B", "C"] as const;
@@ -771,4 +771,211 @@ export function confidenceSortRank(level: ConfidenceLevel): number {
 
 export function overallFitLabel(fit: OverallFit): string {
   return fit.label;
+}
+
+/** Tier Tool pillar alignment (Phase 5 bridge). */
+export type TtPillarAlignment = "supports" | "neutral" | "challenges";
+
+/** Snapshot from Tier Tool `zbd.tt.reviewMetrics` export. */
+export type TtAssessmentInput = {
+  eligible: boolean;
+  conclusion?: "supports" | "mixed" | "challenges" | "inconclusive" | null;
+  decisionConfidence?: ConfidenceLevel;
+  adminAction?: "none" | "monitor" | "consider_re_evaluation";
+  directionHint?: string | null;
+  pillars?: Partial<
+    Record<
+      "skillRating" | "competitiveRating" | "carry" | "skillTrend" | "formTrend",
+      TtPillarAlignment | null
+    >
+  >;
+  experienceScore?: number;
+  formTrendLevel?: PerformanceTrendLevel;
+};
+
+/**
+ * Map Tier Tool ECP consensus to Website recommendation actions.
+ * Intended to replace holistic/TAP weighting when TT metrics are imported.
+ */
+export function computeRecommendationFromTtAssessment(
+  currentTier: ReviewTier,
+  evaluationFit: TierFit,
+  tt: TtAssessmentInput,
+): Pick<
+  RecommendationResult,
+  "action" | "actionLabel" | "reason" | "recommendationConfidence" | "stars" | "overallFit"
+> {
+  if (!tt.eligible) {
+    return {
+      action: "no_change",
+      actionLabel: "No Change",
+      reason: "Insufficient Tier Tool evidence for a recommendation.",
+      recommendationConfidence: "low",
+      stars: 1,
+      overallFit: evaluationFit,
+    };
+  }
+
+  const decision = tt.decisionConfidence ?? "medium";
+  const stars = decision === "high" ? 5 : decision === "medium" ? 3 : 2;
+  const conclusion = tt.conclusion ?? "inconclusive";
+  const admin = tt.adminAction ?? "none";
+
+  let action: ActionKind = "no_change";
+  let actionLabel = "No Change";
+  let reason =
+    tt.directionHint ||
+    "Tier Tool evidence supports the current expected profile.";
+
+  if (
+    admin === "consider_re_evaluation" ||
+    (conclusion === "challenges" && decision !== "low")
+  ) {
+    action = "review_recommended";
+    actionLabel = "Review Recommended";
+    reason =
+      tt.directionHint ||
+      "Tier Tool pillar evidence challenges the current expected profile.";
+  } else if (admin === "monitor" || conclusion === "mixed") {
+    action = "optional_review";
+    actionLabel = "Optional Review";
+    reason =
+      tt.directionHint ||
+      "Mixed Tier Tool evidence — revisit after additional events.";
+  } else if (conclusion === "inconclusive" || decision === "low") {
+    action = "no_change";
+    actionLabel = "No Change";
+    reason = "Tier Tool evidence is inconclusive.";
+  }
+
+  let overallFit: OverallFit;
+  if (conclusion === "challenges") {
+    overallFit = { kind: "disagreement", label: "Evidence Challenges Profile" };
+  } else if (conclusion === "supports") {
+    overallFit =
+      evaluationFit.kind === "best_fit"
+        ? evaluationFit
+        : { kind: "best_fit", tier: currentTier, label: `Best Fit: ${currentTier}` };
+  } else if (conclusion === "mixed") {
+    overallFit = { kind: "disagreement", label: "Mixed Evidence" };
+  } else {
+    overallFit = { kind: "disagreement", label: "Inconclusive Evidence" };
+  }
+
+  return {
+    action,
+    actionLabel,
+    reason,
+    recommendationConfidence: decision,
+    stars,
+    overallFit,
+  };
+}
+
+const TT_PILLAR_KEYS = [
+  "skillRating",
+  "competitiveRating",
+  "carry",
+  "skillTrend",
+  "formTrend",
+] as const;
+
+type TtPillarKey = (typeof TT_PILLAR_KEYS)[number];
+
+export type TtReviewMetricsExportPlayer = {
+  playerId: string;
+  slug?: string;
+  discordUsername: string;
+  epicUsername?: string;
+  currentTier: string;
+  evaluationTotalScore?: number | null;
+  experienceScore?: number | null;
+  reviewAssessment?: {
+    eligibility?: { eligible?: boolean };
+    consensus?: {
+      conclusion?: TtAssessmentInput["conclusion"];
+      directionHint?: string | null;
+    };
+    confidence?: {
+      decision?: { level?: ConfidenceLevel };
+    };
+    adminAction?: {
+      action?: TtAssessmentInput["adminAction"];
+      directionHint?: string | null;
+    };
+    pillars?: Partial<
+      Record<TtPillarKey, { alignment?: TtPillarAlignment | null }>
+    >;
+    formTrend?: { level?: PerformanceTrendLevel | null };
+  };
+};
+
+export type TtReviewMetricsExport = {
+  contract: string;
+  schemaVersion: string;
+  generatedAt: string;
+  playerCount: number;
+  players: TtReviewMetricsExportPlayer[];
+};
+
+export function mapTtExportPlayerToAssessmentInput(
+  row: TtReviewMetricsExportPlayer,
+): TtAssessmentInput {
+  const ra = row.reviewAssessment;
+  const pillars: NonNullable<TtAssessmentInput["pillars"]> = {};
+
+  for (const key of TT_PILLAR_KEYS) {
+    const alignment = ra?.pillars?.[key]?.alignment;
+    if (alignment) pillars[key] = alignment;
+  }
+
+  return {
+    eligible: ra?.eligibility?.eligible === true,
+    conclusion: ra?.consensus?.conclusion ?? null,
+    decisionConfidence: ra?.confidence?.decision?.level,
+    adminAction: ra?.adminAction?.action ?? "none",
+    directionHint:
+      ra?.consensus?.directionHint ??
+      ra?.adminAction?.directionHint ??
+      null,
+    pillars,
+    experienceScore:
+      typeof row.experienceScore === "number" ? row.experienceScore : undefined,
+    formTrendLevel: ra?.formTrend?.level ?? undefined,
+  };
+}
+
+export function ttCacheRowToAssessmentInput(row: {
+  eligible: boolean;
+  conclusion?: TtAssessmentInput["conclusion"];
+  decisionConfidence?: ConfidenceLevel;
+  adminAction?: TtAssessmentInput["adminAction"];
+  directionHint?: string;
+  experienceScore?: number;
+  formTrendLevel?: PerformanceTrendLevel;
+  pillarSkillRating?: TtPillarAlignment;
+  pillarCompetitiveRating?: TtPillarAlignment;
+  pillarCarry?: TtPillarAlignment;
+  pillarSkillTrend?: TtPillarAlignment;
+  pillarFormTrend?: TtPillarAlignment;
+}): TtAssessmentInput {
+  const pillars: NonNullable<TtAssessmentInput["pillars"]> = {};
+  if (row.pillarSkillRating) pillars.skillRating = row.pillarSkillRating;
+  if (row.pillarCompetitiveRating) {
+    pillars.competitiveRating = row.pillarCompetitiveRating;
+  }
+  if (row.pillarCarry) pillars.carry = row.pillarCarry;
+  if (row.pillarSkillTrend) pillars.skillTrend = row.pillarSkillTrend;
+  if (row.pillarFormTrend) pillars.formTrend = row.pillarFormTrend;
+
+  return {
+    eligible: row.eligible,
+    conclusion: row.conclusion ?? null,
+    decisionConfidence: row.decisionConfidence,
+    adminAction: row.adminAction ?? "none",
+    directionHint: row.directionHint ?? null,
+    pillars,
+    experienceScore: row.experienceScore,
+    formTrendLevel: row.formTrendLevel,
+  };
 }

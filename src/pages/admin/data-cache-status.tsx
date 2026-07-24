@@ -71,7 +71,6 @@ function DataCacheStatusContent() {
   const rebuildEventCache = useMutation(api.cacheStatus.rebuildEventCache);
   const rebuildImportCache = useMutation(api.cacheStatus.rebuildImportCache);
   const rebuildMatchStatsCache = useMutation(api.cacheStatus.rebuildMatchStatsCache);
-  const rebuildAggregateStatsCache = useMutation(api.cacheStatus.rebuildAggregateStatsCache);
   const backfillPlayerEventStats = useMutation(api.cacheStatus.backfillPlayerEventParticipationStats);
 
   const [rebuildingCache, setRebuildingCache] = useState<string | null>(null);
@@ -89,7 +88,7 @@ function DataCacheStatusContent() {
     }
   };
 
-  const handleRebuildCache = async (cacheType: "players" | "events" | "imports" | "matchStats" | "aggregateStats" | "playerEventStats") => {
+  const handleRebuildCache = async (cacheType: "players" | "events" | "imports" | "matchStats" | "playerEventStats") => {
     setRebuildingCache(cacheType);
     try {
       let result;
@@ -105,9 +104,6 @@ function DataCacheStatusContent() {
           break;
         case "matchStats":
           result = await rebuildMatchStatsCache();
-          break;
-        case "aggregateStats":
-          result = await rebuildAggregateStatsCache();
           break;
         case "playerEventStats":
           result = await backfillPlayerEventStats();
@@ -175,23 +171,6 @@ function DataCacheStatusContent() {
   const recentImportSyncs =
     dashboard && !dashboard.needsRefresh ? dashboard.recentImportSyncs : undefined;
 
-  const aggregateCoverage = cacheMetadata?.aggregateStatsCache
-    ? {
-        included: cacheMetadata.aggregateStatsCache.playerCount,
-        matchDataPool:
-          cacheMetadata.aggregateStatsCache.rebuildPoolCount ??
-          cacheMetadata.competitivePool.eligibleMatchDataPool,
-        excludedNoYuniteEvents:
-          cacheMetadata.aggregateStatsCache.excludedNoYuniteEvents ??
-          Math.max(
-            0,
-            (cacheMetadata.aggregateStatsCache.rebuildPoolCount ??
-              cacheMetadata.competitivePool.eligibleMatchDataPool) -
-              cacheMetadata.aggregateStatsCache.playerCount,
-          ),
-      }
-    : null;
-
   const formatCount = (count: number, sampled?: boolean) =>
     `${count.toLocaleString()}${sampled ? "+" : ""}`;
 
@@ -234,10 +213,10 @@ function DataCacheStatusContent() {
 
           <Card className="border-primary bg-primary/5">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Unified player stats rebuild</CardTitle>
+              <CardTitle className="text-base">Operational player stats rebuild</CardTitle>
               <CardDescription>
-                Event participation → TC → DCA → top-five → tier-eval holistic scores (raw + TC/DCA).
-                Replaces separate per-cache holistic refresh buttons for a full refresh.
+                Event participation → TC → DCA → top-five cache for Yunite coverage and raw export.
+                Analytics modelling runs in the Tier Tool.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -261,19 +240,6 @@ function DataCacheStatusContent() {
                   variant="outline"
                   label="Top 5 only"
                   topFiveOnly
-                />
-                <PlayerStatsRebuildButton
-                  size="sm"
-                  variant="outline"
-                  label="Average stats only"
-                  aggregateStatsOnly
-                />
-                <PlayerStatsRebuildButton
-                  size="sm"
-                  variant="outline"
-                  label="8-week tier eval only"
-                  tierEvalOnly
-                  tierEvalRecentOnly
                 />
                 <PlayerStatsRebuildButton
                   size="sm"
@@ -514,113 +480,6 @@ function DataCacheStatusContent() {
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Aggregate Stats Cache */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium">Aggregate Stats</CardTitle>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    title="Population average stats (unified rebuild)"
-                    onClick={() => handleRebuildCache("aggregateStats")}
-                    disabled={rebuildingCache === "aggregateStats" || !!activeStatsRebuild}
-                  >
-                    {rebuildingCache === "aggregateStats" ? (
-                      <Spinner className="h-3 w-3" />
-                    ) : (
-                      <RefreshCw className="h-3 w-3" />
-                    )}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {cacheMetadata.aggregateStatsCache ? (
-                    <Badge variant="outline" className="text-green-600 border-green-600">
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Cached
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">
-                      <XCircle className="mr-1 h-3 w-3" />
-                      Empty
-                    </Badge>
-                  )}
-                </div>
-                {cacheMetadata.aggregateStatsCache && aggregateCoverage && (
-                  <div className="space-y-1 mt-2 text-xs">
-                    <div className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">Yunite event coverage</span>
-                      <span className="font-medium text-right">
-                        {aggregateCoverage.included.toLocaleString()} players
-                      </span>
-                    </div>
-                    {aggregateCoverage.excludedNoYuniteEvents > 0 && (
-                      <p className="text-muted-foreground">
-                        {aggregateCoverage.matchDataPool} match-data pool ·{" "}
-                        {aggregateCoverage.excludedNoYuniteEvents} without Yunite import events
-                      </p>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Last Updated</span>
-                      <span className="font-medium">
-                        {formatRelativeTime(cacheMetadata.aggregateStatsCache.lastUpdated)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            {/* Tier Re-Evaluation Cache */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <Link to="/admin/holistic-score-stats">
-                    <CardTitle className="text-sm font-medium hover:underline cursor-pointer">
-                      Holistic Scores →
-                    </CardTitle>
-                  </Link>
-                </div>
-                <CardDescription className="text-xs">Tier evaluations & scores</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {cacheMetadata.tierReEvaluationCache.evaluationCount > 0 ? (
-                    <Badge variant="outline" className="text-green-600 border-green-600">
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Cached
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">
-                      <XCircle className="mr-1 h-3 w-3" />
-                      Empty
-                    </Badge>
-                  )}
-                </div>
-                {cacheMetadata.tierReEvaluationCache.evaluationCount > 0 && (
-                  <div className="space-y-1 mt-2 text-xs">
-                    <div className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">Pool coverage</span>
-                      <span className="font-medium text-right">
-                        {poolCoverageLabel(
-                          cacheMetadata.tierReEvaluationCache.evaluationCount,
-                          cacheMetadata.competitivePool.tierEvalEligiblePool,
-                        )}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Last Updated</span>
-                      <span className="font-medium">
-                        {formatRelativeTime(cacheMetadata.tierReEvaluationCache.lastUpdated || undefined)}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
           </div>

@@ -4,36 +4,16 @@ import {
   actionSortRank,
   buildTierCenters,
   classifyScoreAgainstCenters,
-  computeHolisticConfidence,
-  computeTierRecommendation,
+  computeRecommendationFromTtAssessment,
   confidenceSortRank,
   isReviewTier,
-  median,
   overallFitLabel,
-  primaryAbilityTier,
+  ttCacheRowToAssessmentInput,
   type ActionKind,
   type ConfidenceLevel,
+  type OverallFit,
   type ReviewTier,
 } from "./lib/stats/tierReviewConfidence";
-import {
-  adjustHolisticForTeammateComposition,
-  blendExpectedTeammateStrength,
-  estimateHolisticPointsPerTeammateStrength,
-  restrictionPriorTeammateStrength,
-  type RestrictionTier,
-} from "./lib/stats/tierRestrictions";
-import {
-  buildStrengthExpectations,
-  computePerformanceVsExpected,
-  mean,
-  type PerformanceVsExpectedLevel,
-  type TeamPerfSample,
-} from "./lib/stats/teamAdjustedPerformance";
-import {
-  computePerformanceTrend,
-  toTrendSamples,
-  type PerformanceTrendLevel,
-} from "./lib/stats/performanceTrend";
 
 type PlayerReviewRow = {
   playerId: string;
@@ -43,43 +23,10 @@ type PlayerReviewRow = {
   currentTier: ReviewTier;
   evaluationScore: number;
   evaluationFitLabel: string;
-  holisticScore: number;
-  /** Restriction-adjusted holistic used for best-fit / recommendations. */
-  adjustedHolisticScore: number;
-  holisticAdjustmentDelta: number;
-  rawHolisticFitLabel: string;
-  holisticFitLabel: string;
-  holisticConfidence: ConfidenceLevel;
-  holisticConfidenceLabel: string;
-  holisticConfidenceStars: number;
-  holisticConfidenceSummary: string;
-  holisticConfidenceReasons: string[];
-  actualTeammateStrength?: number;
-  expectedTeammateStrength?: number;
-  compositionResidual?: number;
-  compositionBiasLabel?: string;
-  duoShare?: number;
-  /** Mean roster evaluation strength from cached teamPerfSamples. */
-  avgTeamStrength?: number;
-  avgTeamStrengthEvents?: number;
-  /** Performance vs Expected — teams vs similar-strength historical peers. */
-  performanceVsExpected?: PerformanceVsExpectedLevel;
-  performanceVsExpectedLabel?: string;
-  performanceVsExpectedSummary?: string;
-  expectedAvgPlacement?: number;
-  actualAvgPlacement?: number;
-  expectedAvgTeamKills?: number;
-  actualAvgTeamKills?: number;
-  performanceVsExpectedEvents?: number;
-  /** Recent form vs the player's own historical baseline. */
-  performanceTrend?: PerformanceTrendLevel;
-  performanceTrendLabel?: string;
-  performanceTrendDisplayLabel?: string;
-  performanceTrendSummary?: string;
-  performanceTrendReasons?: string[];
-  performanceTrendRecentEvents?: number;
-  performanceTrendBaselineEvents?: number;
-  totalEvents: number;
+  experienceScore?: number;
+  ttConclusion?: string;
+  ttEligible?: boolean;
+  formTrendLevel?: string;
   overallFitLabel: string;
   recommendationConfidence: ConfidenceLevel;
   recommendationConfidenceLabel: string;
@@ -87,62 +34,34 @@ type PlayerReviewRow = {
   action: ActionKind;
   actionLabel: string;
   reason: string;
-  suggestedTier?: ReviewTier;
+  recommendationSource: "tier_tool" | "pending_import" | "missing_from_export";
 };
 
-function avgTeamStrengthFromSamples(
-  samples: readonly TeamPerfSample[] | undefined,
-): { avgTeamStrength?: number; avgTeamStrengthEvents?: number } {
-  if (!samples || samples.length === 0) return {};
-  const strengths: number[] = [];
-  for (const sample of samples) {
-    if (typeof sample.strength === "number" && Number.isFinite(sample.strength)) {
-      strengths.push(sample.strength);
-    }
-  }
-  if (strengths.length === 0) return {};
-  return {
-    avgTeamStrength: mean(strengths),
-    avgTeamStrengthEvents: strengths.length,
-  };
-}
-
 /**
- * Tier recommendation — best-fit from evaluation + restriction-adjusted
- * holistic. Reads only players + tierReEvaluationCache (no per-event tables).
+ * Tier recommendations — evaluation fit + Tier Tool ECP consensus import.
+ * No holistic/TAP modelling on Website (Phase 6).
  */
 export const getTierReviewConfidence = query({
   args: {},
   handler: async (ctx) => {
     await requireModeratorOrAdmin(ctx);
 
-    const [activePlayers, cacheRows] = await Promise.all([
+    const [activePlayers, ttImportMeta, ttMetricRows] = await Promise.all([
       ctx.db
         .query("players")
         .withIndex("by_status", (q) => q.eq("status", "active"))
         .collect(),
-      ctx.db.query("tierReEvaluationCache").collect(),
+      ctx.db.query("ttReviewMetricsImport").take(1),
+      ctx.db.query("ttReviewMetricsByPlayer").collect(),
     ]);
 
-    const playersById = new Map(activePlayers.map((p) => [p._id, p] as const));
-
-    const missingIds = cacheRows
-      .map((row) => row.playerId)
-      .filter((id) => !playersById.has(id));
-    if (missingIds.length > 0) {
-      const extras = await Promise.all(missingIds.map((id) => ctx.db.get(id)));
-      for (const player of extras) {
-        if (player) playersById.set(player._id, player);
-      }
-    }
+    const ttImport = ttImportMeta[0] ?? null;
+    const ttImportActive = Boolean(ttImport);
+    const ttByPlayerId = new Map(
+      ttMetricRows.map((row) => [row.playerId, row] as const),
+    );
 
     const evaluationScoresByTier: Record<ReviewTier, number[]> = {
-      S: [],
-      A: [],
-      B: [],
-      C: [],
-    };
-    const holisticScoresByTier: Record<ReviewTier, number[]> = {
       S: [],
       A: [],
       B: [],
@@ -160,346 +79,159 @@ export const getTierReviewConfidence = query({
       evaluationScoresByTier[player.tier].push(player.totalScore);
     }
 
-    type CacheCandidate = {
-      cache: (typeof cacheRows)[number];
-      currentTier: ReviewTier;
-      evaluationScore: number;
-      discordUsername: string;
-      epicUsername: string;
-      nickname?: string;
-      matchesAnalyzed?: number;
-      withoutDuoCount?: number;
-      hasConsistentDuo: boolean;
-      hasMutualDependency: boolean;
-    };
+    const evaluationCenters = buildTierCenters(evaluationScoresByTier);
 
-    const candidates: CacheCandidate[] = [];
+    const reviews: PlayerReviewRow[] = [];
     let insufficientEvaluation = 0;
     let skippedInvalidTier = 0;
+    let missingFromExport = 0;
 
-    for (const cache of cacheRows) {
-      if (typeof cache.holisticScore !== "number") continue;
-
-      const player = playersById.get(cache.playerId);
-      const currentTier: ReviewTier | null =
-        (player && isReviewTier(player.tier) && player.tier) ||
-        (isReviewTier(cache.tier) ? cache.tier : null);
-
-      if (!currentTier) {
-        skippedInvalidTier += 1;
+    for (const player of activePlayers) {
+      if (player.isAlt || !isReviewTier(player.tier)) {
+        if (!player.isAlt && player.tier && !isReviewTier(player.tier)) {
+          skippedInvalidTier += 1;
+        }
         continue;
       }
 
-      holisticScoresByTier[currentTier].push(cache.holisticScore);
-
+      const currentTier = player.tier;
       const evaluationScore =
-        typeof player?.totalScore === "number" ? player.totalScore : null;
+        typeof player.totalScore === "number" ? player.totalScore : null;
       if (evaluationScore === null) {
         insufficientEvaluation += 1;
         continue;
       }
 
-      candidates.push({
-        cache,
-        currentTier,
-        evaluationScore,
-        discordUsername: player?.discordUsername ?? cache.discordUsername,
-        epicUsername: player?.epicUsername ?? "",
-        nickname: player?.nickname,
-        matchesAnalyzed: player?.contributionScore?.matchesAnalyzed,
-        withoutDuoCount: player?.dcaCache?.withoutDuoCount,
-        hasConsistentDuo: !!player?.dcaCache?.consistentDuoEpic,
-        hasMutualDependency: !!player?.dcaCache?.hasMutualDependency,
-      });
-    }
-
-    const evaluationCenters = buildTierCenters(evaluationScoresByTier);
-    const rawHolisticCenters = buildTierCenters(holisticScoresByTier);
-    const pointsPerStrengthUnit =
-      estimateHolisticPointsPerTeammateStrength(rawHolisticCenters);
-
-    // Empirical teammate-strength distributions by *evaluation ability* band
-    // (not assigned tier) — used to adapt expectation as the player base shifts.
-    const actualByAbility: Record<ReviewTier, number[]> = {
-      S: [],
-      A: [],
-      B: [],
-      C: [],
-    };
-
-    const provisionalFits = candidates.map((candidate) => {
       const evaluationFit = classifyScoreAgainstCenters(
-        candidate.evaluationScore,
+        evaluationScore,
         evaluationCenters,
       );
-      const ability = primaryAbilityTier(evaluationFit);
-      if (typeof candidate.cache.avgTeammateTier === "number") {
-        actualByAbility[ability].push(candidate.cache.avgTeammateTier);
+
+      const ttRow = ttByPlayerId.get(player._id);
+
+      let action: ActionKind = "no_change";
+      let actionLabel = "No Change";
+      let reason = "Import Tier Tool review metrics to enable recommendations.";
+      let recommendationConfidence: ConfidenceLevel = "low";
+      let stars = 1;
+      let overallFit: OverallFit = evaluationFit;
+      let recommendationSource: PlayerReviewRow["recommendationSource"] =
+        "pending_import";
+      let ttConclusion: string | undefined;
+      let ttEligible: boolean | undefined;
+      let formTrendLevel: string | undefined;
+      let experienceScore: number | undefined;
+
+      if (ttImportActive && ttRow) {
+        const ttResult = computeRecommendationFromTtAssessment(
+          currentTier,
+          evaluationFit,
+          ttCacheRowToAssessmentInput(ttRow),
+        );
+        action = ttResult.action;
+        actionLabel = ttResult.actionLabel;
+        reason = ttResult.reason;
+        recommendationConfidence = ttResult.recommendationConfidence;
+        stars = ttResult.stars;
+        overallFit = ttResult.overallFit;
+        recommendationSource = "tier_tool";
+        ttConclusion = ttRow.conclusion ?? undefined;
+        ttEligible = ttRow.eligible;
+        formTrendLevel = ttRow.formTrendLevel ?? undefined;
+        experienceScore = ttRow.experienceScore ?? undefined;
+      } else if (ttImportActive) {
+        recommendationSource = "missing_from_export";
+        missingFromExport += 1;
+        reason =
+          "Player not in Tier Tool export snapshot — re-export from Tier Tool after rebuild.";
       }
-      return { candidate, evaluationFit, ability };
-    });
 
-    const expectedByAbility: Record<ReviewTier, number> = {
-      S: 0,
-      A: 0,
-      B: 0,
-      C: 0,
-    };
-    for (const tier of ["S", "A", "B", "C"] as ReviewTier[]) {
-      expectedByAbility[tier] = blendExpectedTeammateStrength({
-        empiricalMedian: median(actualByAbility[tier]),
-        empiricalCount: actualByAbility[tier].length,
-        restrictionPrior: restrictionPriorTeammateStrength(
-          tier as RestrictionTier,
-        ),
-      });
-    }
-
-    // Build restriction-adjusted holistic scores, then centers from those.
-    const adjustedHolisticByTier: Record<ReviewTier, number[]> = {
-      S: [],
-      A: [],
-      B: [],
-      C: [],
-    };
-
-    const withAdjusted = provisionalFits.map((row) => {
-      const actualTeammateStrength = row.candidate.cache.avgTeammateTier;
-      const expectedTeammateStrength = expectedByAbility[row.ability];
-      const residual =
-        actualTeammateStrength !== undefined
-          ? actualTeammateStrength - expectedTeammateStrength
-          : undefined;
-
-      const { adjustedHolistic, adjustmentDelta } =
-        adjustHolisticForTeammateComposition({
-          rawHolistic: row.candidate.cache.holisticScore,
-          residual,
-          pointsPerStrengthUnit,
-        });
-
-      adjustedHolisticByTier[row.candidate.currentTier].push(adjustedHolistic);
-
-      return {
-        ...row,
-        actualTeammateStrength,
-        expectedTeammateStrength,
-        residual,
-        adjustedHolistic,
-        adjustmentDelta,
-      };
-    });
-
-    const adjustedHolisticCenters = buildTierCenters(adjustedHolisticByTier);
-
-    // Learn expected team outcomes by strength from cached samples only
-    // (no thirdPartyResults / match reads on this page).
-    const globalTeamSamples: TeamPerfSample[] = [];
-    for (const cache of cacheRows) {
-      const samples = cache.teamPerfSamples;
-      if (!samples) continue;
-      for (const sample of samples) {
-        if (
-          typeof sample.strength === "number" &&
-          Number.isFinite(sample.strength)
-        ) {
-          globalTeamSamples.push(sample);
-        }
-      }
-    }
-    const strengthExpectations = buildStrengthExpectations(globalTeamSamples);
-
-    const reviews: PlayerReviewRow[] = [];
-
-    for (const row of withAdjusted) {
-      const { candidate, evaluationFit, adjustedHolistic, adjustmentDelta } =
-        row;
-      const { cache, currentTier, evaluationScore } = candidate;
-
-      const rawHolisticFit = classifyScoreAgainstCenters(
-        cache.holisticScore,
-        rawHolisticCenters,
-      );
-      const holisticFit = classifyScoreAgainstCenters(
-        adjustedHolistic,
-        adjustedHolisticCenters,
-      );
-
-      const holisticConfidence = computeHolisticConfidence({
-        totalEvents: cache.totalEvents,
-        actualTeammateStrength: row.actualTeammateStrength,
-        expectedTeammateStrength: row.expectedTeammateStrength,
-        matchesAnalyzed: candidate.matchesAnalyzed,
-        withoutDuoCount: candidate.withoutDuoCount,
-        hasConsistentDuo: candidate.hasConsistentDuo,
-        hasMutualDependency: candidate.hasMutualDependency,
-      });
-
-      // Use cached sample arrays in place — no remapping copies.
-      const playerSamples = (cache.teamPerfSamples ?? []) as TeamPerfSample[];
-      const performanceVsExpected = computePerformanceVsExpected(
-        playerSamples,
-        strengthExpectations,
-      );
-      const performanceTrend = computePerformanceTrend(
-        toTrendSamples(playerSamples),
-      );
-
-      const cachedAvgStrength =
-        typeof cache.avgTeamStrength === "number"
-          ? {
-              avgTeamStrength: cache.avgTeamStrength,
-              avgTeamStrengthEvents: cache.avgTeamStrengthEvents,
-            }
-          : avgTeamStrengthFromSamples(playerSamples);
-
-      const result = computeTierRecommendation(
-        evaluationFit,
-        holisticFit,
-        currentTier,
-        holisticConfidence,
-        performanceVsExpected,
-        performanceTrend,
-      );
+      const recommendationConfidenceLabel =
+        recommendationConfidence === "high"
+          ? "High"
+          : recommendationConfidence === "medium"
+            ? "Medium"
+            : "Low";
 
       reviews.push({
-        playerId: cache.playerId,
-        discordUsername: candidate.discordUsername,
-        epicUsername: candidate.epicUsername,
-        nickname: candidate.nickname,
+        playerId: player._id,
+        discordUsername: player.discordUsername,
+        epicUsername: player.epicUsername,
+        nickname: player.nickname,
         currentTier,
         evaluationScore,
         evaluationFitLabel: evaluationFit.label,
-        holisticScore: cache.holisticScore,
-        adjustedHolisticScore: adjustedHolistic,
-        holisticAdjustmentDelta: adjustmentDelta,
-        rawHolisticFitLabel: rawHolisticFit.label,
-        holisticFitLabel: holisticFit.label,
-        holisticConfidence: holisticConfidence.level,
-        holisticConfidenceLabel: holisticConfidence.label,
-        holisticConfidenceStars: holisticConfidence.stars,
-        holisticConfidenceSummary: holisticConfidence.summary,
-        holisticConfidenceReasons: holisticConfidence.reasons,
-        actualTeammateStrength: row.actualTeammateStrength,
-        expectedTeammateStrength: row.expectedTeammateStrength,
-        compositionResidual: holisticConfidence.compositionResidual,
-        compositionBiasLabel: holisticConfidence.compositionBiasLabel,
-        duoShare: holisticConfidence.duoShare,
-        avgTeamStrength: cachedAvgStrength.avgTeamStrength,
-        avgTeamStrengthEvents: cachedAvgStrength.avgTeamStrengthEvents,
-        performanceVsExpected: performanceVsExpected?.level,
-        performanceVsExpectedLabel: performanceVsExpected?.label,
-        performanceVsExpectedSummary: performanceVsExpected?.summary,
-        expectedAvgPlacement: performanceVsExpected?.expectedAvgPlacement,
-        actualAvgPlacement: performanceVsExpected?.actualAvgPlacement,
-        expectedAvgTeamKills: performanceVsExpected?.expectedAvgTeamKills,
-        actualAvgTeamKills: performanceVsExpected?.actualAvgTeamKills,
-        performanceVsExpectedEvents: performanceVsExpected?.eventCount,
-        performanceTrend: performanceTrend?.level,
-        performanceTrendLabel: performanceTrend?.label,
-        performanceTrendDisplayLabel: performanceTrend?.displayLabel,
-        performanceTrendSummary: performanceTrend?.summary,
-        performanceTrendReasons: performanceTrend?.reasons,
-        performanceTrendRecentEvents: performanceTrend?.recentEventCount,
-        performanceTrendBaselineEvents: performanceTrend?.baselineEventCount,
-        totalEvents: cache.totalEvents,
-        overallFitLabel: overallFitLabel(result.overallFit),
-        recommendationConfidence: result.recommendationConfidence,
-        recommendationConfidenceLabel: result.recommendationConfidenceLabel,
-        stars: result.stars,
-        action: result.action,
-        actionLabel: result.actionLabel,
-        reason: result.reason,
-        suggestedTier: result.suggestedTier,
+        experienceScore,
+        ttConclusion,
+        ttEligible,
+        formTrendLevel,
+        overallFitLabel: overallFitLabel(overallFit),
+        recommendationConfidence,
+        recommendationConfidenceLabel,
+        stars,
+        action,
+        actionLabel,
+        reason,
+        recommendationSource,
       });
     }
 
-    reviews.sort((a, b) => {
-      const byAction = actionSortRank(a.action) - actionSortRank(b.action);
+    reviews.sort((a, B) => {
+      const byAction = actionSortRank(a.action) - actionSortRank(B.action);
       if (byAction !== 0) return byAction;
       const byConfidence =
         confidenceSortRank(a.recommendationConfidence) -
-        confidenceSortRank(b.recommendationConfidence);
+        confidenceSortRank(B.recommendationConfidence);
       if (byConfidence !== 0) return byConfidence;
-      const byHolistic =
-        confidenceSortRank(a.holisticConfidence) -
-        confidenceSortRank(b.holisticConfidence);
-      if (byHolistic !== 0) return byHolistic;
-      return a.discordUsername.localeCompare(b.discordUsername);
+      return a.discordUsername.localeCompare(B.discordUsername);
     });
 
-    const summary = {
-      totalCompared: reviews.length,
-      insufficientEvaluation,
-      skippedInvalidTier,
-      byRecommendationConfidence: {
-        high: reviews.filter((r) => r.recommendationConfidence === "high")
-          .length,
-        medium: reviews.filter((r) => r.recommendationConfidence === "medium")
-          .length,
-        low: reviews.filter((r) => r.recommendationConfidence === "low").length,
-      },
-      byHolisticConfidence: {
-        high: reviews.filter((r) => r.holisticConfidence === "high").length,
-        medium: reviews.filter((r) => r.holisticConfidence === "medium").length,
-        low: reviews.filter((r) => r.holisticConfidence === "low").length,
-      },
-      byPerformanceVsExpected: {
-        above: reviews.filter((r) => r.performanceVsExpected === "above")
-          .length,
-        around: reviews.filter((r) => r.performanceVsExpected === "around")
-          .length,
-        below: reviews.filter((r) => r.performanceVsExpected === "below")
-          .length,
-        insufficient: reviews.filter((r) => !r.performanceVsExpected).length,
-      },
-      byPerformanceTrend: {
-        improving: reviews.filter((r) => r.performanceTrend === "improving")
-          .length,
-        stable: reviews.filter((r) => r.performanceTrend === "stable").length,
-        declining: reviews.filter((r) => r.performanceTrend === "declining")
-          .length,
-        insufficient: reviews.filter((r) => !r.performanceTrend).length,
-      },
-      byAction: {
-        review_required: reviews.filter((r) => r.action === "review_required")
-          .length,
-        review_move: reviews.filter((r) => r.action === "review_move").length,
-        review_recommended: reviews.filter(
-          (r) => r.action === "review_recommended",
-        ).length,
-        optional_review: reviews.filter((r) => r.action === "optional_review")
-          .length,
-        no_change: reviews.filter((r) => r.action === "no_change").length,
-      },
-      needsAttention: reviews.filter((r) => r.action !== "no_change").length,
-      evaluationCenters,
-      holisticCenters: rawHolisticCenters,
-      adjustedHolisticCenters,
-      holisticPointsPerTeammateStrength: pointsPerStrengthUnit,
-      expectedTeammateStrengthByAbility: expectedByAbility,
-      restrictionPriorsByAbility: {
-        S: restrictionPriorTeammateStrength("S"),
-        A: restrictionPriorTeammateStrength("A"),
-        B: restrictionPriorTeammateStrength("B"),
-        C: restrictionPriorTeammateStrength("C"),
-      },
-      teamStrengthExpectationBuckets: strengthExpectations.length,
-      teamStrengthSampleCount: globalTeamSamples.length,
-      evaluationPeerCounts: {
-        S: evaluationScoresByTier.S.length,
-        A: evaluationScoresByTier.A.length,
-        B: evaluationScoresByTier.B.length,
-        C: evaluationScoresByTier.C.length,
-      },
-      holisticPeerCounts: {
-        S: holisticScoresByTier.S.length,
-        A: holisticScoresByTier.A.length,
-        B: holisticScoresByTier.B.length,
-        C: holisticScoresByTier.C.length,
+    return {
+      reviews,
+      summary: {
+        totalCompared: reviews.length,
+        insufficientEvaluation,
+        skippedInvalidTier,
+        missingFromExport,
+        byRecommendationConfidence: {
+          high: reviews.filter((r) => r.recommendationConfidence === "high")
+            .length,
+          medium: reviews.filter((r) => r.recommendationConfidence === "medium")
+            .length,
+          low: reviews.filter((r) => r.recommendationConfidence === "low")
+            .length,
+        },
+        byAction: {
+          review_required: reviews.filter((r) => r.action === "review_required")
+            .length,
+          review_move: reviews.filter((r) => r.action === "review_move").length,
+          review_recommended: reviews.filter(
+            (r) => r.action === "review_recommended",
+          ).length,
+          optional_review: reviews.filter((r) => r.action === "optional_review")
+            .length,
+          no_change: reviews.filter((r) => r.action === "no_change").length,
+        },
+        needsAttention: reviews.filter((r) => r.action !== "no_change").length,
+        evaluationCenters,
+        evaluationPeerCounts: {
+          S: evaluationScoresByTier.S.length,
+          A: evaluationScoresByTier.A.length,
+          B: evaluationScoresByTier.B.length,
+          C: evaluationScoresByTier.C.length,
+        },
+        ttImport: ttImportActive
+          ? {
+              active: true,
+              generatedAt: ttImport!.generatedAt,
+              importedAt: ttImport!.importedAt,
+              playerCount: ttImport!.playerCount,
+              matchedInReviews: reviews.filter(
+                (r) => r.recommendationSource === "tier_tool",
+              ).length,
+            }
+          : { active: false },
       },
     };
-
-    return { reviews, summary };
   },
 });

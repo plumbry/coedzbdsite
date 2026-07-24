@@ -9,7 +9,6 @@ import {
 } from "./helpers/manualScores";
 import { scheduleGenderSheetRebuild } from "./helpers/genderSheetSchedule";
 import { schedulePublicMemberDirectoryRebuildForPlayer } from "./helpers/publicMemberDirectory";
-import { updateTierEvalForPlayerIfEligible } from "./lib/stats/updateTierEvalForPlayer";
 
 // Calculate tier based on total score
 function calculateTier(totalScore: number): string {
@@ -336,10 +335,6 @@ export const createOrUpdateScore = mutation({
       newValue: `${totalScore}/1900, Tier ${tier}`,
     });
 
-    await ctx.scheduler.runAfter(0, internal.scores.syncTierEvalAfterEvaluation, {
-      playerId: args.playerId,
-    });
-
     await schedulePublicMemberDirectoryRebuildForPlayer(ctx, {
       currentMembershipStatus: player.currentMembershipStatus,
       isAlt: player.isAlt,
@@ -351,10 +346,10 @@ export const createOrUpdateScore = mutation({
   },
 });
 
-/** After a manual evaluation save — update tier re-eval for this player only. */
+/** @deprecated Phase 6 — tier-eval modelling moved to Tier Tool. Kept for scheduled job compatibility. */
 export const syncTierEvalAfterEvaluation = internalMutation({
   args: { playerId: v.id("players") },
-  handler: async (ctx, args) => {
-    return await updateTierEvalForPlayerIfEligible(ctx, args.playerId);
+  handler: async () => {
+    return { tierEvalUpdated: false, deprecated: true as const };
   },
 });
