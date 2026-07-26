@@ -24,6 +24,36 @@ export default function KillCapsTab({
 
   const [uploading, setUploading] = useState(false);
   const [deletingFileId, setDeletingFileId] = useState<Id<"opsHubKillCapFiles"> | null>(null);
+  const [downloadingFileId, setDownloadingFileId] = useState<Id<"opsHubKillCapFiles"> | null>(
+    null,
+  );
+
+  const handleDownloadFile = async (
+    id: Id<"opsHubKillCapFiles">,
+    fileName: string,
+    downloadUrl: string,
+  ) => {
+    setDownloadingFileId(id);
+    try {
+      const response = await fetch(downloadUrl);
+      if (!response.ok) {
+        throw new Error(`Download failed (${response.status})`);
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      toast.error("Failed to download file");
+    } finally {
+      setDownloadingFileId(null);
+    }
+  };
 
   const handleFilesSelected = async (selectedFiles: FileList | null) => {
     if (!selectedFiles || selectedFiles.length === 0 || !canUploadFiles) return;
@@ -125,11 +155,24 @@ export default function KillCapsTab({
                 </div>
                 <div className="flex items-center gap-2">
                   {fileRow.downloadUrl ? (
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={fileRow.downloadUrl} target="_blank" rel="noreferrer">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={downloadingFileId === fileRow._id}
+                      onClick={() =>
+                        void handleDownloadFile(
+                          fileRow._id,
+                          fileRow.fileName,
+                          fileRow.downloadUrl!,
+                        )
+                      }
+                    >
+                      {downloadingFileId === fileRow._id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
                         <Download className="h-3.5 w-3.5" />
-                        Download
-                      </a>
+                      )}
+                      Download
                     </Button>
                   ) : (
                     <Button variant="outline" size="sm" disabled>
