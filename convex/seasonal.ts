@@ -1505,6 +1505,7 @@ export const setCampaignEvent = mutation({
       }
       await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
         campaignId: campaign._id,
+        phase: "simple",
         importIndex: 0,
         resultsCursor: null,
       });
@@ -1535,8 +1536,9 @@ export const setCampaignEvent = mutation({
     });
     await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
       campaignId: campaign._id,
+      phase: "simple",
       importIndex: 0,
-        resultsCursor: null,
+      resultsCursor: null,
     });
     return { success: true };
   },
@@ -1642,6 +1644,7 @@ export const saveQuest = mutation({
     if (completionMethod === "auto") {
       await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
         campaignId: campaign._id,
+        phase: "simple",
         importIndex: 0,
         resultsCursor: null,
       });
@@ -1702,8 +1705,9 @@ export const deleteQuest = mutation({
     // Wheel totals and passport aggregates depend on this quest, so refresh.
     await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
       campaignId: campaign._id,
+      phase: "simple",
       importIndex: 0,
-        resultsCursor: null,
+      resultsCursor: null,
     });
 
     return { deleted: true };
@@ -2161,8 +2165,9 @@ export const recalculateCampaign = mutation({
     });
     await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
       campaignId: campaign._id,
+      phase: "simple",
       importIndex: 0,
-        resultsCursor: null,
+      resultsCursor: null,
     });
     return { success: true };
   },
@@ -2171,6 +2176,8 @@ export const recalculateCampaign = mutation({
 export const recalculateCampaignInternal = internalMutation({
   args: {
     campaignId: v.id("seasonalCampaigns"),
+    /** simple = non-teammate rules (fast batches); coplay = teammate rules (1 player at a time). */
+    phase: v.optional(v.union(v.literal("simple"), v.literal("coplay"))),
     /** Which campaign import we are scanning for players. */
     importIndex: v.optional(v.number()),
     /** Pagination cursor within the current import's results. */
@@ -2182,17 +2189,44 @@ export const recalculateCampaignInternal = internalMutation({
   handler: async (ctx, args) => {
     const campaign = await ctx.db.get(args.campaignId);
     if (!campaign) return;
-    const autoQuests = (
+    const allAutoQuests = (
       await ctx.db
         .query("seasonalQuests")
         .withIndex("by_campaign", (q) => q.eq("campaignId", args.campaignId))
         .collect()
     ).filter((quest) => quest.isActive && quest.completionMethod === "auto");
-    if (autoQuests.length === 0) {
+    if (allAutoQuests.length === 0) {
       await logSeasonalAudit(ctx, {
         campaignId: args.campaignId,
         action: "recalculate_completed",
         note: "No active auto quests.",
+      });
+      return;
+    }
+
+    const phase = args.phase ?? "simple";
+    const autoQuests =
+      phase === "coplay"
+        ? allAutoQuests.filter((quest) => ruleNeedsCoplay(quest.qualificationRule))
+        : allAutoQuests.filter((quest) => !ruleNeedsCoplay(quest.qualificationRule));
+    const hasCoplayQuests = allAutoQuests.some((quest) =>
+      ruleNeedsCoplay(quest.qualificationRule),
+    );
+
+    if (autoQuests.length === 0) {
+      if (phase === "simple" && hasCoplayQuests) {
+        await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
+          campaignId: args.campaignId,
+          phase: "coplay",
+          importIndex: 0,
+          resultsCursor: null,
+        });
+        return;
+      }
+      await logSeasonalAudit(ctx, {
+        campaignId: args.campaignId,
+        action: "recalculate_completed",
+        note: `No quests for phase ${phase}.`,
       });
       return;
     }
@@ -2209,10 +2243,24 @@ export const recalculateCampaignInternal = internalMutation({
 
     const importIndex = args.importIndex ?? 0;
     if (importIndex >= imports.length) {
+      if (phase === "simple" && hasCoplayQuests) {
+        await logSeasonalAudit(ctx, {
+          campaignId: args.campaignId,
+          action: "recalculate_phase_completed",
+          note: `Simple auto quests done across ${imports.length} import(s); starting teammate rules.`,
+        });
+        await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
+          campaignId: args.campaignId,
+          phase: "coplay",
+          importIndex: 0,
+          resultsCursor: null,
+        });
+        return;
+      }
       await logSeasonalAudit(ctx, {
         campaignId: args.campaignId,
         action: "recalculate_completed",
-        note: `Finished scanning ${imports.length} campaign import(s).`,
+        note: `Finished ${phase} phase across ${imports.length} campaign import(s).`,
       });
       return;
     }
@@ -2224,7 +2272,7 @@ export const recalculateCampaignInternal = internalMutation({
       const type = quest.qualificationRule?.type;
       return type === "reach_top_5" || type === "reach_top_3" || type === "reach_top_10";
     });
-    const needsCoplay = autoQuests.some((quest) => ruleNeedsCoplay(quest.qualificationRule));
+    const needsCoplay = phase === "coplay";
     const needsFullCoplayHistory = autoQuests.some(
       (quest) => quest.qualificationRule?.type === "new_teammates",
     );
@@ -2243,7 +2291,6 @@ export const recalculateCampaignInternal = internalMutation({
       .query("thirdPartyResults")
       .withIndex("by_import", (q) => q.eq("importId", current.importRecord._id))
       .paginate({
-        // Teammate rules are expensive; one result row (= one player) per invocation.
         numItems: needsCoplay ? 1 : 30,
         cursor: args.resultsCursor ?? null,
       });
@@ -2323,6 +2370,7 @@ export const recalculateCampaignInternal = internalMutation({
     if (!page.isDone) {
       await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
         campaignId: args.campaignId,
+        phase,
         importIndex,
         resultsCursor: page.continueCursor,
       });
@@ -2333,7 +2381,23 @@ export const recalculateCampaignInternal = internalMutation({
     if (nextImportIndex < imports.length) {
       await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
         campaignId: args.campaignId,
+        phase,
         importIndex: nextImportIndex,
+        resultsCursor: null,
+      });
+      return;
+    }
+
+    if (phase === "simple" && hasCoplayQuests) {
+      await logSeasonalAudit(ctx, {
+        campaignId: args.campaignId,
+        action: "recalculate_phase_completed",
+        note: `Simple auto quests done; last page auto-approved ${approvedInBatch}. Starting teammate rules.`,
+      });
+      await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
+        campaignId: args.campaignId,
+        phase: "coplay",
+        importIndex: 0,
         resultsCursor: null,
       });
       return;
@@ -2342,7 +2406,7 @@ export const recalculateCampaignInternal = internalMutation({
     await logSeasonalAudit(ctx, {
       campaignId: args.campaignId,
       action: "recalculate_completed",
-      note: `Finished ${imports.length} import(s); last page auto-approved ${approvedInBatch}.`,
+      note: `Finished ${phase} phase across ${imports.length} import(s); last page auto-approved ${approvedInBatch}.`,
     });
   },
 });
@@ -2375,6 +2439,7 @@ export const recalculatePlayerForImport = internalMutation({
     for (const campaignId of campaignIds) {
       await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
         campaignId,
+        phase: "simple",
         importIndex: 0,
         resultsCursor: null,
       });

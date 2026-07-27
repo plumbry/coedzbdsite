@@ -1737,8 +1737,8 @@ export default function SummerSlamAdminPage() {
               <CardHeader>
                 <CardTitle>Recalculation and Wheel Exports</CardTitle>
                 <CardDescription>
-                  Recalculation runs in the background over Summer Slam tagged events/imports and only
-                  awards Auto Complete quests for matched players.
+                  Recalculation runs in the background over Summer Slam tagged events/imports.
+                  Simple auto quests update first; teammate rules follow more slowly.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-3">
