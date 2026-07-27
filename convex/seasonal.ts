@@ -1,4 +1,3 @@
-import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -475,11 +474,15 @@ function eventMetaFromImport(
   };
 }
 
+/** Group leaderboard rows into teams — never fall back to per-player keys. */
 function teamLeaderboardKey(result: Doc<"thirdPartyResults">): string {
   if (result.teamId) return `team:${result.teamId}`;
-  if (result.playerId) return `player:${result.playerId}`;
-  if (result.discordId) return `discord:${result.discordId}`;
-  return `epic:${result.epicUsername.trim().toLowerCase()}`;
+  if (result.duoAssignment) return `duo:${result.duoAssignment}`;
+  if (result.teamName?.trim()) {
+    return `teamName:${result.teamName.trim().toLowerCase()}`;
+  }
+  // Same Yunite standing when team ids/names are missing: shared placement + points.
+  return `placement:${result.placement}:points:${result.points}`;
 }
 
 /** Overall Yunite standings for one import: unique teams ranked by tournament points. */
@@ -507,74 +510,53 @@ function computeOverallLeaderboardRanks(
   return new Map(ranked.map(([key], index) => [key, index + 1]));
 }
 
-async function appendImportResultsForPlayer(
-  ctx: QueryCtx | MutationCtx,
-  args: {
-    importRecord: Doc<"thirdPartyImports">;
-    playerId: Id<"players">;
-    teamFormat: TeamFormat;
-    event: CampaignEventMeta;
-    importIds: Set<Id<"thirdPartyImports">>;
-    results: CampaignPlayerResult[];
-  },
-) {
-  if (args.importIds.has(args.importRecord._id)) return;
-  args.importIds.add(args.importRecord._id);
+type CampaignImportRef = {
+  importRecord: Doc<"thirdPartyImports">;
+  teamFormat: TeamFormat;
+  event: CampaignEventMeta;
+};
 
-  const importResults = await ctx.db
-    .query("thirdPartyResults")
-    .withIndex("by_import", (q) => q.eq("importId", args.importRecord._id))
-    .collect();
-
-  const overallRankByTeam = computeOverallLeaderboardRanks(importResults);
-
-  for (const result of importResults) {
-    if (result.playerId !== args.playerId) continue;
-    args.results.push({
-      ...result,
-      importId: args.importRecord._id,
-      eventId: args.event._id,
-      teamFormat: args.teamFormat,
-      event: args.event,
-      overallLeaderboardPlacement:
-        overallRankByTeam.get(teamLeaderboardKey(result)) ?? result.placement,
-    });
-  }
-}
-
-async function loadPlayerCampaignResults(
+/** Unique campaign imports from event tags + Summer Slam–flagged imports. */
+async function listCampaignImportRefs(
   ctx: QueryCtx | MutationCtx,
   campaignId: Id<"seasonalCampaigns">,
-  playerId: Id<"players">,
-) {
+): Promise<{
+  campaign: Doc<"seasonalCampaigns"> | null;
+  imports: CampaignImportRef[];
+  teamFormatByEvent: Map<Id<"events">, TeamFormat>;
+}> {
   const campaign = await ctx.db.get(campaignId);
   if (!campaign) {
     return {
-      results: [] as CampaignPlayerResult[],
-      matchStats: [] as Doc<"matchPlayerStats">[],
-      teamFormatByEvent: new Map<Id<"events">, TeamFormat>(),
+      campaign: null,
+      imports: [],
+      teamFormatByEvent: new Map(),
     };
   }
 
   const { tags, eventById, teamFormatByEvent } = await loadCampaignEventContext(ctx, campaignId);
-  const results: CampaignPlayerResult[] = [];
-  const importIds = new Set<Id<"thirdPartyImports">>();
+  const seen = new Set<Id<"thirdPartyImports">>();
+  const imports: CampaignImportRef[] = [];
 
   for (const tag of tags) {
     const event = eventById.get(tag.eventId);
     if (!event) continue;
-    const imports = await ctx.db
+    const eventImports = await ctx.db
       .query("thirdPartyImports")
       .withIndex("by_event", (q) => q.eq("eventId", tag.eventId))
       .collect();
-    for (const importRecord of imports) {
-      await appendImportResultsForPlayer(ctx, {
+    for (const importRecord of eventImports) {
+      if (seen.has(importRecord._id)) continue;
+      seen.add(importRecord._id);
+      imports.push({
         importRecord,
-        playerId,
         teamFormat: tag.teamFormat,
-        event,
-        importIds,
-        results,
+        event: {
+          _id: event._id,
+          name: event.name,
+          startDate: event.startDate,
+          type: event.type,
+        },
       });
     }
   }
@@ -586,23 +568,107 @@ async function loadPlayerCampaignResults(
 
   for (const importRecord of taggedImports) {
     if (!importRecord.seasonalTeamFormat) continue;
+    if (seen.has(importRecord._id)) continue;
+    seen.add(importRecord._id);
     const linkedEvent = importRecord.eventId ? await ctx.db.get(importRecord.eventId) : null;
-    await appendImportResultsForPlayer(ctx, {
+    imports.push({
       importRecord,
-      playerId,
       teamFormat: importRecord.seasonalTeamFormat,
       event: eventMetaFromImport(importRecord, linkedEvent),
-      importIds,
-      results,
     });
   }
 
-  const playerMatchStats = await ctx.db
-    .query("matchPlayerStats")
-    .withIndex("by_player", (q) => q.eq("playerId", playerId))
+  return { campaign, imports, teamFormatByEvent };
+}
+
+/**
+ * Build one player's campaign results from by_player rows + optional per-import rank cache.
+ * Avoids loading every campaign import for every player in a batch.
+ */
+async function loadPlayerCampaignDataCached(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    playerId: Id<"players">;
+    imports: CampaignImportRef[];
+    includeMatchStats: boolean;
+    includeOverallRanks: boolean;
+    importCache: Map<
+      Id<"thirdPartyImports">,
+      { overallRankByTeam: Map<string, number> }
+    >;
+  },
+) {
+  const importById = new Map(
+    args.imports.map((entry) => [entry.importRecord._id, entry] as const),
+  );
+  const importIds = new Set(importById.keys());
+
+  const playerResults = await ctx.db
+    .query("thirdPartyResults")
+    .withIndex("by_player", (q) => q.eq("playerId", args.playerId))
     .collect();
-  const matchStats = playerMatchStats.filter((stat) => importIds.has(stat.importId));
-  return { results, matchStats, teamFormatByEvent };
+  const campaignRows = playerResults.filter((row) => importIds.has(row.importId));
+
+  const results: CampaignPlayerResult[] = [];
+  for (const result of campaignRows) {
+    const ref = importById.get(result.importId);
+    if (!ref) continue;
+
+    let overallLeaderboardPlacement = result.placement;
+    if (args.includeOverallRanks) {
+      let cached = args.importCache.get(result.importId);
+      if (!cached) {
+        const importResults = await ctx.db
+          .query("thirdPartyResults")
+          .withIndex("by_import", (q) => q.eq("importId", result.importId))
+          .collect();
+        cached = { overallRankByTeam: computeOverallLeaderboardRanks(importResults) };
+        args.importCache.set(result.importId, cached);
+      }
+      overallLeaderboardPlacement =
+        cached.overallRankByTeam.get(teamLeaderboardKey(result)) ?? result.placement;
+    }
+
+    results.push({
+      ...result,
+      importId: result.importId,
+      eventId: ref.event._id,
+      teamFormat: ref.teamFormat,
+      event: ref.event,
+      overallLeaderboardPlacement,
+    });
+  }
+
+  let matchStats: Doc<"matchPlayerStats">[] = [];
+  if (args.includeMatchStats) {
+    const playerMatchStats = await ctx.db
+      .query("matchPlayerStats")
+      .withIndex("by_player", (q) => q.eq("playerId", args.playerId))
+      .collect();
+    matchStats = playerMatchStats.filter((stat) => importIds.has(stat.importId));
+  }
+
+  return { results, matchStats };
+}
+
+async function loadPlayerCampaignResults(
+  ctx: QueryCtx | MutationCtx,
+  campaignId: Id<"seasonalCampaigns">,
+  playerId: Id<"players">,
+) {
+  const { imports, teamFormatByEvent } = await listCampaignImportRefs(ctx, campaignId);
+  const data = await loadPlayerCampaignDataCached(ctx, {
+    playerId,
+    imports,
+    includeMatchStats: true,
+    includeOverallRanks: true,
+    importCache: new Map(),
+  });
+  return {
+    results: data.results,
+    matchStats: data.matchStats,
+    teamFormatByEvent,
+  };
 }
 
 function formatEventDate(event: CampaignEventMeta): string {
@@ -623,7 +689,7 @@ function evaluateReachTop(
     current: match ? 1 : 0,
     target: 1,
     log: match
-      ? `Auto-approved: Reached Top ${maxPlacement} on the overall Yunite leaderboard (${match.teamFormat}) on ${formatEventDate(match.event)}.`
+      ? `Auto-approved: Team finished Top ${maxPlacement} on the overall Yunite leaderboard (${match.teamFormat}) on ${formatEventDate(match.event)}.`
       : undefined,
   };
 }
@@ -669,6 +735,8 @@ async function countLeaderboardsForDiscordId(
   ctx: QueryCtx | MutationCtx,
   discordId: string,
   cache: Map<string, number>,
+  /** Stop once this many distinct imports are known (enough to reject "new member"). */
+  stopAt?: number,
 ): Promise<number> {
   if (cache.has(discordId)) return cache.get(discordId)!;
   const player = await ctx.db
@@ -679,10 +747,14 @@ async function countLeaderboardsForDiscordId(
     cache.set(discordId, Number.POSITIVE_INFINITY);
     return Number.POSITIVE_INFINITY;
   }
+
+  // Use take() instead of paginate() — Convex allows only one paginated query per function,
+  // and recalculation already paginates campaign import results.
+  const takeCount = stopAt != null ? Math.max(stopAt * 20, 40) : 500;
   const results = await ctx.db
     .query("thirdPartyResults")
     .withIndex("by_player", (q) => q.eq("playerId", player._id))
-    .collect();
+    .take(takeCount);
   const count = new Set(results.map((result) => result.importId)).size;
   cache.set(discordId, count);
   return count;
@@ -723,7 +795,7 @@ async function loadTeammateDiscordIds(
       .collect();
     teamDiscordIds = importResults
       .filter((row) => row.teamId === result.teamId && row.discordId)
-      .map((row) => row.discordId!) ;
+      .map((row) => row.discordId!);
     caches.teamByImportTeamId.set(cacheKey, teamDiscordIds);
   }
   return [...new Set(teamDiscordIds.filter((id) => id !== self.discordId))];
@@ -732,6 +804,16 @@ async function loadTeammateDiscordIds(
 async function loadPlayerCoplayContext(
   ctx: QueryCtx | MutationCtx,
   playerId: Id<"players">,
+  options?: {
+    /** When set, only build teammate maps for these imports (plus full history if includeFullHistory). */
+    campaignImportIds?: Set<Id<"thirdPartyImports">>;
+    /** Needed for new_teammates (prior coplay outside the current import). */
+    includeFullHistory?: boolean;
+    /** Needed for new_member_teammate. */
+    includeLeaderboardCounts?: boolean;
+    /** Early-exit threshold for leaderboard counting. */
+    newMemberMaxEvents?: number;
+  },
 ): Promise<PlayerCoplayContext> {
   const player = await ctx.db.get(playerId);
   const self = {
@@ -743,6 +825,13 @@ async function loadPlayerCoplayContext(
     .withIndex("by_player", (q) => q.eq("playerId", playerId))
     .collect();
 
+  const includeFullHistory = options?.includeFullHistory ?? true;
+  const campaignImportIds = options?.campaignImportIds;
+  const scopedResults =
+    includeFullHistory || !campaignImportIds
+      ? allResults
+      : allResults.filter((result) => campaignImportIds.has(result.importId));
+
   const caches = {
     epicToDiscord: new Map<string, string | null>(),
     teamByImportTeamId: new Map<string, string[]>(),
@@ -750,7 +839,7 @@ async function loadPlayerCoplayContext(
   const teammatesByImport = new Map<Id<"thirdPartyImports">, string[]>();
   const neededDiscordIds = new Set<string>();
 
-  for (const result of allResults) {
+  for (const result of scopedResults) {
     const teammates = await loadTeammateDiscordIds(ctx, result, self, caches);
     const existing = teammatesByImport.get(result.importId) ?? [];
     const merged = [...new Set([...existing, ...teammates])];
@@ -759,8 +848,11 @@ async function loadPlayerCoplayContext(
   }
 
   const leaderboardCountByDiscordId = new Map<string, number>();
-  for (const discordId of neededDiscordIds) {
-    await countLeaderboardsForDiscordId(ctx, discordId, leaderboardCountByDiscordId);
+  if (options?.includeLeaderboardCounts !== false) {
+    const stopAt = options?.newMemberMaxEvents;
+    for (const discordId of neededDiscordIds) {
+      await countLeaderboardsForDiscordId(ctx, discordId, leaderboardCountByDiscordId, stopAt);
+    }
   }
 
   return { teammatesByImport, leaderboardCountByDiscordId };
@@ -1021,6 +1113,16 @@ export const getQuestLeaderboard = query({
     if (!campaign) return [];
 
     const limit = Math.min(Math.max(args.limit ?? 10, 1), 25);
+
+    // Only players who claimed a passport appear on the public leaderboard.
+    // Auto-quest recalculation can approve stamps before a passport exists.
+    const passports = await ctx.db
+      .query("seasonalPassports")
+      .withIndex("by_campaign", (q) => q.eq("campaignId", campaign._id))
+      .collect();
+    const passportPlayerIds = new Set(passports.map((passport) => passport.playerId));
+    if (passportPlayerIds.size === 0) return [];
+
     const approvedRows = await ctx.db
       .query("seasonalQuestProgress")
       .withIndex("by_campaign_and_status", (q) =>
@@ -1030,6 +1132,7 @@ export const getQuestLeaderboard = query({
 
     const countsByPlayer = new Map<Id<"players">, number>();
     for (const row of approvedRows) {
+      if (!passportPlayerIds.has(row.playerId)) continue;
       countsByPlayer.set(row.playerId, (countsByPlayer.get(row.playerId) ?? 0) + 1);
     }
 
@@ -1402,7 +1505,8 @@ export const setCampaignEvent = mutation({
       }
       await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
         campaignId: campaign._id,
-        cursor: null,
+        importIndex: 0,
+        resultsCursor: null,
       });
       return { success: true };
     }
@@ -1431,7 +1535,8 @@ export const setCampaignEvent = mutation({
     });
     await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
       campaignId: campaign._id,
-      cursor: null,
+      importIndex: 0,
+        resultsCursor: null,
     });
     return { success: true };
   },
@@ -1537,7 +1642,8 @@ export const saveQuest = mutation({
     if (completionMethod === "auto") {
       await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
         campaignId: campaign._id,
-        cursor: null,
+        importIndex: 0,
+        resultsCursor: null,
       });
     }
     return questId;
@@ -1596,7 +1702,8 @@ export const deleteQuest = mutation({
     // Wheel totals and passport aggregates depend on this quest, so refresh.
     await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
       campaignId: campaign._id,
-      cursor: null,
+      importIndex: 0,
+        resultsCursor: null,
     });
 
     return { deleted: true };
@@ -2054,7 +2161,8 @@ export const recalculateCampaign = mutation({
     });
     await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
       campaignId: campaign._id,
-      cursor: null,
+      importIndex: 0,
+        resultsCursor: null,
     });
     return { success: true };
   },
@@ -2063,50 +2171,148 @@ export const recalculateCampaign = mutation({
 export const recalculateCampaignInternal = internalMutation({
   args: {
     campaignId: v.id("seasonalCampaigns"),
-    cursor: v.union(v.string(), v.null()),
-    paginationOpts: v.optional(paginationOptsValidator),
+    /** Which campaign import we are scanning for players. */
+    importIndex: v.optional(v.number()),
+    /** Pagination cursor within the current import's results. */
+    resultsCursor: v.optional(v.union(v.string(), v.null())),
+    /** Legacy args from older scheduled jobs — ignored. */
+    playerOffset: v.optional(v.number()),
+    cursor: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
     const campaign = await ctx.db.get(args.campaignId);
     if (!campaign) return;
-    const autoQuests = (await ctx.db
-      .query("seasonalQuests")
-      .withIndex("by_campaign", (q) => q.eq("campaignId", args.campaignId))
-      .collect()).filter((quest) => quest.isActive && quest.completionMethod === "auto");
-    if (autoQuests.length === 0) return;
+    const autoQuests = (
+      await ctx.db
+        .query("seasonalQuests")
+        .withIndex("by_campaign", (q) => q.eq("campaignId", args.campaignId))
+        .collect()
+    ).filter((quest) => quest.isActive && quest.completionMethod === "auto");
+    if (autoQuests.length === 0) {
+      await logSeasonalAudit(ctx, {
+        campaignId: args.campaignId,
+        action: "recalculate_completed",
+        note: "No active auto quests.",
+      });
+      return;
+    }
 
-    const page = await ctx.db.query("players").paginate({
-      numItems: 40,
-      cursor: args.cursor,
+    const { imports, teamFormatByEvent } = await listCampaignImportRefs(ctx, args.campaignId);
+    if (imports.length === 0) {
+      await logSeasonalAudit(ctx, {
+        campaignId: args.campaignId,
+        action: "recalculate_completed",
+        note: "No campaign imports/tagged events to recalculate.",
+      });
+      return;
+    }
+
+    const importIndex = args.importIndex ?? 0;
+    if (importIndex >= imports.length) {
+      await logSeasonalAudit(ctx, {
+        campaignId: args.campaignId,
+        action: "recalculate_completed",
+        note: `Finished scanning ${imports.length} campaign import(s).`,
+      });
+      return;
+    }
+
+    const needsMatchStats = autoQuests.some(
+      (quest) => quest.qualificationRule?.type === "win_game",
+    );
+    const needsOverallRanks = autoQuests.some((quest) => {
+      const type = quest.qualificationRule?.type;
+      return type === "reach_top_5" || type === "reach_top_3" || type === "reach_top_10";
     });
+    const needsCoplay = autoQuests.some((quest) => ruleNeedsCoplay(quest.qualificationRule));
+    const needsFullCoplayHistory = autoQuests.some(
+      (quest) => quest.qualificationRule?.type === "new_teammates",
+    );
+    const needsLeaderboardCounts = autoQuests.some(
+      (quest) => quest.qualificationRule?.type === "new_member_teammate",
+    );
+    const newMemberMaxEvents = autoQuests.reduce<number | undefined>((max, quest) => {
+      if (quest.qualificationRule?.type !== "new_member_teammate") return max;
+      const value = quest.qualificationRule.maxEvents;
+      if (typeof value !== "number") return max;
+      return max == null ? value : Math.max(max, value);
+    }, undefined);
 
-    for (const player of page.page) {
-      const data = await loadPlayerCampaignResults(ctx, args.campaignId, player._id);
-      const needsCoplay = autoQuests.some((quest) => ruleNeedsCoplay(quest.qualificationRule));
-      const coplay = needsCoplay ? await loadPlayerCoplayContext(ctx, player._id) : null;
+    const current = imports[importIndex]!;
+    const page = await ctx.db
+      .query("thirdPartyResults")
+      .withIndex("by_import", (q) => q.eq("importId", current.importRecord._id))
+      .paginate({
+        // Teammate rules are expensive; one result row (= one player) per invocation.
+        numItems: needsCoplay ? 1 : 30,
+        cursor: args.resultsCursor ?? null,
+      });
+
+    const playerIds = [
+      ...new Set(
+        page.page
+          .map((row) => row.playerId)
+          .filter((playerId): playerId is Id<"players"> => playerId != null),
+      ),
+    ];
+
+    const importCache = new Map<
+      Id<"thirdPartyImports">,
+      { overallRankByTeam: Map<string, number> }
+    >();
+    const campaignImportIds = new Set(imports.map((entry) => entry.importRecord._id));
+    let approvedInBatch = 0;
+
+    for (const playerId of playerIds) {
+      const loaded = await loadPlayerCampaignDataCached(ctx, {
+        playerId,
+        imports,
+        includeMatchStats: needsMatchStats,
+        includeOverallRanks: needsOverallRanks,
+        importCache,
+      });
+      const data = {
+        results: loaded.results,
+        matchStats: loaded.matchStats,
+        teamFormatByEvent,
+      };
+      const coplay = needsCoplay
+        ? await loadPlayerCoplayContext(ctx, playerId, {
+            campaignImportIds,
+            includeFullHistory: needsFullCoplayHistory,
+            includeLeaderboardCounts: needsLeaderboardCounts,
+            newMemberMaxEvents,
+          })
+        : null;
       for (const quest of autoQuests) {
         const evaluation = await evaluateRule(
           ctx,
           quest.qualificationRule,
           data,
-          player._id,
+          playerId,
           coplay,
         );
+        const nextStatus = evaluation.qualifies
+          ? "approved"
+          : evaluation.current > 0
+            ? "in_progress"
+            : "not_started";
         await setProgress(ctx, {
           campaignId: args.campaignId,
           quest,
-          playerId: player._id,
-          status: evaluation.qualifies ? "approved" : evaluation.current > 0 ? "in_progress" : "not_started",
+          playerId,
+          status: nextStatus,
           progressCurrent: evaluation.current,
           progressTarget: evaluation.target,
           awardSource: evaluation.qualifies ? "auto" : undefined,
           awardLog: evaluation.log,
         });
         if (evaluation.qualifies && evaluation.log) {
+          approvedInBatch += 1;
           await logSeasonalAudit(ctx, {
             campaignId: args.campaignId,
             questId: quest._id,
-            playerId: player._id,
+            playerId,
             action: "quest_auto_approved",
             note: evaluation.log,
           });
@@ -2117,9 +2323,27 @@ export const recalculateCampaignInternal = internalMutation({
     if (!page.isDone) {
       await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
         campaignId: args.campaignId,
-        cursor: page.continueCursor,
+        importIndex,
+        resultsCursor: page.continueCursor,
       });
+      return;
     }
+
+    const nextImportIndex = importIndex + 1;
+    if (nextImportIndex < imports.length) {
+      await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
+        campaignId: args.campaignId,
+        importIndex: nextImportIndex,
+        resultsCursor: null,
+      });
+      return;
+    }
+
+    await logSeasonalAudit(ctx, {
+      campaignId: args.campaignId,
+      action: "recalculate_completed",
+      note: `Finished ${imports.length} import(s); last page auto-approved ${approvedInBatch}.`,
+    });
   },
 });
 
@@ -2151,7 +2375,8 @@ export const recalculatePlayerForImport = internalMutation({
     for (const campaignId of campaignIds) {
       await ctx.scheduler.runAfter(0, internal.seasonal.recalculateCampaignInternal, {
         campaignId,
-        cursor: null,
+        importIndex: 0,
+        resultsCursor: null,
       });
     }
   },

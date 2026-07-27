@@ -36,6 +36,17 @@ const PROCESS_IMPORT_POLL_MS = 2000;
 const PROCESS_IMPORT_MAX_WAIT_MS = 30 * 60 * 1000;
 const PROCESS_IMPORT_GAP_MS = 1000;
 
+/** Infer campaign team format from event name; null if ambiguous. */
+function detectTeamFormatFromName(
+  name: string,
+): "duos" | "trios" | "squads" | null {
+  const lower = name.toLowerCase();
+  if (/\bduos?\b/.test(lower)) return "duos";
+  if (/\btrios?\b/.test(lower)) return "trios";
+  if (/\bsquads?\b/.test(lower)) return "squads";
+  return null;
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -156,7 +167,7 @@ export default function ImportThirdParty() {
   const [editLeaderboardUrl, setEditLeaderboardUrl] = useState("");
   const [editLinkedEventId, setEditLinkedEventId] = useState<string>("none");
   const [editSummerSlam, setEditSummerSlam] = useState(false);
-  const [editSummerSlamFormat, setEditSummerSlamFormat] = useState<"duos" | "trios" | "squads">("squads");
+  const [editSummerSlamFormat, setEditSummerSlamFormat] = useState<"duos" | "trios" | "squads">("trios");
   const [isUpdating, setIsUpdating] = useState(false);
   const [replaceFile, setReplaceFile] = useState<File | null>(null);
   const [isReplacingCSV, setIsReplacingCSV] = useState(false);
@@ -921,7 +932,11 @@ export default function ImportThirdParty() {
     setEditLeaderboardUrl(importRecord.leaderboardUrl || "");
     setEditLinkedEventId(importRecord.eventId || "none");
     setEditSummerSlam(importRecord.seasonalCampaignSlug === "summer-slam");
-    setEditSummerSlamFormat(importRecord.seasonalTeamFormat ?? "squads");
+    setEditSummerSlamFormat(
+      importRecord.seasonalTeamFormat ??
+        detectTeamFormatFromName(importRecord.eventName) ??
+        "trios",
+    );
     setReplaceFile(null);
   };
   
@@ -2178,7 +2193,13 @@ export default function ImportThirdParty() {
                 <Switch
                   id="edit-summer-slam"
                   checked={editSummerSlam}
-                  onCheckedChange={setEditSummerSlam}
+                  onCheckedChange={(checked) => {
+                    setEditSummerSlam(checked);
+                    if (checked) {
+                      const detected = detectTeamFormatFromName(editEventName);
+                      if (detected) setEditSummerSlamFormat(detected);
+                    }
+                  }}
                 />
               </div>
               {editSummerSlam ? (

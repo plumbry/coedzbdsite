@@ -690,7 +690,7 @@ export default function SummerSlamAdminPage() {
     setIsRecalculating(true);
     try {
       await recalculateCampaign({ slug: CAMPAIGN_SLUG });
-      toast.success("Recalculation started.");
+      toast.success("Recalculation started — check Auto Awards in a minute.");
     } catch (error) {
       console.error(error);
       toast.error("Could not start recalculation.");
@@ -1118,23 +1118,23 @@ export default function SummerSlamAdminPage() {
                     )}
                     {ruleType === "reach_top_10" && (
                       <p className="text-sm text-muted-foreground">
-                        Auto-completes when the player finishes Top 10 on the overall Yunite
-                        leaderboard for any tagged Summer Slam scrim (tournament standings, not an
-                        individual game).
+                        Auto-completes when the player&apos;s team finishes anywhere in the Top 10
+                        (places 1–10) on the overall Yunite leaderboard for any tagged Summer Slam
+                        scrim (tournament standings, not an individual game).
                       </p>
                     )}
                     {ruleType === "reach_top_5" && (
                       <p className="text-sm text-muted-foreground">
-                        Auto-completes when the player finishes Top 5 on the overall Yunite
-                        leaderboard for any tagged Summer Slam scrim (tournament standings, not an
-                        individual game).
+                        Auto-completes when the player&apos;s team finishes anywhere in the Top 5
+                        (places 1–5) on the overall Yunite leaderboard for any tagged Summer Slam
+                        scrim (tournament standings, not an individual game).
                       </p>
                     )}
                     {ruleType === "reach_top_3" && (
                       <p className="text-sm text-muted-foreground">
-                        Auto-completes when the player finishes Top 3 on the overall Yunite
-                        leaderboard for any tagged Summer Slam scrim (tournament standings, not an
-                        individual game).
+                        Auto-completes when the player&apos;s team finishes anywhere in the Top 3
+                        (places 1–3) on the overall Yunite leaderboard for any tagged Summer Slam
+                        scrim (tournament standings, not an individual game).
                       </p>
                     )}
                     {ruleType === "win_game" && (
@@ -1736,7 +1736,10 @@ export default function SummerSlamAdminPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Recalculation and Wheel Exports</CardTitle>
-                <CardDescription>Recalculation runs in the background and only uses campaign-tagged events.</CardDescription>
+                <CardDescription>
+                  Recalculation runs in the background over Summer Slam tagged events/imports and only
+                  awards Auto Complete quests for matched players.
+                </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-3">
                 <Button onClick={handleRecalculate} disabled={isRecalculating}>

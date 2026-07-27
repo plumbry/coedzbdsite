@@ -94,11 +94,11 @@ function formatQualificationRule(rule: QualificationRule): string {
     case "play_all_team_formats":
       return "Play Duos, Trios, and Squads events";
     case "reach_top_5":
-      return "Reach Top 5 on a tagged Summer Slam overall Yunite leaderboard";
+      return "Finish Top 5 as a team (places 1–5) on a tagged Summer Slam overall Yunite leaderboard";
     case "reach_top_3":
-      return "Reach Top 3 on a tagged Summer Slam overall Yunite leaderboard";
+      return "Finish Top 3 as a team (places 1–3) on a tagged Summer Slam overall Yunite leaderboard";
     case "reach_top_10":
-      return "Reach Top 10 on a tagged Summer Slam overall Yunite leaderboard";
+      return "Finish Top 10 as a team (places 1–10) on a tagged Summer Slam overall Yunite leaderboard";
     case "win_game":
       return "Win an individual match in a tagged Summer Slam scrim";
     case "play_event_type":
