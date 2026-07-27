@@ -1810,8 +1810,47 @@ export const getAdminDashboard = query({
         approvedStamps: progress
           .filter((row) => row.status === "approved")
           .reduce((total, row) => total + row.stampReward, 0),
+        autoApproved: progress.filter(
+          (row) => row.status === "approved" && row.awardSource === "auto",
+        ).length,
       },
     };
+  },
+});
+
+/** Admin list of auto-approved quest stamps (who × which quest). */
+export const getAutoApprovedProgress = query({
+  args: { slug: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
+    const progressRows = (
+      await ctx.db
+        .query("seasonalQuestProgress")
+        .withIndex("by_campaign_and_status", (q) =>
+          q.eq("campaignId", campaign._id).eq("status", "approved"),
+        )
+        .collect()
+    ).filter((row) => row.awardSource === "auto");
+
+    const playerIds = [...new Set(progressRows.map((row) => row.playerId))];
+    const questIds = [...new Set(progressRows.map((row) => row.questId))];
+    const players = new Map<Id<"players">, Doc<"players"> | null>();
+    const quests = new Map<Id<"seasonalQuests">, Doc<"seasonalQuests"> | null>();
+    for (const playerId of playerIds) {
+      players.set(playerId, await ctx.db.get(playerId));
+    }
+    for (const questId of questIds) {
+      quests.set(questId, await ctx.db.get(questId));
+    }
+
+    return progressRows
+      .map((progress) => ({
+        progress,
+        player: players.get(progress.playerId) ?? null,
+        quest: quests.get(progress.questId) ?? null,
+      }))
+      .sort((a, b) => (b.progress.approvedAt ?? 0) - (a.progress.approvedAt ?? 0));
   },
 });
 

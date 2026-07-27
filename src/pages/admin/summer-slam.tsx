@@ -258,6 +258,7 @@ export default function SummerSlamAdminPage() {
   const [threshold, setThreshold] = useState(1);
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("pending_review");
   const [filterText, setFilterText] = useState("");
+  const [autoAwardFilterText, setAutoAwardFilterText] = useState("");
   const [selectedReviewRow, setSelectedReviewRow] = useState<ReviewQueueRow | null>(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const [campaignTitle, setCampaignTitle] = useState("");
@@ -286,6 +287,10 @@ export default function SummerSlamAdminPage() {
   const passportSort = useColumnSort<
     "player" | "discordUser" | "created" | "approvedPoints" | "littleTickets" | "bigTickets"
   >("created", "desc");
+  const autoAwardSort = useColumnSort<"player" | "quest" | "category" | "points" | "approved">(
+    "approved",
+    "desc",
+  );
   const { isAdmin } = useUserRole();
 
   const ensureCampaign = useMutation(api.seasonal.ensureSummerSlamCampaign);
@@ -298,6 +303,7 @@ export default function SummerSlamAdminPage() {
   const taggedEvents = useQuery(api.seasonal.getAdminTaggedEvents, isAdmin ? { slug: CAMPAIGN_SLUG } : "skip");
   const reviewQueue = useQuery(api.seasonal.getReviewQueue, isAdmin ? { slug: CAMPAIGN_SLUG, status: reviewStatus } : "skip");
   const passports = useQuery(api.seasonal.getAdminPassports, isAdmin ? { slug: CAMPAIGN_SLUG } : "skip");
+  const autoAwards = useQuery(api.seasonal.getAutoApprovedProgress, isAdmin ? { slug: CAMPAIGN_SLUG } : "skip");
   const exportData = useQuery(api.seasonal.getProgressExport, isAdmin ? { slug: CAMPAIGN_SLUG } : "skip");
 
   useEffect(() => {
@@ -456,6 +462,52 @@ export default function SummerSlamAdminPage() {
     });
     return rows;
   }, [passports, passportSort.sortColumn, passportSort.sortDirection]);
+
+  const filteredAutoAwards = useMemo(() => {
+    const term = autoAwardFilterText.trim().toLowerCase();
+    if (!term) return autoAwards ?? [];
+    return (autoAwards ?? []).filter((row) => {
+      const player = row.player;
+      const quest = row.quest;
+      return (
+        player?.discordUsername.toLowerCase().includes(term) ||
+        player?.epicUsername.toLowerCase().includes(term) ||
+        quest?.title.toLowerCase().includes(term) ||
+        quest?.category.toLowerCase().includes(term) ||
+        (quest ? categoryLabels[quest.category].toLowerCase().includes(term) : false) ||
+        (row.progress.awardLog?.toLowerCase().includes(term) ?? false)
+      );
+    });
+  }, [autoAwardFilterText, autoAwards]);
+
+  const sortedAutoAwards = useMemo(() => {
+    const rows = [...filteredAutoAwards];
+    const direction = autoAwardSort.sortDirection === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      let comparison = 0;
+      switch (autoAwardSort.sortColumn) {
+        case "player":
+          comparison = compareOptionalString(a.player?.discordUsername, b.player?.discordUsername);
+          break;
+        case "quest":
+          comparison = compareOptionalString(a.quest?.title, b.quest?.title);
+          break;
+        case "category":
+          comparison =
+            TAGLINE_EDIT_ORDER.indexOf(a.quest?.category ?? "traveller") -
+            TAGLINE_EDIT_ORDER.indexOf(b.quest?.category ?? "traveller");
+          break;
+        case "points":
+          comparison = a.progress.stampReward - b.progress.stampReward;
+          break;
+        case "approved":
+          comparison = (a.progress.approvedAt ?? 0) - (b.progress.approvedAt ?? 0);
+          break;
+      }
+      return comparison * direction;
+    });
+    return rows;
+  }, [filteredAutoAwards, autoAwardSort.sortColumn, autoAwardSort.sortDirection]);
 
   const isPreLaunchPreview = useMemo(() => {
     const campaign = dashboard?.campaign;
@@ -828,7 +880,7 @@ export default function SummerSlamAdminPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           <button
             type="button"
             onClick={() => setActiveTab("tagged-events")}
@@ -849,6 +901,14 @@ export default function SummerSlamAdminPage() {
             <p className="text-xs text-muted-foreground">Pending Reviews</p>
             <p className="text-xl font-bold">{dashboard?.counts.pendingSubmissions ?? 0}</p>
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("auto-awards")}
+            className="rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/40"
+          >
+            <p className="text-xs text-muted-foreground">Auto Awards</p>
+            <p className="text-xl font-bold">{dashboard?.counts.autoApproved ?? 0}</p>
+          </button>
           <div className="rounded-lg border bg-card p-3">
             <p className="text-xs text-muted-foreground">Approved Points</p>
             <p className="text-xl font-bold">{dashboard?.counts.approvedStamps ?? 0}</p>
@@ -860,6 +920,7 @@ export default function SummerSlamAdminPage() {
             <TabsTrigger value="quests">Quests</TabsTrigger>
             <TabsTrigger value="tagged-events">Tagged Events</TabsTrigger>
             <TabsTrigger value="review">Review Queue</TabsTrigger>
+            <TabsTrigger value="auto-awards">Auto Awards</TabsTrigger>
             <TabsTrigger value="passports">Passports</TabsTrigger>
             <TabsTrigger value="exports">Recalculate & Exports</TabsTrigger>
           </TabsList>
@@ -1432,6 +1493,146 @@ export default function SummerSlamAdminPage() {
             />
           </TabsContent>
 
+          <TabsContent value="auto-awards" className="mt-0 space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Input
+                className={cn("max-w-sm", fieldClass)}
+                placeholder="Filter by player, quest, category, reason..."
+                value={autoAwardFilterText}
+                onChange={(event) => setAutoAwardFilterText(event.target.value)}
+              />
+              <Button
+                variant="outline"
+                className="shrink-0"
+                onClick={() =>
+                  downloadCsv(
+                    "summer-slam-auto-awards.csv",
+                    sortedAutoAwards.map((row) => ({
+                      discordUsername: row.player?.discordUsername ?? "",
+                      epicUsername: row.player?.epicUsername ?? "",
+                      questTitle: row.quest?.title ?? "",
+                      category: row.quest ? categoryLabels[row.quest.category] : "",
+                      points: row.progress.stampReward,
+                      approvedAt: row.progress.approvedAt
+                        ? new Date(row.progress.approvedAt).toISOString()
+                        : "",
+                      reason: row.progress.awardLog ?? "",
+                      progressCurrent: row.progress.progressCurrent ?? "",
+                      progressTarget: row.progress.progressTarget ?? "",
+                    })),
+                  )
+                }
+              >
+                <Download className="mr-2 h-4 w-4" /> Export
+              </Button>
+            </div>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>Auto-claimed Quests</CardTitle>
+                <CardDescription>
+                  Every stamp awarded by Auto Complete rules after recalculation. Filter by Discord,
+                  Epic, quest title, or award reason.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <SortableHead
+                        label="Player"
+                        column="player"
+                        sortColumn={autoAwardSort.sortColumn}
+                        sortDirection={autoAwardSort.sortDirection}
+                        onSort={autoAwardSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Quest"
+                        column="quest"
+                        sortColumn={autoAwardSort.sortColumn}
+                        sortDirection={autoAwardSort.sortDirection}
+                        onSort={autoAwardSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Category"
+                        column="category"
+                        sortColumn={autoAwardSort.sortColumn}
+                        sortDirection={autoAwardSort.sortDirection}
+                        onSort={autoAwardSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Points"
+                        column="points"
+                        sortColumn={autoAwardSort.sortColumn}
+                        sortDirection={autoAwardSort.sortDirection}
+                        onSort={autoAwardSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Approved"
+                        column="approved"
+                        sortColumn={autoAwardSort.sortColumn}
+                        sortDirection={autoAwardSort.sortDirection}
+                        onSort={autoAwardSort.handleSort}
+                      />
+                      <TableHead>Reason</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {autoAwards === undefined ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                          Loading auto awards…
+                        </TableCell>
+                      </TableRow>
+                    ) : sortedAutoAwards.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                          {autoAwardFilterText.trim()
+                            ? "No auto awards match this filter."
+                            : "No auto-claimed quests yet. Tag events and recalculate progress first."}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedAutoAwards.map((row) => (
+                        <TableRow key={row.progress._id}>
+                          <TableCell>
+                            <div className="font-medium">{row.player?.discordUsername ?? "Unknown"}</div>
+                            <div className="text-xs text-muted-foreground">{row.player?.epicUsername}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div>{row.quest?.title ?? "Unknown quest"}</div>
+                            {row.progress.progressCurrent != null && row.progress.progressTarget != null ? (
+                              <div className="text-xs text-muted-foreground">
+                                Progress {row.progress.progressCurrent}/{row.progress.progressTarget}
+                              </div>
+                            ) : null}
+                          </TableCell>
+                          <TableCell>
+                            {row.quest ? categoryLabels[row.quest.category] : "—"}
+                          </TableCell>
+                          <TableCell>{row.progress.stampReward}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {row.progress.approvedAt
+                              ? new Date(row.progress.approvedAt).toLocaleString("en-GB", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="max-w-[320px] text-sm text-muted-foreground">
+                            {row.progress.awardLog ?? "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="passports" className="mt-0">
             <Card>
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1584,6 +1785,27 @@ export default function SummerSlamAdminPage() {
                   log: row.awardLog ?? "",
                 })))}>
                   <Download className="mr-2 h-4 w-4" /> Approved Points
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    downloadCsv(
+                      "summer-slam-auto-awards.csv",
+                      (autoAwards ?? []).map((row) => ({
+                        discordUsername: row.player?.discordUsername ?? "",
+                        epicUsername: row.player?.epicUsername ?? "",
+                        questTitle: row.quest?.title ?? "",
+                        category: row.quest ? categoryLabels[row.quest.category] : "",
+                        points: row.progress.stampReward,
+                        approvedAt: row.progress.approvedAt
+                          ? new Date(row.progress.approvedAt).toISOString()
+                          : "",
+                        reason: row.progress.awardLog ?? "",
+                      })),
+                    )
+                  }
+                >
+                  <Download className="mr-2 h-4 w-4" /> Auto Awards
                 </Button>
               </CardContent>
             </Card>
