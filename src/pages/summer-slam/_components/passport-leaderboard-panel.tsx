@@ -50,7 +50,7 @@ export function PassportLeaderboardPanel({ className }: { className?: string }) 
           {leaderboard.map((entry) => (
             <li
               key={`${entry.rank}-${entry.displayName}`}
-              className="flex min-h-8 items-center gap-2 rounded-lg border border-orange-100/80 bg-orange-50/40 px-2.5 py-1.5 text-xs"
+              className="flex min-h-8 items-center gap-2 rounded-lg border border-orange-200/70 bg-white px-2.5 py-1.5 text-xs shadow-[inset_0_1px_0_rgba(255,248,240,0.9)]"
             >
               <span className="w-6 shrink-0 font-bold tabular-nums text-orange-400">#{entry.rank}</span>
               <span className="min-w-0 flex-1 truncate font-medium text-orange-950">
