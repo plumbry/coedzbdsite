@@ -13,6 +13,7 @@ import {
 import {
   writeReEvalAudit,
   ensureAllActivePlayersEnrolled,
+  ensureActivePlayersEnrolledPage,
   normalizeFortniteTrackerLink,
   syncAcceptedApplicationTrackerLink,
   syncDashboardCacheForReEval,
@@ -21,9 +22,15 @@ import { updateTierEvalForPlayerIfEligible } from "../lib/stats/updateTierEvalFo
 import { updateStatsForPlayer } from "../lib/stats/updatePlayerStatsCache";
 
 export const ensureActivePlayersEnrolledInternal = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    return ensureAllActivePlayersEnrolled(ctx);
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+    numItems: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    return ensureActivePlayersEnrolledPage(ctx, {
+      cursor: args.cursor,
+      numItems: args.numItems,
+    });
   },
 });
 

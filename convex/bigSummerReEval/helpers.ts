@@ -623,8 +623,9 @@ export function queueReasonForAction(
 export async function ensurePlayerEnrolledInReEval(
   ctx: MutationCtx,
   playerId: Id<"players">,
+  playerDoc?: Doc<"players">,
 ): Promise<boolean> {
-  const player = await ctx.db.get(playerId);
+  const player = playerDoc ?? (await ctx.db.get(playerId));
   if (!player) return false;
   if (!isSummerReEvalEligible(player)) {
     return false;
@@ -636,7 +637,7 @@ export async function ensurePlayerEnrolledInReEval(
   const trackerLink = await resolveAutoTrackerLink(ctx, player);
   const now = Date.now();
 
-  await ctx.db.insert("bigSummerReEval", {
+  const reEvalId = await ctx.db.insert("bigSummerReEval", {
     playerId,
     trackerStatus: inferInitialTrackerStatus(trackerLink),
     reEvalStatus: "unchecked",
@@ -645,27 +646,103 @@ export async function ensurePlayerEnrolledInReEval(
     memberResponse: "unset",
     lastUpdatedAt: now,
   });
+  await upsertDashboardCacheRow(
+    ctx,
+    {
+      _id: reEvalId,
+      _creationTime: now,
+      playerId,
+      trackerStatus: inferInitialTrackerStatus(trackerLink),
+      reEvalStatus: "unchecked",
+      fortniteTrackerLink: trackerLink,
+      trackerLinkManuallySet: false,
+      memberResponse: "unset",
+      lastUpdatedAt: now,
+    },
+    player,
+    trackerLink,
+  );
   return true;
 }
 
+/**
+ * Enroll eligible accepted members missing a Summer Re-Eval row.
+ * Skips a full dashboard-cache rebuild — that path exceeds the 4096-read limit
+ * at ~800 members. Newly created rows get a cache upsert instead.
+ */
 export async function ensureAllActivePlayersEnrolled(
   ctx: MutationCtx,
 ): Promise<{ created: number; enrolled: number; cached: number }> {
   const activePlayers = await ctx.db
     .query("players")
-    .withIndex("by_membership_status", (q) => q.eq("currentMembershipStatus", "accepted"))
+    .withIndex("by_membership_status", (q) =>
+      q.eq("currentMembershipStatus", "accepted"),
+    )
     .collect();
+
+  const existingReEvals = await ctx.db.query("bigSummerReEval").collect();
+  const enrolledPlayerIds = new Set(existingReEvals.map((row) => row.playerId));
 
   let created = 0;
   let enrolled = 0;
+  let cached = 0;
   for (const player of activePlayers) {
     if (!isSummerReEvalEligible(player)) continue;
     enrolled += 1;
-    const wasCreated = await ensurePlayerEnrolledInReEval(ctx, player._id);
-    if (wasCreated) created += 1;
+    if (enrolledPlayerIds.has(player._id)) continue;
+
+    const wasCreated = await ensurePlayerEnrolledInReEval(ctx, player._id, player);
+    if (wasCreated) {
+      created += 1;
+      cached += 1;
+      enrolledPlayerIds.add(player._id);
+    }
   }
-  const { cached } = await rebuildDashboardCache(ctx);
+
   return { created, enrolled, cached };
+}
+
+/** Paginated enrollment for callers that need to stay under read limits. */
+export async function ensureActivePlayersEnrolledPage(
+  ctx: MutationCtx,
+  opts: { cursor?: string | null; numItems?: number },
+): Promise<{
+  created: number;
+  enrolled: number;
+  cached: number;
+  isDone: boolean;
+  continueCursor: string | null;
+}> {
+  const page = await ctx.db
+    .query("players")
+    .withIndex("by_membership_status", (q) =>
+      q.eq("currentMembershipStatus", "accepted"),
+    )
+    .paginate({
+      numItems: opts.numItems ?? 80,
+      cursor: opts.cursor ?? null,
+    });
+
+  let created = 0;
+  let enrolled = 0;
+  let cached = 0;
+  for (const player of page.page) {
+    if (!isSummerReEvalEligible(player)) continue;
+    enrolled += 1;
+    const wasCreated = await ensurePlayerEnrolledInReEval(ctx, player._id, player);
+    if (wasCreated) {
+      created += 1;
+      cached += 1;
+    }
+  }
+
+  return {
+    created,
+    enrolled,
+    cached,
+    isDone: page.isDone,
+    continueCursor: page.isDone ? null : page.continueCursor,
+  };
 }
 
 export async function countActivePlayersForReEval(ctx: QueryCtx | MutationCtx) {

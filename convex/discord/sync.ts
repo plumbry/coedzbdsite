@@ -299,6 +299,25 @@ async function ensureSyncRun(ctx: ActionCtx): Promise<string> {
   return syncRunId;
 }
 
+/** Enroll Summer Re-Eval rows in pages to stay under Convex read limits. */
+async function enrollActivePlayersForReEval(ctx: ActionCtx): Promise<void> {
+  let cursor: string | null = null;
+  for (;;) {
+    const page: {
+      created: number;
+      enrolled: number;
+      cached: number;
+      isDone: boolean;
+      continueCursor: string | null;
+    } = await ctx.runMutation(
+      internal.bigSummerReEval.mutations.ensureActivePlayersEnrolledInternal,
+      { cursor, numItems: 80 },
+    );
+    if (page.isDone) break;
+    cursor = page.continueCursor;
+  }
+}
+
 type SingleMemberSyncResult = {
   success: boolean;
   discordUserId: string;
@@ -471,7 +490,7 @@ export const syncDiscordMembersInternal = internalAction({
   args: {},
   handler: async (ctx): Promise<void> => {
     await fetchAndSyncAllDiscordMembers(ctx, { allowMembershipAcceptance: true });
-    await ctx.runMutation(internal.bigSummerReEval.mutations.ensureActivePlayersEnrolledInternal, {});
+    await enrollActivePlayersForReEval(ctx);
   },
 });
 
@@ -481,7 +500,7 @@ export const syncAllGuildMembers = action({
   handler: async (ctx): Promise<SyncResult> => {
     await requireAdminAction(ctx);
     const result = await fetchAndSyncAllDiscordMembers(ctx, { allowMembershipAcceptance: true });
-    await ctx.runMutation(internal.bigSummerReEval.mutations.ensureActivePlayersEnrolledInternal, {});
+    await enrollActivePlayersForReEval(ctx);
     return result;
   },
 });
@@ -625,7 +644,7 @@ export const syncAcceptedMembers = action({
         recordsUpdated: updated,
         recordsArchived: Math.max(0, skipped),
       });
-      await ctx.runMutation(internal.bigSummerReEval.mutations.ensureActivePlayersEnrolledInternal, {});
+      await enrollActivePlayersForReEval(ctx);
 
       return {
         success: true,
