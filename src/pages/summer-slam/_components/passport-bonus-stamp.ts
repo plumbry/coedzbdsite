@@ -8,7 +8,7 @@ export type BonusStampId = typeof BONUS_STAMP_ID;
 
 export const BONUS_STAMP_META = {
   id: BONUS_STAMP_ID,
-  label: "Summer Legend Bonus",
+  label: "Summer Legend",
   title: "Summer Legend Stamp",
   tagline: "The rarest mark — earned only by those who complete the entire season.",
   image: STAMP_IMAGES.summer_legend,

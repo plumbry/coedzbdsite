@@ -77,8 +77,8 @@ export function PassportSealImage({
           className={cn(
             "relative flex h-full w-full items-center justify-center rounded-full border-2 border-dashed",
             earned
-              ? "border-amber-400/80 bg-gradient-to-br from-amber-50 to-orange-50 text-amber-700"
-              : "border-orange-200/70 bg-orange-50/40 text-orange-400/70",
+              ? "border-amber-400 bg-gradient-to-br from-amber-50 to-orange-50 text-amber-700"
+              : "border-orange-300 bg-white text-orange-400",
             earned && animateEarned && "motion-safe:animate-[sealPop_0.6s_ease-out]",
           )}
           aria-hidden

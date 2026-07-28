@@ -121,7 +121,7 @@ function BonusSealButton({
     ? "Done"
     : bonusUnlocked && bonusSeal.total > 0
       ? `${bonusSeal.approved}/${bonusSeal.total}`
-      : "Bonus";
+      : "?";
 
   return (
     <div className={STAMP_COLUMN_CLASS}>
