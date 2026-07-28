@@ -232,7 +232,7 @@ export default function SummerSlamLandingPage() {
                 variant="outline"
                 className="min-h-14 flex-1 px-5 text-base font-semibold touch-manipulation sm:min-h-11 sm:flex-none sm:px-6 sm:text-sm"
               >
-                <Link to="/support">Site Support</Link>
+                <Link to="/summer-slam/how-to">How To</Link>
               </Button>
             </div>
 
