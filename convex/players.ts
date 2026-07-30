@@ -27,6 +27,7 @@ import {
 import { syncPlayerDiscordAliases } from "./helpers/playerDiscordAliases";
 import { relinkEventResultsForPlayer } from "./helpers/playerResults";
 import { syncDashboardCacheForPlayer } from "./bigSummerReEval/helpers";
+import { pickEarliestJoinedAt } from "./lib/playerJoinedAt";
 
 export const getPlayers = query({
   args: {},
@@ -1288,6 +1289,7 @@ function buildProfileFieldsFromSource(
     discordUserId: string;
     alternateDiscordUserIds?: string[];
     serverJoinDate: string;
+    joinedAt?: string;
     epicUsername: string;
     epicId?: string;
     previousEpicIds?: Array<{ epicId: string; changedAt: string }>;
@@ -1302,7 +1304,7 @@ function buildProfileFieldsFromSource(
     archiveReason?: "left server" | "application incomplete" | "no tier role" | "banned" | "other";
     hasLeftServer?: boolean;
   },
-  other: { discordUserId: string; alternateDiscordUserIds?: string[]; epicId?: string; previousEpicIds?: Array<{ epicId: string; changedAt: string }>; platform?: "PC" | "PS4" | "XB1" | "SWITCH" | "MOBILE"; matchConfidence?: "exact" | "username" | "fuzzy" | "manual"; status?: "active" | "archived" | "rejected" | "discord_member"; currentMembershipStatus?: "accepted" | "rejected" | "former"; archiveReason?: "left server" | "application incomplete" | "no tier role" | "banned" | "other"; hasLeftServer?: boolean },
+  other: { discordUserId: string; alternateDiscordUserIds?: string[]; joinedAt?: string; epicId?: string; previousEpicIds?: Array<{ epicId: string; changedAt: string }>; platform?: "PC" | "PS4" | "XB1" | "SWITCH" | "MOBILE"; matchConfidence?: "exact" | "username" | "fuzzy" | "manual"; status?: "active" | "archived" | "rejected" | "discord_member"; currentMembershipStatus?: "accepted" | "rejected" | "former"; archiveReason?: "left server" | "application incomplete" | "no tier role" | "banned" | "other"; hasLeftServer?: boolean },
 ) {
   const resolvedPrimaryId = resolveDiscordUserId(profile, other);
   const discordIds = mergePlayerDiscordIdsFromSources(
@@ -1319,6 +1321,7 @@ function buildProfileFieldsFromSource(
     discordUserId: discordIds.discordUserId,
     alternateDiscordUserIds: discordIds.alternateDiscordUserIds,
     serverJoinDate: profile.serverJoinDate,
+    joinedAt: pickEarliestJoinedAt(profile.joinedAt, other.joinedAt) ?? undefined,
     epicUsername: profile.epicUsername,
     epicId: profile.epicId ?? other.epicId,
     previousEpicIds: profile.previousEpicIds ?? other.previousEpicIds,
@@ -1359,6 +1362,7 @@ export const getPlayersMergePreview = query({
         alternateDiscordUserIds: player.alternateDiscordUserIds,
         nickname: player.nickname,
         serverJoinDate: player.serverJoinDate,
+        joinedAt: player.joinedAt,
         tier: player.tier,
         totalScore: player.totalScore,
         discordRoles: player.discordRoles,
@@ -1449,6 +1453,9 @@ export const mergePlayers = mutation({
         discordUserId: discordIds.discordUserId,
         alternateDiscordUserIds: discordIds.alternateDiscordUserIds,
         serverJoinDate: primaryPlayer.serverJoinDate || secondaryPlayer.serverJoinDate,
+        joinedAt:
+          pickEarliestJoinedAt(primaryPlayer.joinedAt, secondaryPlayer.joinedAt) ??
+          undefined,
         epicUsername: primaryPlayer.epicUsername,
         twitterUsername: primaryPlayer.twitterUsername || secondaryPlayer.twitterUsername,
         twitchUsername: primaryPlayer.twitchUsername || secondaryPlayer.twitchUsername,

@@ -85,7 +85,7 @@ http.route({
         discordUserId: body.id,
         discordUsername: body.username,
         nickname: body.nickname || null,
-        joinedAt: body.joined_at || new Date().toISOString(),
+        joinedAt: typeof body.joined_at === "string" ? body.joined_at : null,
         roles: body.roles || null,
       });
 

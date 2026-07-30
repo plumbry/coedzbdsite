@@ -30,6 +30,7 @@ import {
   type ZbdRawValidationCollection,
   type ZbdRawValidationReport,
 } from "./lib/zbdRaw/types";
+import { normalizeJoinedAt } from "./lib/playerJoinedAt";
 
 const PAGE_SIZE = 200;
 
@@ -39,6 +40,13 @@ type PageResult<T> = {
   isDone: boolean;
 };
 
+function hasRealDiscordUserId(discordUserId: string | undefined): boolean {
+  return (
+    !!discordUserId &&
+    !discordUserId.startsWith("placeholder_") &&
+    discordUserId !== "imported"
+  );
+}
 
 export const getContractMeta = query({
   args: {},
@@ -53,9 +61,66 @@ export const getContractMeta = query({
   },
 });
 
+export const getJoinedAtCoverageReport = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const players = await ctx.db.query("players").collect();
+    let withJoinedAt = 0;
+    let withMalformedJoinedAt = 0;
+    let missingJoinedAt = 0;
+    let eligibleForDiscordSyncBackfill = 0;
+    let unknownUntilManualOrDiscordLookup = 0;
+
+    for (const player of players) {
+      if (player.joinedAt !== undefined) {
+        if (normalizeJoinedAt(player.joinedAt) === player.joinedAt) {
+          withJoinedAt++;
+        } else {
+          withMalformedJoinedAt++;
+        }
+        continue;
+      }
+
+      missingJoinedAt++;
+      const reviewableStatus =
+        player.currentMembershipStatus === "accepted" ||
+        player.currentMembershipStatus === "former" ||
+        player.status === "active" ||
+        player.status === "discord_member";
+      if (
+        hasRealDiscordUserId(player.discordUserId) &&
+        player.hasLeftServer !== true &&
+        reviewableStatus
+      ) {
+        eligibleForDiscordSyncBackfill++;
+      } else {
+        unknownUntilManualOrDiscordLookup++;
+      }
+    }
+
+    return {
+      totalPlayers: players.length,
+      withJoinedAt,
+      withMalformedJoinedAt,
+      missingJoinedAt,
+      eligibleForDiscordSyncBackfill,
+      unknownUntilManualOrDiscordLookup,
+      notes: [
+        "eligibleForDiscordSyncBackfill means the player has a real Discord ID and appears reviewable; the Discord sync/backfill path can populate joinedAt if the member is still in the guild.",
+        "unknownUntilManualOrDiscordLookup includes placeholders, imported/manual records, left-server records, and records whose Discord membership timestamp cannot be proven from local data alone.",
+      ],
+    };
+  },
+});
+
 export const pagePlayers = query({
   args: { cursor: v.union(v.string(), v.null()) },
-  handler: async (ctx, args): Promise<PageResult<ReturnType<typeof mapPlayer>>> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<PageResult<ReturnType<typeof mapPlayer>>> => {
     await requireAdmin(ctx);
     const page = await ctx.db.query("players").paginate({
       numItems: PAGE_SIZE,
@@ -411,7 +476,7 @@ export const getValidationReport = query({
         sourceTable: "players",
         recordCount: -1,
         notes:
-          "Analytics caches (TC/DCA/topFive) excluded. Denorm activity fields excluded. Live count after produce.",
+          "Includes canonical joinedAt when populated from Discord joined_at. Analytics caches (TC/DCA/topFive) excluded. Denorm activity fields excluded. Live count after produce.",
       },
       {
         collection: "identityAliases",
@@ -554,6 +619,7 @@ export const getValidationReport = query({
       "competitionEvents.teamFormat is derived from stored event.type / smdTeamSize (product configuration facts), not from analytics.",
       "resultBatches.sourceSystem is normalized from thirdPartyImports.source / isManualImport labels.",
       "players.evaluationTotalScore / officialTier are committed snapshots on the player record, not live recalculations.",
+      "players.joinedAt is the canonical ZBD Discord/community join timestamp and is only populated from trusted Discord membership sync data; unknown values export as null.",
       "No contributionScore, dcaCache, topFiveCache, holistic, evaluationStatus, or aggregate caches are exported.",
       "Historical evaluation revisions are limited to whatever manualScores documents exist (usually current upsert).",
       "Live record counts are filled by the producer UI after assembling a document (validation query avoids full-table scans).",
@@ -562,6 +628,7 @@ export const getValidationReport = query({
     const dataQualityIssues = [
       "If matchParticipations count is 0 while eventResultEntries > 0 after produce, match-grain sync is incomplete for historical imports.",
       "Players without manualScores are expected for discord_member / unevaluated records.",
+      "Players created by manual/admin/import paths may have legacy serverJoinDate but no canonical joinedAt until Discord sync confirms joined_at.",
       "Early players may have officialTier on players.tier without corresponding tierHistory rows.",
     ];
 

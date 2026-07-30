@@ -20,6 +20,7 @@ import type {
   ZbdRawTierChange,
   ZbdRawTierSnapshot,
 } from "./types";
+import { normalizeJoinedAt } from "../playerJoinedAt";
 
 export function isoFromMillis(ms: number | undefined | null): string | null {
   if (ms == null || !Number.isFinite(ms)) {
@@ -115,6 +116,7 @@ export function mapPlayer(player: Doc<"players">): ZbdRawPlayer {
     membershipStatus: player.currentMembershipStatus ?? null,
     officialTier: player.tier ?? null,
     evaluationTotalScore: player.totalScore ?? null,
+    joinedAt: normalizeJoinedAt(player.joinedAt),
     serverJoinDate: player.serverJoinDate || null,
     isAlt: player.isAlt === true,
     hasLeftServer: player.hasLeftServer ?? null,
@@ -415,7 +417,9 @@ export function mapTierSnapshot(
   };
 }
 
-export function mapEventPenalty(row: Doc<"eventPenalties">): ZbdRawEventPenalty {
+export function mapEventPenalty(
+  row: Doc<"eventPenalties">,
+): ZbdRawEventPenalty {
   return {
     id: row._id,
     competitionEventId: row.eventId,
@@ -428,7 +432,9 @@ export function mapEventPenalty(row: Doc<"eventPenalties">): ZbdRawEventPenalty 
   };
 }
 
-export function mapPrizeEarning(row: Doc<"playerEarnings">): ZbdRawPrizeEarning {
+export function mapPrizeEarning(
+  row: Doc<"playerEarnings">,
+): ZbdRawPrizeEarning {
   return {
     id: row._id,
     playerId: row.playerId,

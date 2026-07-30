@@ -44,6 +44,11 @@ export type ZbdRawPlayer = {
   membershipStatus: "accepted" | "rejected" | "former" | null;
   officialTier: string | null;
   evaluationTotalScore: number | null;
+  /**
+   * Canonical Discord/community join timestamp.
+   * Source: players.joinedAt from Discord Guild Member joined_at.
+   */
+  joinedAt: string | null;
   serverJoinDate: string | null;
   isAlt: boolean;
   hasLeftServer: boolean | null;

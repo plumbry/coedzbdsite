@@ -31,6 +31,8 @@ export default defineSchema({
     discordUserId: v.string(),
     alternateDiscordUserIds: v.optional(v.array(v.string())), // Up to 2 additional Discord IDs (total of 3)
     serverJoinDate: v.string(),
+    /** Canonical Discord/community join timestamp from Discord Guild Member joined_at. */
+    joinedAt: v.optional(v.string()),
     lastDiscordSync: v.optional(v.number()), // Timestamp of last Discord data sync
     epicUsername: v.string(),
     previousEpicIds: v.optional(v.array(v.object({
@@ -1282,6 +1284,7 @@ export default defineSchema({
         epicUsername: v.string(),
         nickname: v.optional(v.string()),
         serverJoinDate: v.string(),
+        joinedAt: v.optional(v.string()),
         alternateDiscordUserIds: v.optional(v.array(v.string())),
         tier: v.optional(v.string()),
         status: v.optional(v.string()),

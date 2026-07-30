@@ -23,6 +23,7 @@ import { scheduleGenderSheetRebuild } from "./helpers/genderSheetSchedule";
 import {
   sanitizeDiscordNickname,
 } from "./lib/discordNicknamePolicy";
+import { normalizeJoinedAt, pickEarliestJoinedAt } from "./lib/playerJoinedAt";
 
 type SyncMatchConfidence = "exact" | "username" | "fuzzy" | "manual";
 
@@ -47,6 +48,7 @@ type DiscordBatchSyncPlayer = {
   epicUsername: string;
   nickname?: string;
   serverJoinDate: string;
+  joinedAt?: string;
   alternateDiscordUserIds?: string[];
   tier?: string;
   status?: string;
@@ -65,6 +67,7 @@ function toDiscordBatchSyncPlayer(player: Doc<"players">): DiscordBatchSyncPlaye
     epicUsername: player.epicUsername,
     nickname: player.nickname,
     serverJoinDate: player.serverJoinDate,
+    joinedAt: player.joinedAt,
     alternateDiscordUserIds: player.alternateDiscordUserIds,
     tier: player.tier,
     status: player.status,
@@ -507,6 +510,9 @@ export const manualMatchToPlayer = mutation({
     nickname: allowedNickname,
       discordRoles: discordMember.discordRoles,
       serverJoinDate: discordMember.serverJoinDate,
+      joinedAt:
+        pickEarliestJoinedAt(targetPlayer.joinedAt, discordMember.joinedAt) ??
+        undefined,
       matchConfidence: "manual" as const,
       needsReview: false,
     });
@@ -1122,6 +1128,7 @@ export const syncDiscordMembersBatch = internalMutation({
           nickname?: string;
           epicUsername: string;
           serverJoinDate: string;
+          joinedAt?: string;
           discordRoles?: Array<{ id: string; name: string }>;
           tier?: string;
           status?: "active";
@@ -1135,6 +1142,7 @@ export const syncDiscordMembersBatch = internalMutation({
           nickname: allowedNickname,
           epicUsername,
           serverJoinDate: member.serverJoinDate,
+          joinedAt: pickEarliestJoinedAt(existingPlayer.joinedAt, member.serverJoinDate) ?? undefined,
           hasLeftServer: false,
         };
 
@@ -1230,6 +1238,7 @@ export const syncDiscordMembersBatch = internalMutation({
               nickname?: string;
               epicUsername: string;
               serverJoinDate: string;
+              joinedAt?: string;
               discordRoles?: Array<{ id: string; name: string }>;
               tier?: string;
               status?: "active";
@@ -1241,6 +1250,7 @@ export const syncDiscordMembersBatch = internalMutation({
               nickname: allowedNickname,
               epicUsername,
               serverJoinDate: member.serverJoinDate,
+              joinedAt: pickEarliestJoinedAt(evaluationPlayer.joinedAt, member.serverJoinDate) ?? undefined,
               hasLeftServer: false,
             };
 
@@ -1302,6 +1312,7 @@ export const syncDiscordMembersBatch = internalMutation({
           discordUserId: member.discordUserId,
           nickname: allowedNickname,
           serverJoinDate: member.serverJoinDate,
+          joinedAt: normalizeJoinedAt(member.serverJoinDate) ?? undefined,
           epicUsername,
           discordRoles: member.roles,
           status: allowMembershipAcceptance && hasTierRole ? "active" : "discord_member",
@@ -1354,7 +1365,7 @@ export const upsertDiscordMember = internalMutation({
     discordUserId: v.string(),
     discordUsername: v.string(),
     nickname: v.union(v.string(), v.null()),
-    joinedAt: v.string(),
+    joinedAt: v.union(v.string(), v.null()),
     roles: v.union(
       v.array(
         v.object({
@@ -1387,7 +1398,8 @@ export const upsertDiscordMember = internalMutation({
         discordUserId: string;
         nickname?: string;
         epicUsername: string;
-        serverJoinDate: string;
+        serverJoinDate?: string;
+        joinedAt?: string;
         discordRoles?: Array<{ id: string; name: string }>;
         tier?: string;
         status?: "active" | "discord_member";
@@ -1400,7 +1412,8 @@ export const upsertDiscordMember = internalMutation({
         discordUserId: args.discordUserId,
         nickname: allowedNickname,
         epicUsername,
-        serverJoinDate: args.joinedAt,
+        ...(args.joinedAt ? { serverJoinDate: args.joinedAt } : {}),
+        joinedAt: pickEarliestJoinedAt(existingPlayer.joinedAt, args.joinedAt) ?? undefined,
         hasLeftServer: false,
       };
 
@@ -1500,7 +1513,8 @@ export const upsertDiscordMember = internalMutation({
           discordUserId: string;
           nickname?: string;
           epicUsername: string;
-          serverJoinDate: string;
+          serverJoinDate?: string;
+          joinedAt?: string;
           discordRoles?: Array<{ id: string; name: string }>;
           tier?: string;
           status?: "active" | "discord_member";
@@ -1512,7 +1526,8 @@ export const upsertDiscordMember = internalMutation({
           discordUserId: args.discordUserId,
           nickname: allowedNickname,
           epicUsername,
-          serverJoinDate: args.joinedAt,
+          ...(args.joinedAt ? { serverJoinDate: args.joinedAt } : {}),
+          joinedAt: pickEarliestJoinedAt(evaluationPlayer.joinedAt, args.joinedAt) ?? undefined,
           hasLeftServer: false,
           matchConfidence: "exact",
         };
@@ -1577,7 +1592,8 @@ export const upsertDiscordMember = internalMutation({
       discordUsername: args.discordUsername,
       discordUserId: args.discordUserId,
       nickname: allowedNickname,
-      serverJoinDate: args.joinedAt,
+      serverJoinDate: args.joinedAt ?? new Date().toISOString(),
+      joinedAt: normalizeJoinedAt(args.joinedAt) ?? undefined,
       epicUsername,
       discordRoles: args.roles || undefined,
       status: hasTierRole ? ("active" as const) : ("discord_member" as const),
