@@ -322,11 +322,36 @@ export default function MapEditor({
     };
   }, [finishInteraction, setInteractionState]);
 
+  const placeTextAt = (point: NormalizedPoint) => {
+    const nextText: MapText = {
+      id: createBoxId(),
+      x: point.x,
+      y: point.y,
+      text: "",
+      color: MAP_BOX_DEFAULT_COLOR,
+    };
+    onTextsChange((prev) => [...prev, nextText]);
+    onSelectionChange(selectText(nextText.id));
+    onToolChange("rect");
+    armMenuActionsSoon();
+    // Focus after React commits the new selected textarea.
+    window.setTimeout(() => {
+      const el = document.querySelector<HTMLTextAreaElement>(
+        `textarea[data-map-text-id="${nextText.id}"]`,
+      );
+      el?.focus();
+      el?.select();
+    }, 0);
+  };
+
   const handleCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (interactionRef.current.mode !== "idle") return;
 
+    const textToolActive = toolRef.current === "text";
     const target = event.target;
-    if (target instanceof Element) {
+    // While the text tool is active, ignore selection chrome so a click on a
+    // selected rectangle (handles / menu / selected label) still stamps text.
+    if (!textToolActive && target instanceof Element) {
       if (
         target.closest("[data-resize-handle]") ||
         target.closest("[data-map-selection-menu]") ||
@@ -342,36 +367,20 @@ export default function MapEditor({
     disarmMenuActions();
 
     const point = pointToNormalized(event.clientX, event.clientY, rect);
+
+    if (textToolActive) {
+      event.preventDefault();
+      event.stopPropagation();
+      placeTextAt(point);
+      return;
+    }
+
     const hit = hitTestMapObjects(
       boxesRef.current,
       textsRef.current,
       point,
       selectionRef.current,
     );
-
-    // Text tool places on empty space or on top of boxes. Existing text still
-    // selects/moves so you can adjust a label without stacking another one.
-    if (toolRef.current === "text") {
-      if (hit?.kind === "text") {
-        event.preventDefault();
-        beginTextMove(hit.object, point, event);
-        return;
-      }
-
-      event.preventDefault();
-      const nextText: MapText = {
-        id: createBoxId(),
-        x: point.x,
-        y: point.y,
-        text: "",
-        color: MAP_BOX_DEFAULT_COLOR,
-      };
-      onTextsChange((prev) => [...prev, nextText]);
-      onSelectionChange(selectText(nextText.id));
-      onToolChange("rect");
-      armMenuActionsSoon();
-      return;
-    }
 
     if (hit?.kind === "box") {
       event.preventDefault();
@@ -447,6 +456,7 @@ export default function MapEditor({
     handle: ResizeHandle,
     event: React.PointerEvent,
   ) => {
+    if (toolRef.current === "text") return;
     event.stopPropagation();
     event.preventDefault();
     if (interactionRef.current.mode !== "idle") return;
@@ -462,7 +472,9 @@ export default function MapEditor({
     });
   };
 
-  const showSelectionMenu = interaction.mode === "idle" && menuActionsArmed;
+  // Hide move/resize/menu chrome while stamping text so it cannot eat clicks.
+  const showSelectionMenu =
+    tool !== "text" && interaction.mode === "idle" && menuActionsArmed;
 
   const draftRect =
     interaction.mode === "creating-box" && interaction.exceededThreshold
@@ -529,7 +541,10 @@ export default function MapEditor({
                   <MapBoxLayer
                     key={box.id}
                     box={box}
-                    selected={isSelectedObject(selection, "box", box.id)}
+                    selected={
+                      tool !== "text" &&
+                      isSelectedObject(selection, "box", box.id)
+                    }
                     onResizePointerDown={handleResizePointerDown}
                   />
                 ))}
@@ -537,7 +552,10 @@ export default function MapEditor({
                   <MapTextLayer
                     key={textItem.id}
                     textItem={textItem}
-                    selected={isSelectedObject(selection, "text", textItem.id)}
+                    selected={
+                      tool !== "text" &&
+                      isSelectedObject(selection, "text", textItem.id)
+                    }
                     onMovePointerDown={handleTextMovePointerDown}
                     onTextChange={(textId, text) => {
                       onTextsChange((prev) =>
