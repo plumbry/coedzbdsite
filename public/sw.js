@@ -1,4 +1,4 @@
-const CACHE_NAME = "app-v5";
+const CACHE_NAME = "app-v6";
 const urlsToCache = ["/", "/icon/icon-192.png", "/icon/icon-512.png"];
 
 function isHtmlResponse(response) {
