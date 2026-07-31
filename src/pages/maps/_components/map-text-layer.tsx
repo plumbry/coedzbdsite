@@ -8,16 +8,23 @@ type MapTextLayerProps = {
   textItem: MapText;
   selected: boolean;
   onTextChange: (textId: string, text: string) => void;
+  onMovePointerDown?: (
+    textId: string,
+    event: React.PointerEvent,
+  ) => void;
 };
 
 /**
  * Visual + edit chrome for one text object.
- * Selection/move hit-testing is owned by MapEditor geometry picking.
+ * Selection/move hit-testing is owned by MapEditor geometry picking for
+ * unselected labels; the selected label forwards pointerdown so drag-to-move
+ * still works (edit via the selection menu / double-click).
  */
 export default function MapTextLayer({
   textItem,
   selected,
   onTextChange,
+  onMovePointerDown,
 }: MapTextLayerProps) {
   const color = resolveMapBoxColor(textItem.color);
 
@@ -50,13 +57,22 @@ export default function MapTextLayer({
         className={cn(
           "w-full resize-none bg-transparent px-1.5 py-1 text-center text-xs font-black uppercase leading-tight outline-none sm:text-sm",
           // Unselected text must stay pointer-events:none so canvas geometry
-          // picking owns selection. Only the active text captures pointers.
+          // picking owns selection. Selected text captures pointers so we can
+          // start a move (and edit via double-click / menu).
           selected ? "pointer-events-auto ring-2 ring-black/80" : "pointer-events-none",
         )}
         style={{ color }}
         onPointerDown={(event) => {
-          // Editing the selected text must not start a canvas drag/create.
+          if (!selected) return;
+          // Start move from the label itself; otherwise the text tool would
+          // treat the click as empty space and spawn another label.
           event.stopPropagation();
+          onMovePointerDown?.(textItem.id, event);
+        }}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          event.currentTarget.focus();
+          event.currentTarget.select();
         }}
         onClick={(event) => event.stopPropagation()}
         onChange={(event) => {

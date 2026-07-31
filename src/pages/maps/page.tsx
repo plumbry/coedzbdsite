@@ -49,12 +49,13 @@ import MapEditor from "./_components/map-editor.tsx";
 import MapHeaderActions from "./_components/map-header-actions.tsx";
 
 const PAGE_TITLE = "Simpsons Reload Dropmap";
+/** Stable client key for the /maps/new scratchpad (never a server map id). */
+const SCRATCHPAD_KEY = "new";
 
 export function SharedMapPage() {
   const { mapId } = useParams<{ mapId: string }>();
   const navigate = useNavigate();
 
-  const createMap = useMutation(api.maps.mutations.createMap);
   const saveMap = useMutation(api.maps.mutations.saveMap);
 
   const isNewRoute = mapId === "new";
@@ -78,13 +79,16 @@ export function SharedMapPage() {
   localTextsRef.current = localTexts;
   selectionRef.current = selection;
   const [tool, setTool] = useState<EditorTool>("rect");
-  const [hydratedForMapId, setHydratedForMapId] = useState<string | null>(null);
+  const [hydratedForMapId, setHydratedForMapId] = useState<string | null>(
+    isNewRoute ? SCRATCHPAD_KEY : null,
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [imageMissing, setImageMissing] = useState(false);
   const [reloadDialogOpen, setReloadDialogOpen] = useState(false);
-  const [isBootstrappingNewMap, setIsBootstrappingNewMap] = useState(isNewRoute);
   // Once true for the current mapId, server snapshots must not replace local boxes.
-  const lockHydrationRef = useRef(false);
+  const lockHydrationRef = useRef(isNewRoute);
+  /** Tracks which mapId the local editor state currently belongs to. */
+  const activeMapIdRef = useRef<string | null>(isNewRoute ? SCRATCHPAD_KEY : null);
 
   const isDirty = useMemo(
     () => !boxesEqual(localBoxes, savedBoxes) || !textsEqual(localTexts, savedTexts),
@@ -114,42 +118,50 @@ export function SharedMapPage() {
     );
   }, []);
 
+  const resetLocalEditorState = useCallback(() => {
+    dispatchBoxes({ type: "hydrate", boxes: [] });
+    setLocalTexts([]);
+    setSavedBoxes([]);
+    setSavedTexts([]);
+    setExpectedUpdatedAt(null);
+    setSelection(null);
+    setHydratedForMapId(null);
+    lockHydrationRef.current = false;
+  }, []);
+
+  const prepareScratchpad = useCallback(() => {
+    activeMapIdRef.current = SCRATCHPAD_KEY;
+    dispatchBoxes({ type: "hydrate", boxes: [] });
+    setLocalTexts([]);
+    setSavedBoxes([]);
+    setSavedTexts([]);
+    setExpectedUpdatedAt(null);
+    setSelection(null);
+    setHydratedForMapId(SCRATCHPAD_KEY);
+    lockHydrationRef.current = true;
+    setImageMissing(false);
+  }, []);
+
+  // /maps/new is a shared URL that always stays put — local-only until Save.
   useEffect(() => {
     if (!isNewRoute) return;
-
-    let cancelled = false;
-    setIsBootstrappingNewMap(true);
-
-    void createMap({})
-      .then((result) => {
-        if (cancelled) return;
-        navigate(`/maps/${result.mapId}`, { replace: true });
-      })
-      .catch(() => {
-        if (cancelled) return;
-        toast.error("Failed to create a new map");
-        setIsBootstrappingNewMap(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [createMap, isNewRoute, navigate]);
+    prepareScratchpad();
+  }, [isNewRoute, prepareScratchpad]);
 
   useEffect(() => {
     if (!resolvedMapId) return;
-    setSelection(null);
     setImageMissing(false);
-    // Only unlock hydration when the route map id actually changes.
-    setHydratedForMapId((current) => {
-      if (current === resolvedMapId) {
-        lockHydrationRef.current = true;
-        return current;
-      }
-      lockHydrationRef.current = false;
-      return null;
-    });
-  }, [resolvedMapId]);
+
+    if (activeMapIdRef.current === resolvedMapId) {
+      lockHydrationRef.current = true;
+      return;
+    }
+
+    // Switching maps: clear annotations immediately so a prior map's boxes
+    // cannot flash (or stick) before the empty server snapshot hydrates.
+    activeMapIdRef.current = resolvedMapId;
+    resetLocalEditorState();
+  }, [resetLocalEditorState, resolvedMapId]);
 
   const hydrateFromServer = useCallback(
     (
@@ -177,7 +189,61 @@ export function SharedMapPage() {
     setHydratedForMapId(resolvedMapId);
   }, [hydrateFromServer, hydratedForMapId, resolvedMapId, serverMap]);
 
+  const publishAndCopyLink = useCallback(async () => {
+    const boxes = localBoxesRef.current;
+    const texts = localTextsRef.current;
+    if (boxes.length === 0 && texts.length === 0) {
+      toast.error("Add a box or text before saving");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = (await saveMap({
+        sourceMapId: resolvedMapId,
+        boxes,
+        texts,
+      })) as SaveMapResult;
+
+      const shareUrl = buildMapShareUrl(window.location.origin, result.mapId);
+      const copied = await copyMapShareLink(shareUrl);
+      const outcome: SaveAndCopyOutcome = copied
+        ? "saved-and-copied"
+        : "saved-copy-failed";
+      toast.success(getSaveAndCopyToastMessage(outcome));
+
+      if (isNewRoute) {
+        // Stay on /maps/new and clear so the next person gets a blank canvas.
+        prepareScratchpad();
+        return;
+      }
+
+      // Shared map: open the new frozen iteration URL.
+      activeMapIdRef.current = result.mapId;
+      hydrateFromServer(result.boxes, result.texts, result.updatedAt);
+      lockHydrationRef.current = true;
+      setHydratedForMapId(result.mapId);
+      navigate(`/maps/${result.mapId}`, { replace: true });
+    } catch {
+      toast.error(getSaveAndCopyToastMessage("save-failed"));
+    } finally {
+      setIsSaving(false);
+    }
+  }, [
+    hydrateFromServer,
+    isNewRoute,
+    navigate,
+    prepareScratchpad,
+    resolvedMapId,
+    saveMap,
+  ]);
+
   const handleCopyLink = useCallback(async () => {
+    if (isNewRoute) {
+      // Scratchpad has no stable link until Save publishes one.
+      await publishAndCopyLink();
+      return;
+    }
     if (!resolvedMapId) return;
     const shareUrl = buildMapShareUrl(window.location.origin, resolvedMapId);
     const copied = await copyMapShareLink(shareUrl);
@@ -188,9 +254,14 @@ export function SharedMapPage() {
       return;
     }
     toast.success(message);
-  }, [resolvedMapId]);
+  }, [isNewRoute, publishAndCopyLink, resolvedMapId]);
 
   const handleSaveAndCopyLink = useCallback(async () => {
+    if (isNewRoute) {
+      await publishAndCopyLink();
+      return;
+    }
+
     if (!resolvedMapId || expectedUpdatedAt == null) {
       toast.error(getSaveAndCopyToastMessage("save-failed"));
       return;
@@ -201,43 +272,24 @@ export function SharedMapPage() {
       return;
     }
 
-    setIsSaving(true);
-    try {
-      const result = (await saveMap({
-        sourceMapId: resolvedMapId,
-        boxes: localBoxesRef.current,
-        texts: localTextsRef.current,
-      })) as SaveMapResult;
-
-      hydrateFromServer(result.boxes, result.texts, result.updatedAt);
-      lockHydrationRef.current = true;
-      setHydratedForMapId(result.mapId);
-      navigate(`/maps/${result.mapId}`, { replace: true });
-
-      const shareUrl = buildMapShareUrl(window.location.origin, result.mapId);
-      const copied = await copyMapShareLink(shareUrl);
-      const outcome: SaveAndCopyOutcome = copied
-        ? "saved-and-copied"
-        : "saved-copy-failed";
-      toast.success(getSaveAndCopyToastMessage(outcome));
-    } catch {
-      toast.error(getSaveAndCopyToastMessage("save-failed"));
-    } finally {
-      setIsSaving(false);
-    }
+    await publishAndCopyLink();
   }, [
     expectedUpdatedAt,
     handleCopyLink,
-    hydrateFromServer,
     isDirty,
-    navigate,
+    isNewRoute,
+    publishAndCopyLink,
     resolvedMapId,
-    saveMap,
   ]);
 
   const handleNewMap = useCallback(() => {
+    if (isNewRoute) {
+      prepareScratchpad();
+      toast.success("Canvas cleared");
+      return;
+    }
     navigate("/maps/new");
-  }, [navigate]);
+  }, [isNewRoute, navigate, prepareScratchpad]);
 
   const handleDeleteSelected = useCallback(() => {
     const current = selectionRef.current;
@@ -260,13 +312,18 @@ export function SharedMapPage() {
   }, [hydrateFromServer, resolvedMapId, serverMap]);
 
   const handleReloadFromServer = useCallback(() => {
+    if (isNewRoute) {
+      prepareScratchpad();
+      toast.success("Canvas cleared");
+      return;
+    }
     if (!serverMap) return;
     if (isDirty) {
       setReloadDialogOpen(true);
       return;
     }
     performReloadFromServer();
-  }, [isDirty, performReloadFromServer, serverMap]);
+  }, [isDirty, isNewRoute, performReloadFromServer, prepareScratchpad, serverMap]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -281,31 +338,15 @@ export function SharedMapPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleDeleteSelected]);
 
-  if (isNewRoute && isBootstrappingNewMap) {
-    return (
-      <PageShell maxWidth="wide">
-        <PageHeader
-          title={PAGE_TITLE}
-          description="Creating a new shared dropmap…"
-          icon={MapIcon}
-        />
-        <Card>
-          <CardContent className="space-y-3 py-8">
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-[50vh] w-full" />
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
+  const isHydrated = isNewRoute
+    ? hydratedForMapId === SCRATCHPAD_KEY
+    : hydratedForMapId === resolvedMapId;
 
-  if (!resolvedMapId) {
+  if (!isNewRoute && !resolvedMapId) {
     return null;
   }
 
-  const isHydrated = hydratedForMapId === resolvedMapId;
-
-  if (!isHydrated && serverMap === undefined) {
+  if (!isNewRoute && !isHydrated && serverMap === undefined) {
     return (
       <PageShell maxWidth="wide">
         <PageHeader
@@ -323,7 +364,7 @@ export function SharedMapPage() {
     );
   }
 
-  if (!isHydrated && serverMap === null) {
+  if (!isNewRoute && !isHydrated && serverMap === null) {
     return (
       <PageShell maxWidth="wide">
         <PageHeader title={PAGE_TITLE} icon={MapIcon} />
@@ -373,15 +414,20 @@ export function SharedMapPage() {
     <PageShell maxWidth="wide">
       <PageHeader
         title={PAGE_TITLE}
-        description="Use Box or Text from the toolbar. Select an object for colour and delete."
+        description={
+          isNewRoute
+            ? "Shared scratchpad — Save publishes a new link and clears the canvas for the next person."
+            : "Use Box or Text from the toolbar. Select an object for colour and delete."
+        }
         icon={MapIcon}
         actions={
           <MapHeaderActions
             onNew={handleNewMap}
             onCopyLink={() => void handleCopyLink()}
             onReloadFromServer={handleReloadFromServer}
-            canReloadFromServer={serverMap != null}
+            canReloadFromServer={!isNewRoute && serverMap != null}
             isSaving={isSaving}
+            newLabel={isNewRoute ? "Clear" : "New"}
           />
         }
       />

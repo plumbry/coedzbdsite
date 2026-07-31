@@ -9,6 +9,8 @@ type MapHeaderActionsProps = {
   onReloadFromServer: () => void;
   canReloadFromServer: boolean;
   isSaving: boolean;
+  newLabel?: string;
+  reloadLabel?: string;
 };
 
 export default function MapHeaderActions({
@@ -17,6 +19,8 @@ export default function MapHeaderActions({
   onReloadFromServer,
   canReloadFromServer,
   isSaving,
+  newLabel = "New",
+  reloadLabel = "Reload",
 }: MapHeaderActionsProps) {
   return (
     <div
@@ -24,9 +28,9 @@ export default function MapHeaderActions({
       role="toolbar"
       aria-label="Map page actions"
     >
-      <Button type="button" variant="outline" onClick={onNew} aria-label="Create new map">
+      <Button type="button" variant="outline" onClick={onNew} aria-label={newLabel}>
         <Plus className="h-4 w-4" aria-hidden />
-        New
+        {newLabel}
       </Button>
       <Button
         type="button"
@@ -43,10 +47,10 @@ export default function MapHeaderActions({
         variant="ghost"
         onClick={onReloadFromServer}
         disabled={!canReloadFromServer || isSaving}
-        aria-label="Reload map from server"
+        aria-label={reloadLabel}
       >
         <RefreshCw className="h-4 w-4" aria-hidden />
-        Reload
+        {reloadLabel}
       </Button>
     </div>
   );

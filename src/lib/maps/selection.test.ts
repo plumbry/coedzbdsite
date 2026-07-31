@@ -8,8 +8,10 @@ import {
   hitTestMapObjects,
   isSelectedObject,
   pointInBox,
+  pointInText,
   selectBox,
   selectText,
+  textHitHalfExtents,
   updateBoxById,
 } from "./selection";
 
@@ -85,6 +87,38 @@ describe("pointInBox / findTopBoxAtPoint", () => {
   });
 });
 
+describe("pointInText / textHitHalfExtents", () => {
+  it("grows the hit target for longer labels so they stay selectable", () => {
+    const short = textHitHalfExtents({
+      id: "t1",
+      x: 0.5,
+      y: 0.5,
+      text: "Hi",
+      color: "#FAE904",
+    });
+    const long = textHitHalfExtents({
+      id: "t2",
+      x: 0.5,
+      y: 0.5,
+      text: "MY TEAM NAME",
+      color: "#FAE904",
+    });
+    expect(long.halfWidth).toBeGreaterThan(short.halfWidth);
+
+    const label = {
+      id: "t3",
+      x: 0.5,
+      y: 0.5,
+      text: "MY TEAM",
+      color: "#FAE904",
+    };
+    // Near the edge of a long label — must still hit (old fixed pad missed this).
+    expect(pointInText({ x: 0.5 + short.halfWidth + 0.01, y: 0.5 }, label)).toBe(
+      true,
+    );
+  });
+});
+
 describe("hitTestMapObjects", () => {
   it("returns a single box id, never every box", () => {
     const hit = hitTestMapObjects(boxes, texts, { x: 0.15, y: 0.15 }, null);
@@ -98,6 +132,18 @@ describe("hitTestMapObjects", () => {
 
   it("returns null on empty map space", () => {
     expect(hitTestMapObjects(boxes, texts, { x: 0.9, y: 0.1 }, null)).toBeNull();
+  });
+
+  it("selects existing text instead of treating the click as empty space", () => {
+    const label: MapText = {
+      id: "team",
+      x: 0.4,
+      y: 0.3,
+      text: "MY TEAM",
+      color: "#FAE904",
+    };
+    const hit = hitTestMapObjects(boxes, [label], { x: 0.45, y: 0.3 }, null);
+    expect(hit).toEqual({ kind: "text", object: label });
   });
 });
 

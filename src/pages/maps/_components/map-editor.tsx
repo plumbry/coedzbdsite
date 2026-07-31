@@ -368,18 +368,7 @@ export default function MapEditor({
 
     if (hit?.kind === "text") {
       event.preventDefault();
-      const textItem = hit.object;
-      onSelectionChange(selectText(textItem.id));
-      setInteractionState({
-        mode: "moving-text",
-        textId: textItem.id,
-        grabOffset: { x: point.x - textItem.x, y: point.y - textItem.y },
-        startClientX: event.clientX,
-        startClientY: event.clientY,
-        exceededThreshold: false,
-        originText: { ...textItem },
-      });
-      event.currentTarget.setPointerCapture(event.pointerId);
+      beginTextMove(hit.object, point, event);
       return;
     }
 
@@ -408,6 +397,39 @@ export default function MapEditor({
       exceededThreshold: false,
     });
     event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const beginTextMove = (
+    textItem: MapText,
+    point: NormalizedPoint,
+    event: React.PointerEvent,
+  ) => {
+    disarmMenuActions();
+    onSelectionChange(selectText(textItem.id));
+    setInteractionState({
+      mode: "moving-text",
+      textId: textItem.id,
+      grabOffset: { x: point.x - textItem.x, y: point.y - textItem.y },
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      exceededThreshold: false,
+      originText: { ...textItem },
+    });
+    overlayRef.current?.setPointerCapture(event.pointerId);
+  };
+
+  const handleTextMovePointerDown = (
+    textId: string,
+    event: React.PointerEvent,
+  ) => {
+    if (interactionRef.current.mode !== "idle") return;
+    const textItem = textsRef.current.find((entry) => entry.id === textId);
+    if (!textItem) return;
+    const rect = getOverlayRect(overlayRef.current);
+    if (!rect) return;
+    event.preventDefault();
+    const point = pointToNormalized(event.clientX, event.clientY, rect);
+    beginTextMove(textItem, point, event);
   };
 
   const handleResizePointerDown = (
@@ -499,6 +521,7 @@ export default function MapEditor({
                   key={textItem.id}
                   textItem={textItem}
                   selected={isSelectedObject(selection, "text", textItem.id)}
+                  onMovePointerDown={handleTextMovePointerDown}
                   onTextChange={(textId, text) => {
                     onTextsChange((prev) =>
                       prev.map((entry) =>

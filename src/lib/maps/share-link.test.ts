@@ -12,10 +12,10 @@ describe("buildMapShareUrl", () => {
 describe("getSaveAndCopyToastMessage", () => {
   it("returns the expected save and copy messages", () => {
     expect(getSaveAndCopyToastMessage("saved-and-copied")).toBe(
-      "Saved — new link copied",
+      "Saved — share link copied",
     );
     expect(getSaveAndCopyToastMessage("saved-copy-failed")).toBe(
-      "Saved as a new link, but it could not be copied",
+      "Saved as a new share link, but it could not be copied",
     );
     expect(getSaveAndCopyToastMessage("copied-only")).toBe("Link copied");
     expect(getSaveAndCopyToastMessage("copy-failed")).toBe("Could not copy the link");

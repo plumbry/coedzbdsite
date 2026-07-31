@@ -68,16 +68,20 @@ export const createMap = mutation({
 
 /**
  * Persist the current editor state as a *new* shareable map.
- * The source map is left unchanged so existing links stay frozen.
+ * Optional sourceMapId only copies baseMapId; the source row is never mutated
+ * so existing share links stay frozen. Omit sourceMapId when publishing from
+ * the /maps/new scratchpad.
  */
 export const saveMap = mutation({
   args: {
-    sourceMapId: v.string(),
+    sourceMapId: v.optional(v.string()),
     boxes: v.array(mapBoxValidator),
     texts: v.array(mapTextValidator),
   },
   handler: async (ctx, args) => {
-    const source = await findMapByPublicId(ctx, args.sourceMapId);
+    const source = args.sourceMapId
+      ? await findMapByPublicId(ctx, args.sourceMapId)
+      : null;
     const baseMapId = source?.baseMapId ?? "simpsons-reload";
     const boxes = validateMapBoxes(args.boxes);
     const texts = validateMapTexts(args.texts);

@@ -28,18 +28,37 @@ export function pointInBox(point: NormalizedPoint, box: MapBox): boolean {
   );
 }
 
-/** Text hit target: small padded box around the text centre. */
+/**
+ * Approximate half-extents for a text label in normalized map space.
+ * Sized from content so longer labels stay selectable/movable.
+ */
+export function textHitHalfExtents(textItem: MapText): {
+  halfWidth: number;
+  halfHeight: number;
+} {
+  const lines = (textItem.text.trim() || "Text").split("\n");
+  const maxLineLen = Math.max(1, ...lines.map((line) => line.length));
+  // Tuned for uppercase bold sm/xs labels on the dropmap.
+  const halfWidth = Math.min(0.4, Math.max(0.08, maxLineLen * 0.014));
+  const halfHeight = Math.min(0.14, Math.max(0.04, lines.length * 0.028));
+  return { halfWidth, halfHeight };
+}
+
+/** Text hit target: padded box around the text centre, scaled to label size. */
 export function pointInText(
   point: NormalizedPoint,
   textItem: MapText,
-  halfWidth = 0.06,
-  halfHeight = 0.03,
+  halfWidth?: number,
+  halfHeight?: number,
 ): boolean {
+  const extents = textHitHalfExtents(textItem);
+  const hw = halfWidth ?? extents.halfWidth;
+  const hh = halfHeight ?? extents.halfHeight;
   return (
-    point.x >= textItem.x - halfWidth &&
-    point.x <= textItem.x + halfWidth &&
-    point.y >= textItem.y - halfHeight &&
-    point.y <= textItem.y + halfHeight
+    point.x >= textItem.x - hw &&
+    point.x <= textItem.x + hw &&
+    point.y >= textItem.y - hh &&
+    point.y <= textItem.y + hh
   );
 }
 
