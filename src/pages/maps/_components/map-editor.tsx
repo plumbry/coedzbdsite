@@ -483,90 +483,98 @@ export default function MapEditor({
 
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <div className="relative inline-block w-full max-w-full">
-        <img
-          src={imageSrc}
-          alt="Simpsons Reload dropmap"
-          className="block h-auto max-h-[70vh] w-full max-w-full rounded-lg border bg-muted object-contain"
-          draggable={false}
-          onLoad={() => setImageLoaded(true)}
-          onError={() => {
-            setImageLoaded(false);
-            onImageMissing();
-          }}
-        />
-        {imageLoaded ? (
-          <>
-            <MapPoiOverlay />
-            <div
-              ref={overlayRef}
-              data-map-canvas=""
-              data-box-count={boxes.length}
-              className={`absolute inset-0 z-10 touch-none ${
-                tool === "text" ? "cursor-text" : "cursor-crosshair"
-              }`}
-              onPointerDown={handleCanvasPointerDown}
-              aria-label="Map drawing area"
-            >
-              {boxes.map((box) => (
-                <MapBoxLayer
-                  key={box.id}
-                  box={box}
-                  selected={isSelectedObject(selection, "box", box.id)}
-                  onResizePointerDown={handleResizePointerDown}
-                />
-              ))}
-              {texts.map((textItem) => (
-                <MapTextLayer
-                  key={textItem.id}
-                  textItem={textItem}
-                  selected={isSelectedObject(selection, "text", textItem.id)}
-                  onMovePointerDown={handleTextMovePointerDown}
-                  onTextChange={(textId, text) => {
-                    onTextsChange((prev) =>
-                      prev.map((entry) =>
-                        entry.id === textId ? { ...entry, text } : entry,
-                      ),
-                    );
-                  }}
-                />
-              ))}
-              {draftRect ? <DraftMapBox {...draftRect} /> : null}
-              {showSelectionMenu && selectedBox && selection?.type === "box" ? (
-                <MapSelectionMenu
-                  selection={selection}
-                  color={selectedBox.color}
-                  x={selectedBox.x + selectedBox.width / 2}
-                  y={selectedBox.y}
-                  height={selectedBox.height}
-                  disabled={colorControlsDisabled}
-                  onColorChange={onSelectedColorChange}
-                />
-              ) : null}
-              {showSelectionMenu && selectedText && selection?.type === "text" ? (
-                <MapSelectionMenu
-                  selection={selection}
-                  color={selectedText.color}
-                  x={selectedText.x}
-                  y={selectedText.y}
-                  disabled={colorControlsDisabled}
-                  onColorChange={onSelectedColorChange}
-                  onEditText={focusSelectedText}
-                />
-              ) : null}
-            </div>
-            <MapSideToolbar
-              tool={tool}
-              onToolChange={onToolChange}
-              onSave={onSave}
-              onDeleteSelected={
-                selection && menuActionsArmed ? onDeleteSelected : undefined
-              }
-              isSaving={isSaving}
-              isDirty={isDirty}
-            />
-          </>
-        ) : null}
+      {/*
+        Keep the stage square and size-capped so overlays share the same
+        coordinate space as the map pixels. w-full + max-h + object-contain
+        previously letterboxed the square asset inside a wide box, which
+        shoved every POI/box/text left of its landmark.
+      */}
+      <div className="relative mx-auto w-full max-w-[min(100%,70vh)]">
+        <div className="relative aspect-square w-full overflow-hidden rounded-lg border bg-muted">
+          <img
+            src={imageSrc}
+            alt="Simpsons Reload dropmap"
+            className="absolute inset-0 h-full w-full object-fill"
+            draggable={false}
+            onLoad={() => setImageLoaded(true)}
+            onError={() => {
+              setImageLoaded(false);
+              onImageMissing();
+            }}
+          />
+          {imageLoaded ? (
+            <>
+              <MapPoiOverlay />
+              <div
+                ref={overlayRef}
+                data-map-canvas=""
+                data-box-count={boxes.length}
+                className={`absolute inset-0 z-10 touch-none ${
+                  tool === "text" ? "cursor-text" : "cursor-crosshair"
+                }`}
+                onPointerDown={handleCanvasPointerDown}
+                aria-label="Map drawing area"
+              >
+                {boxes.map((box) => (
+                  <MapBoxLayer
+                    key={box.id}
+                    box={box}
+                    selected={isSelectedObject(selection, "box", box.id)}
+                    onResizePointerDown={handleResizePointerDown}
+                  />
+                ))}
+                {texts.map((textItem) => (
+                  <MapTextLayer
+                    key={textItem.id}
+                    textItem={textItem}
+                    selected={isSelectedObject(selection, "text", textItem.id)}
+                    onMovePointerDown={handleTextMovePointerDown}
+                    onTextChange={(textId, text) => {
+                      onTextsChange((prev) =>
+                        prev.map((entry) =>
+                          entry.id === textId ? { ...entry, text } : entry,
+                        ),
+                      );
+                    }}
+                  />
+                ))}
+                {draftRect ? <DraftMapBox {...draftRect} /> : null}
+                {showSelectionMenu && selectedBox && selection?.type === "box" ? (
+                  <MapSelectionMenu
+                    selection={selection}
+                    color={selectedBox.color}
+                    x={selectedBox.x + selectedBox.width / 2}
+                    y={selectedBox.y}
+                    height={selectedBox.height}
+                    disabled={colorControlsDisabled}
+                    onColorChange={onSelectedColorChange}
+                  />
+                ) : null}
+                {showSelectionMenu && selectedText && selection?.type === "text" ? (
+                  <MapSelectionMenu
+                    selection={selection}
+                    color={selectedText.color}
+                    x={selectedText.x}
+                    y={selectedText.y}
+                    disabled={colorControlsDisabled}
+                    onColorChange={onSelectedColorChange}
+                    onEditText={focusSelectedText}
+                  />
+                ) : null}
+              </div>
+              <MapSideToolbar
+                tool={tool}
+                onToolChange={onToolChange}
+                onSave={onSave}
+                onDeleteSelected={
+                  selection && menuActionsArmed ? onDeleteSelected : undefined
+                }
+                isSaving={isSaving}
+                isDirty={isDirty}
+              />
+            </>
+          ) : null}
+        </div>
       </div>
     </div>
   );
