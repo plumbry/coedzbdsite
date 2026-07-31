@@ -12,6 +12,9 @@ type MapSideToolbarProps = {
   isDirty: boolean;
 };
 
+const toolButtonClass =
+  "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors";
+
 export default function MapSideToolbar({
   tool,
   onToolChange,
@@ -21,9 +24,9 @@ export default function MapSideToolbar({
   isDirty,
 }: MapSideToolbarProps) {
   return (
-    <div className="pointer-events-auto absolute right-3 top-3 z-50 flex flex-col items-stretch gap-2 sm:right-4 sm:top-4">
+    <div className="pointer-events-auto absolute right-3 top-3 z-50 flex w-auto flex-col items-end gap-1.5 sm:right-4 sm:top-4">
       <div
-        className="flex flex-col gap-1 rounded-xl border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-sm"
+        className="flex flex-col gap-px rounded-md border border-border/80 bg-background/90 p-0.5 shadow-sm backdrop-blur-sm"
         role="toolbar"
         aria-label="Drawing tools"
       >
@@ -33,14 +36,14 @@ export default function MapSideToolbar({
           aria-label="Rectangle tool"
           aria-pressed={tool === "rect"}
           className={cn(
-            "inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+            toolButtonClass,
             tool === "rect"
               ? "bg-primary text-primary-foreground"
-              : "text-foreground hover:bg-accent hover:text-accent-foreground",
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )}
           onClick={() => onToolChange("rect")}
         >
-          <Square className="h-5 w-5" strokeWidth={2.25} aria-hidden />
+          <Square className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
         </button>
         <button
           type="button"
@@ -48,45 +51,50 @@ export default function MapSideToolbar({
           aria-label="Text tool"
           aria-pressed={tool === "text"}
           className={cn(
-            "inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+            toolButtonClass,
             tool === "text"
               ? "bg-primary text-primary-foreground"
-              : "text-foreground hover:bg-accent hover:text-accent-foreground",
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )}
           onClick={() => onToolChange("text")}
         >
-          <Type className="h-5 w-5" strokeWidth={2.25} aria-hidden />
+          <Type className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
         </button>
-        {onDeleteSelected ? (
-          <button
-            type="button"
-            aria-label="Delete selected object"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-destructive transition-colors hover:bg-destructive/10"
-            onClick={onDeleteSelected}
-          >
-            <Trash2 className="h-5 w-5" strokeWidth={2.25} aria-hidden />
-          </button>
-        ) : null}
       </div>
+
+      {onDeleteSelected ? (
+        <button
+          type="button"
+          aria-label="Delete selected object"
+          className={cn(
+            toolButtonClass,
+            "border border-border/80 bg-background/90 text-destructive shadow-sm backdrop-blur-sm hover:bg-destructive/10",
+          )}
+          onClick={onDeleteSelected}
+        >
+          <Trash2 className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+        </button>
+      ) : null}
 
       <Button
         type="button"
         variant="default"
+        size="sm"
         onClick={onSave}
         disabled={isSaving}
         aria-label="Save map and copy link"
-        className="h-10 gap-2 px-3 font-semibold shadow-lg"
+        className="h-7 gap-1.5 px-2.5 text-xs font-semibold shadow-sm"
       >
         {isSaving ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
         ) : (
-          <Save className="h-4 w-4" aria-hidden />
+          <Save className="h-3.5 w-3.5" aria-hidden />
         )}
         Save
       </Button>
 
       {isDirty ? (
-        <span className="rounded-md border border-border bg-background/95 px-2 py-1 text-center text-[11px] font-medium text-muted-foreground shadow">
+        <span className="rounded px-1.5 py-0.5 text-center text-[10px] font-medium text-muted-foreground">
           Unsaved
         </span>
       ) : null}
