@@ -43,6 +43,23 @@ describe("normalizedRectFromDrag", () => {
     expect(rect.width).toBeCloseTo(0.3);
     expect(rect.height).toBeCloseTo(0.4);
   });
+
+  it("returns geometry only so callers can assign a real id after spreading", () => {
+    const rect = normalizedRectFromDrag(
+      { x: 0.1, y: 0.1 },
+      { x: 0.4, y: 0.5 },
+      0.02,
+    );
+    expect(rect).not.toHaveProperty("id");
+
+    const nextBox: MapBox = {
+      ...rect,
+      id: "unique-box-id",
+      label: "",
+      color: "#FAE904",
+    };
+    expect(nextBox.id).toBe("unique-box-id");
+  });
 });
 
 describe("moveBox", () => {

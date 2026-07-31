@@ -72,7 +72,9 @@ export function normalizedRectFromDrag(
   if (x + width > 1) x = 1 - width;
   if (y + height > 1) y = 1 - height;
 
-  return clampBoxToMap({
+  // Geometry only — never return a placeholder id. Callers that spread this
+  // onto a real box must set `id` after the spread (or it would become "draft").
+  const clamped = clampBoxToMap({
     id: "draft",
     x,
     y,
@@ -81,6 +83,12 @@ export function normalizedRectFromDrag(
     label: "",
     color: MAP_BOX_DEFAULT_COLOR,
   });
+  return {
+    x: clamped.x,
+    y: clamped.y,
+    width: clamped.width,
+    height: clamped.height,
+  };
 }
 
 export type ResizeHandle =

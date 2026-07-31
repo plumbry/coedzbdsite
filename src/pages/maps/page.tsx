@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/convex/_generated/api.js";
@@ -27,11 +27,9 @@ import {
 import { toast } from "sonner";
 import { MapIcon } from "lucide-react";
 import { BASE_MAPS } from "@/lib/maps/constants";
-import {
-  deleteSelectedObject,
-  shouldIgnoreMapEditorShortcut,
-} from "@/lib/maps/box-actions";
+import { shouldIgnoreMapEditorShortcut } from "@/lib/maps/box-actions";
 import { migrateLegacyBoxLabelsToTexts, textsEqual } from "@/lib/maps/boxes";
+import { boxesReducer } from "@/lib/maps/boxes-reducer";
 import { boxesEqual } from "@/lib/maps/coordinates";
 import {
   buildMapShareUrl,
@@ -46,7 +44,7 @@ import type {
   SaveMapResult,
   SelectedObject,
 } from "@/lib/maps/types";
-import { applyColorToSelection } from "@/lib/maps/selection";
+import { resolveMapBoxColor } from "@/lib/maps/box-color";
 import MapEditor from "./_components/map-editor.tsx";
 import MapHeaderActions from "./_components/map-header-actions.tsx";
 
@@ -67,7 +65,7 @@ export function SharedMapPage() {
     resolvedMapId ? { mapId: resolvedMapId } : "skip",
   );
 
-  const [localBoxes, setLocalBoxes] = useState<MapBox[]>([]);
+  const [localBoxes, dispatchBoxes] = useReducer(boxesReducer, []);
   const [localTexts, setLocalTexts] = useState<MapText[]>([]);
   const [savedBoxes, setSavedBoxes] = useState<MapBox[]>([]);
   const [savedTexts, setSavedTexts] = useState<MapText[]>([]);
@@ -85,6 +83,8 @@ export function SharedMapPage() {
   const [imageMissing, setImageMissing] = useState(false);
   const [reloadDialogOpen, setReloadDialogOpen] = useState(false);
   const [isBootstrappingNewMap, setIsBootstrappingNewMap] = useState(isNewRoute);
+  // Once true for the current mapId, server snapshots must not replace local boxes.
+  const lockHydrationRef = useRef(false);
 
   const isDirty = useMemo(
     () => !boxesEqual(localBoxes, savedBoxes) || !textsEqual(localTexts, savedTexts),
@@ -94,14 +94,24 @@ export function SharedMapPage() {
   const handleSelectedColorChange = useCallback((color: string) => {
     const currentSelection = selectionRef.current;
     if (!currentSelection) return;
-    const next = applyColorToSelection(
-      localBoxesRef.current,
-      localTextsRef.current,
-      currentSelection,
-      color,
+    const resolved = resolveMapBoxColor(color);
+    if (currentSelection.type === "box") {
+      const current = localBoxesRef.current.find((box) => box.id === currentSelection.id);
+      if (!current) return;
+      dispatchBoxes({
+        type: "patch",
+        id: currentSelection.id,
+        box: { ...current, color: resolved },
+      });
+      return;
+    }
+    setLocalTexts((prev) =>
+      prev.map((textItem) =>
+        textItem.id === currentSelection.id
+          ? { ...textItem, color: resolved }
+          : textItem,
+      ),
     );
-    setLocalBoxes(next.boxes);
-    setLocalTexts(next.texts);
   }, []);
 
   useEffect(() => {
@@ -130,8 +140,15 @@ export function SharedMapPage() {
     if (!resolvedMapId) return;
     setSelection(null);
     setImageMissing(false);
-    // Keep hydration if we already prepared this map (e.g. after fork-on-save).
-    setHydratedForMapId((current) => (current === resolvedMapId ? current : null));
+    // Only unlock hydration when the route map id actually changes.
+    setHydratedForMapId((current) => {
+      if (current === resolvedMapId) {
+        lockHydrationRef.current = true;
+        return current;
+      }
+      lockHydrationRef.current = false;
+      return null;
+    });
   }, [resolvedMapId]);
 
   const hydrateFromServer = useCallback(
@@ -141,7 +158,7 @@ export function SharedMapPage() {
       updatedAt: number,
     ) => {
       const migrated = migrateLegacyBoxLabelsToTexts(boxes, texts);
-      setLocalBoxes(migrated.boxes);
+      dispatchBoxes({ type: "hydrate", boxes: migrated.boxes });
       setLocalTexts(migrated.texts);
       setSavedBoxes(migrated.boxes);
       setSavedTexts(migrated.texts);
@@ -151,16 +168,12 @@ export function SharedMapPage() {
     [],
   );
 
-  const isDirtyRef = useRef(false);
-  isDirtyRef.current = isDirty;
-
   useEffect(() => {
     if (!resolvedMapId || !serverMap || serverMap.mapId !== resolvedMapId) return;
-    if (hydratedForMapId === resolvedMapId) return;
-    // Never clobber in-progress local edits if hydration re-triggers.
-    if (isDirtyRef.current && hydratedForMapId != null) return;
+    if (hydratedForMapId === resolvedMapId || lockHydrationRef.current) return;
 
     hydrateFromServer(serverMap.boxes, serverMap.texts, serverMap.updatedAt);
+    lockHydrationRef.current = true;
     setHydratedForMapId(resolvedMapId);
   }, [hydrateFromServer, hydratedForMapId, resolvedMapId, serverMap]);
 
@@ -192,11 +205,12 @@ export function SharedMapPage() {
     try {
       const result = (await saveMap({
         sourceMapId: resolvedMapId,
-        boxes: localBoxes,
-        texts: localTexts,
+        boxes: localBoxesRef.current,
+        texts: localTextsRef.current,
       })) as SaveMapResult;
 
       hydrateFromServer(result.boxes, result.texts, result.updatedAt);
+      lockHydrationRef.current = true;
       setHydratedForMapId(result.mapId);
       navigate(`/maps/${result.mapId}`, { replace: true });
 
@@ -216,8 +230,6 @@ export function SharedMapPage() {
     handleCopyLink,
     hydrateFromServer,
     isDirty,
-    localBoxes,
-    localTexts,
     navigate,
     resolvedMapId,
     saveMap,
@@ -228,22 +240,22 @@ export function SharedMapPage() {
   }, [navigate]);
 
   const handleDeleteSelected = useCallback(() => {
-    const next = deleteSelectedObject(
-      localBoxesRef.current,
-      localTextsRef.current,
-      selectionRef.current,
-    );
-    setLocalBoxes(next.boxes);
-    setLocalTexts(next.texts);
-    setSelection(next.selection);
+    const current = selectionRef.current;
+    if (!current) return;
+    if (current.type === "box") {
+      dispatchBoxes({ type: "remove", id: current.id });
+    } else {
+      setLocalTexts((prev) => prev.filter((textItem) => textItem.id !== current.id));
+    }
+    setSelection(null);
   }, []);
 
   const performReloadFromServer = useCallback(() => {
-    if (!serverMap) return;
+    if (!serverMap || !resolvedMapId) return;
+    lockHydrationRef.current = false;
     hydrateFromServer(serverMap.boxes, serverMap.texts, serverMap.updatedAt);
-    if (resolvedMapId) {
-      setHydratedForMapId(resolvedMapId);
-    }
+    lockHydrationRef.current = true;
+    setHydratedForMapId(resolvedMapId);
     toast.success("Reloaded from server");
   }, [hydrateFromServer, resolvedMapId, serverMap]);
 
@@ -258,7 +270,6 @@ export function SharedMapPage() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      // Delete only — Backspace is too easy to hit while clicking the map.
       if (event.key !== "Delete") return;
       if (shouldIgnoreMapEditorShortcut(event.target)) return;
       if (!selectionRef.current) return;
@@ -398,7 +409,7 @@ export function SharedMapPage() {
               selection={selection}
               tool={tool}
               onToolChange={setTool}
-              onBoxesChange={setLocalBoxes}
+              onBoxesAction={dispatchBoxes}
               onTextsChange={setLocalTexts}
               onSelectionChange={setSelection}
               onSelectedColorChange={handleSelectedColorChange}

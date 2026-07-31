@@ -1,7 +1,4 @@
-import {
-  getContrastTextColor,
-  resolveMapBoxColor,
-} from "@/lib/maps/box-color.ts";
+import { resolveMapBoxColor } from "@/lib/maps/box-color.ts";
 import type { MapText } from "@/lib/maps/types";
 import { cn } from "@/lib/utils.ts";
 
@@ -23,7 +20,6 @@ export default function MapTextLayer({
   onTextChange,
 }: MapTextLayerProps) {
   const color = resolveMapBoxColor(textItem.color);
-  const outline = getContrastTextColor(color) === "#FFFFFF" ? "#000000" : "#FFFFFF";
 
   return (
     <div
@@ -57,10 +53,7 @@ export default function MapTextLayer({
           // picking owns selection. Only the active text captures pointers.
           selected ? "pointer-events-auto ring-2 ring-black/80" : "pointer-events-none",
         )}
-        style={{
-          color,
-          textShadow: `0 0 2px ${outline}, 1px 1px 0 ${outline}, -1px -1px 0 ${outline}, 1px -1px 0 ${outline}, -1px 1px 0 ${outline}`,
-        }}
+        style={{ color }}
         onPointerDown={(event) => {
           // Editing the selected text must not start a canvas drag/create.
           event.stopPropagation();

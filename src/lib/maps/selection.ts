@@ -44,8 +44,10 @@ export function pointInText(
 }
 
 /**
- * Topmost box under a point. Selected boxes win when overlapping so the
- * active object can still be dragged after another box was drawn on top.
+ * Topmost box under a point.
+ * Prefer the currently selected box only when it is among the hits (it paints
+ * above siblings). Otherwise use paint order: later array entries win.
+ * Never collapses multiple hits into a shared layer selection.
  */
 export function findTopBoxAtPoint(
   boxes: MapBox[],
@@ -58,7 +60,6 @@ export function findTopBoxAtPoint(
     const selectedHit = hits.find((box) => box.id === selectedBoxId);
     if (selectedHit) return selectedHit;
   }
-  // Later array entries are painted later → treated as topmost.
   return hits[hits.length - 1] ?? null;
 }
 

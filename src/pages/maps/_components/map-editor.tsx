@@ -14,13 +14,12 @@ import {
   type NormalizedPoint,
   type ResizeHandle,
 } from "@/lib/maps/coordinates";
+import type { BoxesAction } from "@/lib/maps/boxes-reducer";
 import {
-  appendBox,
   hitTestMapObjects,
   isSelectedObject,
   selectBox,
   selectText,
-  updateBoxById,
 } from "@/lib/maps/selection";
 import type { EditorTool, MapBox, MapText, SelectedObject } from "@/lib/maps/types";
 import MapBoxLayer, { DraftMapBox } from "./map-box-layer.tsx";
@@ -29,7 +28,6 @@ import MapSideToolbar from "./map-side-toolbar.tsx";
 import MapTextLayer from "./map-text-layer.tsx";
 import MapPoiOverlay from "./map-poi-overlay.tsx";
 
-type BoxesUpdater = (prev: MapBox[]) => MapBox[];
 type TextsUpdater = (prev: MapText[]) => MapText[];
 
 type InteractionState =
@@ -51,7 +49,12 @@ type InteractionState =
       exceededThreshold: boolean;
       originBox: MapBox;
     }
-  | { mode: "resizing-box"; boxId: string; handle: ResizeHandle }
+  | {
+      mode: "resizing-box";
+      boxId: string;
+      handle: ResizeHandle;
+      originBox: MapBox;
+    }
   | {
       mode: "moving-text";
       textId: string;
@@ -68,7 +71,7 @@ type MapEditorProps = {
   selection: SelectedObject;
   tool: EditorTool;
   onToolChange: (tool: EditorTool) => void;
-  onBoxesChange: (updater: BoxesUpdater) => void;
+  onBoxesAction: (action: BoxesAction) => void;
   onTextsChange: (updater: TextsUpdater) => void;
   onSelectionChange: (selection: SelectedObject) => void;
   onSelectedColorChange: (color: string) => void;
@@ -94,7 +97,7 @@ export default function MapEditor({
   selection,
   tool,
   onToolChange,
-  onBoxesChange,
+  onBoxesAction,
   onTextsChange,
   onSelectionChange,
   onSelectedColorChange,
@@ -111,7 +114,7 @@ export default function MapEditor({
   const textsRef = useRef(texts);
   const selectionRef = useRef(selection);
   const toolRef = useRef(tool);
-  const onBoxesChangeRef = useRef(onBoxesChange);
+  const onBoxesActionRef = useRef(onBoxesAction);
   const onTextsChangeRef = useRef(onTextsChange);
   const onSelectionChangeRef = useRef(onSelectionChange);
   const interactionRef = useRef<InteractionState>({ mode: "idle" });
@@ -124,7 +127,7 @@ export default function MapEditor({
   textsRef.current = texts;
   selectionRef.current = selection;
   toolRef.current = tool;
-  onBoxesChangeRef.current = onBoxesChange;
+  onBoxesActionRef.current = onBoxesAction;
   onTextsChangeRef.current = onTextsChange;
   onSelectionChangeRef.current = onSelectionChange;
 
@@ -222,18 +225,25 @@ export default function MapEditor({
         }
 
         const moved = moveBox(current.originBox, point, current.grabOffset);
-        onBoxesChangeRef.current((prev) =>
-          updateBoxById(prev, current.boxId, () => moved),
-        );
+        onBoxesActionRef.current({
+          type: "patch",
+          id: current.boxId,
+          box: moved,
+        });
         return;
       }
 
       if (current.mode === "resizing-box") {
-        onBoxesChangeRef.current((prev) =>
-          updateBoxById(prev, current.boxId, (box) =>
-            resizeBox(box, current.handle, point, MAP_BOX_DEFAULT_MIN_DRAG_SIZE),
+        onBoxesActionRef.current({
+          type: "patch",
+          id: current.boxId,
+          box: resizeBox(
+            current.originBox,
+            current.handle,
+            point,
+            MAP_BOX_DEFAULT_MIN_DRAG_SIZE,
           ),
-        );
+        });
         return;
       }
 
@@ -288,12 +298,12 @@ export default function MapEditor({
             MAP_BOX_DEFAULT_MIN_DRAG_SIZE,
           );
           const nextBox: MapBox = {
-            id: createBoxId(),
             ...draft,
+            id: createBoxId(),
             label: "",
             color: MAP_BOX_DEFAULT_COLOR,
           };
-          onBoxesChangeRef.current((prev) => appendBox(prev, nextBox));
+          onBoxesActionRef.current({ type: "append", box: nextBox });
           onSelectionChangeRef.current(selectBox(nextBox.id));
         }
       }
@@ -412,7 +422,12 @@ export default function MapEditor({
     if (!box) return;
     disarmMenuActions();
     onSelectionChange(selectBox(boxId));
-    setInteractionState({ mode: "resizing-box", boxId, handle });
+    setInteractionState({
+      mode: "resizing-box",
+      boxId,
+      handle,
+      originBox: { ...box },
+    });
   };
 
   const showSelectionMenu = interaction.mode === "idle" && menuActionsArmed;
@@ -521,7 +536,9 @@ export default function MapEditor({
               tool={tool}
               onToolChange={onToolChange}
               onSave={onSave}
-              onDeleteSelected={selection ? onDeleteSelected : undefined}
+              onDeleteSelected={
+                selection && menuActionsArmed ? onDeleteSelected : undefined
+              }
               isSaving={isSaving}
               isDirty={isDirty}
             />
