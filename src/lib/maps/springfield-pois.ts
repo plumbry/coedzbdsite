@@ -35,9 +35,9 @@ export const SPRINGFIELD_POIS: MapPoi[] = [
   {
     id: "kamp-krusty",
     label: "KAMP KRUSTY",
-    // Cabins / camp on the forested shore of the north lake
-    x: 0.45,
-    y: 0.33,
+    // Right of town-square centre, a touch above Evergreen Terrace
+    x: 0.55,
+    y: 0.41,
     width: 0.13,
   },
   {
