@@ -45,7 +45,7 @@ export default function MapPolygonLayer({
         d={pointsToSvgPath(polygon.points)}
         fill={fill}
         stroke={color}
-        strokeWidth={(borderWidth / 10) * (selected ? 1.15 : 1)}
+        strokeWidth={borderWidth}
         strokeLinejoin="miter"
         vectorEffect="non-scaling-stroke"
         opacity={selected ? 1 : 0.85}
@@ -87,7 +87,7 @@ export function DraftMapPolygon({ points, cursor }: DraftPolygonProps) {
         d={d}
         fill="color-mix(in oklab, var(--primary) 18%, transparent)"
         stroke="var(--primary)"
-        strokeWidth={1.5}
+        strokeWidth={MAP_BOX_BORDER_WIDTH_PX}
         strokeDasharray="4 3"
         strokeLinejoin="miter"
         vectorEffect="non-scaling-stroke"
