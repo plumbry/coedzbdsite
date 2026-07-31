@@ -6,6 +6,13 @@ export const BASE_MAP_IMAGE_PATH = "/assets/maps/springfield-reload-map.webp";
 /** Native pixel dimensions of springfield-reload-map.webp (square). */
 export const BASE_MAP_IMAGE_SIZE = { width: 1000, height: 1000 } as const;
 
+/**
+ * Higher-res clean map used only by the admin POI editor.
+ * Public /maps keeps BASE_MAP_IMAGE_* until POIs are retuned and rolled out.
+ */
+export const ADMIN_MAP_IMAGE_PATH = "/assets/maps/springfield-reload-map-2400.png";
+export const ADMIN_MAP_IMAGE_SIZE = { width: 2400, height: 2400 } as const;
+
 export const MAP_BOX_MIN_SIZE = 0.01;
 export const MAP_BOX_LABEL_MAX_LENGTH = 100;
 export const MAP_BOX_DEFAULT_MIN_DRAG_SIZE = 0.02;

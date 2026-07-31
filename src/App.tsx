@@ -20,6 +20,7 @@ import UploadsPage from "./pages/admin/uploads.tsx";
 import SupportAdminPage from "./pages/admin/support.tsx";
 import AuditPage from "./pages/admin/audit.tsx";
 import FeaturesPage from "./pages/admin/features/page.tsx";
+import AdminMapsPage from "./pages/admin/maps.tsx";
 import PlayerEarningsPage from "./pages/admin/player-earnings.tsx";
 import MemberManagement from "./pages/admin/member-management.tsx";
 import StatsPage from "./pages/admin/stats.tsx";
@@ -85,6 +86,7 @@ export default function App() {
             <Route path="support" element={<SupportAdminPage />} />
             <Route path="audit" element={<AuditPage />} />
             <Route path="features" element={<FeaturesPage />} />
+            <Route path="maps" element={<AdminMapsPage />} />
             <Route path="player-earnings" element={<PlayerEarningsPage />} />
             <Route path="member-management/:tab?" element={<MemberManagement />} />
             <Route path="members/:tab?" element={<MemberManagement />} />

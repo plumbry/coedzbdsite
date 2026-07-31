@@ -38,6 +38,7 @@ import {
   LayoutDashboard,
   Wrench,
   PieChart,
+  Map,
   BarChart3,
   ShieldCheck,
   type LucideIcon,
@@ -377,6 +378,7 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
     if (isAdmin) {
       const adminItems: NavItem[] = [];
       adminItems.push({ path: "/admin/features", label: "Features", icon: Zap });
+      adminItems.push({ path: "/admin/maps", label: "Dropmap POIs", icon: Map });
       if (isModeratorOrAdmin) {
         adminItems.push({ path: "/admin/support", label: "Support", icon: MessageSquare });
       }
