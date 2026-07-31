@@ -349,6 +349,30 @@ export default function MapEditor({
       selectionRef.current,
     );
 
+    // Text tool places on empty space or on top of boxes. Existing text still
+    // selects/moves so you can adjust a label without stacking another one.
+    if (toolRef.current === "text") {
+      if (hit?.kind === "text") {
+        event.preventDefault();
+        beginTextMove(hit.object, point, event);
+        return;
+      }
+
+      event.preventDefault();
+      const nextText: MapText = {
+        id: createBoxId(),
+        x: point.x,
+        y: point.y,
+        text: "",
+        color: MAP_BOX_DEFAULT_COLOR,
+      };
+      onTextsChange((prev) => [...prev, nextText]);
+      onSelectionChange(selectText(nextText.id));
+      onToolChange("rect");
+      armMenuActionsSoon();
+      return;
+    }
+
     if (hit?.kind === "box") {
       event.preventDefault();
       const box = hit.object;
@@ -373,20 +397,6 @@ export default function MapEditor({
     }
 
     onSelectionChange(null);
-
-    if (toolRef.current === "text") {
-      const nextText: MapText = {
-        id: createBoxId(),
-        x: point.x,
-        y: point.y,
-        text: "",
-        color: MAP_BOX_DEFAULT_COLOR,
-      };
-      onTextsChange((prev) => [...prev, nextText]);
-      onSelectionChange(selectText(nextText.id));
-      armMenuActionsSoon();
-      return;
-    }
 
     setInteractionState({
       mode: "creating-box",
