@@ -413,7 +413,7 @@ export function SharedMapPage() {
       />
 
       <Card>
-        <CardContent className="py-4">
+        <CardContent className="px-2 py-2 sm:px-6 sm:py-4">
           {imageMissing ? (
             <ErrorState>
               <ErrorStateHeader>

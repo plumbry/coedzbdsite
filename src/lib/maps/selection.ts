@@ -1,3 +1,4 @@
+import { prefersCoarsePointer } from "./pointer";
 import type { MapBox, MapText, SelectedObject } from "./types";
 
 export type NormalizedPoint = { x: number; y: number };
@@ -38,9 +39,16 @@ export function textHitHalfExtents(textItem: MapText): {
 } {
   const lines = (textItem.text.trim() || "Text").split("\n");
   const maxLineLen = Math.max(1, ...lines.map((line) => line.length));
-  // Tuned for uppercase bold sm/xs labels on the dropmap.
-  const halfWidth = Math.min(0.4, Math.max(0.08, maxLineLen * 0.014));
-  const halfHeight = Math.min(0.14, Math.max(0.04, lines.length * 0.028));
+  // Tuned for uppercase bold labels; coarse pointers get a larger min pad.
+  const coarse = prefersCoarsePointer();
+  const halfWidth = Math.min(
+    0.4,
+    Math.max(coarse ? 0.11 : 0.08, maxLineLen * 0.014),
+  );
+  const halfHeight = Math.min(
+    0.14,
+    Math.max(coarse ? 0.06 : 0.04, lines.length * 0.028),
+  );
   return { halfWidth, halfHeight };
 }
 

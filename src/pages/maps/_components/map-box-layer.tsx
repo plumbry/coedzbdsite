@@ -65,7 +65,7 @@ export default function MapBoxLayer({
       aria-selected={selected}
     >
       <div
-        className="h-full w-full rounded-sm"
+        className="h-full w-full"
         style={{
           border: `${borderWidth}px solid ${boxColor}`,
           backgroundColor: fill,
@@ -81,7 +81,9 @@ export default function MapBoxLayer({
               data-resize-handle={handle}
               aria-label={`Resize ${handle}`}
               className={cn(
-                "pointer-events-auto absolute z-30 h-2.5 w-2.5 rounded-full border bg-background shadow touch-none",
+                // Visible knob stays small; ::before expands the finger hit target.
+                "pointer-events-auto absolute z-30 h-2.5 w-2.5 touch-none rounded-full border bg-background shadow",
+                "before:absolute before:-inset-3 before:content-[''] max-sm:h-3.5 max-sm:w-3.5 max-sm:before:-inset-3.5",
                 handlePositionClass[handle],
               )}
               style={{ borderColor: boxColor }}
@@ -103,7 +105,7 @@ type DraftBoxProps = {
 export function DraftMapBox({ x, y, width, height }: DraftBoxProps) {
   return (
     <div
-      className="pointer-events-none absolute z-30 rounded-sm border-2 border-dashed"
+      className="pointer-events-none absolute z-30 border-2 border-dashed"
       style={{
         left: `${x * 100}%`,
         top: `${y * 100}%`,

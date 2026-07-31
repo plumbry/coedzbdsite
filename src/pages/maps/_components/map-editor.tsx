@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MAP_BOX_DEFAULT_COLOR,
   MAP_BOX_DEFAULT_MIN_DRAG_SIZE,
-  MAP_CREATE_DRAG_THRESHOLD_PX,
 } from "@/lib/maps/constants";
 import { clampTextCenter, shouldCreateBoxFromDrag } from "@/lib/maps/box-actions";
+import { mapDragThresholdPx } from "@/lib/maps/pointer";
 import {
   createBoxId,
   moveBox,
@@ -119,6 +119,12 @@ export default function MapEditor({
   const onSelectionChangeRef = useRef(onSelectionChange);
   const interactionRef = useRef<InteractionState>({ mode: "idle" });
   const menuArmTimeoutRef = useRef<number | null>(null);
+  /** Active pointer ids on the canvas — size > 1 means pinch / multi-touch. */
+  const activePointersRef = useRef(new Set<number>());
+  /** When true, skip committing creates / text taps (pinch zoom in progress). */
+  const suppressGestureRef = useRef(false);
+  /** Text tool: place on pointerup so a pinch does not stamp a label. */
+  const pendingTextRef = useRef<NormalizedPoint | null>(null);
   const [interaction, setInteraction] = useState<InteractionState>({ mode: "idle" });
   const [imageLoaded, setImageLoaded] = useState(false);
   const [menuActionsArmed, setMenuActionsArmed] = useState(true);
@@ -158,6 +164,49 @@ export default function MapEditor({
     setInteractionState({ mode: "idle" });
     armMenuActionsSoon();
   }, [armMenuActionsSoon, setInteractionState]);
+
+  const releaseCanvasPointerCaptures = useCallback(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    for (const pointerId of activePointersRef.current) {
+      try {
+        if (overlay.hasPointerCapture(pointerId)) {
+          overlay.releasePointerCapture(pointerId);
+        }
+      } catch {
+        // Ignore: capture may already be released.
+      }
+    }
+  }, []);
+
+  /** Abort draw/move when a second finger lands so the browser can pinch-zoom. */
+  const abortGestureForMultiTouch = useCallback(() => {
+    suppressGestureRef.current = true;
+    pendingTextRef.current = null;
+    const current = interactionRef.current;
+    if (current.mode === "moving-box") {
+      onBoxesActionRef.current({
+        type: "patch",
+        id: current.boxId,
+        box: current.originBox,
+      });
+    } else if (current.mode === "moving-text") {
+      onTextsChangeRef.current((prev) =>
+        prev.map((textItem) =>
+          textItem.id === current.textId ? current.originText : textItem,
+        ),
+      );
+    } else if (current.mode === "resizing-box") {
+      onBoxesActionRef.current({
+        type: "patch",
+        id: current.boxId,
+        box: current.originBox,
+      });
+    }
+    releaseCanvasPointerCaptures();
+    setInteractionState({ mode: "idle" });
+    armMenuActionsSoon();
+  }, [armMenuActionsSoon, releaseCanvasPointerCaptures, setInteractionState]);
 
   useEffect(() => {
     return () => {
@@ -200,7 +249,7 @@ export default function MapEditor({
           shouldCreateBoxFromDrag(
             { x: current.startClientX, y: current.startClientY },
             { x: event.clientX, y: event.clientY },
-            MAP_CREATE_DRAG_THRESHOLD_PX,
+            mapDragThresholdPx(),
           );
         setInteractionState({
           ...current,
@@ -216,7 +265,7 @@ export default function MapEditor({
           shouldCreateBoxFromDrag(
             { x: current.startClientX, y: current.startClientY },
             { x: event.clientX, y: event.clientY },
-            MAP_CREATE_DRAG_THRESHOLD_PX,
+            mapDragThresholdPx(),
           );
         if (!exceededThreshold) return;
 
@@ -253,7 +302,7 @@ export default function MapEditor({
           shouldCreateBoxFromDrag(
             { x: current.startClientX, y: current.startClientY },
             { x: event.clientX, y: event.clientY },
-            MAP_CREATE_DRAG_THRESHOLD_PX,
+            mapDragThresholdPx(),
           );
         if (!exceededThreshold) return;
 
@@ -276,8 +325,21 @@ export default function MapEditor({
     };
 
     const handlePointerUp = (event: PointerEvent) => {
+      activePointersRef.current.delete(event.pointerId);
+
+      const suppressed = suppressGestureRef.current;
+      if (activePointersRef.current.size === 0) {
+        suppressGestureRef.current = false;
+      }
+
       const current = interactionRef.current;
       if (current.mode === "idle") return;
+
+      // Pinch / multi-touch aborted the gesture — do not create a box.
+      if (suppressed) {
+        finishInteraction();
+        return;
+      }
 
       const rect = getOverlayRect(overlayRef.current);
 
@@ -287,7 +349,7 @@ export default function MapEditor({
           shouldCreateBoxFromDrag(
             { x: current.startClientX, y: current.startClientY },
             { x: event.clientX, y: event.clientY },
-            MAP_CREATE_DRAG_THRESHOLD_PX,
+            mapDragThresholdPx(),
           );
 
         if (exceededThreshold) {
@@ -339,7 +401,7 @@ export default function MapEditor({
       const el = document.querySelector<HTMLTextAreaElement>(
         `textarea[data-map-text-id="${nextText.id}"]`,
       );
-      el?.focus();
+      el?.focus({ preventScroll: true });
       el?.select();
     }, 0);
   };
@@ -361,17 +423,30 @@ export default function MapEditor({
       }
     }
 
+    activePointersRef.current.add(event.pointerId);
+
+    // Second finger: abort any draw/move so the browser can pinch-zoom the page.
+    if (activePointersRef.current.size > 1) {
+      abortGestureForMultiTouch();
+      return;
+    }
+
     const rect = getOverlayRect(overlayRef.current);
-    if (!rect) return;
+    if (!rect) {
+      activePointersRef.current.delete(event.pointerId);
+      return;
+    }
 
     disarmMenuActions();
+    suppressGestureRef.current = false;
 
     const point = pointToNormalized(event.clientX, event.clientY, rect);
+    const isTouch = event.pointerType === "touch";
 
     if (textToolActive) {
-      event.preventDefault();
-      event.stopPropagation();
-      placeTextAt(point);
+      // Defer placement until pointerup so a pinch does not stamp text.
+      pendingTextRef.current = point;
+      if (!isTouch) event.preventDefault();
       return;
     }
 
@@ -383,7 +458,8 @@ export default function MapEditor({
     );
 
     if (hit?.kind === "box") {
-      event.preventDefault();
+      // Avoid preventDefault on touch so pinch-zoom is not blocked.
+      if (!isTouch) event.preventDefault();
       const box = hit.object;
       onSelectionChange(selectBox(box.id));
       setInteractionState({
@@ -400,7 +476,7 @@ export default function MapEditor({
     }
 
     if (hit?.kind === "text") {
-      event.preventDefault();
+      if (!isTouch) event.preventDefault();
       beginTextMove(hit.object, point, event);
       return;
     }
@@ -416,6 +492,24 @@ export default function MapEditor({
       exceededThreshold: false,
     });
     event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleCanvasPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    activePointersRef.current.delete(event.pointerId);
+
+    const pendingText = pendingTextRef.current;
+    const suppressed = suppressGestureRef.current;
+
+    if (activePointersRef.current.size === 0) {
+      suppressGestureRef.current = false;
+    }
+
+    if (!pendingText) return;
+    pendingTextRef.current = null;
+
+    // Only stamp text for a clean single-finger / mouse tap.
+    if (suppressed || activePointersRef.current.size > 0) return;
+    placeTextAt(pendingText);
   };
 
   const beginTextMove = (
@@ -441,12 +535,17 @@ export default function MapEditor({
     textId: string,
     event: React.PointerEvent,
   ) => {
+    activePointersRef.current.add(event.pointerId);
+    if (activePointersRef.current.size > 1) {
+      abortGestureForMultiTouch();
+      return;
+    }
     if (interactionRef.current.mode !== "idle") return;
     const textItem = textsRef.current.find((entry) => entry.id === textId);
     if (!textItem) return;
     const rect = getOverlayRect(overlayRef.current);
     if (!rect) return;
-    event.preventDefault();
+    if (event.pointerType !== "touch") event.preventDefault();
     const point = pointToNormalized(event.clientX, event.clientY, rect);
     beginTextMove(textItem, point, event);
   };
@@ -457,8 +556,13 @@ export default function MapEditor({
     event: React.PointerEvent,
   ) => {
     if (toolRef.current === "text") return;
+    activePointersRef.current.add(event.pointerId);
+    if (activePointersRef.current.size > 1) {
+      abortGestureForMultiTouch();
+      return;
+    }
     event.stopPropagation();
-    event.preventDefault();
+    if (event.pointerType !== "touch") event.preventDefault();
     if (interactionRef.current.mode !== "idle") return;
     const box = boxesRef.current.find((entry) => entry.id === boxId);
     if (!box) return;
@@ -499,7 +603,7 @@ export default function MapEditor({
     const el = document.querySelector<HTMLTextAreaElement>(
       `textarea[data-map-text-id="${selectedText.id}"]`,
     );
-    el?.focus();
+    el?.focus({ preventScroll: true });
     el?.select();
   };
 
@@ -511,7 +615,7 @@ export default function MapEditor({
         previously letterboxed the square asset inside a wide box, which
         shoved every POI/box/text left of its landmark.
       */}
-      <div className="relative mx-auto w-full max-w-[min(100%,70vh)]">
+      <div className="relative mx-auto w-full max-w-[min(100%,70vh,70dvh)]">
         <div className="relative aspect-square w-full overflow-hidden rounded-lg border bg-muted">
           <img
             src={imageSrc}
@@ -531,10 +635,12 @@ export default function MapEditor({
                 ref={overlayRef}
                 data-map-canvas=""
                 data-box-count={boxes.length}
-                className={`absolute inset-0 z-10 touch-none ${
+                className={`absolute inset-0 z-10 touch-pinch-zoom ${
                   tool === "text" ? "cursor-text" : "cursor-crosshair"
                 }`}
                 onPointerDown={handleCanvasPointerDown}
+                onPointerUp={handleCanvasPointerUp}
+                onPointerCancel={handleCanvasPointerUp}
                 aria-label="Map drawing area"
               >
                 {boxes.map((box) => (

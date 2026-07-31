@@ -28,7 +28,13 @@ export default function MapHeaderActions({
       role="toolbar"
       aria-label="Map page actions"
     >
-      <Button type="button" variant="outline" onClick={onNew} aria-label={newLabel}>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={onNew}
+        aria-label={newLabel}
+        className="touch-manipulation"
+      >
         <Plus className="h-4 w-4" aria-hidden />
         {newLabel}
       </Button>
@@ -38,6 +44,7 @@ export default function MapHeaderActions({
         onClick={onCopyLink}
         disabled={isSaving}
         aria-label="Copy share link"
+        className="touch-manipulation"
       >
         <Copy className="h-4 w-4" aria-hidden />
         Copy link
@@ -48,6 +55,7 @@ export default function MapHeaderActions({
         onClick={onReloadFromServer}
         disabled={!canReloadFromServer || isSaving}
         aria-label={reloadLabel}
+        className="touch-manipulation"
       >
         <RefreshCw className="h-4 w-4" aria-hidden />
         {reloadLabel}

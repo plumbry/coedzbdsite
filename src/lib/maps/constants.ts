@@ -11,6 +11,8 @@ export const MAP_BOX_LABEL_MAX_LENGTH = 100;
 export const MAP_BOX_DEFAULT_MIN_DRAG_SIZE = 0.02;
 export const MAP_BOX_DEFAULT_COLOR = "#FAE904";
 export const MAP_CREATE_DRAG_THRESHOLD_PX = 4;
+/** Higher threshold for fingers so tiny wobble does not start a drag. */
+export const MAP_CREATE_DRAG_THRESHOLD_TOUCH_PX = 10;
 
 export const BASE_MAPS = {
   [BASE_MAP_ID]: {

@@ -35,14 +35,17 @@ export default function MapSelectionMenu({
     setShowColor(false);
   }, [selection.id, selection.type]);
 
-  const preferBelow = y < 0.14;
+  // Keep the menu on-screen on narrow viewports (centred transform otherwise clips).
+  const clampedX = Math.min(0.88, Math.max(0.12, x));
+  // Colour picker is tall — flip below/above based on vertical room.
+  const preferBelow = showColor ? y < 0.45 : y < 0.18;
   const top = preferBelow ? `${(y + height) * 100}%` : `${y * 100}%`;
-  const left = `${x * 100}%`;
+  const left = `${clampedX * 100}%`;
 
   return (
     <div
       data-map-selection-menu=""
-      className="pointer-events-auto absolute z-50"
+      className="pointer-events-auto absolute z-50 max-w-[min(18rem,calc(100%-1rem))]"
       style={{
         left,
         top,
@@ -64,10 +67,10 @@ export default function MapSelectionMenu({
             <button
               type="button"
               disabled={disabled}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium hover:bg-muted disabled:opacity-50"
+              className="flex min-h-11 touch-manipulation items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-muted disabled:opacity-50 sm:min-h-0 sm:py-2"
               onClick={onEditText}
             >
-              <Type className="h-4 w-4" aria-hidden />
+              <Type className="h-4 w-4 shrink-0" aria-hidden />
               Edit text
             </button>
           ) : null}
@@ -75,10 +78,10 @@ export default function MapSelectionMenu({
           <button
             type="button"
             disabled={disabled}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium hover:bg-muted disabled:opacity-50"
+            className="flex min-h-11 touch-manipulation items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-muted disabled:opacity-50 sm:min-h-0 sm:py-2"
             onClick={() => setShowColor((value) => !value)}
           >
-            <Paintbrush className="h-4 w-4" aria-hidden />
+            <Paintbrush className="h-4 w-4 shrink-0" aria-hidden />
             Change colour
           </button>
         </div>

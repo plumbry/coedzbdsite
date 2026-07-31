@@ -55,11 +55,14 @@ export default function MapTextLayer({
         readOnly={!selected}
         tabIndex={selected ? 0 : -1}
         className={cn(
-          "w-full resize-none bg-transparent px-1.5 py-1 text-center text-xs font-black uppercase leading-tight outline-none sm:text-sm",
+          // text-base on small screens avoids iOS zoom-on-focus (<16px).
+          "w-full resize-none bg-transparent px-1.5 py-1 text-center text-base font-black uppercase leading-tight outline-none sm:text-sm",
           // Unselected text must stay pointer-events:none so canvas geometry
           // picking owns selection. Selected text captures pointers so we can
           // start a move (and edit via double-click / menu).
-          selected ? "pointer-events-auto ring-2 ring-black/80" : "pointer-events-none",
+          selected
+            ? "pointer-events-auto touch-manipulation ring-2 ring-black/80"
+            : "pointer-events-none",
         )}
         style={{ color }}
         onPointerDown={(event) => {
@@ -71,7 +74,7 @@ export default function MapTextLayer({
         }}
         onDoubleClick={(event) => {
           event.stopPropagation();
-          event.currentTarget.focus();
+          event.currentTarget.focus({ preventScroll: true });
           event.currentTarget.select();
         }}
         onClick={(event) => event.stopPropagation()}

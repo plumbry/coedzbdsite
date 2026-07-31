@@ -82,7 +82,7 @@ export default function MapColorPicker({
   const hexInvalid = hexDraft.trim().length > 0 && !isValidHexColor(hexDraft);
 
   return (
-    <div className="flex w-[14rem] flex-col gap-2 px-2 py-2">
+    <div className="flex w-[min(16rem,100%)] flex-col gap-2 px-2 py-2">
       <div
         ref={svRef}
         role="slider"
@@ -93,7 +93,7 @@ export default function MapColorPicker({
         aria-disabled={disabled}
         tabIndex={disabled ? -1 : 0}
         className={cn(
-          "relative h-28 w-full touch-none rounded-md border border-border",
+          "relative h-32 w-full touch-none rounded-md border border-border sm:h-28",
           disabled ? "cursor-not-allowed opacity-50" : "cursor-crosshair",
         )}
         style={{
@@ -106,7 +106,7 @@ export default function MapColorPicker({
         onPointerMove={handleSvPointerMove}
       >
         <div
-          className="pointer-events-none absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
+          className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow sm:h-3.5 sm:w-3.5"
           style={{
             left: `${hsv.s * 100}%`,
             top: `${(1 - hsv.v) * 100}%`,
@@ -115,7 +115,7 @@ export default function MapColorPicker({
         />
       </div>
 
-      <label className="flex flex-col gap-1">
+      <label className="flex flex-col gap-1.5">
         <span className="text-[11px] font-medium text-muted-foreground">Hue</span>
         <input
           type="range"
@@ -126,9 +126,9 @@ export default function MapColorPicker({
           disabled={disabled}
           aria-label="Hue"
           className={cn(
-            "h-3 w-full cursor-pointer appearance-none rounded-full border border-border disabled:cursor-not-allowed disabled:opacity-50",
-            "[&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-foreground [&::-webkit-slider-thumb]:shadow",
-            "[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-foreground",
+            "h-5 w-full cursor-pointer touch-manipulation appearance-none rounded-full border border-border disabled:cursor-not-allowed disabled:opacity-50 sm:h-3",
+            "[&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-foreground [&::-webkit-slider-thumb]:shadow sm:[&::-webkit-slider-thumb]:h-3.5 sm:[&::-webkit-slider-thumb]:w-3.5",
+            "[&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-foreground sm:[&::-moz-range-thumb]:h-3.5 sm:[&::-moz-range-thumb]:w-3.5",
           )}
           style={{ background: HUE_GRADIENT }}
           onChange={(event) =>
@@ -139,7 +139,7 @@ export default function MapColorPicker({
 
       <div className="flex items-center gap-2">
         <div
-          className="h-8 w-8 shrink-0 rounded-md border border-border"
+          className="h-10 w-10 shrink-0 rounded-md border border-border sm:h-8 sm:w-8"
           style={{ backgroundColor: hsvToHex(hsv.h, hsv.s, hsv.v) }}
           aria-hidden
         />
@@ -149,7 +149,8 @@ export default function MapColorPicker({
           aria-label="Hex colour"
           aria-invalid={hexInvalid}
           spellCheck={false}
-          className="h-8 font-mono text-xs uppercase"
+          // text-base avoids iOS zoom-on-focus; desktop can stay compact.
+          className="h-10 touch-manipulation font-mono text-base uppercase sm:h-8 sm:text-xs"
           onChange={(event) => handleHexChange(event.target.value)}
         />
       </div>

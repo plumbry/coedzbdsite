@@ -13,7 +13,7 @@ type MapSideToolbarProps = {
 };
 
 const toolButtonClass =
-  "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors";
+  "inline-flex h-10 w-10 touch-manipulation items-center justify-center rounded-md transition-colors sm:h-7 sm:w-7";
 
 export default function MapSideToolbar({
   tool,
@@ -24,9 +24,9 @@ export default function MapSideToolbar({
   isDirty,
 }: MapSideToolbarProps) {
   return (
-    <div className="pointer-events-auto absolute right-3 top-3 z-50 flex w-auto flex-col items-end gap-1.5 sm:right-4 sm:top-4">
+    <div className="pointer-events-auto absolute right-2 top-2 z-50 flex w-auto flex-col items-end gap-1.5 sm:right-4 sm:top-4">
       <div
-        className="flex flex-col gap-px rounded-md border border-border/80 bg-background/90 p-0.5 shadow-sm backdrop-blur-sm"
+        className="flex flex-col gap-0.5 rounded-md border border-border/80 bg-background/90 p-0.5 shadow-sm backdrop-blur-sm"
         role="toolbar"
         aria-label="Drawing tools"
       >
@@ -43,7 +43,7 @@ export default function MapSideToolbar({
           )}
           onClick={() => onToolChange("rect")}
         >
-          <Square className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+          <Square className="h-4 w-4 sm:h-3.5 sm:w-3.5" strokeWidth={2.25} aria-hidden />
         </button>
         <button
           type="button"
@@ -58,7 +58,7 @@ export default function MapSideToolbar({
           )}
           onClick={() => onToolChange("text")}
         >
-          <Type className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+          <Type className="h-4 w-4 sm:h-3.5 sm:w-3.5" strokeWidth={2.25} aria-hidden />
         </button>
       </div>
 
@@ -72,7 +72,7 @@ export default function MapSideToolbar({
           )}
           onClick={onDeleteSelected}
         >
-          <Trash2 className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+          <Trash2 className="h-4 w-4 sm:h-3.5 sm:w-3.5" strokeWidth={2.25} aria-hidden />
         </button>
       ) : null}
 
@@ -83,12 +83,12 @@ export default function MapSideToolbar({
         onClick={onSave}
         disabled={isSaving}
         aria-label="Save map and copy link"
-        className="h-7 gap-1.5 px-2.5 text-xs font-semibold shadow-sm"
+        className="h-10 touch-manipulation gap-1.5 px-3 text-sm font-semibold shadow-sm sm:h-7 sm:px-2.5 sm:text-xs"
       >
         {isSaving ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          <Loader2 className="h-4 w-4 animate-spin sm:h-3.5 sm:w-3.5" aria-hidden />
         ) : (
-          <Save className="h-3.5 w-3.5" aria-hidden />
+          <Save className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden />
         )}
         Save
       </Button>
