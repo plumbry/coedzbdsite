@@ -111,17 +111,22 @@ export default function MapEditor({
   const textsRef = useRef(texts);
   const selectionRef = useRef(selection);
   const toolRef = useRef(tool);
+  const onBoxesChangeRef = useRef(onBoxesChange);
+  const onTextsChangeRef = useRef(onTextsChange);
+  const onSelectionChangeRef = useRef(onSelectionChange);
   const interactionRef = useRef<InteractionState>({ mode: "idle" });
   const menuArmTimeoutRef = useRef<number | null>(null);
   const [interaction, setInteraction] = useState<InteractionState>({ mode: "idle" });
   const [imageLoaded, setImageLoaded] = useState(false);
-  // Prevents ghost clicks on the floating menu after select/move gestures.
   const [menuActionsArmed, setMenuActionsArmed] = useState(true);
 
   boxesRef.current = boxes;
   textsRef.current = texts;
   selectionRef.current = selection;
   toolRef.current = tool;
+  onBoxesChangeRef.current = onBoxesChange;
+  onTextsChangeRef.current = onTextsChange;
+  onSelectionChangeRef.current = onSelectionChange;
 
   const disarmMenuActions = useCallback(() => {
     if (menuArmTimeoutRef.current != null) {
@@ -135,11 +140,10 @@ export default function MapEditor({
     if (menuArmTimeoutRef.current != null) {
       window.clearTimeout(menuArmTimeoutRef.current);
     }
-    // Wait past the synthetic click that follows pointerup.
     menuArmTimeoutRef.current = window.setTimeout(() => {
       menuArmTimeoutRef.current = null;
       setMenuActionsArmed(true);
-    }, 50);
+    }, 100);
   }, []);
 
   const setInteractionState = useCallback((next: InteractionState) => {
@@ -165,7 +169,7 @@ export default function MapEditor({
       if (event.key !== "Escape") return;
       event.preventDefault();
       finishInteraction();
-      onSelectionChange(null);
+      onSelectionChangeRef.current(null);
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
       }
@@ -173,8 +177,11 @@ export default function MapEditor({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [finishInteraction, onSelectionChange]);
+  }, [finishInteraction]);
 
+  // Bind window pointer listeners once. Handlers always read latest refs so a
+  // parent re-render cannot drop pointerup mid-gesture (which previously
+  // thrashed these listeners via unstable callback identities).
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
       const current = interactionRef.current;
@@ -215,14 +222,14 @@ export default function MapEditor({
         }
 
         const moved = moveBox(current.originBox, point, current.grabOffset);
-        onBoxesChange((prev) =>
+        onBoxesChangeRef.current((prev) =>
           updateBoxById(prev, current.boxId, () => moved),
         );
         return;
       }
 
       if (current.mode === "resizing-box") {
-        onBoxesChange((prev) =>
+        onBoxesChangeRef.current((prev) =>
           updateBoxById(prev, current.boxId, (box) =>
             resizeBox(box, current.handle, point, MAP_BOX_DEFAULT_MIN_DRAG_SIZE),
           ),
@@ -248,7 +255,7 @@ export default function MapEditor({
           point.x - current.grabOffset.x,
           point.y - current.grabOffset.y,
         );
-        onTextsChange((prev) =>
+        onTextsChangeRef.current((prev) =>
           prev.map((textItem) =>
             textItem.id === current.textId
               ? { ...current.originText, x: next.x, y: next.y }
@@ -286,8 +293,8 @@ export default function MapEditor({
             label: "",
             color: MAP_BOX_DEFAULT_COLOR,
           };
-          onBoxesChange((prev) => appendBox(prev, nextBox));
-          onSelectionChange(selectBox(nextBox.id));
+          onBoxesChangeRef.current((prev) => appendBox(prev, nextBox));
+          onSelectionChangeRef.current(selectBox(nextBox.id));
         }
       }
 
@@ -303,23 +310,11 @@ export default function MapEditor({
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [
-    finishInteraction,
-    onBoxesChange,
-    onSelectionChange,
-    onTextsChange,
-    setInteractionState,
-  ]);
+  }, [finishInteraction, setInteractionState]);
 
-  /**
-   * Single canvas hit target: resolve one object by geometry + id.
-   * Objects themselves are pointer-events:none so the whole layer cannot
-   * act as a shared selection frame.
-   */
   const handleCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (interactionRef.current.mode !== "idle") return;
 
-    // Ignore interactive chrome (resize handles, menus, textareas).
     const target = event.target;
     if (target instanceof Element) {
       if (
@@ -355,7 +350,7 @@ export default function MapEditor({
         startClientX: event.clientX,
         startClientY: event.clientY,
         exceededThreshold: false,
-        originBox: box,
+        originBox: { ...box },
       });
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
@@ -372,13 +367,12 @@ export default function MapEditor({
         startClientX: event.clientX,
         startClientY: event.clientY,
         exceededThreshold: false,
-        originText: textItem,
+        originText: { ...textItem },
       });
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
     }
 
-    // Empty space: deselect; optionally start create / place text.
     onSelectionChange(null);
 
     if (toolRef.current === "text") {
@@ -414,6 +408,8 @@ export default function MapEditor({
     event.stopPropagation();
     event.preventDefault();
     if (interactionRef.current.mode !== "idle") return;
+    const box = boxesRef.current.find((entry) => entry.id === boxId);
+    if (!box) return;
     disarmMenuActions();
     onSelectionChange(selectBox(boxId));
     setInteractionState({ mode: "resizing-box", boxId, handle });
@@ -468,6 +464,7 @@ export default function MapEditor({
             <div
               ref={overlayRef}
               data-map-canvas=""
+              data-box-count={boxes.length}
               className={`absolute inset-0 z-10 touch-none ${
                 tool === "text" ? "cursor-text" : "cursor-crosshair"
               }`}
@@ -505,7 +502,6 @@ export default function MapEditor({
                   y={selectedBox.y}
                   height={selectedBox.height}
                   disabled={colorControlsDisabled}
-                  onDelete={onDeleteSelected}
                   onColorChange={onSelectedColorChange}
                 />
               ) : null}
@@ -516,7 +512,6 @@ export default function MapEditor({
                   x={selectedText.x}
                   y={selectedText.y}
                   disabled={colorControlsDisabled}
-                  onDelete={onDeleteSelected}
                   onColorChange={onSelectedColorChange}
                   onEditText={focusSelectedText}
                 />
@@ -526,6 +521,7 @@ export default function MapEditor({
               tool={tool}
               onToolChange={onToolChange}
               onSave={onSave}
+              onDeleteSelected={selection ? onDeleteSelected : undefined}
               isSaving={isSaving}
               isDirty={isDirty}
             />

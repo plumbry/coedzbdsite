@@ -151,9 +151,14 @@ export function SharedMapPage() {
     [],
   );
 
+  const isDirtyRef = useRef(false);
+  isDirtyRef.current = isDirty;
+
   useEffect(() => {
     if (!resolvedMapId || !serverMap || serverMap.mapId !== resolvedMapId) return;
     if (hydratedForMapId === resolvedMapId) return;
+    // Never clobber in-progress local edits if hydration re-triggers.
+    if (isDirtyRef.current && hydratedForMapId != null) return;
 
     hydrateFromServer(serverMap.boxes, serverMap.texts, serverMap.updatedAt);
     setHydratedForMapId(resolvedMapId);
@@ -253,16 +258,17 @@ export function SharedMapPage() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      // Delete only — Backspace is too easy to hit while clicking the map.
+      if (event.key !== "Delete") return;
       if (shouldIgnoreMapEditorShortcut(event.target)) return;
-      if (!selection) return;
+      if (!selectionRef.current) return;
       event.preventDefault();
       handleDeleteSelected();
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleDeleteSelected, selection]);
+  }, [handleDeleteSelected]);
 
   if (isNewRoute && isBootstrappingNewMap) {
     return (
@@ -392,8 +398,8 @@ export function SharedMapPage() {
               selection={selection}
               tool={tool}
               onToolChange={setTool}
-              onBoxesChange={(updater) => setLocalBoxes(updater)}
-              onTextsChange={(updater) => setLocalTexts(updater)}
+              onBoxesChange={setLocalBoxes}
+              onTextsChange={setLocalTexts}
               onSelectionChange={setSelection}
               onSelectedColorChange={handleSelectedColorChange}
               onDeleteSelected={handleDeleteSelected}

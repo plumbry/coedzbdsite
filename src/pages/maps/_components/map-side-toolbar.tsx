@@ -1,12 +1,13 @@
 import { Button } from "@/components/ui/button.tsx";
 import type { EditorTool } from "@/lib/maps/types";
 import { cn } from "@/lib/utils.ts";
-import { Loader2, Save, Square, Type } from "lucide-react";
+import { Loader2, Save, Square, Trash2, Type } from "lucide-react";
 
 type MapSideToolbarProps = {
   tool: EditorTool;
   onToolChange: (tool: EditorTool) => void;
   onSave: () => void;
+  onDeleteSelected?: () => void;
   isSaving: boolean;
   isDirty: boolean;
 };
@@ -15,6 +16,7 @@ export default function MapSideToolbar({
   tool,
   onToolChange,
   onSave,
+  onDeleteSelected,
   isSaving,
   isDirty,
 }: MapSideToolbarProps) {
@@ -55,6 +57,16 @@ export default function MapSideToolbar({
         >
           <Type className="h-5 w-5" strokeWidth={2.25} aria-hidden />
         </button>
+        {onDeleteSelected ? (
+          <button
+            type="button"
+            aria-label="Delete selected object"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-destructive transition-colors hover:bg-destructive/10"
+            onClick={onDeleteSelected}
+          >
+            <Trash2 className="h-5 w-5" strokeWidth={2.25} aria-hidden />
+          </button>
+        ) : null}
       </div>
 
       <Button

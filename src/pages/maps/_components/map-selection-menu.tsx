@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input.tsx";
 import { isValidHexColor, normalizeHexColor } from "@/lib/maps/box-color.ts";
 import type { SelectedObject } from "@/lib/maps/types";
-import { Paintbrush, Trash2, Type } from "lucide-react";
+import { Paintbrush, Type } from "lucide-react";
 
 type MapSelectionMenuProps = {
   selection: NonNullable<SelectedObject>;
@@ -11,11 +11,15 @@ type MapSelectionMenuProps = {
   y: number;
   height?: number;
   disabled?: boolean;
-  onDelete: () => void;
   onColorChange: (color: string) => void;
   onEditText?: () => void;
 };
 
+/**
+ * Floating colour / edit controls for the selected object.
+ * Delete lives on the side toolbar so a menu overlay cannot eat map clicks
+ * and remove another box by accident.
+ */
 export default function MapSelectionMenu({
   selection,
   color,
@@ -23,7 +27,6 @@ export default function MapSelectionMenu({
   y,
   height = 0,
   disabled = false,
-  onDelete,
   onColorChange,
   onEditText,
 }: MapSelectionMenuProps) {
@@ -67,11 +70,11 @@ export default function MapSelectionMenu({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="relative rounded-xl border border-border bg-white px-1 py-1 text-black shadow-xl">
+      <div className="relative rounded-xl border border-border bg-card px-1 py-1 text-foreground shadow-xl">
         {!preferBelow ? (
-          <div className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-x-8 border-t-8 border-x-transparent border-t-white" />
+          <div className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-x-8 border-t-8 border-x-transparent border-t-card" />
         ) : (
-          <div className="absolute bottom-full left-1/2 h-0 w-0 -translate-x-1/2 border-x-8 border-b-8 border-x-transparent border-b-white" />
+          <div className="absolute bottom-full left-1/2 h-0 w-0 -translate-x-1/2 border-x-8 border-b-8 border-x-transparent border-b-card" />
         )}
 
         <div className="flex min-w-[10.5rem] flex-col">
@@ -95,22 +98,6 @@ export default function MapSelectionMenu({
           >
             <Paintbrush className="h-4 w-4" aria-hidden />
             Change colour
-          </button>
-
-          <button
-            type="button"
-            disabled={disabled}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
-            onPointerDown={(event) => {
-              // Use pointerdown (not click) so a ghost click from a prior
-              // select/move gesture cannot delete another object.
-              event.stopPropagation();
-              if (disabled) return;
-              onDelete();
-            }}
-          >
-            <Trash2 className="h-4 w-4" aria-hidden />
-            Delete
           </button>
         </div>
 
