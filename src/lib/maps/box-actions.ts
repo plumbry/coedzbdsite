@@ -1,5 +1,30 @@
-import type { MapBox } from "./types";
+import type { MapBox, MapSelection, MapText } from "./types";
 
+export function deleteSelectedObject(
+  boxes: MapBox[],
+  texts: MapText[],
+  selection: MapSelection,
+): { boxes: MapBox[]; texts: MapText[]; selection: MapSelection } {
+  if (!selection) {
+    return { boxes, texts, selection };
+  }
+
+  if (selection.kind === "box") {
+    return {
+      boxes: boxes.filter((box) => box.id !== selection.id),
+      texts,
+      selection: null,
+    };
+  }
+
+  return {
+    boxes,
+    texts: texts.filter((textItem) => textItem.id !== selection.id),
+    selection: null,
+  };
+}
+
+/** @deprecated Use deleteSelectedObject */
 export function deleteSelectedBox(
   boxes: MapBox[],
   selectedBoxId: string | null,
@@ -35,4 +60,11 @@ export function pointerDistancePx(
   end: { x: number; y: number },
 ): number {
   return Math.hypot(end.x - start.x, end.y - start.y);
+}
+
+export function clampTextCenter(x: number, y: number): { x: number; y: number } {
+  return {
+    x: Math.min(1, Math.max(0, x)),
+    y: Math.min(1, Math.max(0, y)),
+  };
 }

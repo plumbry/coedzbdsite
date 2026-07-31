@@ -2617,6 +2617,17 @@ export default defineSchema({
         color: v.optional(v.string()),
       }),
     ),
+    texts: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          x: v.number(),
+          y: v.number(),
+          text: v.string(),
+          color: v.optional(v.string()),
+        }),
+      ),
+    ),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_map_id", ["mapId"]),

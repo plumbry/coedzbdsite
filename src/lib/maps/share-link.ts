@@ -6,19 +6,19 @@ export type SaveAndCopyOutcome =
   | "saved-and-copied"
   | "saved-copy-failed"
   | "copied-only"
-  | "conflict"
+  | "copy-failed"
   | "save-failed";
 
 export function getSaveAndCopyToastMessage(outcome: SaveAndCopyOutcome): string {
   switch (outcome) {
     case "saved-and-copied":
-      return "Saved and link copied";
+      return "Saved — new link copied";
     case "saved-copy-failed":
-      return "Saved, but the link could not be copied";
+      return "Saved as a new link, but it could not be copied";
     case "copied-only":
-      return "Saved and link copied";
-    case "conflict":
-      return "This shared map changed elsewhere. Reload from the server before saving again.";
+      return "Link copied";
+    case "copy-failed":
+      return "Could not copy the link";
     case "save-failed":
       return "Failed to save map";
   }

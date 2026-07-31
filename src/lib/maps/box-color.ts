@@ -1,5 +1,5 @@
-export const MAP_BOX_DEFAULT_COLOR = "#3B82F6";
-export const MAP_BOX_FILL_OPACITY = 0.15;
+export const MAP_BOX_DEFAULT_COLOR = "#FAE904";
+export const MAP_BOX_FILL_OPACITY = 0.22;
 export const MAP_BOX_BORDER_WIDTH_PX = 2;
 export const MAP_BOX_BORDER_WIDTH_SELECTED_PX = 3;
 export const MAP_CREATE_DRAG_THRESHOLD_PX = 4;

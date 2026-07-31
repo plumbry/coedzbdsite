@@ -4,7 +4,7 @@ import {
   MAP_BOX_DEFAULT_MIN_DRAG_SIZE,
   MAP_CREATE_DRAG_THRESHOLD_PX,
 } from "@/lib/maps/constants";
-import { shouldCreateBoxFromDrag } from "@/lib/maps/box-actions";
+import { clampTextCenter, shouldCreateBoxFromDrag } from "@/lib/maps/box-actions";
 import {
   createBoxId,
   moveBox,
@@ -14,30 +14,60 @@ import {
   type NormalizedPoint,
   type ResizeHandle,
 } from "@/lib/maps/coordinates";
-import type { MapBox } from "@/lib/maps/types";
+import type { EditorTool, MapBox, MapSelection, MapText } from "@/lib/maps/types";
 import MapBoxLayer, { DraftMapBox } from "./map-box-layer.tsx";
+import MapSelectionMenu from "./map-selection-menu.tsx";
+import MapSideToolbar from "./map-side-toolbar.tsx";
+import MapTextLayer from "./map-text-layer.tsx";
 import MapPoiOverlay from "./map-poi-overlay.tsx";
 
 type InteractionState =
   | { mode: "idle" }
   | {
-      mode: "creating";
+      mode: "creating-box";
       startClientX: number;
       startClientY: number;
       start: NormalizedPoint;
       current: NormalizedPoint;
       exceededThreshold: boolean;
     }
-  | { mode: "moving"; boxId: string; grabOffset: NormalizedPoint }
-  | { mode: "resizing"; boxId: string; handle: ResizeHandle };
+  | {
+      mode: "moving-box";
+      boxId: string;
+      grabOffset: NormalizedPoint;
+      startClientX: number;
+      startClientY: number;
+      exceededThreshold: boolean;
+      originBox: MapBox;
+    }
+  | { mode: "resizing-box"; boxId: string; handle: ResizeHandle }
+  | {
+      mode: "moving-text";
+      textId: string;
+      grabOffset: NormalizedPoint;
+      startClientX: number;
+      startClientY: number;
+      exceededThreshold: boolean;
+      originText: MapText;
+    };
 
 type MapEditorProps = {
   boxes: MapBox[];
-  selectedBoxId: string | null;
+  texts: MapText[];
+  selection: MapSelection;
+  tool: EditorTool;
+  onToolChange: (tool: EditorTool) => void;
   onBoxesChange: (boxes: MapBox[]) => void;
-  onSelectedBoxIdChange: (boxId: string | null) => void;
+  onTextsChange: (texts: MapText[]) => void;
+  onSelectionChange: (selection: MapSelection) => void;
+  onSelectedColorChange: (color: string) => void;
+  onDeleteSelected: () => void;
+  onSave: () => void;
   imageSrc: string;
   onImageMissing: () => void;
+  isSaving?: boolean;
+  isDirty?: boolean;
+  colorControlsDisabled?: boolean;
 };
 
 function getOverlayRect(element: HTMLDivElement | null): DOMRect | null {
@@ -49,103 +79,157 @@ function getOverlayRect(element: HTMLDivElement | null): DOMRect | null {
 
 export default function MapEditor({
   boxes,
-  selectedBoxId,
+  texts,
+  selection,
+  tool,
+  onToolChange,
   onBoxesChange,
-  onSelectedBoxIdChange,
+  onTextsChange,
+  onSelectionChange,
+  onSelectedColorChange,
+  onDeleteSelected,
+  onSave,
   imageSrc,
   onImageMissing,
+  isSaving = false,
+  isDirty = false,
+  colorControlsDisabled = false,
 }: MapEditorProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const boxesRef = useRef(boxes);
+  const textsRef = useRef(texts);
+  const toolRef = useRef(tool);
+  const interactionRef = useRef<InteractionState>({ mode: "idle" });
   const [interaction, setInteraction] = useState<InteractionState>({ mode: "idle" });
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  const updateBox = useCallback(
-    (boxId: string, updater: (box: MapBox) => MapBox) => {
-      onBoxesChange(boxes.map((box) => (box.id === boxId ? updater(box) : box)));
-    },
-    [boxes, onBoxesChange],
-  );
+  boxesRef.current = boxes;
+  textsRef.current = texts;
+  toolRef.current = tool;
 
-  const finishInteraction = useCallback(() => {
-    setInteraction({ mode: "idle" });
+  const setInteractionState = useCallback((next: InteractionState) => {
+    interactionRef.current = next;
+    setInteraction(next);
   }, []);
 
-  const cancelInteraction = useCallback(() => {
-    finishInteraction();
-    onSelectedBoxIdChange(null);
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
-  }, [finishInteraction, onSelectedBoxIdChange]);
+  const finishInteraction = useCallback(() => {
+    setInteractionState({ mode: "idle" });
+  }, [setInteractionState]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
-      cancelInteraction();
+      finishInteraction();
+      onSelectionChange(null);
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cancelInteraction]);
+  }, [finishInteraction, onSelectionChange]);
 
   useEffect(() => {
-    if (interaction.mode === "idle") return;
-
     const handlePointerMove = (event: PointerEvent) => {
+      const current = interactionRef.current;
+      if (current.mode === "idle") return;
+
       const rect = getOverlayRect(overlayRef.current);
       if (!rect) return;
       const point = pointToNormalized(event.clientX, event.clientY, rect);
 
-      if (interaction.mode === "creating") {
+      if (current.mode === "creating-box") {
         const exceededThreshold =
-          interaction.exceededThreshold ||
+          current.exceededThreshold ||
           shouldCreateBoxFromDrag(
-            { x: interaction.startClientX, y: interaction.startClientY },
+            { x: current.startClientX, y: current.startClientY },
             { x: event.clientX, y: event.clientY },
             MAP_CREATE_DRAG_THRESHOLD_PX,
           );
-        setInteraction({
-          mode: "creating",
-          startClientX: interaction.startClientX,
-          startClientY: interaction.startClientY,
-          start: interaction.start,
+        setInteractionState({
+          ...current,
           current: point,
           exceededThreshold,
         });
         return;
       }
 
-      if (interaction.mode === "moving") {
-        const box = boxes.find((entry) => entry.id === interaction.boxId);
-        if (!box) return;
-        updateBox(interaction.boxId, (current) =>
-          moveBox(current, point, interaction.grabOffset),
+      if (current.mode === "moving-box") {
+        const exceededThreshold =
+          current.exceededThreshold ||
+          shouldCreateBoxFromDrag(
+            { x: current.startClientX, y: current.startClientY },
+            { x: event.clientX, y: event.clientY },
+            MAP_CREATE_DRAG_THRESHOLD_PX,
+          );
+        if (!exceededThreshold) return;
+
+        if (!current.exceededThreshold) {
+          setInteractionState({ ...current, exceededThreshold: true });
+        }
+
+        onBoxesChange(
+          boxesRef.current.map((box) =>
+            box.id === current.boxId
+              ? moveBox(current.originBox, point, current.grabOffset)
+              : box,
+          ),
         );
         return;
       }
 
-      if (interaction.mode === "resizing") {
-        const box = boxes.find((entry) => entry.id === interaction.boxId);
-        if (!box) return;
-        updateBox(interaction.boxId, (current) =>
-          resizeBox(current, interaction.handle, point, MAP_BOX_DEFAULT_MIN_DRAG_SIZE),
+      if (current.mode === "resizing-box") {
+        onBoxesChange(
+          boxesRef.current.map((box) =>
+            box.id === current.boxId
+              ? resizeBox(box, current.handle, point, MAP_BOX_DEFAULT_MIN_DRAG_SIZE)
+              : box,
+          ),
+        );
+        return;
+      }
+
+      if (current.mode === "moving-text") {
+        const exceededThreshold =
+          current.exceededThreshold ||
+          shouldCreateBoxFromDrag(
+            { x: current.startClientX, y: current.startClientY },
+            { x: event.clientX, y: event.clientY },
+            MAP_CREATE_DRAG_THRESHOLD_PX,
+          );
+        if (!exceededThreshold) return;
+
+        if (!current.exceededThreshold) {
+          setInteractionState({ ...current, exceededThreshold: true });
+        }
+
+        const next = clampTextCenter(
+          point.x - current.grabOffset.x,
+          point.y - current.grabOffset.y,
+        );
+        onTextsChange(
+          textsRef.current.map((textItem) =>
+            textItem.id === current.textId
+              ? { ...current.originText, x: next.x, y: next.y }
+              : textItem,
+          ),
         );
       }
     };
 
     const handlePointerUp = (event: PointerEvent) => {
-      const rect = getOverlayRect(overlayRef.current);
-      if (!rect) {
-        finishInteraction();
-        return;
-      }
+      const current = interactionRef.current;
+      if (current.mode === "idle") return;
 
-      if (interaction.mode === "creating") {
+      const rect = getOverlayRect(overlayRef.current);
+
+      if (current.mode === "creating-box" && rect) {
         const exceededThreshold =
-          interaction.exceededThreshold ||
+          current.exceededThreshold ||
           shouldCreateBoxFromDrag(
-            { x: interaction.startClientX, y: interaction.startClientY },
+            { x: current.startClientX, y: current.startClientY },
             { x: event.clientX, y: event.clientY },
             MAP_CREATE_DRAG_THRESHOLD_PX,
           );
@@ -153,7 +237,7 @@ export default function MapEditor({
         if (exceededThreshold) {
           const point = pointToNormalized(event.clientX, event.clientY, rect);
           const draft = normalizedRectFromDrag(
-            interaction.start,
+            current.start,
             point,
             MAP_BOX_DEFAULT_MIN_DRAG_SIZE,
           );
@@ -163,8 +247,8 @@ export default function MapEditor({
             label: "",
             color: MAP_BOX_DEFAULT_COLOR,
           };
-          onBoxesChange([...boxes, nextBox]);
-          onSelectedBoxIdChange(nextBox.id);
+          onBoxesChange([...boxesRef.current, nextBox]);
+          onSelectionChange({ kind: "box", id: nextBox.id });
         }
       }
 
@@ -181,23 +265,38 @@ export default function MapEditor({
       window.removeEventListener("pointercancel", handlePointerUp);
     };
   }, [
-    boxes,
     finishInteraction,
-    interaction,
     onBoxesChange,
-    onSelectedBoxIdChange,
-    updateBox,
+    onSelectionChange,
+    onTextsChange,
+    setInteractionState,
   ]);
 
   const handleOverlayPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (interaction.mode !== "idle") return;
+    if (interactionRef.current.mode !== "idle") return;
+    if (event.target !== event.currentTarget) return;
+
     const rect = getOverlayRect(overlayRef.current);
     if (!rect) return;
 
     const point = pointToNormalized(event.clientX, event.clientY, rect);
-    onSelectedBoxIdChange(null);
-    setInteraction({
-      mode: "creating",
+    onSelectionChange(null);
+
+    if (toolRef.current === "text") {
+      const nextText: MapText = {
+        id: createBoxId(),
+        x: point.x,
+        y: point.y,
+        text: "",
+        color: MAP_BOX_DEFAULT_COLOR,
+      };
+      onTextsChange([...textsRef.current, nextText]);
+      onSelectionChange({ kind: "text", id: nextText.id });
+      return;
+    }
+
+    setInteractionState({
+      mode: "creating-box",
       startClientX: event.clientX,
       startClientY: event.clientY,
       start: point,
@@ -207,35 +306,68 @@ export default function MapEditor({
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  const handleMovePointerDown = (boxId: string, event: React.PointerEvent<HTMLDivElement>) => {
-    if (interaction.mode !== "idle") return;
+  const handleBoxPointerDown = (boxId: string, event: React.PointerEvent) => {
+    event.stopPropagation();
+    event.preventDefault();
+    if (interactionRef.current.mode !== "idle") return;
+
     const rect = getOverlayRect(overlayRef.current);
     if (!rect) return;
 
-    const box = boxes.find((entry) => entry.id === boxId);
+    const box = boxesRef.current.find((entry) => entry.id === boxId);
     if (!box) return;
 
     const point = pointToNormalized(event.clientX, event.clientY, rect);
-    setInteraction({
-      mode: "moving",
+    onSelectionChange({ kind: "box", id: boxId });
+    setInteractionState({
+      mode: "moving-box",
       boxId,
       grabOffset: { x: point.x - box.x, y: point.y - box.y },
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      exceededThreshold: false,
+      originBox: box,
     });
-    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleTextPointerDown = (textId: string, event: React.PointerEvent) => {
+    event.stopPropagation();
+    event.preventDefault();
+    if (interactionRef.current.mode !== "idle") return;
+
+    const rect = getOverlayRect(overlayRef.current);
+    if (!rect) return;
+
+    const textItem = textsRef.current.find((entry) => entry.id === textId);
+    if (!textItem) return;
+
+    const point = pointToNormalized(event.clientX, event.clientY, rect);
+    onSelectionChange({ kind: "text", id: textId });
+    setInteractionState({
+      mode: "moving-text",
+      textId,
+      grabOffset: { x: point.x - textItem.x, y: point.y - textItem.y },
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      exceededThreshold: false,
+      originText: textItem,
+    });
   };
 
   const handleResizePointerDown = (
     boxId: string,
     handle: ResizeHandle,
-    event: React.PointerEvent<HTMLButtonElement>,
+    event: React.PointerEvent,
   ) => {
-    if (interaction.mode !== "idle") return;
-    setInteraction({ mode: "resizing", boxId, handle });
-    event.currentTarget.setPointerCapture(event.pointerId);
+    event.stopPropagation();
+    event.preventDefault();
+    if (interactionRef.current.mode !== "idle") return;
+    onSelectionChange({ kind: "box", id: boxId });
+    setInteractionState({ mode: "resizing-box", boxId, handle });
   };
 
   const draftRect =
-    interaction.mode === "creating" && interaction.exceededThreshold
+    interaction.mode === "creating-box" && interaction.exceededThreshold
       ? normalizedRectFromDrag(
           interaction.start,
           interaction.current,
@@ -243,9 +375,27 @@ export default function MapEditor({
         )
       : null;
 
+  const selectedBox =
+    selection?.kind === "box"
+      ? (boxes.find((box) => box.id === selection.id) ?? null)
+      : null;
+  const selectedText =
+    selection?.kind === "text"
+      ? (texts.find((textItem) => textItem.id === selection.id) ?? null)
+      : null;
+
+  const focusSelectedText = () => {
+    if (!selectedText) return;
+    const el = document.querySelector<HTMLTextAreaElement>(
+      `textarea[data-map-text-id="${selectedText.id}"]`,
+    );
+    el?.focus();
+    el?.select();
+  };
+
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <div className="relative inline-block max-w-full">
+      <div className="relative inline-block w-full max-w-full">
         <img
           src={imageSrc}
           alt="Simpsons Reload dropmap"
@@ -262,7 +412,9 @@ export default function MapEditor({
             <MapPoiOverlay />
             <div
               ref={overlayRef}
-              className="absolute inset-0 z-10 touch-none cursor-crosshair"
+              className={`absolute inset-0 z-10 touch-none ${
+                tool === "text" ? "cursor-text" : "cursor-crosshair"
+              }`}
               onPointerDown={handleOverlayPointerDown}
               aria-label="Map drawing area"
             >
@@ -270,17 +422,59 @@ export default function MapEditor({
                 <MapBoxLayer
                   key={box.id}
                   box={box}
-                  selected={box.id === selectedBoxId}
-                  onSelect={onSelectedBoxIdChange}
-                  onLabelChange={(boxId, label) => {
-                    updateBox(boxId, (current) => ({ ...current, label }));
-                  }}
-                  onMovePointerDown={handleMovePointerDown}
+                  selected={selection?.kind === "box" && selection.id === box.id}
+                  onBoxPointerDown={handleBoxPointerDown}
                   onResizePointerDown={handleResizePointerDown}
                 />
               ))}
+              {texts.map((textItem) => (
+                <MapTextLayer
+                  key={textItem.id}
+                  textItem={textItem}
+                  selected={selection?.kind === "text" && selection.id === textItem.id}
+                  onTextPointerDown={handleTextPointerDown}
+                  onTextChange={(textId, text) => {
+                    onTextsChange(
+                      textsRef.current.map((entry) =>
+                        entry.id === textId ? { ...entry, text } : entry,
+                      ),
+                    );
+                  }}
+                />
+              ))}
               {draftRect ? <DraftMapBox {...draftRect} /> : null}
+              {selectedBox && selection?.kind === "box" ? (
+                <MapSelectionMenu
+                  selection={selection}
+                  color={selectedBox.color}
+                  x={selectedBox.x + selectedBox.width / 2}
+                  y={selectedBox.y}
+                  height={selectedBox.height}
+                  disabled={colorControlsDisabled}
+                  onDelete={onDeleteSelected}
+                  onColorChange={onSelectedColorChange}
+                />
+              ) : null}
+              {selectedText && selection?.kind === "text" ? (
+                <MapSelectionMenu
+                  selection={selection}
+                  color={selectedText.color}
+                  x={selectedText.x}
+                  y={selectedText.y}
+                  disabled={colorControlsDisabled}
+                  onDelete={onDeleteSelected}
+                  onColorChange={onSelectedColorChange}
+                  onEditText={focusSelectedText}
+                />
+              ) : null}
             </div>
+            <MapSideToolbar
+              tool={tool}
+              onToolChange={onToolChange}
+              onSave={onSave}
+              isSaving={isSaving}
+              isDirty={isDirty}
+            />
           </>
         ) : null}
       </div>

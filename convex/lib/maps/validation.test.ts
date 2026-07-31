@@ -34,7 +34,7 @@ describe("validateMapBox", () => {
       label: "Loot",
     });
 
-    expect(box.color).toBe("#3B82F6");
+    expect(box.color).toBe("#FAE904");
   });
 
   it("normalizes stored colours to uppercase six-digit hex", () => {

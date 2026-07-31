@@ -1,9 +1,11 @@
 import { ConvexError } from "convex/values";
 
-export const MAP_BOX_DEFAULT_COLOR = "#3B82F6";
+export const MAP_BOX_DEFAULT_COLOR = "#FAE904";
 export const MAP_BOX_MIN_SIZE = 0.01;
 export const MAP_BOX_LABEL_MAX_LENGTH = 100;
+export const MAP_TEXT_MAX_LENGTH = 200;
 export const MAP_BOXES_MAX_COUNT = 200;
+export const MAP_TEXTS_MAX_COUNT = 400;
 
 export type MapBoxInput = {
   id: string;
@@ -12,6 +14,14 @@ export type MapBoxInput = {
   width: number;
   height: number;
   label: string;
+  color?: string;
+};
+
+export type MapTextInput = {
+  id: string;
+  x: number;
+  y: number;
+  text: string;
   color?: string;
 };
 
@@ -97,6 +107,43 @@ export function validateMapBoxes(boxes: MapBoxInput[]): MapBoxInput[] {
     const validated = validateMapBox(box);
     if (seenIds.has(validated.id)) {
       throw new ConvexError("Duplicate box id");
+    }
+    seenIds.add(validated.id);
+    return validated;
+  });
+}
+
+export function normalizeMapTextContent(text: string): string {
+  return text.replace(/\r\n/g, "\n").slice(0, MAP_TEXT_MAX_LENGTH);
+}
+
+export function validateMapText(textItem: MapTextInput): MapTextInput {
+  if (!textItem.id || typeof textItem.id !== "string") {
+    throw new ConvexError("Invalid text id");
+  }
+
+  assertNormalized(textItem.x, "x");
+  assertNormalized(textItem.y, "y");
+
+  return {
+    id: textItem.id,
+    x: textItem.x,
+    y: textItem.y,
+    text: normalizeMapTextContent(textItem.text),
+    color: normalizeMapBoxColor(textItem.color),
+  };
+}
+
+export function validateMapTexts(texts: MapTextInput[]): MapTextInput[] {
+  if (texts.length > MAP_TEXTS_MAX_COUNT) {
+    throw new ConvexError(`Maps may contain at most ${MAP_TEXTS_MAX_COUNT} text labels`);
+  }
+
+  const seenIds = new Set<string>();
+  return texts.map((textItem) => {
+    const validated = validateMapText(textItem);
+    if (seenIds.has(validated.id)) {
+      throw new ConvexError("Duplicate text id");
     }
     seenIds.add(validated.id);
     return validated;

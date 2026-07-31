@@ -12,75 +12,84 @@ export type MapPoi = {
 };
 
 /**
- * Normalized POI label positions for the clean Springfield Reload map asset.
- * Coordinates are aligned to island geography (not raw screenshot pixels).
+ * Normalized POI label centres for the clean Springfield Reload map asset.
+ * Positions target the POI buildings themselves (not ocean gutter text).
  */
 export const SPRINGFIELD_POIS: MapPoi[] = [
   {
     id: "cletus-corn-hole",
     label: "CLETUS' CORN HOLE",
-    x: 0.225,
-    y: 0.195,
-    width: 0.155,
+    // NW farm buildings / crop fields
+    x: 0.3,
+    y: 0.24,
+    width: 0.16,
   },
   {
     id: "springfield-nuclear-power-plant",
     label: "SPRINGFIELD NUCLEAR POWER PLANT",
-    x: 0.775,
-    y: 0.165,
-    width: 0.27,
-    fontScale: 0.84,
+    // NE cooling-tower plant complex
+    x: 0.72,
+    y: 0.23,
+    width: 0.28,
+    fontScale: 0.82,
   },
   {
     id: "kamp-krusty",
     label: "KAMP KRUSTY",
-    x: 0.515,
-    y: 0.275,
-    width: 0.125,
+    // Forest cabin cluster west/south of the north lake
+    x: 0.5,
+    y: 0.33,
+    width: 0.13,
   },
   {
     id: "evergreen-terrace",
     label: "EVERGREEN TERRACE",
-    x: 0.215,
-    y: 0.415,
-    width: 0.175,
+    // Western residential street grid
+    x: 0.26,
+    y: 0.46,
+    width: 0.18,
   },
   {
     id: "burns-manor",
     label: "BURNS MANOR",
-    x: 0.775,
-    y: 0.435,
-    width: 0.135,
+    // Eastern white mansion (not the hedge maze)
+    x: 0.74,
+    y: 0.5,
+    width: 0.14,
   },
   {
     id: "springfield-town-square",
     label: "SPRINGFIELD TOWN SQUARE",
-    x: 0.495,
-    y: 0.515,
-    width: 0.205,
-    fontScale: 0.87,
+    // Central town green / plaza
+    x: 0.5,
+    y: 0.56,
+    width: 0.21,
+    fontScale: 0.86,
   },
   {
     id: "springfield-slurpworks",
     label: "SPRINGFIELD SLURPWORKS",
-    x: 0.195,
-    y: 0.655,
-    width: 0.215,
-    fontScale: 0.85,
+    // SW coastal industrial complex
+    x: 0.24,
+    y: 0.7,
+    width: 0.22,
+    fontScale: 0.84,
   },
   {
     id: "corruption-corners",
     label: "CORRUPTION CORNERS",
-    x: 0.725,
-    y: 0.725,
-    width: 0.185,
+    // SE coastal built-up area
+    x: 0.74,
+    y: 0.72,
+    width: 0.19,
   },
   {
     id: "donut-district",
     label: "DONUT DISTRICT",
-    x: 0.435,
-    y: 0.765,
-    width: 0.135,
+    // Southern coastal town cluster (left of the small southern islet)
+    x: 0.42,
+    y: 0.76,
+    width: 0.14,
   },
 ];
 

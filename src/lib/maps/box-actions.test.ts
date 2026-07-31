@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  deleteSelectedBox,
+  deleteSelectedObject,
   shouldCreateBoxFromDrag,
   shouldIgnoreMapEditorShortcut,
 } from "./box-actions";
-import type { MapBox } from "./types";
+import type { MapBox, MapText } from "./types";
 
 const sampleBoxes: MapBox[] = [
   {
@@ -13,7 +13,7 @@ const sampleBoxes: MapBox[] = [
     y: 0.1,
     width: 0.2,
     height: 0.2,
-    label: "A",
+    label: "",
     color: "#FF0000",
   },
   {
@@ -22,23 +22,48 @@ const sampleBoxes: MapBox[] = [
     y: 0.5,
     width: 0.2,
     height: 0.2,
-    label: "B",
+    label: "",
     color: "#00FF00",
   },
 ];
 
-describe("deleteSelectedBox", () => {
+const sampleTexts: MapText[] = [
+  {
+    id: "t1",
+    x: 0.3,
+    y: 0.3,
+    text: "Line one",
+    color: "#0000FF",
+  },
+];
+
+describe("deleteSelectedObject", () => {
   it("deletes only the selected rectangle", () => {
-    const result = deleteSelectedBox(sampleBoxes, "a");
+    const result = deleteSelectedObject(sampleBoxes, sampleTexts, {
+      kind: "box",
+      id: "a",
+    });
     expect(result.boxes).toHaveLength(1);
     expect(result.boxes[0]?.id).toBe("b");
-    expect(result.selectedBoxId).toBeNull();
+    expect(result.texts).toHaveLength(1);
+    expect(result.selection).toBeNull();
+  });
+
+  it("deletes only the selected text", () => {
+    const result = deleteSelectedObject(sampleBoxes, sampleTexts, {
+      kind: "text",
+      id: "t1",
+    });
+    expect(result.boxes).toHaveLength(2);
+    expect(result.texts).toHaveLength(0);
+    expect(result.selection).toBeNull();
   });
 
   it("no-ops when nothing is selected", () => {
-    const result = deleteSelectedBox(sampleBoxes, null);
+    const result = deleteSelectedObject(sampleBoxes, sampleTexts, null);
     expect(result.boxes).toEqual(sampleBoxes);
-    expect(result.selectedBoxId).toBeNull();
+    expect(result.texts).toEqual(sampleTexts);
+    expect(result.selection).toBeNull();
   });
 });
 
@@ -55,7 +80,10 @@ describe("shouldIgnoreMapEditorShortcut", () => {
       shouldIgnoreMapEditorShortcut({ tagName: "INPUT", isContentEditable: false } as HTMLElement),
     ).toBe(true);
     expect(
-      shouldIgnoreMapEditorShortcut({ tagName: "TEXTAREA", isContentEditable: false } as HTMLElement),
+      shouldIgnoreMapEditorShortcut({
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as HTMLElement),
     ).toBe(true);
     expect(
       shouldIgnoreMapEditorShortcut({ tagName: "DIV", isContentEditable: false } as HTMLElement),

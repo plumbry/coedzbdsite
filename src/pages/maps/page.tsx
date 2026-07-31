@@ -27,8 +27,11 @@ import {
 import { toast } from "sonner";
 import { MapIcon } from "lucide-react";
 import { BASE_MAPS } from "@/lib/maps/constants";
-import { deleteSelectedBox, shouldIgnoreMapEditorShortcut } from "@/lib/maps/box-actions";
-import { normalizeLoadedMapBoxes } from "@/lib/maps/boxes";
+import {
+  deleteSelectedObject,
+  shouldIgnoreMapEditorShortcut,
+} from "@/lib/maps/box-actions";
+import { migrateLegacyBoxLabelsToTexts, textsEqual } from "@/lib/maps/boxes";
 import { boxesEqual } from "@/lib/maps/coordinates";
 import {
   buildMapShareUrl,
@@ -36,10 +39,15 @@ import {
   getSaveAndCopyToastMessage,
   type SaveAndCopyOutcome,
 } from "@/lib/maps/share-link";
-import type { MapBox, SaveMapResult } from "@/lib/maps/types";
+import type {
+  EditorTool,
+  MapBox,
+  MapSelection,
+  MapText,
+  SaveMapResult,
+} from "@/lib/maps/types";
 import MapEditor from "./_components/map-editor.tsx";
-import MapBoxPropertiesPanel from "./_components/map-box-properties-panel.tsx";
-import MapToolbar from "./_components/map-toolbar.tsx";
+import MapHeaderActions from "./_components/map-header-actions.tsx";
 
 const PAGE_TITLE = "Simpsons Reload Dropmap";
 
@@ -59,9 +67,12 @@ export function SharedMapPage() {
   );
 
   const [localBoxes, setLocalBoxes] = useState<MapBox[]>([]);
+  const [localTexts, setLocalTexts] = useState<MapText[]>([]);
   const [savedBoxes, setSavedBoxes] = useState<MapBox[]>([]);
+  const [savedTexts, setSavedTexts] = useState<MapText[]>([]);
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<number | null>(null);
-  const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<MapSelection>(null);
+  const [tool, setTool] = useState<EditorTool>("rect");
   const [hydratedForMapId, setHydratedForMapId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [imageMissing, setImageMissing] = useState(false);
@@ -69,23 +80,26 @@ export function SharedMapPage() {
   const [isBootstrappingNewMap, setIsBootstrappingNewMap] = useState(isNewRoute);
 
   const isDirty = useMemo(
-    () => !boxesEqual(localBoxes, savedBoxes),
-    [localBoxes, savedBoxes],
-  );
-
-  const selectedBox = useMemo(
-    () => localBoxes.find((box) => box.id === selectedBoxId) ?? null,
-    [localBoxes, selectedBoxId],
+    () => !boxesEqual(localBoxes, savedBoxes) || !textsEqual(localTexts, savedTexts),
+    [localBoxes, localTexts, savedBoxes, savedTexts],
   );
 
   const handleSelectedColorChange = useCallback(
     (color: string) => {
-      if (!selectedBoxId) return;
-      setLocalBoxes((current) =>
-        current.map((box) => (box.id === selectedBoxId ? { ...box, color } : box)),
+      if (!selection) return;
+      if (selection.kind === "box") {
+        setLocalBoxes((current) =>
+          current.map((box) => (box.id === selection.id ? { ...box, color } : box)),
+        );
+        return;
+      }
+      setLocalTexts((current) =>
+        current.map((textItem) =>
+          textItem.id === selection.id ? { ...textItem, color } : textItem,
+        ),
       );
     },
-    [selectedBoxId],
+    [selection],
   );
 
   useEffect(() => {
@@ -112,101 +126,118 @@ export function SharedMapPage() {
 
   useEffect(() => {
     if (!resolvedMapId) return;
-    setHydratedForMapId(null);
-    setSelectedBoxId(null);
+    setSelection(null);
     setImageMissing(false);
+    // Keep hydration if we already prepared this map (e.g. after fork-on-save).
+    setHydratedForMapId((current) => (current === resolvedMapId ? current : null));
   }, [resolvedMapId]);
+
+  const hydrateFromServer = useCallback(
+    (
+      boxes: Array<Omit<MapBox, "color"> & { color?: string; label?: string }>,
+      texts: Array<Omit<MapText, "color"> & { color?: string }> | undefined,
+      updatedAt: number,
+    ) => {
+      const migrated = migrateLegacyBoxLabelsToTexts(boxes, texts);
+      setLocalBoxes(migrated.boxes);
+      setLocalTexts(migrated.texts);
+      setSavedBoxes(migrated.boxes);
+      setSavedTexts(migrated.texts);
+      setExpectedUpdatedAt(updatedAt);
+      setSelection(null);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!resolvedMapId || !serverMap || serverMap.mapId !== resolvedMapId) return;
     if (hydratedForMapId === resolvedMapId) return;
 
-    const normalizedBoxes = normalizeLoadedMapBoxes(serverMap.boxes);
-    setLocalBoxes(normalizedBoxes);
-    setSavedBoxes(normalizedBoxes);
-    setExpectedUpdatedAt(serverMap.updatedAt);
+    hydrateFromServer(serverMap.boxes, serverMap.texts, serverMap.updatedAt);
     setHydratedForMapId(resolvedMapId);
-  }, [hydratedForMapId, resolvedMapId, serverMap]);
+  }, [hydrateFromServer, hydratedForMapId, resolvedMapId, serverMap]);
 
-  const applyServerSnapshot = useCallback(
-    (boxes: Array<Omit<MapBox, "color"> & { color?: string }>, updatedAt: number) => {
-      const normalizedBoxes = normalizeLoadedMapBoxes(boxes);
-      setLocalBoxes(normalizedBoxes);
-      setSavedBoxes(normalizedBoxes);
-      setExpectedUpdatedAt(updatedAt);
-      setSelectedBoxId(null);
-    },
-    [],
-  );
-
-  const saveAndCopyLink = useCallback(async (): Promise<SaveAndCopyOutcome> => {
-    if (!resolvedMapId || expectedUpdatedAt == null) return "save-failed";
-
+  const handleCopyLink = useCallback(async () => {
+    if (!resolvedMapId) return;
     const shareUrl = buildMapShareUrl(window.location.origin, resolvedMapId);
+    const copied = await copyMapShareLink(shareUrl);
+    const outcome: SaveAndCopyOutcome = copied ? "copied-only" : "copy-failed";
+    const message = getSaveAndCopyToastMessage(outcome);
+    if (outcome === "copy-failed") {
+      toast.error(message);
+      return;
+    }
+    toast.success(message);
+  }, [resolvedMapId]);
+
+  const handleSaveAndCopyLink = useCallback(async () => {
+    if (!resolvedMapId || expectedUpdatedAt == null) {
+      toast.error(getSaveAndCopyToastMessage("save-failed"));
+      return;
+    }
 
     if (!isDirty) {
-      const copied = await copyMapShareLink(shareUrl);
-      return copied ? "copied-only" : "saved-copy-failed";
+      await handleCopyLink();
+      return;
     }
 
     setIsSaving(true);
     try {
       const result = (await saveMap({
-        mapId: resolvedMapId,
-        expectedUpdatedAt,
+        sourceMapId: resolvedMapId,
         boxes: localBoxes,
+        texts: localTexts,
       })) as SaveMapResult;
 
-      if (!result.ok) {
-        return "conflict";
-      }
+      hydrateFromServer(result.boxes, result.texts, result.updatedAt);
+      setHydratedForMapId(result.mapId);
+      navigate(`/maps/${result.mapId}`, { replace: true });
 
-      applyServerSnapshot(result.boxes, result.updatedAt);
+      const shareUrl = buildMapShareUrl(window.location.origin, result.mapId);
       const copied = await copyMapShareLink(shareUrl);
-      return copied ? "saved-and-copied" : "saved-copy-failed";
+      const outcome: SaveAndCopyOutcome = copied
+        ? "saved-and-copied"
+        : "saved-copy-failed";
+      toast.success(getSaveAndCopyToastMessage(outcome));
     } catch {
-      return "save-failed";
+      toast.error(getSaveAndCopyToastMessage("save-failed"));
     } finally {
       setIsSaving(false);
     }
   }, [
-    applyServerSnapshot,
     expectedUpdatedAt,
+    handleCopyLink,
+    hydrateFromServer,
     isDirty,
     localBoxes,
+    localTexts,
+    navigate,
     resolvedMapId,
     saveMap,
   ]);
-
-  const handleSaveAndCopyLink = useCallback(async () => {
-    const outcome = await saveAndCopyLink();
-    const message = getSaveAndCopyToastMessage(outcome);
-    if (outcome === "conflict" || outcome === "save-failed") {
-      toast.error(message);
-      return;
-    }
-    toast.success(message);
-  }, [saveAndCopyLink]);
 
   const handleNewMap = useCallback(() => {
     navigate("/maps/new");
   }, [navigate]);
 
   const handleDeleteSelected = useCallback(() => {
-    const next = deleteSelectedBox(localBoxes, selectedBoxId);
-    if (next.selectedBoxId === selectedBoxId) return;
+    const next = deleteSelectedObject(localBoxes, localTexts, selection);
+    if (next.selection === selection && next.boxes === localBoxes && next.texts === localTexts) {
+      return;
+    }
     setLocalBoxes(next.boxes);
-    setSelectedBoxId(next.selectedBoxId);
-  }, [localBoxes, selectedBoxId]);
+    setLocalTexts(next.texts);
+    setSelection(next.selection);
+  }, [localBoxes, localTexts, selection]);
 
   const performReloadFromServer = useCallback(() => {
     if (!serverMap) return;
-    applyServerSnapshot(serverMap.boxes, serverMap.updatedAt);
+    hydrateFromServer(serverMap.boxes, serverMap.texts, serverMap.updatedAt);
     if (resolvedMapId) {
       setHydratedForMapId(resolvedMapId);
     }
     toast.success("Reloaded from server");
-  }, [applyServerSnapshot, resolvedMapId, serverMap]);
+  }, [hydrateFromServer, resolvedMapId, serverMap]);
 
   const handleReloadFromServer = useCallback(() => {
     if (!serverMap) return;
@@ -221,14 +252,14 @@ export function SharedMapPage() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Delete" && event.key !== "Backspace") return;
       if (shouldIgnoreMapEditorShortcut(event.target)) return;
-      if (!selectedBoxId) return;
+      if (!selection) return;
       event.preventDefault();
       handleDeleteSelected();
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleDeleteSelected, selectedBoxId]);
+  }, [handleDeleteSelected, selection]);
 
   if (isNewRoute && isBootstrappingNewMap) {
     return (
@@ -252,7 +283,9 @@ export function SharedMapPage() {
     return null;
   }
 
-  if (serverMap === undefined || hydratedForMapId !== resolvedMapId) {
+  const isHydrated = hydratedForMapId === resolvedMapId;
+
+  if (!isHydrated && serverMap === undefined) {
     return (
       <PageShell maxWidth="wide">
         <PageHeader
@@ -270,7 +303,7 @@ export function SharedMapPage() {
     );
   }
 
-  if (serverMap === null) {
+  if (!isHydrated && serverMap === null) {
     return (
       <PageShell maxWidth="wide">
         <PageHeader title={PAGE_TITLE} icon={MapIcon} />
@@ -296,36 +329,42 @@ export function SharedMapPage() {
     );
   }
 
-  const baseMap = BASE_MAPS[serverMap.baseMapId];
+  if (!isHydrated) {
+    return (
+      <PageShell maxWidth="wide">
+        <PageHeader
+          title={PAGE_TITLE}
+          description="Loading shared dropmap…"
+          icon={MapIcon}
+        />
+        <Card>
+          <CardContent className="space-y-3 py-8">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-[50vh] w-full" />
+          </CardContent>
+        </Card>
+      </PageShell>
+    );
+  }
+
+  const baseMap = BASE_MAPS[serverMap?.baseMapId ?? "simpsons-reload"];
 
   return (
     <PageShell maxWidth="wide">
       <PageHeader
         title={PAGE_TITLE}
-        description="Draw boxes, label them, colour-code them, save, and share the URL with your team."
+        description="Use Box or Text from the yellow toolbar. Select an object for colour and delete."
         icon={MapIcon}
         actions={
-          <MapToolbar
-            isDirty={isDirty}
-            isSaving={isSaving}
-            hasSelection={selectedBoxId != null}
+          <MapHeaderActions
             onNew={handleNewMap}
-            onSave={() => void handleSaveAndCopyLink()}
-            onCopyLink={() => void handleSaveAndCopyLink()}
-            onDeleteSelected={handleDeleteSelected}
+            onCopyLink={() => void handleCopyLink()}
             onReloadFromServer={handleReloadFromServer}
             canReloadFromServer={serverMap != null}
+            isSaving={isSaving}
           />
         }
       />
-
-      {selectedBox ? (
-        <MapBoxPropertiesPanel
-          color={selectedBox.color}
-          onColorChange={handleSelectedColorChange}
-          disabled={isSaving}
-        />
-      ) : null}
 
       <Card>
         <CardContent className="py-4">
@@ -346,9 +385,19 @@ export function SharedMapPage() {
           ) : (
             <MapEditor
               boxes={localBoxes}
-              selectedBoxId={selectedBoxId}
+              texts={localTexts}
+              selection={selection}
+              tool={tool}
+              onToolChange={setTool}
               onBoxesChange={setLocalBoxes}
-              onSelectedBoxIdChange={setSelectedBoxId}
+              onTextsChange={setLocalTexts}
+              onSelectionChange={setSelection}
+              onSelectedColorChange={handleSelectedColorChange}
+              onDeleteSelected={handleDeleteSelected}
+              onSave={() => void handleSaveAndCopyLink()}
+              isSaving={isSaving}
+              isDirty={isDirty}
+              colorControlsDisabled={isSaving}
               imageSrc={baseMap.imagePath}
               onImageMissing={() => setImageMissing(true)}
             />

@@ -43,6 +43,7 @@ describe("resolveMapBoxColor", () => {
   it("falls back to the default colour", () => {
     expect(resolveMapBoxColor(undefined)).toBe(MAP_BOX_DEFAULT_COLOR);
     expect(resolveMapBoxColor("invalid")).toBe(MAP_BOX_DEFAULT_COLOR);
+    expect(MAP_BOX_DEFAULT_COLOR).toBe("#FAE904");
   });
 });
 
