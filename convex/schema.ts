@@ -2602,4 +2602,21 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_player", ["playerId"])
     .index("by_player_and_status", ["playerId", "status"]),
+
+  sharedMaps: defineTable({
+    mapId: v.string(),
+    baseMapId: v.literal("simpsons-reload"),
+    boxes: v.array(
+      v.object({
+        id: v.string(),
+        x: v.number(),
+        y: v.number(),
+        width: v.number(),
+        height: v.number(),
+        label: v.string(),
+      }),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_map_id", ["mapId"]),
 });

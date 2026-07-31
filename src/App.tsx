@@ -40,6 +40,7 @@ import SummerSlamLandingPage from "./pages/summer-slam/page.tsx";
 import SummerSlamPassportPage from "./pages/summer-slam/passport.tsx";
 import SummerSlamHowToPage from "./pages/summer-slam/how-to.tsx";
 import TierRestrictionsPage from "./pages/tier-restrictions/page.tsx";
+import SharedMapPage from "./pages/maps/page.tsx";
 import SsoCallbackPage from "./pages/auth/sso-callback.tsx";
 
 import EventBansPage from "./pages/admin/event-bans.tsx";
@@ -115,6 +116,7 @@ export default function App() {
           <Route path="/summer-slam/how-to" element={<SummerSlamHowToPage />} />
           <Route path="/spin/:eventId" element={<ScrimEventPage />} />
           <Route path="/tier-restrictions" element={<TierRestrictionsPage />} />
+          <Route path="/maps/:mapId" element={<SharedMapPage />} />
           <Route path="/sso-callback" element={<SsoCallbackPage />} />
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
