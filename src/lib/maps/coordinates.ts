@@ -1,4 +1,4 @@
-import { MAP_BOX_MIN_SIZE } from "./constants";
+import { MAP_BOX_MIN_SIZE, MAP_BOX_DEFAULT_COLOR } from "./constants";
 import type { MapBox } from "./types";
 
 export function clamp(value: number, min: number, max: number): number {
@@ -31,7 +31,8 @@ export function boxesEqual(a: MapBox[], b: MapBox[]): boolean {
       box.y === other.y &&
       box.width === other.width &&
       box.height === other.height &&
-      box.label === other.label
+      box.label === other.label &&
+      box.color === other.color
     );
   });
 }
@@ -78,6 +79,7 @@ export function normalizedRectFromDrag(
     width,
     height,
     label: "",
+    color: MAP_BOX_DEFAULT_COLOR,
   });
 }
 

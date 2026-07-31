@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MAP_BOX_DEFAULT_MIN_DRAG_SIZE } from "@/lib/maps/constants";
+import {
+  MAP_BOX_DEFAULT_COLOR,
+  MAP_BOX_DEFAULT_MIN_DRAG_SIZE,
+  MAP_CREATE_DRAG_THRESHOLD_PX,
+} from "@/lib/maps/constants";
+import { shouldCreateBoxFromDrag } from "@/lib/maps/box-actions";
 import {
   createBoxId,
   moveBox,
@@ -15,7 +20,14 @@ import MapPoiOverlay from "./map-poi-overlay.tsx";
 
 type InteractionState =
   | { mode: "idle" }
-  | { mode: "creating"; start: NormalizedPoint; current: NormalizedPoint }
+  | {
+      mode: "creating";
+      startClientX: number;
+      startClientY: number;
+      start: NormalizedPoint;
+      current: NormalizedPoint;
+      exceededThreshold: boolean;
+    }
   | { mode: "moving"; boxId: string; grabOffset: NormalizedPoint }
   | { mode: "resizing"; boxId: string; handle: ResizeHandle };
 
@@ -58,6 +70,25 @@ export default function MapEditor({
     setInteraction({ mode: "idle" });
   }, []);
 
+  const cancelInteraction = useCallback(() => {
+    finishInteraction();
+    onSelectedBoxIdChange(null);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  }, [finishInteraction, onSelectedBoxIdChange]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      cancelInteraction();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [cancelInteraction]);
+
   useEffect(() => {
     if (interaction.mode === "idle") return;
 
@@ -67,7 +98,21 @@ export default function MapEditor({
       const point = pointToNormalized(event.clientX, event.clientY, rect);
 
       if (interaction.mode === "creating") {
-        setInteraction({ mode: "creating", start: interaction.start, current: point });
+        const exceededThreshold =
+          interaction.exceededThreshold ||
+          shouldCreateBoxFromDrag(
+            { x: interaction.startClientX, y: interaction.startClientY },
+            { x: event.clientX, y: event.clientY },
+            MAP_CREATE_DRAG_THRESHOLD_PX,
+          );
+        setInteraction({
+          mode: "creating",
+          startClientX: interaction.startClientX,
+          startClientY: interaction.startClientY,
+          start: interaction.start,
+          current: point,
+          exceededThreshold,
+        });
         return;
       }
 
@@ -97,19 +142,30 @@ export default function MapEditor({
       }
 
       if (interaction.mode === "creating") {
-        const point = pointToNormalized(event.clientX, event.clientY, rect);
-        const draft = normalizedRectFromDrag(
-          interaction.start,
-          point,
-          MAP_BOX_DEFAULT_MIN_DRAG_SIZE,
-        );
-        const nextBox: MapBox = {
-          id: createBoxId(),
-          ...draft,
-          label: "",
-        };
-        onBoxesChange([...boxes, nextBox]);
-        onSelectedBoxIdChange(nextBox.id);
+        const exceededThreshold =
+          interaction.exceededThreshold ||
+          shouldCreateBoxFromDrag(
+            { x: interaction.startClientX, y: interaction.startClientY },
+            { x: event.clientX, y: event.clientY },
+            MAP_CREATE_DRAG_THRESHOLD_PX,
+          );
+
+        if (exceededThreshold) {
+          const point = pointToNormalized(event.clientX, event.clientY, rect);
+          const draft = normalizedRectFromDrag(
+            interaction.start,
+            point,
+            MAP_BOX_DEFAULT_MIN_DRAG_SIZE,
+          );
+          const nextBox: MapBox = {
+            id: createBoxId(),
+            ...draft,
+            label: "",
+            color: MAP_BOX_DEFAULT_COLOR,
+          };
+          onBoxesChange([...boxes, nextBox]);
+          onSelectedBoxIdChange(nextBox.id);
+        }
       }
 
       finishInteraction();
@@ -140,7 +196,14 @@ export default function MapEditor({
 
     const point = pointToNormalized(event.clientX, event.clientY, rect);
     onSelectedBoxIdChange(null);
-    setInteraction({ mode: "creating", start: point, current: point });
+    setInteraction({
+      mode: "creating",
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      start: point,
+      current: point,
+      exceededThreshold: false,
+    });
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -172,7 +235,7 @@ export default function MapEditor({
   };
 
   const draftRect =
-    interaction.mode === "creating"
+    interaction.mode === "creating" && interaction.exceededThreshold
       ? normalizedRectFromDrag(
           interaction.start,
           interaction.current,
@@ -185,7 +248,7 @@ export default function MapEditor({
       <div className="relative inline-block max-w-full">
         <img
           src={imageSrc}
-          alt="Simpsons Reload strategy map"
+          alt="Simpsons Reload dropmap"
           className="block h-auto max-h-[70vh] w-full max-w-full rounded-lg border bg-muted object-contain"
           draggable={false}
           onLoad={() => setImageLoaded(true)}

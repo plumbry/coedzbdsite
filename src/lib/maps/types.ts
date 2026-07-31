@@ -5,6 +5,7 @@ export type MapBox = {
   width: number;
   height: number;
   label: string;
+  color: string;
 };
 
 export type SharedMap = {

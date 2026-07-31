@@ -1,4 +1,12 @@
 import { MAP_BOX_LABEL_MAX_LENGTH } from "@/lib/maps/constants";
+import {
+  MAP_BOX_BORDER_WIDTH_PX,
+  MAP_BOX_BORDER_WIDTH_SELECTED_PX,
+  MAP_BOX_FILL_OPACITY,
+  getContrastTextColor,
+  hexToRgba,
+  resolveMapBoxColor,
+} from "@/lib/maps/box-color.ts";
 import type { MapBox } from "@/lib/maps/types";
 import { cn } from "@/lib/utils.ts";
 import type { ResizeHandle } from "@/lib/maps/coordinates";
@@ -37,6 +45,10 @@ export default function MapBoxLayer({
   onMovePointerDown,
   onResizePointerDown,
 }: MapBoxLayerProps) {
+  const boxColor = resolveMapBoxColor(box.color);
+  const labelColor = getContrastTextColor(boxColor);
+  const borderWidth = selected ? MAP_BOX_BORDER_WIDTH_SELECTED_PX : MAP_BOX_BORDER_WIDTH_PX;
+
   return (
     <div
       className={cn(
@@ -56,10 +68,13 @@ export default function MapBoxLayer({
       }}
     >
       <div
-        className={cn(
-          "flex h-full w-full items-center justify-center rounded-sm border-2 bg-primary/10 p-1",
-          selected ? "border-primary ring-2 ring-primary/30" : "border-primary/70",
-        )}
+        className="flex h-full w-full items-center justify-center rounded-sm p-1"
+        style={{
+          borderColor: boxColor,
+          borderWidth,
+          borderStyle: "solid",
+          backgroundColor: hexToRgba(boxColor, MAP_BOX_FILL_OPACITY),
+        }}
       >
         <input
           type="text"
@@ -67,7 +82,8 @@ export default function MapBoxLayer({
           maxLength={MAP_BOX_LABEL_MAX_LENGTH}
           placeholder="Label"
           aria-label={`Label for box ${box.id}`}
-          className="w-full bg-transparent text-center text-xs font-semibold text-foreground outline-none placeholder:text-muted-foreground sm:text-sm"
+          className="w-full bg-transparent text-center text-xs font-semibold outline-none placeholder:opacity-70 sm:text-sm"
+          style={{ color: labelColor }}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
           onChange={(event) => onLabelChange(box.id, event.target.value)}
@@ -80,7 +96,7 @@ export default function MapBoxLayer({
               type="button"
               aria-label={`Resize ${handle}`}
               className={cn(
-                "absolute z-30 h-3 w-3 rounded-full border border-border bg-background shadow-sm touch-none",
+                "absolute z-30 h-2 w-2 rounded-full border border-border bg-background shadow-sm touch-none",
                 handlePositionClass[handle],
               )}
               onPointerDown={(event) => {
@@ -105,12 +121,13 @@ type DraftBoxProps = {
 export function DraftMapBox({ x, y, width, height }: DraftBoxProps) {
   return (
     <div
-      className="pointer-events-none absolute z-30 border-2 border-dashed border-primary bg-primary/20"
+      className="pointer-events-none absolute z-30 border-2 border-dashed border-primary"
       style={{
         left: `${x * 100}%`,
         top: `${y * 100}%`,
         width: `${width * 100}%`,
         height: `${height * 100}%`,
+        backgroundColor: "rgba(59, 130, 246, 0.15)",
       }}
     />
   );

@@ -17,9 +17,53 @@ describe("validateMapBox", () => {
       width: 0.3,
       height: 0.25,
       label: " Tilted Towers ",
+      color: "#f80",
     });
 
     expect(box.label).toBe("Tilted Towers");
+    expect(box.color).toBe("#FF8800");
+  });
+
+  it("defaults missing colours", () => {
+    const box = validateMapBox({
+      id: "box-1",
+      x: 0.1,
+      y: 0.2,
+      width: 0.3,
+      height: 0.25,
+      label: "Loot",
+    });
+
+    expect(box.color).toBe("#3B82F6");
+  });
+
+  it("normalizes stored colours to uppercase six-digit hex", () => {
+    const box = validateMapBox({
+      id: "box-1",
+      x: 0.1,
+      y: 0.2,
+      width: 0.3,
+      height: 0.25,
+      label: "Loot",
+      color: "#f80",
+    });
+
+    expect(box.color).toBe("#FF8800");
+    expect(box.color).toMatch(/^#[0-9A-F]{6}$/);
+  });
+
+  it("rejects invalid colours", () => {
+    expect(() =>
+      validateMapBox({
+        id: "box-1",
+        x: 0.1,
+        y: 0.2,
+        width: 0.3,
+        height: 0.25,
+        label: "Loot",
+        color: "orange",
+      }),
+    ).toThrow(ConvexError);
   });
 
   it("rejects coordinates outside 0..1", () => {
@@ -78,6 +122,7 @@ describe("validateMapBoxes", () => {
           width: 0.2,
           height: 0.2,
           label: "One",
+          color: "#FF0000",
         },
         {
           id: "dup",
@@ -86,6 +131,7 @@ describe("validateMapBoxes", () => {
           width: 0.2,
           height: 0.2,
           label: "Two",
+          color: "#00FF00",
         },
       ]),
     ).toThrow(ConvexError);

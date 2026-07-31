@@ -15,6 +15,7 @@ const sampleBox: MapBox = {
   width: 0.3,
   height: 0.25,
   label: "Loot",
+  color: "#3B82F6",
 };
 
 describe("clampBoxToMap", () => {

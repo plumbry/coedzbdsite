@@ -1,5 +1,6 @@
 import { ConvexError } from "convex/values";
 
+export const MAP_BOX_DEFAULT_COLOR = "#3B82F6";
 export const MAP_BOX_MIN_SIZE = 0.01;
 export const MAP_BOX_LABEL_MAX_LENGTH = 100;
 export const MAP_BOXES_MAX_COUNT = 200;
@@ -11,6 +12,7 @@ export type MapBoxInput = {
   width: number;
   height: number;
   label: string;
+  color?: string;
 };
 
 function isFiniteNumber(value: number): boolean {
@@ -25,6 +27,31 @@ function assertNormalized(value: number, field: string): void {
 
 export function normalizeMapBoxLabel(label: string): string {
   return label.trim().slice(0, MAP_BOX_LABEL_MAX_LENGTH);
+}
+
+const HEX_SHORT_PATTERN = /^#([0-9A-Fa-f]{3})$/;
+const HEX_LONG_PATTERN = /^#([0-9A-Fa-f]{6})$/;
+
+export function normalizeMapBoxColor(color: string | undefined): string {
+  const value = color?.trim() ?? MAP_BOX_DEFAULT_COLOR;
+  const shortMatch = value.match(HEX_SHORT_PATTERN);
+  let normalized: string;
+  if (shortMatch) {
+    const [r, g, b] = shortMatch[1]!;
+    normalized = `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  } else {
+    const longMatch = value.match(HEX_LONG_PATTERN);
+    if (!longMatch) {
+      throw new ConvexError("Invalid box color: must be #RGB or #RRGGBB");
+    }
+    normalized = `#${longMatch[1]!.toUpperCase()}`;
+  }
+
+  if (!/^#[0-9A-F]{6}$/.test(normalized)) {
+    throw new ConvexError("Invalid box color: must normalize to #RRGGBB");
+  }
+
+  return normalized;
 }
 
 export function validateMapBox(box: MapBoxInput): MapBoxInput {
@@ -56,6 +83,7 @@ export function validateMapBox(box: MapBoxInput): MapBoxInput {
     width: box.width,
     height: box.height,
     label: normalizeMapBoxLabel(box.label),
+    color: normalizeMapBoxColor(box.color),
   };
 }
 

@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 
 type MapToolbarProps = {
-  isDirty: boolean;
   isSaving: boolean;
   hasSelection: boolean;
   onNew: () => void;
@@ -20,10 +19,10 @@ type MapToolbarProps = {
   onDeleteSelected: () => void;
   onReloadFromServer: () => void;
   canReloadFromServer: boolean;
+  isDirty: boolean;
 };
 
 export default function MapToolbar({
-  isDirty,
   isSaving,
   hasSelection,
   onNew,
@@ -32,6 +31,7 @@ export default function MapToolbar({
   onDeleteSelected,
   onReloadFromServer,
   canReloadFromServer,
+  isDirty,
 }: MapToolbarProps) {
   return (
     <div
@@ -43,12 +43,7 @@ export default function MapToolbar({
         <Plus className="h-4 w-4" aria-hidden />
         New
       </Button>
-      <Button
-        type="button"
-        onClick={onSave}
-        disabled={isSaving || !isDirty}
-        aria-label="Save map"
-      >
+      <Button type="button" onClick={onSave} disabled={isSaving} aria-label="Save map and copy link">
         {isSaving ? (
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
         ) : (

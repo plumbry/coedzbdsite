@@ -27,13 +27,21 @@ import {
 import { toast } from "sonner";
 import { MapIcon } from "lucide-react";
 import { BASE_MAPS } from "@/lib/maps/constants";
+import { deleteSelectedBox, shouldIgnoreMapEditorShortcut } from "@/lib/maps/box-actions";
+import { normalizeLoadedMapBoxes } from "@/lib/maps/boxes";
 import { boxesEqual } from "@/lib/maps/coordinates";
+import {
+  buildMapShareUrl,
+  copyMapShareLink,
+  getSaveAndCopyToastMessage,
+  type SaveAndCopyOutcome,
+} from "@/lib/maps/share-link";
 import type { MapBox, SaveMapResult } from "@/lib/maps/types";
 import MapEditor from "./_components/map-editor.tsx";
+import MapBoxPropertiesPanel from "./_components/map-box-properties-panel.tsx";
 import MapToolbar from "./_components/map-toolbar.tsx";
 
-const CONFLICT_MESSAGE =
-  "This shared map changed elsewhere. Reload from the server before saving again.";
+const PAGE_TITLE = "Simpsons Reload Dropmap";
 
 export function SharedMapPage() {
   const { mapId } = useParams<{ mapId: string }>();
@@ -63,6 +71,21 @@ export function SharedMapPage() {
   const isDirty = useMemo(
     () => !boxesEqual(localBoxes, savedBoxes),
     [localBoxes, savedBoxes],
+  );
+
+  const selectedBox = useMemo(
+    () => localBoxes.find((box) => box.id === selectedBoxId) ?? null,
+    [localBoxes, selectedBoxId],
+  );
+
+  const handleSelectedColorChange = useCallback(
+    (color: string) => {
+      if (!selectedBoxId) return;
+      setLocalBoxes((current) =>
+        current.map((box) => (box.id === selectedBoxId ? { ...box, color } : box)),
+      );
+    },
+    [selectedBoxId],
   );
 
   useEffect(() => {
@@ -98,22 +121,33 @@ export function SharedMapPage() {
     if (!resolvedMapId || !serverMap || serverMap.mapId !== resolvedMapId) return;
     if (hydratedForMapId === resolvedMapId) return;
 
-    setLocalBoxes(serverMap.boxes);
-    setSavedBoxes(serverMap.boxes);
+    const normalizedBoxes = normalizeLoadedMapBoxes(serverMap.boxes);
+    setLocalBoxes(normalizedBoxes);
+    setSavedBoxes(normalizedBoxes);
     setExpectedUpdatedAt(serverMap.updatedAt);
     setHydratedForMapId(resolvedMapId);
   }, [hydratedForMapId, resolvedMapId, serverMap]);
 
-  const applyServerSnapshot = useCallback((boxes: MapBox[], updatedAt: number) => {
-    setLocalBoxes(boxes);
-    setSavedBoxes(boxes);
-    setExpectedUpdatedAt(updatedAt);
-    setSelectedBoxId(null);
-  }, []);
+  const applyServerSnapshot = useCallback(
+    (boxes: Array<Omit<MapBox, "color"> & { color?: string }>, updatedAt: number) => {
+      const normalizedBoxes = normalizeLoadedMapBoxes(boxes);
+      setLocalBoxes(normalizedBoxes);
+      setSavedBoxes(normalizedBoxes);
+      setExpectedUpdatedAt(updatedAt);
+      setSelectedBoxId(null);
+    },
+    [],
+  );
 
-  const handleSave = useCallback(async (): Promise<boolean> => {
-    if (!resolvedMapId || expectedUpdatedAt == null) return false;
-    if (!isDirty) return true;
+  const saveAndCopyLink = useCallback(async (): Promise<SaveAndCopyOutcome> => {
+    if (!resolvedMapId || expectedUpdatedAt == null) return "save-failed";
+
+    const shareUrl = buildMapShareUrl(window.location.origin, resolvedMapId);
+
+    if (!isDirty) {
+      const copied = await copyMapShareLink(shareUrl);
+      return copied ? "copied-only" : "saved-copy-failed";
+    }
 
     setIsSaving(true);
     try {
@@ -124,16 +158,14 @@ export function SharedMapPage() {
       })) as SaveMapResult;
 
       if (!result.ok) {
-        toast.error(CONFLICT_MESSAGE);
-        return false;
+        return "conflict";
       }
 
       applyServerSnapshot(result.boxes, result.updatedAt);
-      toast.success("Map saved");
-      return true;
+      const copied = await copyMapShareLink(shareUrl);
+      return copied ? "saved-and-copied" : "saved-copy-failed";
     } catch {
-      toast.error("Failed to save map");
-      return false;
+      return "save-failed";
     } finally {
       setIsSaving(false);
     }
@@ -146,27 +178,26 @@ export function SharedMapPage() {
     saveMap,
   ]);
 
-  const handleCopyLink = useCallback(async () => {
-    const saved = await handleSave();
-    if (!saved) return;
-
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast.success("Link copied to clipboard");
-    } catch {
-      toast.error("Failed to copy link");
+  const handleSaveAndCopyLink = useCallback(async () => {
+    const outcome = await saveAndCopyLink();
+    const message = getSaveAndCopyToastMessage(outcome);
+    if (outcome === "conflict" || outcome === "save-failed") {
+      toast.error(message);
+      return;
     }
-  }, [handleSave]);
+    toast.success(message);
+  }, [saveAndCopyLink]);
 
   const handleNewMap = useCallback(() => {
     navigate("/maps/new");
   }, [navigate]);
 
   const handleDeleteSelected = useCallback(() => {
-    if (!selectedBoxId) return;
-    setLocalBoxes((current) => current.filter((box) => box.id !== selectedBoxId));
-    setSelectedBoxId(null);
-  }, [selectedBoxId]);
+    const next = deleteSelectedBox(localBoxes, selectedBoxId);
+    if (next.selectedBoxId === selectedBoxId) return;
+    setLocalBoxes(next.boxes);
+    setSelectedBoxId(next.selectedBoxId);
+  }, [localBoxes, selectedBoxId]);
 
   const performReloadFromServer = useCallback(() => {
     if (!serverMap) return;
@@ -189,15 +220,7 @@ export function SharedMapPage() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Delete" && event.key !== "Backspace") return;
-      const target = event.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
+      if (shouldIgnoreMapEditorShortcut(event.target)) return;
       if (!selectedBoxId) return;
       event.preventDefault();
       handleDeleteSelected();
@@ -211,8 +234,8 @@ export function SharedMapPage() {
     return (
       <PageShell maxWidth="wide">
         <PageHeader
-          title="Simpsons Reload Strategy Map"
-          description="Creating a new shared map…"
+          title={PAGE_TITLE}
+          description="Creating a new shared dropmap…"
           icon={MapIcon}
         />
         <Card>
@@ -233,8 +256,8 @@ export function SharedMapPage() {
     return (
       <PageShell maxWidth="wide">
         <PageHeader
-          title="Simpsons Reload Strategy Map"
-          description="Loading shared map…"
+          title={PAGE_TITLE}
+          description="Loading shared dropmap…"
           icon={MapIcon}
         />
         <Card>
@@ -250,7 +273,7 @@ export function SharedMapPage() {
   if (serverMap === null) {
     return (
       <PageShell maxWidth="wide">
-        <PageHeader title="Simpsons Reload Strategy Map" icon={MapIcon} />
+        <PageHeader title={PAGE_TITLE} icon={MapIcon} />
         <ErrorState>
           <ErrorStateHeader>
             <ErrorStateMedia />
@@ -278,8 +301,8 @@ export function SharedMapPage() {
   return (
     <PageShell maxWidth="wide">
       <PageHeader
-        title={`${baseMap.label} Strategy Map`}
-        description="Draw boxes, label them, save, and share the URL with your team."
+        title={PAGE_TITLE}
+        description="Draw boxes, label them, colour-code them, save, and share the URL with your team."
         icon={MapIcon}
         actions={
           <MapToolbar
@@ -287,14 +310,22 @@ export function SharedMapPage() {
             isSaving={isSaving}
             hasSelection={selectedBoxId != null}
             onNew={handleNewMap}
-            onSave={() => void handleSave()}
-            onCopyLink={() => void handleCopyLink()}
+            onSave={() => void handleSaveAndCopyLink()}
+            onCopyLink={() => void handleSaveAndCopyLink()}
             onDeleteSelected={handleDeleteSelected}
             onReloadFromServer={handleReloadFromServer}
             canReloadFromServer={serverMap != null}
           />
         }
       />
+
+      {selectedBox ? (
+        <MapBoxPropertiesPanel
+          color={selectedBox.color}
+          onColorChange={handleSelectedColorChange}
+          disabled={isSaving}
+        />
+      ) : null}
 
       <Card>
         <CardContent className="py-4">

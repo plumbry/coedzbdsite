@@ -2614,6 +2614,7 @@ export default defineSchema({
         width: v.number(),
         height: v.number(),
         label: v.string(),
+        color: v.optional(v.string()),
       }),
     ),
     createdAt: v.number(),

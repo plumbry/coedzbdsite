@@ -11,6 +11,7 @@ const mapBoxValidator = v.object({
   width: v.number(),
   height: v.number(),
   label: v.string(),
+  color: v.optional(v.string()),
 });
 
 async function findMapByPublicId(ctx: MutationCtx, mapId: string) {
