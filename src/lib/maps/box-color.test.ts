@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   MAP_BOX_DEFAULT_COLOR,
   getContrastTextColor,
+  hexToHsv,
+  hsvToHex,
   isStoredHexColor,
   isValidHexColor,
   normalizeHexColor,
@@ -51,5 +53,18 @@ describe("getContrastTextColor", () => {
   it("uses white text on dark colours and black on light colours", () => {
     expect(getContrastTextColor("#000000")).toBe("#FFFFFF");
     expect(getContrastTextColor("#FFFFFF")).toBe("#000000");
+  });
+});
+
+describe("hsvToHex / hexToHsv", () => {
+  it("round-trips primary colours", () => {
+    for (const hex of ["#FF0000", "#00FF00", "#0000FF", "#FAE904", "#FFFFFF"]) {
+      const hsv = hexToHsv(hex);
+      expect(hsvToHex(hsv.h, hsv.s, hsv.v)).toBe(hex);
+    }
+  });
+
+  it("builds red from hue zero", () => {
+    expect(hsvToHex(0, 1, 1)).toBe("#FF0000");
   });
 });
