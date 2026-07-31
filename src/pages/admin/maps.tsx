@@ -139,10 +139,10 @@ function AdminMapsPoiEditor() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
-        <div className="relative mx-auto w-full max-w-[min(100%,1600px)]">
+        <div className="relative mx-auto w-full max-w-[min(100%,1000px)]">
           <div
             ref={stageRef}
-            className="relative aspect-square w-full touch-none overflow-hidden rounded-lg border bg-muted"
+            className="relative aspect-square w-full touch-none overflow-hidden"
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
