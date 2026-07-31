@@ -12,9 +12,9 @@ export type SaveAndCopyOutcome =
 export function getSaveAndCopyToastMessage(outcome: SaveAndCopyOutcome): string {
   switch (outcome) {
     case "saved-and-copied":
-      return "Saved — share link copied";
+      return "New share link created and copied";
     case "saved-copy-failed":
-      return "Saved as a new share link, but it could not be copied";
+      return "New share link created, but it could not be copied";
     case "copied-only":
       return "Link copied";
     case "copy-failed":

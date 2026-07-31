@@ -257,30 +257,10 @@ export function SharedMapPage() {
   }, [isNewRoute, publishAndCopyLink, resolvedMapId]);
 
   const handleSaveAndCopyLink = useCallback(async () => {
-    if (isNewRoute) {
-      await publishAndCopyLink();
-      return;
-    }
-
-    if (!resolvedMapId || expectedUpdatedAt == null) {
-      toast.error(getSaveAndCopyToastMessage("save-failed"));
-      return;
-    }
-
-    if (!isDirty) {
-      await handleCopyLink();
-      return;
-    }
-
+    // Always publish a brand-new share URL. Shared links stay frozen; /maps/new
+    // stays put and clears after publish.
     await publishAndCopyLink();
-  }, [
-    expectedUpdatedAt,
-    handleCopyLink,
-    isDirty,
-    isNewRoute,
-    publishAndCopyLink,
-    resolvedMapId,
-  ]);
+  }, [publishAndCopyLink]);
 
   const handleNewMap = useCallback(() => {
     if (isNewRoute) {
@@ -417,7 +397,7 @@ export function SharedMapPage() {
         description={
           isNewRoute
             ? "Shared scratchpad — Save publishes a new link and clears the canvas for the next person."
-            : "Use Box or Text from the toolbar. Select an object for colour and delete."
+            : "Edit freely — Save always creates a new share link so the original stays unchanged."
         }
         icon={MapIcon}
         actions={
