@@ -923,7 +923,7 @@ export default function MapEditor({
         coordinate space as the map pixels. w-full + max-h + object-contain
         previously letterboxed the square asset inside a wide box, which
         shoved every POI/box/text left of its landmark. Cap is the page shell
-        (up to 2400px) so the HD asset can display near native size.
+        (up to 1600px).
       */}
       <div className="relative mx-auto w-full">
         <div className="relative aspect-square w-full overflow-hidden rounded-lg border bg-muted">

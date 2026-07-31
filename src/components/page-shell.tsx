@@ -12,8 +12,8 @@ const maxWidthClasses: Record<PageShellMaxWidth, string> = {
   default: "max-w-7xl",
   narrow: "max-w-lg",
   wide: "max-w-[1600px]",
-  /** Near-native dropmap width (2400×2400 asset). */
-  maps: "max-w-[2400px]",
+  /** Dropmap page width — large but fits common desktop viewports. */
+  maps: "max-w-[1600px]",
 };
 
 interface PageShellProps {
