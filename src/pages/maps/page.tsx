@@ -35,7 +35,7 @@ import MapToolbar from "./_components/map-toolbar.tsx";
 const CONFLICT_MESSAGE =
   "This shared map changed elsewhere. Reload from the server before saving again.";
 
-export default function SharedMapPage() {
+export function SharedMapPage() {
   const { mapId } = useParams<{ mapId: string }>();
   const navigate = useNavigate();
 

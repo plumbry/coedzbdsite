@@ -40,7 +40,7 @@ import SummerSlamLandingPage from "./pages/summer-slam/page.tsx";
 import SummerSlamPassportPage from "./pages/summer-slam/passport.tsx";
 import SummerSlamHowToPage from "./pages/summer-slam/how-to.tsx";
 import TierRestrictionsPage from "./pages/tier-restrictions/page.tsx";
-import SharedMapPage from "./pages/maps/page.tsx";
+import SharedMapPage from "./pages/maps/route.tsx";
 import SsoCallbackPage from "./pages/auth/sso-callback.tsx";
 
 import EventBansPage from "./pages/admin/event-bans.tsx";
