@@ -917,14 +917,15 @@ export default function MapEditor({
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full">
       {/*
-        Keep the stage square and size-capped so overlays share the same
+        Keep the stage square and width-driven so overlays share the same
         coordinate space as the map pixels. w-full + max-h + object-contain
         previously letterboxed the square asset inside a wide box, which
-        shoved every POI/box/text left of its landmark.
+        shoved every POI/box/text left of its landmark. Cap is the page shell
+        (up to 2400px) so the HD asset can display near native size.
       */}
-      <div className="relative mx-auto w-full max-w-[min(100%,70vh,70dvh)]">
+      <div className="relative mx-auto w-full">
         <div className="relative aspect-square w-full overflow-hidden rounded-lg border bg-muted">
           <img
             src={imageSrc}

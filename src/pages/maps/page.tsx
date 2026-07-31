@@ -380,7 +380,7 @@ export function SharedMapPage() {
 
   if (!isNewRoute && !isHydrated && serverMap === undefined) {
     return (
-      <PageShell maxWidth="wide">
+      <PageShell maxWidth="maps">
         <PageHeader
           title={PAGE_TITLE}
           description="Loading shared dropmap…"
@@ -398,7 +398,7 @@ export function SharedMapPage() {
 
   if (!isNewRoute && !isHydrated && serverMap === null) {
     return (
-      <PageShell maxWidth="wide">
+      <PageShell maxWidth="maps">
         <PageHeader title={PAGE_TITLE} icon={MapIcon} />
         <ErrorState>
           <ErrorStateHeader>
@@ -424,7 +424,7 @@ export function SharedMapPage() {
 
   if (!isHydrated) {
     return (
-      <PageShell maxWidth="wide">
+      <PageShell maxWidth="maps">
         <PageHeader
           title={PAGE_TITLE}
           description="Loading shared dropmap…"
@@ -443,7 +443,7 @@ export function SharedMapPage() {
   const baseMap = BASE_MAPS[serverMap?.baseMapId ?? "simpsons-reload"];
 
   return (
-    <PageShell maxWidth="wide">
+    <PageShell maxWidth="maps">
       <PageHeader
         title={PAGE_TITLE}
         description={
@@ -465,7 +465,7 @@ export function SharedMapPage() {
       />
 
       <Card>
-        <CardContent className="px-2 py-2 sm:px-6 sm:py-4">
+        <CardContent className="px-1 py-1 sm:px-3 sm:py-3">
           {imageMissing ? (
             <ErrorState>
               <ErrorStateHeader>

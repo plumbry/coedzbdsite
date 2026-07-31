@@ -6,12 +6,14 @@ import AdminSidebar from "@/pages/admin/_components/admin-sidebar.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet.tsx";
 
-type PageShellMaxWidth = "default" | "narrow" | "wide";
+type PageShellMaxWidth = "default" | "narrow" | "wide" | "maps";
 
 const maxWidthClasses: Record<PageShellMaxWidth, string> = {
   default: "max-w-7xl",
   narrow: "max-w-lg",
   wide: "max-w-[1600px]",
+  /** Near-native dropmap width (2400×2400 asset). */
+  maps: "max-w-[2400px]",
 };
 
 interface PageShellProps {
