@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
-const STYLESHEET_RECOVERY_KEY = "sw-stylesheet-recovery";
+const ASSET_RECOVERY_KEY = "sw-asset-recovery";
 
-async function recoverFromBrokenStylesheet() {
+async function recoverFromBrokenAssets() {
   if (!("serviceWorker" in navigator)) return;
-  if (sessionStorage.getItem(STYLESHEET_RECOVERY_KEY) === "1") return;
+  if (sessionStorage.getItem(ASSET_RECOVERY_KEY) === "1") return;
 
-  sessionStorage.setItem(STYLESHEET_RECOVERY_KEY, "1");
+  sessionStorage.setItem(ASSET_RECOVERY_KEY, "1");
 
   try {
     const registrations = await navigator.serviceWorker.getRegistrations();
@@ -31,9 +31,15 @@ export function useServiceWorker() {
 
     const onResourceError = (event: Event) => {
       const target = event.target;
-      if (!(target instanceof HTMLLinkElement)) return;
-      if (target.rel !== "stylesheet") return;
-      void recoverFromBrokenStylesheet();
+      if (target instanceof HTMLLinkElement && target.rel === "stylesheet") {
+        void recoverFromBrokenAssets();
+        return;
+      }
+      // Stale index.html after deploy can point at a missing hashed bundle;
+      // SPA fallback used to return HTML for that URL (MIME module error).
+      if (target instanceof HTMLScriptElement && target.src) {
+        void recoverFromBrokenAssets();
+      }
     };
 
     window.addEventListener("error", onResourceError, true);
