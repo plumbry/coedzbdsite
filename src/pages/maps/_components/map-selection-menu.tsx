@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input.tsx";
 import { isValidHexColor, normalizeHexColor } from "@/lib/maps/box-color.ts";
-import type { MapSelection } from "@/lib/maps/types";
+import type { SelectedObject } from "@/lib/maps/types";
 import { Paintbrush, Trash2, Type } from "lucide-react";
 
 type MapSelectionMenuProps = {
-  selection: NonNullable<MapSelection>;
+  selection: NonNullable<SelectedObject>;
   color: string;
   x: number;
   y: number;
@@ -33,7 +33,7 @@ export default function MapSelectionMenu({
   useEffect(() => {
     setHexDraft(color);
     setShowColor(false);
-  }, [color, selection.id, selection.kind]);
+  }, [color, selection.id, selection.type]);
 
   const handleHexChange = (value: string) => {
     setHexDraft(value);
@@ -56,6 +56,7 @@ export default function MapSelectionMenu({
 
   return (
     <div
+      data-map-selection-menu=""
       className="pointer-events-auto absolute z-50"
       style={{
         left,
@@ -74,7 +75,7 @@ export default function MapSelectionMenu({
         )}
 
         <div className="flex min-w-[10.5rem] flex-col">
-          {selection.kind === "text" && onEditText ? (
+          {selection.type === "text" && onEditText ? (
             <button
               type="button"
               disabled={disabled}

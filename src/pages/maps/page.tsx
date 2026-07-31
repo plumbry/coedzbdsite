@@ -42,10 +42,11 @@ import {
 import type {
   EditorTool,
   MapBox,
-  MapSelection,
   MapText,
   SaveMapResult,
+  SelectedObject,
 } from "@/lib/maps/types";
+import { applyColorToSelection } from "@/lib/maps/selection";
 import MapEditor from "./_components/map-editor.tsx";
 import MapHeaderActions from "./_components/map-header-actions.tsx";
 
@@ -71,7 +72,7 @@ export function SharedMapPage() {
   const [savedBoxes, setSavedBoxes] = useState<MapBox[]>([]);
   const [savedTexts, setSavedTexts] = useState<MapText[]>([]);
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<number | null>(null);
-  const [selection, setSelection] = useState<MapSelection>(null);
+  const [selection, setSelection] = useState<SelectedObject>(null);
   const [tool, setTool] = useState<EditorTool>("rect");
   const [hydratedForMapId, setHydratedForMapId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -86,20 +87,11 @@ export function SharedMapPage() {
 
   const handleSelectedColorChange = useCallback(
     (color: string) => {
-      if (!selection) return;
-      if (selection.kind === "box") {
-        setLocalBoxes((current) =>
-          current.map((box) => (box.id === selection.id ? { ...box, color } : box)),
-        );
-        return;
-      }
-      setLocalTexts((current) =>
-        current.map((textItem) =>
-          textItem.id === selection.id ? { ...textItem, color } : textItem,
-        ),
-      );
+      const next = applyColorToSelection(localBoxes, localTexts, selection, color);
+      setLocalBoxes(next.boxes);
+      setLocalTexts(next.texts);
     },
-    [selection],
+    [localBoxes, localTexts, selection],
   );
 
   useEffect(() => {

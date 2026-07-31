@@ -14,7 +14,14 @@ import {
   type NormalizedPoint,
   type ResizeHandle,
 } from "@/lib/maps/coordinates";
-import type { EditorTool, MapBox, MapSelection, MapText } from "@/lib/maps/types";
+import {
+  applyMoveToSelectedBox,
+  hitTestMapObjects,
+  isSelectedObject,
+  selectBox,
+  selectText,
+} from "@/lib/maps/selection";
+import type { EditorTool, MapBox, MapText, SelectedObject } from "@/lib/maps/types";
 import MapBoxLayer, { DraftMapBox } from "./map-box-layer.tsx";
 import MapSelectionMenu from "./map-selection-menu.tsx";
 import MapSideToolbar from "./map-side-toolbar.tsx";
@@ -54,12 +61,12 @@ type InteractionState =
 type MapEditorProps = {
   boxes: MapBox[];
   texts: MapText[];
-  selection: MapSelection;
+  selection: SelectedObject;
   tool: EditorTool;
   onToolChange: (tool: EditorTool) => void;
   onBoxesChange: (boxes: MapBox[]) => void;
   onTextsChange: (texts: MapText[]) => void;
-  onSelectionChange: (selection: MapSelection) => void;
+  onSelectionChange: (selection: SelectedObject) => void;
   onSelectedColorChange: (color: string) => void;
   onDeleteSelected: () => void;
   onSave: () => void;
@@ -98,6 +105,7 @@ export default function MapEditor({
   const overlayRef = useRef<HTMLDivElement>(null);
   const boxesRef = useRef(boxes);
   const textsRef = useRef(texts);
+  const selectionRef = useRef(selection);
   const toolRef = useRef(tool);
   const interactionRef = useRef<InteractionState>({ mode: "idle" });
   const [interaction, setInteraction] = useState<InteractionState>({ mode: "idle" });
@@ -105,6 +113,7 @@ export default function MapEditor({
 
   boxesRef.current = boxes;
   textsRef.current = texts;
+  selectionRef.current = selection;
   toolRef.current = tool;
 
   const setInteractionState = useCallback((next: InteractionState) => {
@@ -170,11 +179,12 @@ export default function MapEditor({
           setInteractionState({ ...current, exceededThreshold: true });
         }
 
+        const moved = moveBox(current.originBox, point, current.grabOffset);
         onBoxesChange(
-          boxesRef.current.map((box) =>
-            box.id === current.boxId
-              ? moveBox(current.originBox, point, current.grabOffset)
-              : box,
+          applyMoveToSelectedBox(
+            boxesRef.current,
+            selectBox(current.boxId),
+            moved,
           ),
         );
         return;
@@ -248,7 +258,7 @@ export default function MapEditor({
             color: MAP_BOX_DEFAULT_COLOR,
           };
           onBoxesChange([...boxesRef.current, nextBox]);
-          onSelectionChange({ kind: "box", id: nextBox.id });
+          onSelectionChange(selectBox(nextBox.id));
         }
       }
 
@@ -272,14 +282,72 @@ export default function MapEditor({
     setInteractionState,
   ]);
 
-  const handleOverlayPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+  /**
+   * Single canvas hit target: resolve one object by geometry + id.
+   * Objects themselves are pointer-events:none so the whole layer cannot
+   * act as a shared selection frame.
+   */
+  const handleCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (interactionRef.current.mode !== "idle") return;
-    if (event.target !== event.currentTarget) return;
+
+    // Ignore interactive chrome (resize handles, menus, textareas).
+    const target = event.target;
+    if (target instanceof Element) {
+      if (
+        target.closest("[data-resize-handle]") ||
+        target.closest("[data-map-selection-menu]") ||
+        target.closest("textarea[data-map-text-id]")
+      ) {
+        return;
+      }
+    }
 
     const rect = getOverlayRect(overlayRef.current);
     if (!rect) return;
 
     const point = pointToNormalized(event.clientX, event.clientY, rect);
+    const hit = hitTestMapObjects(
+      boxesRef.current,
+      textsRef.current,
+      point,
+      selectionRef.current,
+    );
+
+    if (hit?.kind === "box") {
+      event.preventDefault();
+      const box = hit.object;
+      onSelectionChange(selectBox(box.id));
+      setInteractionState({
+        mode: "moving-box",
+        boxId: box.id,
+        grabOffset: { x: point.x - box.x, y: point.y - box.y },
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        exceededThreshold: false,
+        originBox: box,
+      });
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+
+    if (hit?.kind === "text") {
+      event.preventDefault();
+      const textItem = hit.object;
+      onSelectionChange(selectText(textItem.id));
+      setInteractionState({
+        mode: "moving-text",
+        textId: textItem.id,
+        grabOffset: { x: point.x - textItem.x, y: point.y - textItem.y },
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        exceededThreshold: false,
+        originText: textItem,
+      });
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+
+    // Empty space: deselect; optionally start create / place text.
     onSelectionChange(null);
 
     if (toolRef.current === "text") {
@@ -291,7 +359,7 @@ export default function MapEditor({
         color: MAP_BOX_DEFAULT_COLOR,
       };
       onTextsChange([...textsRef.current, nextText]);
-      onSelectionChange({ kind: "text", id: nextText.id });
+      onSelectionChange(selectText(nextText.id));
       return;
     }
 
@@ -306,54 +374,6 @@ export default function MapEditor({
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  const handleBoxPointerDown = (boxId: string, event: React.PointerEvent) => {
-    event.stopPropagation();
-    event.preventDefault();
-    if (interactionRef.current.mode !== "idle") return;
-
-    const rect = getOverlayRect(overlayRef.current);
-    if (!rect) return;
-
-    const box = boxesRef.current.find((entry) => entry.id === boxId);
-    if (!box) return;
-
-    const point = pointToNormalized(event.clientX, event.clientY, rect);
-    onSelectionChange({ kind: "box", id: boxId });
-    setInteractionState({
-      mode: "moving-box",
-      boxId,
-      grabOffset: { x: point.x - box.x, y: point.y - box.y },
-      startClientX: event.clientX,
-      startClientY: event.clientY,
-      exceededThreshold: false,
-      originBox: box,
-    });
-  };
-
-  const handleTextPointerDown = (textId: string, event: React.PointerEvent) => {
-    event.stopPropagation();
-    event.preventDefault();
-    if (interactionRef.current.mode !== "idle") return;
-
-    const rect = getOverlayRect(overlayRef.current);
-    if (!rect) return;
-
-    const textItem = textsRef.current.find((entry) => entry.id === textId);
-    if (!textItem) return;
-
-    const point = pointToNormalized(event.clientX, event.clientY, rect);
-    onSelectionChange({ kind: "text", id: textId });
-    setInteractionState({
-      mode: "moving-text",
-      textId,
-      grabOffset: { x: point.x - textItem.x, y: point.y - textItem.y },
-      startClientX: event.clientX,
-      startClientY: event.clientY,
-      exceededThreshold: false,
-      originText: textItem,
-    });
-  };
-
   const handleResizePointerDown = (
     boxId: string,
     handle: ResizeHandle,
@@ -362,7 +382,7 @@ export default function MapEditor({
     event.stopPropagation();
     event.preventDefault();
     if (interactionRef.current.mode !== "idle") return;
-    onSelectionChange({ kind: "box", id: boxId });
+    onSelectionChange(selectBox(boxId));
     setInteractionState({ mode: "resizing-box", boxId, handle });
   };
 
@@ -376,11 +396,11 @@ export default function MapEditor({
       : null;
 
   const selectedBox =
-    selection?.kind === "box"
+    selection?.type === "box"
       ? (boxes.find((box) => box.id === selection.id) ?? null)
       : null;
   const selectedText =
-    selection?.kind === "text"
+    selection?.type === "text"
       ? (texts.find((textItem) => textItem.id === selection.id) ?? null)
       : null;
 
@@ -412,18 +432,18 @@ export default function MapEditor({
             <MapPoiOverlay />
             <div
               ref={overlayRef}
+              data-map-canvas=""
               className={`absolute inset-0 z-10 touch-none ${
                 tool === "text" ? "cursor-text" : "cursor-crosshair"
               }`}
-              onPointerDown={handleOverlayPointerDown}
+              onPointerDown={handleCanvasPointerDown}
               aria-label="Map drawing area"
             >
               {boxes.map((box) => (
                 <MapBoxLayer
                   key={box.id}
                   box={box}
-                  selected={selection?.kind === "box" && selection.id === box.id}
-                  onBoxPointerDown={handleBoxPointerDown}
+                  selected={isSelectedObject(selection, "box", box.id)}
                   onResizePointerDown={handleResizePointerDown}
                 />
               ))}
@@ -431,8 +451,7 @@ export default function MapEditor({
                 <MapTextLayer
                   key={textItem.id}
                   textItem={textItem}
-                  selected={selection?.kind === "text" && selection.id === textItem.id}
-                  onTextPointerDown={handleTextPointerDown}
+                  selected={isSelectedObject(selection, "text", textItem.id)}
                   onTextChange={(textId, text) => {
                     onTextsChange(
                       textsRef.current.map((entry) =>
@@ -443,7 +462,7 @@ export default function MapEditor({
                 />
               ))}
               {draftRect ? <DraftMapBox {...draftRect} /> : null}
-              {selectedBox && selection?.kind === "box" ? (
+              {selectedBox && selection?.type === "box" ? (
                 <MapSelectionMenu
                   selection={selection}
                   color={selectedBox.color}
@@ -455,7 +474,7 @@ export default function MapEditor({
                   onColorChange={onSelectedColorChange}
                 />
               ) : null}
-              {selectedText && selection?.kind === "text" ? (
+              {selectedText && selection?.type === "text" ? (
                 <MapSelectionMenu
                   selection={selection}
                   color={selectedText.color}

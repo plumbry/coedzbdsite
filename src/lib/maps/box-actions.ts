@@ -9,7 +9,7 @@ export function deleteSelectedObject(
     return { boxes, texts, selection };
   }
 
-  if (selection.kind === "box") {
+  if (selection.type === "box") {
     return {
       boxes: boxes.filter((box) => box.id !== selection.id),
       texts,

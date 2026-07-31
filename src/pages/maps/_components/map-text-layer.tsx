@@ -10,14 +10,16 @@ const TEXT_MAX_LENGTH = 200;
 type MapTextLayerProps = {
   textItem: MapText;
   selected: boolean;
-  onTextPointerDown: (textId: string, event: React.PointerEvent) => void;
   onTextChange: (textId: string, text: string) => void;
 };
 
+/**
+ * Visual + edit chrome for one text object.
+ * Selection/move hit-testing is owned by MapEditor geometry picking.
+ */
 export default function MapTextLayer({
   textItem,
   selected,
-  onTextPointerDown,
   onTextChange,
 }: MapTextLayerProps) {
   const color = resolveMapBoxColor(textItem.color);
@@ -25,8 +27,11 @@ export default function MapTextLayer({
 
   return (
     <div
+      data-map-object="text"
+      data-object-id={textItem.id}
+      data-selected={selected ? "true" : "false"}
       className={cn(
-        "absolute -translate-x-1/2 -translate-y-1/2 touch-none",
+        "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2",
         selected ? "z-30" : "z-20",
       )}
       style={{
@@ -35,7 +40,7 @@ export default function MapTextLayer({
         minWidth: "4rem",
         maxWidth: "40%",
       }}
-      onPointerDown={(event) => onTextPointerDown(textItem.id, event)}
+      aria-selected={selected}
     >
       <textarea
         data-map-text-id={textItem.id}
@@ -48,18 +53,16 @@ export default function MapTextLayer({
         tabIndex={selected ? 0 : -1}
         className={cn(
           "w-full resize-none bg-transparent px-1.5 py-1 text-center text-xs font-black uppercase leading-tight outline-none sm:text-sm",
-          selected ? "ring-2 ring-offset-1 ring-offset-transparent" : "",
+          // Unselected text must stay pointer-events:none so canvas geometry
+          // picking owns selection. Only the active text captures pointers.
+          selected ? "pointer-events-auto ring-2 ring-black/80" : "pointer-events-none",
         )}
         style={{
           color,
           textShadow: `0 0 2px ${outline}, 1px 1px 0 ${outline}, -1px -1px 0 ${outline}, 1px -1px 0 ${outline}, -1px 1px 0 ${outline}`,
-          ...(selected ? { boxShadow: `0 0 0 2px ${color}` } : {}),
         }}
         onPointerDown={(event) => {
-          if (!selected) {
-            onTextPointerDown(textItem.id, event);
-            return;
-          }
+          // Editing the selected text must not start a canvas drag/create.
           event.stopPropagation();
         }}
         onClick={(event) => event.stopPropagation()}

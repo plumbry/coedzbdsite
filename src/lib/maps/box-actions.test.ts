@@ -40,7 +40,7 @@ const sampleTexts: MapText[] = [
 describe("deleteSelectedObject", () => {
   it("deletes only the selected rectangle", () => {
     const result = deleteSelectedObject(sampleBoxes, sampleTexts, {
-      kind: "box",
+      type: "box",
       id: "a",
     });
     expect(result.boxes).toHaveLength(1);
@@ -51,7 +51,7 @@ describe("deleteSelectedObject", () => {
 
   it("deletes only the selected text", () => {
     const result = deleteSelectedObject(sampleBoxes, sampleTexts, {
-      kind: "text",
+      type: "text",
       id: "t1",
     });
     expect(result.boxes).toHaveLength(2);

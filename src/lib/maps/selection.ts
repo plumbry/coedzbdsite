@@ -1,0 +1,153 @@
+import type { MapBox, MapText, SelectedObject } from "./types";
+
+export type NormalizedPoint = { x: number; y: number };
+
+/** True when selection points at this exact object id + type. */
+export function isSelectedObject(
+  selection: SelectedObject,
+  type: "box" | "text",
+  id: string,
+): boolean {
+  return selection?.type === type && selection.id === id;
+}
+
+export function selectBox(id: string): SelectedObject {
+  return { type: "box", id };
+}
+
+export function selectText(id: string): SelectedObject {
+  return { type: "text", id };
+}
+
+export function pointInBox(point: NormalizedPoint, box: MapBox): boolean {
+  return (
+    point.x >= box.x &&
+    point.x <= box.x + box.width &&
+    point.y >= box.y &&
+    point.y <= box.y + box.height
+  );
+}
+
+/** Text hit target: small padded box around the text centre. */
+export function pointInText(
+  point: NormalizedPoint,
+  textItem: MapText,
+  halfWidth = 0.06,
+  halfHeight = 0.03,
+): boolean {
+  return (
+    point.x >= textItem.x - halfWidth &&
+    point.x <= textItem.x + halfWidth &&
+    point.y >= textItem.y - halfHeight &&
+    point.y <= textItem.y + halfHeight
+  );
+}
+
+/**
+ * Topmost box under a point. Selected boxes win when overlapping so the
+ * active object can still be dragged after another box was drawn on top.
+ */
+export function findTopBoxAtPoint(
+  boxes: MapBox[],
+  point: NormalizedPoint,
+  selectedBoxId: string | null = null,
+): MapBox | null {
+  const hits = boxes.filter((box) => pointInBox(point, box));
+  if (hits.length === 0) return null;
+  if (selectedBoxId) {
+    const selectedHit = hits.find((box) => box.id === selectedBoxId);
+    if (selectedHit) return selectedHit;
+  }
+  // Later array entries are painted later → treated as topmost.
+  return hits[hits.length - 1] ?? null;
+}
+
+export function findTopTextAtPoint(
+  texts: MapText[],
+  point: NormalizedPoint,
+  selectedTextId: string | null = null,
+): MapText | null {
+  const hits = texts.filter((textItem) => pointInText(point, textItem));
+  if (hits.length === 0) return null;
+  if (selectedTextId) {
+    const selectedHit = hits.find((textItem) => textItem.id === selectedTextId);
+    if (selectedHit) return selectedHit;
+  }
+  return hits[hits.length - 1] ?? null;
+}
+
+export type HitTestResult =
+  | { kind: "box"; object: MapBox }
+  | { kind: "text"; object: MapText }
+  | null;
+
+/**
+ * Resolve which single user object a pointer should select.
+ * Texts are checked above boxes so labels sitting on areas remain clickable.
+ */
+export function hitTestMapObjects(
+  boxes: MapBox[],
+  texts: MapText[],
+  point: NormalizedPoint,
+  selection: SelectedObject,
+): HitTestResult {
+  const selectedTextId = selection?.type === "text" ? selection.id : null;
+  const selectedBoxId = selection?.type === "box" ? selection.id : null;
+
+  const textHit = findTopTextAtPoint(texts, point, selectedTextId);
+  if (textHit) {
+    return { kind: "text", object: textHit };
+  }
+
+  const boxHit = findTopBoxAtPoint(boxes, point, selectedBoxId);
+  if (boxHit) {
+    return { kind: "box", object: boxHit };
+  }
+
+  return null;
+}
+
+/** Move only the selected box; leave every other box untouched. */
+export function applyMoveToSelectedBox(
+  boxes: MapBox[],
+  selection: SelectedObject,
+  nextBox: MapBox,
+): MapBox[] {
+  if (!selection || selection.type !== "box") return boxes;
+  return boxes.map((box) => (box.id === selection.id ? nextBox : box));
+}
+
+/** Resize only the selected box; leave every other box untouched. */
+export function applyResizeToSelectedBox(
+  boxes: MapBox[],
+  selection: SelectedObject,
+  nextBox: MapBox,
+): MapBox[] {
+  if (!selection || selection.type !== "box") return boxes;
+  if (nextBox.id !== selection.id) return boxes;
+  return boxes.map((box) => (box.id === selection.id ? nextBox : box));
+}
+
+/** Colour only the selected object. */
+export function applyColorToSelection(
+  boxes: MapBox[],
+  texts: MapText[],
+  selection: SelectedObject,
+  color: string,
+): { boxes: MapBox[]; texts: MapText[] } {
+  if (!selection) return { boxes, texts };
+  if (selection.type === "box") {
+    return {
+      boxes: boxes.map((box) =>
+        box.id === selection.id ? { ...box, color } : box,
+      ),
+      texts,
+    };
+  }
+  return {
+    boxes,
+    texts: texts.map((textItem) =>
+      textItem.id === selection.id ? { ...textItem, color } : textItem,
+    ),
+  };
+}

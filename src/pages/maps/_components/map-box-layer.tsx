@@ -25,7 +25,6 @@ const handlePositionClass: Record<ResizeHandle, string> = {
 type MapBoxLayerProps = {
   box: MapBox;
   selected: boolean;
-  onBoxPointerDown: (boxId: string, event: React.PointerEvent) => void;
   onResizePointerDown: (
     boxId: string,
     handle: ResizeHandle,
@@ -33,43 +32,56 @@ type MapBoxLayerProps = {
   ) => void;
 };
 
+/**
+ * Visual + resize chrome for one rectangle.
+ * Hit-testing / selection is owned by MapEditor geometry picking so a shared
+ * overlay cannot select the whole annotation layer.
+ */
 export default function MapBoxLayer({
   box,
   selected,
-  onBoxPointerDown,
   onResizePointerDown,
 }: MapBoxLayerProps) {
   const boxColor = resolveMapBoxColor(box.color);
   const borderWidth = selected ? MAP_BOX_BORDER_WIDTH_SELECTED_PX : MAP_BOX_BORDER_WIDTH_PX;
-  const fill = hexToRgba(boxColor, MAP_BOX_FILL_OPACITY);
+  const fill = hexToRgba(boxColor, selected ? MAP_BOX_FILL_OPACITY : MAP_BOX_FILL_OPACITY * 0.75);
 
   return (
     <div
-      className={cn("absolute touch-none select-none", selected ? "z-20" : "z-10")}
+      data-map-object="box"
+      data-object-id={box.id}
+      data-selected={selected ? "true" : "false"}
+      className={cn(
+        "pointer-events-none absolute select-none",
+        selected ? "z-20" : "z-10",
+      )}
       style={{
         left: `${box.x * 100}%`,
         top: `${box.y * 100}%`,
         width: `${box.width * 100}%`,
         height: `${box.height * 100}%`,
       }}
-      onPointerDown={(event) => onBoxPointerDown(box.id, event)}
+      aria-label={`Rectangle ${box.id}`}
+      aria-selected={selected}
     >
       <div
         className="h-full w-full rounded-sm"
         style={{
           border: `${borderWidth}px solid ${boxColor}`,
           backgroundColor: fill,
+          boxShadow: selected ? `0 0 0 1px #000, 0 0 0 3px ${boxColor}` : undefined,
+          opacity: selected ? 1 : 0.85,
         }}
-        aria-label={`Rectangle ${box.id}`}
       />
       {selected
         ? HANDLES.map((handle) => (
             <button
               key={handle}
               type="button"
+              data-resize-handle={handle}
               aria-label={`Resize ${handle}`}
               className={cn(
-                "absolute z-30 h-2.5 w-2.5 rounded-full border bg-background shadow touch-none",
+                "pointer-events-auto absolute z-30 h-2.5 w-2.5 rounded-full border bg-background shadow touch-none",
                 handlePositionClass[handle],
               )}
               style={{ borderColor: boxColor }}

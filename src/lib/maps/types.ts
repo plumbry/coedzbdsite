@@ -19,10 +19,14 @@ export type MapText = {
   color: string;
 };
 
-export type MapSelection =
-  | { kind: "box"; id: string }
-  | { kind: "text"; id: string }
+/** One nullable object reference — never a layer-wide selection. */
+export type SelectedObject =
+  | { type: "box"; id: string }
+  | { type: "text"; id: string }
   | null;
+
+/** @deprecated Prefer SelectedObject */
+export type MapSelection = SelectedObject;
 
 export type EditorTool = "rect" | "text";
 
