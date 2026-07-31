@@ -474,7 +474,7 @@ export function SharedMapPage() {
                 <ErrorStateDescription>
                   Add the Simpsons Reload map image at{" "}
                   <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                    public/assets/maps/springfield-reload-map.webp
+                    public/assets/maps/springfield-reload-map-2400.png
                   </code>{" "}
                   and refresh this page.
                 </ErrorStateDescription>

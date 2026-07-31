@@ -133,8 +133,8 @@ function AdminMapsPoiEditor() {
           Reset draft
         </Button>
         <span className="text-xs text-muted-foreground">
-          {ADMIN_MAP_IMAGE_SIZE.width}×{ADMIN_MAP_IMAGE_SIZE.height} admin map —
-          public /maps is unchanged
+          {ADMIN_MAP_IMAGE_SIZE.width}×{ADMIN_MAP_IMAGE_SIZE.height} production
+          map — drag labels, then copy into springfield-pois.ts
         </span>
       </div>
 
@@ -149,7 +149,7 @@ function AdminMapsPoiEditor() {
           >
             <img
               src={ADMIN_MAP_IMAGE_PATH}
-              alt="Springfield Reload 2400 map (admin)"
+              alt="Springfield Reload map"
               className="absolute inset-0 h-full w-full object-fill"
               draggable={false}
             />
@@ -270,8 +270,8 @@ function AdminMapsPoiEditor() {
 
       <p className="text-xs text-muted-foreground">
         Draft saves in this browser. When positions look right, copy the TypeScript
-        into <code className="rounded bg-muted px-1">springfield-pois-hd.ts</code>{" "}
-        (or promote to public later). Public dropmaps stay on the 1000×1000 map.
+        into <code className="rounded bg-muted px-1">springfield-pois.ts</code> to
+        update the public dropmap labels.
       </p>
     </div>
   );
@@ -282,7 +282,7 @@ export default function AdminMapsPage() {
     <AdminPageLayout
       requireAdmin
       title="Dropmap POIs"
-      description="Retune labels on the 2400×2400 map. Public /maps is unchanged."
+      description="Retune POI labels on the production dropmap asset."
       maxWidth="wide"
     >
       <AdminMapsPoiEditor />

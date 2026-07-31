@@ -1,9 +1,7 @@
 import { SPRINGFIELD_POIS, type MapPoi } from "./springfield-pois";
 
 /**
- * Working POI set for the admin 2400×2400 map editor.
- * Starts from the public POI list; retune in /admin/maps, then promote later.
- * Public /maps continues to use SPRINGFIELD_POIS + the 1000×1000 asset.
+ * Admin editor defaults — kept in sync with the public POI list.
  */
 export const SPRINGFIELD_POIS_HD: MapPoi[] = SPRINGFIELD_POIS.map((poi) => ({
   ...poi,
@@ -24,5 +22,5 @@ export function serializePoisAsTypeScript(pois: MapPoi[]): string {
     })
     .join(",\n");
 
-  return `export const SPRINGFIELD_POIS_HD: MapPoi[] = [\n${body},\n];\n`;
+  return `export const SPRINGFIELD_POIS: MapPoi[] = [\n${body},\n];\n`;
 }

@@ -12,76 +12,74 @@ export type MapPoi = {
 };
 
 /**
- * Normalized POI label centres for the clean Springfield Reload map asset.
- * Derived from the labelled reference screenshot by mapping island-relative
- * label centres onto the square production map (including ocean padding).
+ * Normalized POI label centres for the Springfield Reload map asset (2400×2400).
+ * Tuned in /admin/maps against springfield-reload-map-2400.png.
  */
 export const SPRINGFIELD_POIS: MapPoi[] = [
   {
     id: "cletus-corn-hole",
     label: "CLETUS' CORN HOLE",
-    x: 0.38,
-    y: 0.28,
+    x: 0.3054,
+    y: 0.2081,
     width: 0.16,
   },
   {
     id: "springfield-nuclear-power-plant",
     label: "SPRINGFIELD NUCLEAR POWER PLANT",
-    x: 0.7,
-    y: 0.25,
+    x: 0.7306,
+    y: 0.2167,
     width: 0.28,
     fontScale: 0.82,
   },
   {
     id: "kamp-krusty",
     label: "KAMP KRUSTY",
-    // Right of town-square centre, a touch above Evergreen Terrace
-    x: 0.55,
-    y: 0.41,
+    x: 0.5593,
+    y: 0.3288,
     width: 0.13,
   },
   {
     id: "evergreen-terrace",
     label: "EVERGREEN TERRACE",
-    x: 0.29,
-    y: 0.44,
+    x: 0.1955,
+    y: 0.4094,
     width: 0.18,
   },
   {
     id: "burns-manor",
     label: "BURNS MANOR",
-    x: 0.76,
-    y: 0.49,
+    x: 0.772,
+    y: 0.4727,
     width: 0.14,
   },
   {
     id: "springfield-town-square",
     label: "SPRINGFIELD TOWN SQUARE",
-    x: 0.52,
-    y: 0.58,
+    x: 0.4707,
+    y: 0.5893,
     width: 0.21,
     fontScale: 0.86,
   },
   {
     id: "springfield-slurpworks",
     label: "SPRINGFIELD SLURPWORKS",
-    x: 0.24,
-    y: 0.66,
+    x: 0.1188,
+    y: 0.6946,
     width: 0.22,
     fontScale: 0.84,
   },
   {
     id: "corruption-corners",
     label: "CORRUPTION CORNERS",
-    x: 0.74,
-    y: 0.66,
+    x: 0.772,
+    y: 0.6906,
     width: 0.19,
   },
   {
     id: "donut-district",
     label: "DONUT DISTRICT",
-    x: 0.39,
-    y: 0.77,
+    x: 0.3381,
+    y: 0.8259,
     width: 0.14,
   },
 ];
