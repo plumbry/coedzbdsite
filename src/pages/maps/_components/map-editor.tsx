@@ -2,9 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MAP_BOX_DEFAULT_COLOR,
   MAP_BOX_DEFAULT_MIN_DRAG_SIZE,
+  MAP_POLYGON_CLOSE_THRESHOLD,
+  MAP_POLYGON_MAX_POINTS,
+  MAP_POLYGON_MIN_POINTS,
 } from "@/lib/maps/constants";
 import { clampTextCenter, shouldCreateBoxFromDrag } from "@/lib/maps/box-actions";
-import { mapDragThresholdPx } from "@/lib/maps/pointer";
+import { mapDragThresholdPx, prefersCoarsePointer } from "@/lib/maps/pointer";
 import {
   createBoxId,
   moveBox,
@@ -15,14 +18,24 @@ import {
   type ResizeHandle,
 } from "@/lib/maps/coordinates";
 import type { BoxesAction } from "@/lib/maps/boxes-reducer";
+import type { PolygonsAction } from "@/lib/maps/polygons-reducer";
+import { movePolygon, polygonBounds } from "@/lib/maps/polygons";
 import {
   hitTestMapObjects,
   isSelectedObject,
   selectBox,
+  selectPolygon,
   selectText,
 } from "@/lib/maps/selection";
-import type { EditorTool, MapBox, MapText, SelectedObject } from "@/lib/maps/types";
+import type {
+  EditorTool,
+  MapBox,
+  MapPolygon,
+  MapText,
+  SelectedObject,
+} from "@/lib/maps/types";
 import MapBoxLayer, { DraftMapBox } from "./map-box-layer.tsx";
+import MapPolygonLayer, { DraftMapPolygon } from "./map-polygon-layer.tsx";
 import MapSelectionMenu from "./map-selection-menu.tsx";
 import MapSideToolbar from "./map-side-toolbar.tsx";
 import MapTextLayer from "./map-text-layer.tsx";
@@ -63,15 +76,31 @@ type InteractionState =
       startClientY: number;
       exceededThreshold: boolean;
       originText: MapText;
+    }
+  | {
+      mode: "creating-polygon";
+      points: NormalizedPoint[];
+      cursor: NormalizedPoint | null;
+    }
+  | {
+      mode: "moving-polygon";
+      polygonId: string;
+      grabOffset: NormalizedPoint;
+      startClientX: number;
+      startClientY: number;
+      exceededThreshold: boolean;
+      originPolygon: MapPolygon;
     };
 
 type MapEditorProps = {
   boxes: MapBox[];
   texts: MapText[];
+  polygons: MapPolygon[];
   selection: SelectedObject;
   tool: EditorTool;
   onToolChange: (tool: EditorTool) => void;
   onBoxesAction: (action: BoxesAction) => void;
+  onPolygonsAction: (action: PolygonsAction) => void;
   onTextsChange: (updater: TextsUpdater) => void;
   onSelectionChange: (selection: SelectedObject) => void;
   onSelectedColorChange: (color: string) => void;
@@ -94,10 +123,12 @@ function getOverlayRect(element: HTMLDivElement | null): DOMRect | null {
 export default function MapEditor({
   boxes,
   texts,
+  polygons,
   selection,
   tool,
   onToolChange,
   onBoxesAction,
+  onPolygonsAction,
   onTextsChange,
   onSelectionChange,
   onSelectedColorChange,
@@ -112,17 +143,25 @@ export default function MapEditor({
   const overlayRef = useRef<HTMLDivElement>(null);
   const boxesRef = useRef(boxes);
   const textsRef = useRef(texts);
+  const polygonsRef = useRef(polygons);
   const selectionRef = useRef(selection);
   const toolRef = useRef(tool);
   const onBoxesActionRef = useRef(onBoxesAction);
+  const onPolygonsActionRef = useRef(onPolygonsAction);
   const onTextsChangeRef = useRef(onTextsChange);
   const onSelectionChangeRef = useRef(onSelectionChange);
+  const onToolChangeRef = useRef(onToolChange);
   const interactionRef = useRef<InteractionState>({ mode: "idle" });
   const menuArmTimeoutRef = useRef<number | null>(null);
   /** Active pointer ids on the canvas — size > 1 means pinch / multi-touch. */
   const activePointersRef = useRef(new Set<number>());
   /** When true, skip committing creates / text taps (pinch zoom in progress). */
   const suppressGestureRef = useRef(false);
+  /**
+   * Sticky for the whole pinch: once two fingers are seen, do not create/move
+   * annotations until every finger has lifted (pointerdown often misses finger 2).
+   */
+  const gestureBlockedRef = useRef(false);
   /** Text tool: place on pointerup so a pinch does not stamp a label. */
   const pendingTextRef = useRef<NormalizedPoint | null>(null);
   const [interaction, setInteraction] = useState<InteractionState>({ mode: "idle" });
@@ -131,11 +170,17 @@ export default function MapEditor({
 
   boxesRef.current = boxes;
   textsRef.current = texts;
+  polygonsRef.current = polygons;
   selectionRef.current = selection;
   toolRef.current = tool;
   onBoxesActionRef.current = onBoxesAction;
+  onPolygonsActionRef.current = onPolygonsAction;
   onTextsChangeRef.current = onTextsChange;
   onSelectionChangeRef.current = onSelectionChange;
+  onToolChangeRef.current = onToolChange;
+
+  const idleToolAfterCreate = () =>
+    prefersCoarsePointer() ? "select" : "rect";
 
   const disarmMenuActions = useCallback(() => {
     if (menuArmTimeoutRef.current != null) {
@@ -165,6 +210,24 @@ export default function MapEditor({
     armMenuActionsSoon();
   }, [armMenuActionsSoon, setInteractionState]);
 
+  /** Commits a polygon draft. Reads via refs so it stays stable for the
+   * window keydown effect (Enter-to-finish) as well as pointer handlers. */
+  const finishPolygon = useCallback(
+    (points: NormalizedPoint[]) => {
+      if (points.length < MAP_POLYGON_MIN_POINTS) return;
+      const nextPolygon: MapPolygon = {
+        id: createBoxId(),
+        points: points.map((point) => ({ x: point.x, y: point.y })),
+        color: MAP_BOX_DEFAULT_COLOR,
+      };
+      onPolygonsActionRef.current({ type: "append", polygon: nextPolygon });
+      onSelectionChangeRef.current(selectPolygon(nextPolygon.id));
+      onToolChangeRef.current(idleToolAfterCreate());
+      finishInteraction();
+    },
+    [finishInteraction],
+  );
+
   const releaseCanvasPointerCaptures = useCallback(() => {
     const overlay = overlayRef.current;
     if (!overlay) return;
@@ -182,6 +245,7 @@ export default function MapEditor({
   /** Abort draw/move when a second finger lands so the browser can pinch-zoom. */
   const abortGestureForMultiTouch = useCallback(() => {
     suppressGestureRef.current = true;
+    gestureBlockedRef.current = true;
     pendingTextRef.current = null;
     const current = interactionRef.current;
     if (current.mode === "moving-box") {
@@ -202,11 +266,28 @@ export default function MapEditor({
         id: current.boxId,
         box: current.originBox,
       });
+    } else if (current.mode === "moving-polygon") {
+      onPolygonsActionRef.current({
+        type: "patch",
+        id: current.polygonId,
+        polygon: current.originPolygon,
+      });
     }
+    // "creating-box" / "creating-polygon" — drop the draft, do not commit.
     releaseCanvasPointerCaptures();
     setInteractionState({ mode: "idle" });
     armMenuActionsSoon();
   }, [armMenuActionsSoon, releaseCanvasPointerCaptures, setInteractionState]);
+
+  const clearGestureFlagsWhenIdle = useCallback(() => {
+    if (activePointersRef.current.size > 0) return;
+    // Defer so every pointerup in this frame still sees the blocked flag.
+    window.requestAnimationFrame(() => {
+      if (activePointersRef.current.size > 0) return;
+      suppressGestureRef.current = false;
+      gestureBlockedRef.current = false;
+    });
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -216,10 +297,56 @@ export default function MapEditor({
     };
   }, []);
 
+  // touchstart sees concurrent fingers even when the 2nd pointerdown never
+  // hits the canvas (common once the first finger has pointer capture).
+  useEffect(() => {
+    const onTouchChange = (event: TouchEvent) => {
+      if (event.touches.length >= 2) {
+        abortGestureForMultiTouch();
+        return;
+      }
+      if (event.touches.length === 0) {
+        activePointersRef.current.clear();
+        clearGestureFlagsWhenIdle();
+      }
+    };
+    window.addEventListener("touchstart", onTouchChange, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("touchend", onTouchChange, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("touchcancel", onTouchChange, {
+      capture: true,
+      passive: true,
+    });
+    return () => {
+      window.removeEventListener("touchstart", onTouchChange, true);
+      window.removeEventListener("touchend", onTouchChange, true);
+      window.removeEventListener("touchcancel", onTouchChange, true);
+    };
+  }, [abortGestureForMultiTouch, clearGestureFlagsWhenIdle]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Enter") {
+        const current = interactionRef.current;
+        if (
+          current.mode === "creating-polygon" &&
+          current.points.length >= MAP_POLYGON_MIN_POINTS
+        ) {
+          event.preventDefault();
+          finishPolygon(current.points);
+        }
+        return;
+      }
+
       if (event.key !== "Escape") return;
       event.preventDefault();
+      // Draft polygons have no committed data yet, so going idle fully
+      // cancels them — no extra cleanup needed here.
       finishInteraction();
       onSelectionChangeRef.current(null);
       if (document.activeElement instanceof HTMLElement) {
@@ -229,13 +356,15 @@ export default function MapEditor({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [finishInteraction]);
+  }, [finishInteraction, finishPolygon]);
 
   // Bind window pointer listeners once. Handlers always read latest refs so a
   // parent re-render cannot drop pointerup mid-gesture (which previously
   // thrashed these listeners via unstable callback identities).
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
+      if (gestureBlockedRef.current || suppressGestureRef.current) return;
+
       const current = interactionRef.current;
       if (current.mode === "idle") return;
 
@@ -296,6 +425,34 @@ export default function MapEditor({
         return;
       }
 
+      if (current.mode === "creating-polygon") {
+        setInteractionState({ ...current, cursor: point });
+        return;
+      }
+
+      if (current.mode === "moving-polygon") {
+        const exceededThreshold =
+          current.exceededThreshold ||
+          shouldCreateBoxFromDrag(
+            { x: current.startClientX, y: current.startClientY },
+            { x: event.clientX, y: event.clientY },
+            mapDragThresholdPx(),
+          );
+        if (!exceededThreshold) return;
+
+        if (!current.exceededThreshold) {
+          setInteractionState({ ...current, exceededThreshold: true });
+        }
+
+        const moved = movePolygon(current.originPolygon, point, current.grabOffset);
+        onPolygonsActionRef.current({
+          type: "patch",
+          id: current.polygonId,
+          polygon: moved,
+        });
+        return;
+      }
+
       if (current.mode === "moving-text") {
         const exceededThreshold =
           current.exceededThreshold ||
@@ -327,17 +484,32 @@ export default function MapEditor({
     const handlePointerUp = (event: PointerEvent) => {
       activePointersRef.current.delete(event.pointerId);
 
-      const suppressed = suppressGestureRef.current;
-      if (activePointersRef.current.size === 0) {
-        suppressGestureRef.current = false;
-      }
+      const blocked =
+        suppressGestureRef.current || gestureBlockedRef.current;
 
       const current = interactionRef.current;
-      if (current.mode === "idle") return;
+      if (current.mode === "idle") {
+        clearGestureFlagsWhenIdle();
+        return;
+      }
 
-      // Pinch / multi-touch aborted the gesture — do not create a box.
-      if (suppressed) {
-        finishInteraction();
+      // Pinch / multi-touch — never commit a box or other draft.
+      if (blocked) {
+        if (current.mode !== "creating-polygon") {
+          finishInteraction();
+        } else {
+          // Drop in-progress polygon vertices as well.
+          setInteractionState({ mode: "idle" });
+          armMenuActionsSoon();
+        }
+        clearGestureFlagsWhenIdle();
+        return;
+      }
+
+      // Polygon vertices are placed on pointerdown clicks, not drags — a
+      // pointerup here (e.g. after adding a vertex) must not finish the draft.
+      if (current.mode === "creating-polygon") {
+        clearGestureFlagsWhenIdle();
         return;
       }
 
@@ -367,10 +539,12 @@ export default function MapEditor({
           };
           onBoxesActionRef.current({ type: "append", box: nextBox });
           onSelectionChangeRef.current(selectBox(nextBox.id));
+          onToolChangeRef.current(idleToolAfterCreate());
         }
       }
 
       finishInteraction();
+      clearGestureFlagsWhenIdle();
     };
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -382,7 +556,12 @@ export default function MapEditor({
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [finishInteraction, setInteractionState]);
+  }, [
+    armMenuActionsSoon,
+    clearGestureFlagsWhenIdle,
+    finishInteraction,
+    setInteractionState,
+  ]);
 
   const placeTextAt = (point: NormalizedPoint) => {
     const nextText: MapText = {
@@ -394,12 +573,12 @@ export default function MapEditor({
     };
     onTextsChange((prev) => [...prev, nextText]);
     onSelectionChange(selectText(nextText.id));
-    onToolChange("rect");
+    onToolChange(idleToolAfterCreate());
     armMenuActionsSoon();
-    // Focus after React commits the new selected textarea.
+    // Focus after React commits the new selected input.
     window.setTimeout(() => {
-      const el = document.querySelector<HTMLTextAreaElement>(
-        `textarea[data-map-text-id="${nextText.id}"]`,
+      const el = document.querySelector<HTMLInputElement>(
+        `[data-map-text-id="${nextText.id}"]`,
       );
       el?.focus({ preventScroll: true });
       el?.select();
@@ -407,7 +586,21 @@ export default function MapEditor({
   };
 
   const handleCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (interactionRef.current.mode !== "idle") return;
+    const activeInteraction = interactionRef.current;
+    // A polygon draft stays "active" between clicks (each click adds a
+    // vertex), so it must keep receiving pointerdown events like idle does.
+    if (
+      activeInteraction.mode !== "idle" &&
+      activeInteraction.mode !== "creating-polygon"
+    ) {
+      return;
+    }
+
+    // Mid-pinch: ignore new drawing until every finger has lifted.
+    if (gestureBlockedRef.current) {
+      activePointersRef.current.add(event.pointerId);
+      return;
+    }
 
     const textToolActive = toolRef.current === "text";
     const target = event.target;
@@ -417,7 +610,7 @@ export default function MapEditor({
       if (
         target.closest("[data-resize-handle]") ||
         target.closest("[data-map-selection-menu]") ||
-        target.closest("textarea[data-map-text-id]")
+        target.closest("[data-map-text-id]")
       ) {
         return;
       }
@@ -438,10 +631,51 @@ export default function MapEditor({
     }
 
     disarmMenuActions();
-    suppressGestureRef.current = false;
+    // Do not clear gestureBlockedRef here — only clearGestureFlagsWhenIdle does.
 
     const point = pointToNormalized(event.clientX, event.clientY, rect);
     const isTouch = event.pointerType === "touch";
+    // Pointer capture on touch blocks the browser from pinching; window
+    // listeners already track moves for mouse/pen with or without capture.
+    const capturePointer = () => {
+      if (!isTouch) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+    };
+
+    // Touch + select tool: browse / pinch only — no create or object grabs.
+    if (toolRef.current === "select" && (isTouch || prefersCoarsePointer())) {
+      return;
+    }
+
+    // A polygon draft is already underway — clicks add vertices or close it,
+    // regardless of which tool is currently selected.
+    if (activeInteraction.mode === "creating-polygon") {
+      if (!isTouch) event.preventDefault();
+      const first = activeInteraction.points[0];
+      const canClose =
+        activeInteraction.points.length >= MAP_POLYGON_MIN_POINTS &&
+        first != null &&
+        Math.hypot(point.x - first.x, point.y - first.y) <=
+          MAP_POLYGON_CLOSE_THRESHOLD;
+
+      if (canClose) {
+        finishPolygon(activeInteraction.points);
+        return;
+      }
+
+      if (activeInteraction.points.length >= MAP_POLYGON_MAX_POINTS) {
+        // At the cap: only closing near the first vertex (above) or Enter finishes.
+        return;
+      }
+
+      setInteractionState({
+        ...activeInteraction,
+        points: [...activeInteraction.points, point],
+        cursor: point,
+      });
+      return;
+    }
 
     if (textToolActive) {
       // Defer placement until pointerup so a pinch does not stamp text.
@@ -455,7 +689,27 @@ export default function MapEditor({
       textsRef.current,
       point,
       selectionRef.current,
+      polygonsRef.current,
     );
+
+    if (hit?.kind === "polygon") {
+      if (!isTouch) event.preventDefault();
+      beginPolygonMove(hit.object, point, event);
+      return;
+    }
+
+    if (toolRef.current === "polygon") {
+      // Polygon tool takes priority over box/text hits for placement — start
+      // a new draft instead of selecting whatever is underneath the click.
+      if (!isTouch) event.preventDefault();
+      onSelectionChange(null);
+      setInteractionState({
+        mode: "creating-polygon",
+        points: [point],
+        cursor: point,
+      });
+      return;
+    }
 
     if (hit?.kind === "box") {
       // Avoid preventDefault on touch so pinch-zoom is not blocked.
@@ -471,7 +725,7 @@ export default function MapEditor({
         exceededThreshold: false,
         originBox: { ...box },
       });
-      event.currentTarget.setPointerCapture(event.pointerId);
+      capturePointer();
       return;
     }
 
@@ -483,6 +737,11 @@ export default function MapEditor({
 
     onSelectionChange(null);
 
+    // Boxes are only drawn with the rectangle tool selected.
+    if (toolRef.current !== "rect") {
+      return;
+    }
+
     setInteractionState({
       mode: "creating-box",
       startClientX: event.clientX,
@@ -491,25 +750,61 @@ export default function MapEditor({
       current: point,
       exceededThreshold: false,
     });
-    event.currentTarget.setPointerCapture(event.pointerId);
+    capturePointer();
+  };
+
+  const handleCanvasDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const current = interactionRef.current;
+    if (current.mode !== "creating-polygon") return;
+    // The second click of the double-click already added a vertex — drop it
+    // so finish uses the vertices placed before the closing double-click.
+    const points = current.points.slice(0, -1);
+    if (points.length < MAP_POLYGON_MIN_POINTS) return;
+    event.preventDefault();
+    finishPolygon(points);
   };
 
   const handleCanvasPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     activePointersRef.current.delete(event.pointerId);
 
     const pendingText = pendingTextRef.current;
-    const suppressed = suppressGestureRef.current;
+    const blocked =
+      suppressGestureRef.current || gestureBlockedRef.current;
 
-    if (activePointersRef.current.size === 0) {
-      suppressGestureRef.current = false;
+    if (!pendingText) {
+      clearGestureFlagsWhenIdle();
+      return;
     }
-
-    if (!pendingText) return;
     pendingTextRef.current = null;
 
     // Only stamp text for a clean single-finger / mouse tap.
-    if (suppressed || activePointersRef.current.size > 0) return;
+    if (blocked || activePointersRef.current.size > 0) {
+      clearGestureFlagsWhenIdle();
+      return;
+    }
     placeTextAt(pendingText);
+    clearGestureFlagsWhenIdle();
+  };
+
+  const beginPolygonMove = (
+    polygon: MapPolygon,
+    point: NormalizedPoint,
+    event: React.PointerEvent,
+  ) => {
+    const bounds = polygonBounds(polygon.points);
+    onSelectionChange(selectPolygon(polygon.id));
+    setInteractionState({
+      mode: "moving-polygon",
+      polygonId: polygon.id,
+      grabOffset: { x: point.x - bounds.x, y: point.y - bounds.y },
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      exceededThreshold: false,
+      originPolygon: { ...polygon },
+    });
+    if (event.pointerType !== "touch") {
+      overlayRef.current?.setPointerCapture(event.pointerId);
+    }
   };
 
   const beginTextMove = (
@@ -528,7 +823,9 @@ export default function MapEditor({
       exceededThreshold: false,
       originText: { ...textItem },
     });
-    overlayRef.current?.setPointerCapture(event.pointerId);
+    if (event.pointerType !== "touch") {
+      overlayRef.current?.setPointerCapture(event.pointerId);
+    }
   };
 
   const handleTextMovePointerDown = (
@@ -576,9 +873,14 @@ export default function MapEditor({
     });
   };
 
-  // Hide move/resize/menu chrome while stamping text so it cannot eat clicks.
+  // Hide move/resize/menu chrome while stamping text, or while drafting a
+  // polygon, so neither can eat clicks meant for the draft / text stamp.
   const showSelectionMenu =
     tool !== "text" && interaction.mode === "idle" && menuActionsArmed;
+
+  // Selection chrome (handles / rings / menu) hides during a polygon draft so
+  // it cannot intercept the clicks that build the draft.
+  const chromeVisible = tool !== "text" && interaction.mode !== "creating-polygon";
 
   const draftRect =
     interaction.mode === "creating-box" && interaction.exceededThreshold
@@ -597,11 +899,18 @@ export default function MapEditor({
     selection?.type === "text"
       ? (texts.find((textItem) => textItem.id === selection.id) ?? null)
       : null;
+  const selectedPolygon =
+    selection?.type === "polygon"
+      ? (polygons.find((polygon) => polygon.id === selection.id) ?? null)
+      : null;
+  const selectedPolygonBounds = selectedPolygon
+    ? polygonBounds(selectedPolygon.points)
+    : null;
 
   const focusSelectedText = () => {
     if (!selectedText) return;
-    const el = document.querySelector<HTMLTextAreaElement>(
-      `textarea[data-map-text-id="${selectedText.id}"]`,
+    const el = document.querySelector<HTMLInputElement>(
+      `[data-map-text-id="${selectedText.id}"]`,
     );
     el?.focus({ preventScroll: true });
     el?.select();
@@ -636,11 +945,16 @@ export default function MapEditor({
                 data-map-canvas=""
                 data-box-count={boxes.length}
                 className={`absolute inset-0 z-10 touch-pinch-zoom ${
-                  tool === "text" ? "cursor-text" : "cursor-crosshair"
+                  tool === "text"
+                    ? "cursor-text"
+                    : tool === "select"
+                      ? "cursor-default"
+                      : "cursor-crosshair"
                 }`}
                 onPointerDown={handleCanvasPointerDown}
                 onPointerUp={handleCanvasPointerUp}
                 onPointerCancel={handleCanvasPointerUp}
+                onDoubleClick={handleCanvasDoubleClick}
                 aria-label="Map drawing area"
               >
                 {boxes.map((box) => (
@@ -648,10 +962,19 @@ export default function MapEditor({
                     key={box.id}
                     box={box}
                     selected={
-                      tool !== "text" &&
-                      isSelectedObject(selection, "box", box.id)
+                      chromeVisible && isSelectedObject(selection, "box", box.id)
                     }
                     onResizePointerDown={handleResizePointerDown}
+                  />
+                ))}
+                {polygons.map((polygon) => (
+                  <MapPolygonLayer
+                    key={polygon.id}
+                    polygon={polygon}
+                    selected={
+                      chromeVisible &&
+                      isSelectedObject(selection, "polygon", polygon.id)
+                    }
                   />
                 ))}
                 {texts.map((textItem) => (
@@ -659,7 +982,7 @@ export default function MapEditor({
                     key={textItem.id}
                     textItem={textItem}
                     selected={
-                      tool !== "text" &&
+                      chromeVisible &&
                       isSelectedObject(selection, "text", textItem.id)
                     }
                     onMovePointerDown={handleTextMovePointerDown}
@@ -673,6 +996,12 @@ export default function MapEditor({
                   />
                 ))}
                 {draftRect ? <DraftMapBox {...draftRect} /> : null}
+                {interaction.mode === "creating-polygon" ? (
+                  <DraftMapPolygon
+                    points={interaction.points}
+                    cursor={interaction.cursor}
+                  />
+                ) : null}
                 {showSelectionMenu && selectedBox && selection?.type === "box" ? (
                   <MapSelectionMenu
                     selection={selection}
@@ -680,6 +1009,20 @@ export default function MapEditor({
                     x={selectedBox.x + selectedBox.width / 2}
                     y={selectedBox.y}
                     height={selectedBox.height}
+                    disabled={colorControlsDisabled}
+                    onColorChange={onSelectedColorChange}
+                  />
+                ) : null}
+                {showSelectionMenu &&
+                selectedPolygon &&
+                selectedPolygonBounds &&
+                selection?.type === "polygon" ? (
+                  <MapSelectionMenu
+                    selection={selection}
+                    color={selectedPolygon.color}
+                    x={selectedPolygonBounds.x + selectedPolygonBounds.width / 2}
+                    y={selectedPolygonBounds.y}
+                    height={selectedPolygonBounds.height}
                     disabled={colorControlsDisabled}
                     onColorChange={onSelectedColorChange}
                   />

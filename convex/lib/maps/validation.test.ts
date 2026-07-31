@@ -6,6 +6,8 @@ import {
   normalizeMapBoxLabel,
   validateMapBox,
   validateMapBoxes,
+  validateMapPolygon,
+  validateMapPolygons,
 } from "./validation";
 
 describe("validateMapBox", () => {
@@ -132,6 +134,59 @@ describe("validateMapBoxes", () => {
           height: 0.2,
           label: "Two",
           color: "#00FF00",
+        },
+      ]),
+    ).toThrow(ConvexError);
+  });
+});
+
+describe("validateMapPolygon", () => {
+  it("accepts a triangle", () => {
+    const polygon = validateMapPolygon({
+      id: "poly-1",
+      points: [
+        { x: 0.1, y: 0.1 },
+        { x: 0.4, y: 0.1 },
+        { x: 0.25, y: 0.4 },
+      ],
+      color: "#fae904",
+    });
+    expect(polygon.color).toBe("#FAE904");
+    expect(polygon.points).toHaveLength(3);
+  });
+
+  it("rejects polygons with fewer than 3 points", () => {
+    expect(() =>
+      validateMapPolygon({
+        id: "poly-1",
+        points: [
+          { x: 0.1, y: 0.1 },
+          { x: 0.4, y: 0.1 },
+        ],
+      }),
+    ).toThrow(ConvexError);
+  });
+});
+
+describe("validateMapPolygons", () => {
+  it("rejects duplicate ids", () => {
+    expect(() =>
+      validateMapPolygons([
+        {
+          id: "dup",
+          points: [
+            { x: 0.1, y: 0.1 },
+            { x: 0.2, y: 0.1 },
+            { x: 0.15, y: 0.2 },
+          ],
+        },
+        {
+          id: "dup",
+          points: [
+            { x: 0.5, y: 0.5 },
+            { x: 0.6, y: 0.5 },
+            { x: 0.55, y: 0.6 },
+          ],
         },
       ]),
     ).toThrow(ConvexError);

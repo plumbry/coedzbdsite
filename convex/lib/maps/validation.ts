@@ -6,6 +6,9 @@ export const MAP_BOX_LABEL_MAX_LENGTH = 100;
 export const MAP_TEXT_MAX_LENGTH = 200;
 export const MAP_BOXES_MAX_COUNT = 200;
 export const MAP_TEXTS_MAX_COUNT = 400;
+export const MAP_POLYGONS_MAX_COUNT = 100;
+export const MAP_POLYGON_MIN_POINTS = 3;
+export const MAP_POLYGON_MAX_POINTS = 32;
 
 export type MapBoxInput = {
   id: string;
@@ -22,6 +25,17 @@ export type MapTextInput = {
   x: number;
   y: number;
   text: string;
+  color?: string;
+};
+
+export type MapPolygonPointInput = {
+  x: number;
+  y: number;
+};
+
+export type MapPolygonInput = {
+  id: string;
+  points: MapPolygonPointInput[];
   color?: string;
 };
 
@@ -144,6 +158,55 @@ export function validateMapTexts(texts: MapTextInput[]): MapTextInput[] {
     const validated = validateMapText(textItem);
     if (seenIds.has(validated.id)) {
       throw new ConvexError("Duplicate text id");
+    }
+    seenIds.add(validated.id);
+    return validated;
+  });
+}
+
+export function validateMapPolygon(polygon: MapPolygonInput): MapPolygonInput {
+  if (!polygon.id || typeof polygon.id !== "string") {
+    throw new ConvexError("Invalid polygon id");
+  }
+
+  if (!Array.isArray(polygon.points)) {
+    throw new ConvexError("Invalid polygon points");
+  }
+
+  if (
+    polygon.points.length < MAP_POLYGON_MIN_POINTS ||
+    polygon.points.length > MAP_POLYGON_MAX_POINTS
+  ) {
+    throw new ConvexError(
+      `Polygons must have between ${MAP_POLYGON_MIN_POINTS} and ${MAP_POLYGON_MAX_POINTS} points`,
+    );
+  }
+
+  const points = polygon.points.map((point, index) => {
+    assertNormalized(point.x, `points[${index}].x`);
+    assertNormalized(point.y, `points[${index}].y`);
+    return { x: point.x, y: point.y };
+  });
+
+  return {
+    id: polygon.id,
+    points,
+    color: normalizeMapBoxColor(polygon.color),
+  };
+}
+
+export function validateMapPolygons(polygons: MapPolygonInput[]): MapPolygonInput[] {
+  if (polygons.length > MAP_POLYGONS_MAX_COUNT) {
+    throw new ConvexError(
+      `Maps may contain at most ${MAP_POLYGONS_MAX_COUNT} polygons`,
+    );
+  }
+
+  const seenIds = new Set<string>();
+  return polygons.map((polygon) => {
+    const validated = validateMapPolygon(polygon);
+    if (seenIds.has(validated.id)) {
+      throw new ConvexError("Duplicate polygon id");
     }
     seenIds.add(validated.id);
     return validated;

@@ -23,6 +23,10 @@ function hsvFromColor(color: string): HsvColor {
   return hexToHsv(resolveMapBoxColor(color));
 }
 
+function isCompleteLongHex(value: string): boolean {
+  return /^#[0-9A-Fa-f]{6}$/.test(value.trim());
+}
+
 export default function MapColorPicker({
   color,
   disabled = false,
@@ -31,10 +35,12 @@ export default function MapColorPicker({
   const [hsv, setHsv] = useState<HsvColor>(() => hsvFromColor(color));
   const [hexDraft, setHexDraft] = useState(resolveMapBoxColor(color));
   const svRef = useRef<HTMLDivElement>(null);
+  const hexFocusedRef = useRef(false);
   const hsvRef = useRef(hsv);
   hsvRef.current = hsv;
 
   useEffect(() => {
+    if (hexFocusedRef.current) return;
     const next = resolveMapBoxColor(color);
     setHexDraft(next);
     setHsv(hexToHsv(next));
@@ -44,7 +50,9 @@ export default function MapColorPicker({
     hsvRef.current = next;
     setHsv(next);
     const hex = hsvToHex(next.h, next.s, next.v);
-    setHexDraft(hex);
+    if (!hexFocusedRef.current) {
+      setHexDraft(hex);
+    }
     onColorChange(hex);
   };
 
@@ -61,28 +69,48 @@ export default function MapColorPicker({
   const handleSvPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (disabled) return;
     event.preventDefault();
+    event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     updateSvFromPointer(event.clientX, event.clientY);
   };
 
   const handleSvPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     if (disabled || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    event.preventDefault();
+    event.stopPropagation();
     updateSvFromPointer(event.clientX, event.clientY);
   };
 
   const handleHexChange = (value: string) => {
     setHexDraft(value);
+    // Only live-commit full #RRGGBB so typing #FAE904 is not hijacked at #FAE.
+    if (!isCompleteLongHex(value)) return;
     const normalized = normalizeHexColor(value);
     if (!normalized) return;
     setHsv(hexToHsv(normalized));
     onColorChange(normalized);
   };
 
+  const handleHexBlur = () => {
+    hexFocusedRef.current = false;
+    const normalized = normalizeHexColor(hexDraft);
+    if (normalized) {
+      setHexDraft(normalized);
+      setHsv(hexToHsv(normalized));
+      onColorChange(normalized);
+      return;
+    }
+    setHexDraft(resolveMapBoxColor(color));
+  };
+
   const hueColor = hsvToHex(hsv.h, 1, 1);
   const hexInvalid = hexDraft.trim().length > 0 && !isValidHexColor(hexDraft);
 
   return (
-    <div className="flex w-[min(16rem,100%)] flex-col gap-2 px-2 py-2">
+    <div
+      className="flex w-[min(16rem,100%)] touch-auto flex-col gap-2 px-2 py-2"
+      onPointerDown={(event) => event.stopPropagation()}
+    >
       <div
         ref={svRef}
         role="slider"
@@ -131,6 +159,7 @@ export default function MapColorPicker({
             "[&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-foreground sm:[&::-moz-range-thumb]:h-3.5 sm:[&::-moz-range-thumb]:w-3.5",
           )}
           style={{ background: HUE_GRADIENT }}
+          onPointerDown={(event) => event.stopPropagation()}
           onChange={(event) =>
             commitHsv({ ...hsv, h: Number(event.target.value) })
           }
@@ -149,9 +178,24 @@ export default function MapColorPicker({
           aria-label="Hex colour"
           aria-invalid={hexInvalid}
           spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="characters"
+          inputMode="text"
+          enterKeyHint="done"
           // text-base avoids iOS zoom-on-focus; desktop can stay compact.
           className="h-10 touch-manipulation font-mono text-base uppercase sm:h-8 sm:text-xs"
+          onPointerDown={(event) => event.stopPropagation()}
+          onFocus={() => {
+            hexFocusedRef.current = true;
+          }}
+          onBlur={handleHexBlur}
           onChange={(event) => handleHexChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.currentTarget.blur();
+            }
+          }}
         />
       </div>
     </div>

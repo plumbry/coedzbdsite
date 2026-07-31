@@ -1,7 +1,15 @@
 import { Button } from "@/components/ui/button.tsx";
 import type { EditorTool } from "@/lib/maps/types";
 import { cn } from "@/lib/utils.ts";
-import { Loader2, Save, Square, Trash2, Type } from "lucide-react";
+import {
+  Loader2,
+  MousePointer2,
+  Pentagon,
+  Save,
+  Square,
+  Trash2,
+  Type,
+} from "lucide-react";
 
 type MapSideToolbarProps = {
   tool: EditorTool;
@@ -32,6 +40,21 @@ export default function MapSideToolbar({
       >
         <button
           type="button"
+          data-active={tool === "select"}
+          aria-label="Select tool"
+          aria-pressed={tool === "select"}
+          className={cn(
+            toolButtonClass,
+            tool === "select"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+          onClick={() => onToolChange("select")}
+        >
+          <MousePointer2 className="h-4 w-4 sm:h-3.5 sm:w-3.5" strokeWidth={2.25} aria-hidden />
+        </button>
+        <button
+          type="button"
           data-active={tool === "rect"}
           aria-label="Rectangle tool"
           aria-pressed={tool === "rect"}
@@ -44,6 +67,21 @@ export default function MapSideToolbar({
           onClick={() => onToolChange("rect")}
         >
           <Square className="h-4 w-4 sm:h-3.5 sm:w-3.5" strokeWidth={2.25} aria-hidden />
+        </button>
+        <button
+          type="button"
+          data-active={tool === "polygon"}
+          aria-label="Polygon tool"
+          aria-pressed={tool === "polygon"}
+          className={cn(
+            toolButtonClass,
+            tool === "polygon"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+          onClick={() => onToolChange("polygon")}
+        >
+          <Pentagon className="h-4 w-4 sm:h-3.5 sm:w-3.5" strokeWidth={2.25} aria-hidden />
         </button>
         <button
           type="button"

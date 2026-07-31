@@ -2,7 +2,11 @@ import { mutation } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import { ConvexError, v } from "convex/values";
 import { generateMapId } from "../lib/maps/id";
-import { validateMapBoxes, validateMapTexts } from "../lib/maps/validation";
+import {
+  validateMapBoxes,
+  validateMapPolygons,
+  validateMapTexts,
+} from "../lib/maps/validation";
 
 const mapBoxValidator = v.object({
   id: v.string(),
@@ -19,6 +23,17 @@ const mapTextValidator = v.object({
   x: v.number(),
   y: v.number(),
   text: v.string(),
+  color: v.optional(v.string()),
+});
+
+const mapPolygonValidator = v.object({
+  id: v.string(),
+  points: v.array(
+    v.object({
+      x: v.number(),
+      y: v.number(),
+    }),
+  ),
   color: v.optional(v.string()),
 });
 
@@ -58,6 +73,7 @@ export const createMap = mutation({
       baseMapId: "simpsons-reload",
       boxes: [],
       texts: [],
+      polygons: [],
       createdAt: now,
       updatedAt: now,
     });
@@ -77,6 +93,7 @@ export const saveMap = mutation({
     sourceMapId: v.optional(v.string()),
     boxes: v.array(mapBoxValidator),
     texts: v.array(mapTextValidator),
+    polygons: v.optional(v.array(mapPolygonValidator)),
   },
   handler: async (ctx, args) => {
     const source = args.sourceMapId
@@ -85,6 +102,7 @@ export const saveMap = mutation({
     const baseMapId = source?.baseMapId ?? "simpsons-reload";
     const boxes = validateMapBoxes(args.boxes);
     const texts = validateMapTexts(args.texts);
+    const polygons = validateMapPolygons(args.polygons ?? []);
     const now = Date.now();
     const mapId = await allocateUniqueMapId(ctx);
 
@@ -93,6 +111,7 @@ export const saveMap = mutation({
       baseMapId,
       boxes,
       texts,
+      polygons,
       createdAt: now,
       updatedAt: now,
     });
@@ -103,6 +122,7 @@ export const saveMap = mutation({
       updatedAt: now,
       boxes,
       texts,
+      polygons,
     };
   },
 });

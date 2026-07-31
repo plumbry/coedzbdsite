@@ -63,6 +63,28 @@ describe("deleteSelectedObject", () => {
     const result = deleteSelectedObject(sampleBoxes, sampleTexts, null);
     expect(result.boxes).toEqual(sampleBoxes);
     expect(result.texts).toEqual(sampleTexts);
+    expect(result.polygons).toEqual([]);
+    expect(result.selection).toBeNull();
+  });
+
+  it("deletes only the selected polygon", () => {
+    const polygons = [
+      {
+        id: "p1",
+        points: [
+          { x: 0.1, y: 0.1 },
+          { x: 0.3, y: 0.1 },
+          { x: 0.2, y: 0.3 },
+        ],
+        color: "#FAE904",
+      },
+    ];
+    const result = deleteSelectedObject(sampleBoxes, sampleTexts, {
+      type: "polygon",
+      id: "p1",
+    }, polygons);
+    expect(result.polygons).toHaveLength(0);
+    expect(result.boxes).toHaveLength(2);
     expect(result.selection).toBeNull();
   });
 });

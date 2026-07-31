@@ -1,12 +1,13 @@
 import { prefersCoarsePointer } from "./pointer";
-import type { MapBox, MapText, SelectedObject } from "./types";
+import { pointInPolygon } from "./polygons";
+import type { MapBox, MapPolygon, MapText, SelectedObject } from "./types";
 
 export type NormalizedPoint = { x: number; y: number };
 
 /** True when selection points at this exact object id + type. */
 export function isSelectedObject(
   selection: SelectedObject,
-  type: "box" | "text",
+  type: "box" | "text" | "polygon",
   id: string,
 ): boolean {
   return selection?.type === type && selection.id === id;
@@ -18,6 +19,10 @@ export function selectBox(id: string): SelectedObject {
 
 export function selectText(id: string): SelectedObject {
   return { type: "text", id };
+}
+
+export function selectPolygon(id: string): SelectedObject {
+  return { type: "polygon", id };
 }
 
 export function pointInBox(point: NormalizedPoint, box: MapBox): boolean {
@@ -37,18 +42,14 @@ export function textHitHalfExtents(textItem: MapText): {
   halfWidth: number;
   halfHeight: number;
 } {
-  const lines = (textItem.text.trim() || "Text").split("\n");
-  const maxLineLen = Math.max(1, ...lines.map((line) => line.length));
-  // Tuned for uppercase bold labels; coarse pointers get a larger min pad.
+  // Tuned for single-line uppercase bold labels; coarse pointers get a larger min pad.
   const coarse = prefersCoarsePointer();
+  const label = textItem.text.trim() || "Text";
   const halfWidth = Math.min(
-    0.4,
-    Math.max(coarse ? 0.11 : 0.08, maxLineLen * 0.014),
+    0.45,
+    Math.max(coarse ? 0.11 : 0.08, label.length * 0.014),
   );
-  const halfHeight = Math.min(
-    0.14,
-    Math.max(coarse ? 0.06 : 0.04, lines.length * 0.028),
-  );
+  const halfHeight = coarse ? 0.055 : 0.04;
   return { halfWidth, halfHeight };
 }
 
@@ -104,27 +105,54 @@ export function findTopTextAtPoint(
   return hits[hits.length - 1] ?? null;
 }
 
+export function findTopPolygonAtPoint(
+  polygons: MapPolygon[],
+  point: NormalizedPoint,
+  selectedPolygonId: string | null = null,
+): MapPolygon | null {
+  const hits = polygons.filter((polygon) => pointInPolygon(point, polygon));
+  if (hits.length === 0) return null;
+  if (selectedPolygonId) {
+    const selectedHit = hits.find((polygon) => polygon.id === selectedPolygonId);
+    if (selectedHit) return selectedHit;
+  }
+  return hits[hits.length - 1] ?? null;
+}
+
 export type HitTestResult =
   | { kind: "box"; object: MapBox }
   | { kind: "text"; object: MapText }
+  | { kind: "polygon"; object: MapPolygon }
   | null;
 
 /**
  * Resolve which single user object a pointer should select.
- * Texts are checked above boxes so labels sitting on areas remain clickable.
+ * Texts sit above polygons, polygons above boxes.
  */
 export function hitTestMapObjects(
   boxes: MapBox[],
   texts: MapText[],
   point: NormalizedPoint,
   selection: SelectedObject,
+  polygons: MapPolygon[] = [],
 ): HitTestResult {
   const selectedTextId = selection?.type === "text" ? selection.id : null;
   const selectedBoxId = selection?.type === "box" ? selection.id : null;
+  const selectedPolygonId =
+    selection?.type === "polygon" ? selection.id : null;
 
   const textHit = findTopTextAtPoint(texts, point, selectedTextId);
   if (textHit) {
     return { kind: "text", object: textHit };
+  }
+
+  const polygonHit = findTopPolygonAtPoint(
+    polygons,
+    point,
+    selectedPolygonId,
+  );
+  if (polygonHit) {
+    return { kind: "polygon", object: polygonHit };
   }
 
   const boxHit = findTopBoxAtPoint(boxes, point, selectedBoxId);
@@ -176,14 +204,25 @@ export function applyColorToSelection(
   texts: MapText[],
   selection: SelectedObject,
   color: string,
-): { boxes: MapBox[]; texts: MapText[] } {
-  if (!selection) return { boxes, texts };
+  polygons: MapPolygon[] = [],
+): { boxes: MapBox[]; texts: MapText[]; polygons: MapPolygon[] } {
+  if (!selection) return { boxes, texts, polygons };
   if (selection.type === "box") {
     return {
       boxes: boxes.map((box) =>
         box.id === selection.id ? { ...box, color } : box,
       ),
       texts,
+      polygons,
+    };
+  }
+  if (selection.type === "polygon") {
+    return {
+      boxes,
+      texts,
+      polygons: polygons.map((polygon) =>
+        polygon.id === selection.id ? { ...polygon, color } : polygon,
+      ),
     };
   }
   return {
@@ -191,5 +230,6 @@ export function applyColorToSelection(
     texts: texts.map((textItem) =>
       textItem.id === selection.id ? { ...textItem, color } : textItem,
     ),
+    polygons,
   };
 }

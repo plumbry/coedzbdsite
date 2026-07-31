@@ -4,6 +4,12 @@ import { cn } from "@/lib/utils.ts";
 
 const TEXT_MAX_LENGTH = 200;
 
+/** Thin black halo so labels stay readable on the busy map art. */
+const MAP_TEXT_OUTLINE_SHADOW =
+  "-1px -1px 0 #000, 0 -1px 0 #000, 1px -1px 0 #000, " +
+  "-1px 0 0 #000, 1px 0 0 #000, " +
+  "-1px 1px 0 #000, 0 1px 0 #000, 1px 1px 0 #000";
+
 type MapTextLayerProps = {
   textItem: MapText;
   selected: boolean;
@@ -13,6 +19,10 @@ type MapTextLayerProps = {
     event: React.PointerEvent,
   ) => void;
 };
+
+function singleLineText(value: string): string {
+  return value.replace(/[\r\n]+/g, " ");
+}
 
 /**
  * Visual + edit chrome for one text object.
@@ -27,6 +37,10 @@ export default function MapTextLayer({
   onMovePointerDown,
 }: MapTextLayerProps) {
   const color = resolveMapBoxColor(textItem.color);
+  const display = textItem.text;
+  // Grow with content so the label stays one line; ch tracks monospace-ish width
+  // well enough for bold uppercase map labels.
+  const charCount = Math.max(4, (display || "Text").length + 1);
 
   return (
     <div
@@ -40,23 +54,21 @@ export default function MapTextLayer({
       style={{
         left: `${textItem.x * 100}%`,
         top: `${textItem.y * 100}%`,
-        minWidth: "4rem",
-        maxWidth: "40%",
       }}
       aria-selected={selected}
     >
-      <textarea
+      <input
+        type="text"
         data-map-text-id={textItem.id}
-        value={textItem.text}
+        value={display}
         maxLength={TEXT_MAX_LENGTH}
-        rows={Math.min(4, Math.max(1, textItem.text.split("\n").length))}
         placeholder="Text"
         aria-label="Map text label"
         readOnly={!selected}
         tabIndex={selected ? 0 : -1}
         className={cn(
           // text-base on small screens avoids iOS zoom-on-focus (<16px).
-          "w-full resize-none bg-transparent px-1.5 py-1 text-center text-base font-black uppercase leading-tight outline-none sm:text-sm",
+          "block resize-none overflow-hidden whitespace-nowrap bg-transparent px-1.5 py-1 text-center text-base font-black uppercase leading-none outline-none sm:text-sm",
           // Unselected text must stay pointer-events:none so canvas geometry
           // picking owns selection. Selected text captures pointers so we can
           // start a move (and edit via double-click / menu).
@@ -64,7 +76,14 @@ export default function MapTextLayer({
             ? "pointer-events-auto touch-manipulation ring-2 ring-black/80"
             : "pointer-events-none",
         )}
-        style={{ color }}
+        style={{
+          color,
+          width: `${charCount}ch`,
+          minWidth: "4ch",
+          WebkitTextStroke: "1.5px #000",
+          paintOrder: "stroke fill",
+          textShadow: MAP_TEXT_OUTLINE_SHADOW,
+        }}
         onPointerDown={(event) => {
           if (!selected) return;
           // Start move from the label itself; otherwise the text tool would
@@ -80,7 +99,13 @@ export default function MapTextLayer({
         onClick={(event) => event.stopPropagation()}
         onChange={(event) => {
           if (!selected) return;
-          onTextChange(textItem.id, event.target.value);
+          onTextChange(textItem.id, singleLineText(event.target.value));
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
         }}
       />
     </div>

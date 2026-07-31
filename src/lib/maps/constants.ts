@@ -11,8 +11,12 @@ export const MAP_BOX_LABEL_MAX_LENGTH = 100;
 export const MAP_BOX_DEFAULT_MIN_DRAG_SIZE = 0.02;
 export const MAP_BOX_DEFAULT_COLOR = "#FAE904";
 export const MAP_CREATE_DRAG_THRESHOLD_PX = 4;
-/** Higher threshold for fingers so tiny wobble does not start a drag. */
-export const MAP_CREATE_DRAG_THRESHOLD_TOUCH_PX = 10;
+/** Higher threshold for fingers so tiny wobble / pinch start does not draw. */
+export const MAP_CREATE_DRAG_THRESHOLD_TOUCH_PX = 18;
+/** Normalized distance to the first vertex that closes a polygon draft. */
+export const MAP_POLYGON_CLOSE_THRESHOLD = 0.03;
+export const MAP_POLYGON_MIN_POINTS = 3;
+export const MAP_POLYGON_MAX_POINTS = 32;
 
 export const BASE_MAPS = {
   [BASE_MAP_ID]: {

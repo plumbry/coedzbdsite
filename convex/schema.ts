@@ -2628,6 +2628,20 @@ export default defineSchema({
         }),
       ),
     ),
+    polygons: v.optional(
+      v.array(
+        v.object({
+          id: v.string(),
+          points: v.array(
+            v.object({
+              x: v.number(),
+              y: v.number(),
+            }),
+          ),
+          color: v.optional(v.string()),
+        }),
+      ),
+    ),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_map_id", ["mapId"]),

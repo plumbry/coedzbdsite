@@ -31,15 +31,19 @@ import { shouldIgnoreMapEditorShortcut } from "@/lib/maps/box-actions";
 import { migrateLegacyBoxLabelsToTexts, textsEqual } from "@/lib/maps/boxes";
 import { boxesReducer } from "@/lib/maps/boxes-reducer";
 import { boxesEqual } from "@/lib/maps/coordinates";
+import { normalizeLoadedMapPolygons, polygonsEqual } from "@/lib/maps/polygons";
+import { polygonsReducer } from "@/lib/maps/polygons-reducer";
 import {
   buildMapShareUrl,
   copyMapShareLink,
   getSaveAndCopyToastMessage,
   type SaveAndCopyOutcome,
 } from "@/lib/maps/share-link";
+import { prefersCoarsePointer } from "@/lib/maps/pointer";
 import type {
   EditorTool,
   MapBox,
+  MapPolygon,
   MapText,
   SaveMapResult,
   SelectedObject,
@@ -68,17 +72,23 @@ export function SharedMapPage() {
 
   const [localBoxes, dispatchBoxes] = useReducer(boxesReducer, []);
   const [localTexts, setLocalTexts] = useState<MapText[]>([]);
+  const [localPolygons, dispatchPolygons] = useReducer(polygonsReducer, []);
   const [savedBoxes, setSavedBoxes] = useState<MapBox[]>([]);
   const [savedTexts, setSavedTexts] = useState<MapText[]>([]);
+  const [savedPolygons, setSavedPolygons] = useState<MapPolygon[]>([]);
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<number | null>(null);
   const [selection, setSelection] = useState<SelectedObject>(null);
   const localBoxesRef = useRef(localBoxes);
   const localTextsRef = useRef(localTexts);
+  const localPolygonsRef = useRef(localPolygons);
   const selectionRef = useRef(selection);
   localBoxesRef.current = localBoxes;
   localTextsRef.current = localTexts;
+  localPolygonsRef.current = localPolygons;
   selectionRef.current = selection;
-  const [tool, setTool] = useState<EditorTool>("rect");
+  const [tool, setTool] = useState<EditorTool>(() =>
+    prefersCoarsePointer() ? "select" : "rect",
+  );
   const [hydratedForMapId, setHydratedForMapId] = useState<string | null>(
     isNewRoute ? SCRATCHPAD_KEY : null,
   );
@@ -91,8 +101,11 @@ export function SharedMapPage() {
   const activeMapIdRef = useRef<string | null>(isNewRoute ? SCRATCHPAD_KEY : null);
 
   const isDirty = useMemo(
-    () => !boxesEqual(localBoxes, savedBoxes) || !textsEqual(localTexts, savedTexts),
-    [localBoxes, localTexts, savedBoxes, savedTexts],
+    () =>
+      !boxesEqual(localBoxes, savedBoxes) ||
+      !textsEqual(localTexts, savedTexts) ||
+      !polygonsEqual(localPolygons, savedPolygons),
+    [localBoxes, localPolygons, localTexts, savedBoxes, savedPolygons, savedTexts],
   );
 
   const handleSelectedColorChange = useCallback((color: string) => {
@@ -109,6 +122,18 @@ export function SharedMapPage() {
       });
       return;
     }
+    if (currentSelection.type === "polygon") {
+      const current = localPolygonsRef.current.find(
+        (polygon) => polygon.id === currentSelection.id,
+      );
+      if (!current) return;
+      dispatchPolygons({
+        type: "patch",
+        id: currentSelection.id,
+        polygon: { ...current, color: resolved },
+      });
+      return;
+    }
     setLocalTexts((prev) =>
       prev.map((textItem) =>
         textItem.id === currentSelection.id
@@ -120,9 +145,11 @@ export function SharedMapPage() {
 
   const resetLocalEditorState = useCallback(() => {
     dispatchBoxes({ type: "hydrate", boxes: [] });
+    dispatchPolygons({ type: "hydrate", polygons: [] });
     setLocalTexts([]);
     setSavedBoxes([]);
     setSavedTexts([]);
+    setSavedPolygons([]);
     setExpectedUpdatedAt(null);
     setSelection(null);
     setHydratedForMapId(null);
@@ -132,9 +159,11 @@ export function SharedMapPage() {
   const prepareScratchpad = useCallback(() => {
     activeMapIdRef.current = SCRATCHPAD_KEY;
     dispatchBoxes({ type: "hydrate", boxes: [] });
+    dispatchPolygons({ type: "hydrate", polygons: [] });
     setLocalTexts([]);
     setSavedBoxes([]);
     setSavedTexts([]);
+    setSavedPolygons([]);
     setExpectedUpdatedAt(null);
     setSelection(null);
     setHydratedForMapId(SCRATCHPAD_KEY);
@@ -168,12 +197,16 @@ export function SharedMapPage() {
       boxes: Array<Omit<MapBox, "color"> & { color?: string; label?: string }>,
       texts: Array<Omit<MapText, "color"> & { color?: string }> | undefined,
       updatedAt: number,
+      polygons?: Array<Omit<MapPolygon, "color"> & { color?: string }>,
     ) => {
       const migrated = migrateLegacyBoxLabelsToTexts(boxes, texts);
+      const normalizedPolygons = normalizeLoadedMapPolygons(polygons);
       dispatchBoxes({ type: "hydrate", boxes: migrated.boxes });
+      dispatchPolygons({ type: "hydrate", polygons: normalizedPolygons });
       setLocalTexts(migrated.texts);
       setSavedBoxes(migrated.boxes);
       setSavedTexts(migrated.texts);
+      setSavedPolygons(normalizedPolygons);
       setExpectedUpdatedAt(updatedAt);
       setSelection(null);
     },
@@ -184,7 +217,12 @@ export function SharedMapPage() {
     if (!resolvedMapId || !serverMap || serverMap.mapId !== resolvedMapId) return;
     if (hydratedForMapId === resolvedMapId || lockHydrationRef.current) return;
 
-    hydrateFromServer(serverMap.boxes, serverMap.texts, serverMap.updatedAt);
+    hydrateFromServer(
+      serverMap.boxes,
+      serverMap.texts,
+      serverMap.updatedAt,
+      serverMap.polygons,
+    );
     lockHydrationRef.current = true;
     setHydratedForMapId(resolvedMapId);
   }, [hydrateFromServer, hydratedForMapId, resolvedMapId, serverMap]);
@@ -192,8 +230,9 @@ export function SharedMapPage() {
   const publishAndCopyLink = useCallback(async () => {
     const boxes = localBoxesRef.current;
     const texts = localTextsRef.current;
-    if (boxes.length === 0 && texts.length === 0) {
-      toast.error("Add a box or text before saving");
+    const polygons = localPolygonsRef.current;
+    if (boxes.length === 0 && texts.length === 0 && polygons.length === 0) {
+      toast.error("Add a box, polygon, or text before saving");
       return;
     }
 
@@ -203,6 +242,7 @@ export function SharedMapPage() {
         sourceMapId: resolvedMapId,
         boxes,
         texts,
+        polygons,
       })) as SaveMapResult;
 
       const shareUrl = buildMapShareUrl(window.location.origin, result.mapId);
@@ -220,7 +260,12 @@ export function SharedMapPage() {
 
       // Shared map: open the new frozen iteration URL.
       activeMapIdRef.current = result.mapId;
-      hydrateFromServer(result.boxes, result.texts, result.updatedAt);
+      hydrateFromServer(
+        result.boxes,
+        result.texts,
+        result.updatedAt,
+        result.polygons,
+      );
       lockHydrationRef.current = true;
       setHydratedForMapId(result.mapId);
       navigate(`/maps/${result.mapId}`, { replace: true });
@@ -276,6 +321,8 @@ export function SharedMapPage() {
     if (!current) return;
     if (current.type === "box") {
       dispatchBoxes({ type: "remove", id: current.id });
+    } else if (current.type === "polygon") {
+      dispatchPolygons({ type: "remove", id: current.id });
     } else {
       setLocalTexts((prev) => prev.filter((textItem) => textItem.id !== current.id));
     }
@@ -285,7 +332,12 @@ export function SharedMapPage() {
   const performReloadFromServer = useCallback(() => {
     if (!serverMap || !resolvedMapId) return;
     lockHydrationRef.current = false;
-    hydrateFromServer(serverMap.boxes, serverMap.texts, serverMap.updatedAt);
+    hydrateFromServer(
+      serverMap.boxes,
+      serverMap.texts,
+      serverMap.updatedAt,
+      serverMap.polygons,
+    );
     lockHydrationRef.current = true;
     setHydratedForMapId(resolvedMapId);
     toast.success("Reloaded from server");
@@ -432,11 +484,13 @@ export function SharedMapPage() {
             <MapEditor
               boxes={localBoxes}
               texts={localTexts}
+              polygons={localPolygons}
               selection={selection}
               tool={tool}
               onToolChange={setTool}
               onBoxesAction={dispatchBoxes}
               onTextsChange={setLocalTexts}
+              onPolygonsAction={dispatchPolygons}
               onSelectionChange={setSelection}
               onSelectedColorChange={handleSelectedColorChange}
               onDeleteSelected={handleDeleteSelected}

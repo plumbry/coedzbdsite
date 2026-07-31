@@ -1,18 +1,34 @@
-import type { MapBox, MapSelection, MapText } from "./types";
+import type { MapBox, MapPolygon, MapSelection, MapText } from "./types";
 
 export function deleteSelectedObject(
   boxes: MapBox[],
   texts: MapText[],
   selection: MapSelection,
-): { boxes: MapBox[]; texts: MapText[]; selection: MapSelection } {
+  polygons: MapPolygon[] = [],
+): {
+  boxes: MapBox[];
+  texts: MapText[];
+  polygons: MapPolygon[];
+  selection: MapSelection;
+} {
   if (!selection) {
-    return { boxes, texts, selection };
+    return { boxes, texts, polygons, selection };
   }
 
   if (selection.type === "box") {
     return {
       boxes: boxes.filter((box) => box.id !== selection.id),
       texts,
+      polygons,
+      selection: null,
+    };
+  }
+
+  if (selection.type === "polygon") {
+    return {
+      boxes,
+      texts,
+      polygons: polygons.filter((polygon) => polygon.id !== selection.id),
       selection: null,
     };
   }
@@ -20,6 +36,7 @@ export function deleteSelectedObject(
   return {
     boxes,
     texts: texts.filter((textItem) => textItem.id !== selection.id),
+    polygons,
     selection: null,
   };
 }

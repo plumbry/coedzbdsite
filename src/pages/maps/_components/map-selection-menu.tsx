@@ -45,7 +45,7 @@ export default function MapSelectionMenu({
   return (
     <div
       data-map-selection-menu=""
-      className="pointer-events-auto absolute z-50 max-w-[min(18rem,calc(100%-1rem))]"
+      className="pointer-events-auto absolute z-50 max-w-[min(18rem,calc(100%-1rem))] touch-auto"
       style={{
         left,
         top,
