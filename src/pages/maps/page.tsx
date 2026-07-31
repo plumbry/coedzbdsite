@@ -345,7 +345,7 @@ export function SharedMapPage() {
     <PageShell maxWidth="wide">
       <PageHeader
         title={PAGE_TITLE}
-        description="Use Box or Text from the yellow toolbar. Select an object for colour and delete."
+        description="Use Box or Text from the toolbar. Select an object for colour and delete."
         icon={MapIcon}
         actions={
           <MapHeaderActions

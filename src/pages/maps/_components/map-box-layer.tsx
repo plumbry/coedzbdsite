@@ -109,8 +109,8 @@ export function DraftMapBox({ x, y, width, height }: DraftBoxProps) {
         top: `${y * 100}%`,
         width: `${width * 100}%`,
         height: `${height * 100}%`,
-        borderColor: "#FAE904",
-        backgroundColor: "rgba(250, 233, 4, 0.22)",
+        borderColor: "var(--primary)",
+        backgroundColor: "color-mix(in oklab, var(--primary) 22%, transparent)",
       }}
     />
   );
