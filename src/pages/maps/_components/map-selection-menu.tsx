@@ -101,7 +101,13 @@ export default function MapSelectionMenu({
             type="button"
             disabled={disabled}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
-            onClick={onDelete}
+            onPointerDown={(event) => {
+              // Use pointerdown (not click) so a ghost click from a prior
+              // select/move gesture cannot delete another object.
+              event.stopPropagation();
+              if (disabled) return;
+              onDelete();
+            }}
           >
             <Trash2 className="h-4 w-4" aria-hidden />
             Delete

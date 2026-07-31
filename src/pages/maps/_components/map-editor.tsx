@@ -15,11 +15,12 @@ import {
   type ResizeHandle,
 } from "@/lib/maps/coordinates";
 import {
-  applyMoveToSelectedBox,
+  appendBox,
   hitTestMapObjects,
   isSelectedObject,
   selectBox,
   selectText,
+  updateBoxById,
 } from "@/lib/maps/selection";
 import type { EditorTool, MapBox, MapText, SelectedObject } from "@/lib/maps/types";
 import MapBoxLayer, { DraftMapBox } from "./map-box-layer.tsx";
@@ -27,6 +28,9 @@ import MapSelectionMenu from "./map-selection-menu.tsx";
 import MapSideToolbar from "./map-side-toolbar.tsx";
 import MapTextLayer from "./map-text-layer.tsx";
 import MapPoiOverlay from "./map-poi-overlay.tsx";
+
+type BoxesUpdater = (prev: MapBox[]) => MapBox[];
+type TextsUpdater = (prev: MapText[]) => MapText[];
 
 type InteractionState =
   | { mode: "idle" }
@@ -64,8 +68,8 @@ type MapEditorProps = {
   selection: SelectedObject;
   tool: EditorTool;
   onToolChange: (tool: EditorTool) => void;
-  onBoxesChange: (boxes: MapBox[]) => void;
-  onTextsChange: (texts: MapText[]) => void;
+  onBoxesChange: (updater: BoxesUpdater) => void;
+  onTextsChange: (updater: TextsUpdater) => void;
   onSelectionChange: (selection: SelectedObject) => void;
   onSelectedColorChange: (color: string) => void;
   onDeleteSelected: () => void;
@@ -108,13 +112,35 @@ export default function MapEditor({
   const selectionRef = useRef(selection);
   const toolRef = useRef(tool);
   const interactionRef = useRef<InteractionState>({ mode: "idle" });
+  const menuArmTimeoutRef = useRef<number | null>(null);
   const [interaction, setInteraction] = useState<InteractionState>({ mode: "idle" });
   const [imageLoaded, setImageLoaded] = useState(false);
+  // Prevents ghost clicks on the floating menu after select/move gestures.
+  const [menuActionsArmed, setMenuActionsArmed] = useState(true);
 
   boxesRef.current = boxes;
   textsRef.current = texts;
   selectionRef.current = selection;
   toolRef.current = tool;
+
+  const disarmMenuActions = useCallback(() => {
+    if (menuArmTimeoutRef.current != null) {
+      window.clearTimeout(menuArmTimeoutRef.current);
+      menuArmTimeoutRef.current = null;
+    }
+    setMenuActionsArmed(false);
+  }, []);
+
+  const armMenuActionsSoon = useCallback(() => {
+    if (menuArmTimeoutRef.current != null) {
+      window.clearTimeout(menuArmTimeoutRef.current);
+    }
+    // Wait past the synthetic click that follows pointerup.
+    menuArmTimeoutRef.current = window.setTimeout(() => {
+      menuArmTimeoutRef.current = null;
+      setMenuActionsArmed(true);
+    }, 50);
+  }, []);
 
   const setInteractionState = useCallback((next: InteractionState) => {
     interactionRef.current = next;
@@ -123,7 +149,16 @@ export default function MapEditor({
 
   const finishInteraction = useCallback(() => {
     setInteractionState({ mode: "idle" });
-  }, [setInteractionState]);
+    armMenuActionsSoon();
+  }, [armMenuActionsSoon, setInteractionState]);
+
+  useEffect(() => {
+    return () => {
+      if (menuArmTimeoutRef.current != null) {
+        window.clearTimeout(menuArmTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -180,22 +215,16 @@ export default function MapEditor({
         }
 
         const moved = moveBox(current.originBox, point, current.grabOffset);
-        onBoxesChange(
-          applyMoveToSelectedBox(
-            boxesRef.current,
-            selectBox(current.boxId),
-            moved,
-          ),
+        onBoxesChange((prev) =>
+          updateBoxById(prev, current.boxId, () => moved),
         );
         return;
       }
 
       if (current.mode === "resizing-box") {
-        onBoxesChange(
-          boxesRef.current.map((box) =>
-            box.id === current.boxId
-              ? resizeBox(box, current.handle, point, MAP_BOX_DEFAULT_MIN_DRAG_SIZE)
-              : box,
+        onBoxesChange((prev) =>
+          updateBoxById(prev, current.boxId, (box) =>
+            resizeBox(box, current.handle, point, MAP_BOX_DEFAULT_MIN_DRAG_SIZE),
           ),
         );
         return;
@@ -219,8 +248,8 @@ export default function MapEditor({
           point.x - current.grabOffset.x,
           point.y - current.grabOffset.y,
         );
-        onTextsChange(
-          textsRef.current.map((textItem) =>
+        onTextsChange((prev) =>
+          prev.map((textItem) =>
             textItem.id === current.textId
               ? { ...current.originText, x: next.x, y: next.y }
               : textItem,
@@ -257,7 +286,7 @@ export default function MapEditor({
             label: "",
             color: MAP_BOX_DEFAULT_COLOR,
           };
-          onBoxesChange([...boxesRef.current, nextBox]);
+          onBoxesChange((prev) => appendBox(prev, nextBox));
           onSelectionChange(selectBox(nextBox.id));
         }
       }
@@ -304,6 +333,8 @@ export default function MapEditor({
 
     const rect = getOverlayRect(overlayRef.current);
     if (!rect) return;
+
+    disarmMenuActions();
 
     const point = pointToNormalized(event.clientX, event.clientY, rect);
     const hit = hitTestMapObjects(
@@ -358,8 +389,9 @@ export default function MapEditor({
         text: "",
         color: MAP_BOX_DEFAULT_COLOR,
       };
-      onTextsChange([...textsRef.current, nextText]);
+      onTextsChange((prev) => [...prev, nextText]);
       onSelectionChange(selectText(nextText.id));
+      armMenuActionsSoon();
       return;
     }
 
@@ -382,9 +414,12 @@ export default function MapEditor({
     event.stopPropagation();
     event.preventDefault();
     if (interactionRef.current.mode !== "idle") return;
+    disarmMenuActions();
     onSelectionChange(selectBox(boxId));
     setInteractionState({ mode: "resizing-box", boxId, handle });
   };
+
+  const showSelectionMenu = interaction.mode === "idle" && menuActionsArmed;
 
   const draftRect =
     interaction.mode === "creating-box" && interaction.exceededThreshold
@@ -453,8 +488,8 @@ export default function MapEditor({
                   textItem={textItem}
                   selected={isSelectedObject(selection, "text", textItem.id)}
                   onTextChange={(textId, text) => {
-                    onTextsChange(
-                      textsRef.current.map((entry) =>
+                    onTextsChange((prev) =>
+                      prev.map((entry) =>
                         entry.id === textId ? { ...entry, text } : entry,
                       ),
                     );
@@ -462,7 +497,7 @@ export default function MapEditor({
                 />
               ))}
               {draftRect ? <DraftMapBox {...draftRect} /> : null}
-              {selectedBox && selection?.type === "box" ? (
+              {showSelectionMenu && selectedBox && selection?.type === "box" ? (
                 <MapSelectionMenu
                   selection={selection}
                   color={selectedBox.color}
@@ -474,7 +509,7 @@ export default function MapEditor({
                   onColorChange={onSelectedColorChange}
                 />
               ) : null}
-              {selectedText && selection?.type === "text" ? (
+              {showSelectionMenu && selectedText && selection?.type === "text" ? (
                 <MapSelectionMenu
                   selection={selection}
                   color={selectedText.color}

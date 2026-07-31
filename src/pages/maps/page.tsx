@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/convex/_generated/api.js";
@@ -73,6 +73,12 @@ export function SharedMapPage() {
   const [savedTexts, setSavedTexts] = useState<MapText[]>([]);
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<number | null>(null);
   const [selection, setSelection] = useState<SelectedObject>(null);
+  const localBoxesRef = useRef(localBoxes);
+  const localTextsRef = useRef(localTexts);
+  const selectionRef = useRef(selection);
+  localBoxesRef.current = localBoxes;
+  localTextsRef.current = localTexts;
+  selectionRef.current = selection;
   const [tool, setTool] = useState<EditorTool>("rect");
   const [hydratedForMapId, setHydratedForMapId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -85,14 +91,18 @@ export function SharedMapPage() {
     [localBoxes, localTexts, savedBoxes, savedTexts],
   );
 
-  const handleSelectedColorChange = useCallback(
-    (color: string) => {
-      const next = applyColorToSelection(localBoxes, localTexts, selection, color);
-      setLocalBoxes(next.boxes);
-      setLocalTexts(next.texts);
-    },
-    [localBoxes, localTexts, selection],
-  );
+  const handleSelectedColorChange = useCallback((color: string) => {
+    const currentSelection = selectionRef.current;
+    if (!currentSelection) return;
+    const next = applyColorToSelection(
+      localBoxesRef.current,
+      localTextsRef.current,
+      currentSelection,
+      color,
+    );
+    setLocalBoxes(next.boxes);
+    setLocalTexts(next.texts);
+  }, []);
 
   useEffect(() => {
     if (!isNewRoute) return;
@@ -213,14 +223,15 @@ export function SharedMapPage() {
   }, [navigate]);
 
   const handleDeleteSelected = useCallback(() => {
-    const next = deleteSelectedObject(localBoxes, localTexts, selection);
-    if (next.selection === selection && next.boxes === localBoxes && next.texts === localTexts) {
-      return;
-    }
+    const next = deleteSelectedObject(
+      localBoxesRef.current,
+      localTextsRef.current,
+      selectionRef.current,
+    );
     setLocalBoxes(next.boxes);
     setLocalTexts(next.texts);
     setSelection(next.selection);
-  }, [localBoxes, localTexts, selection]);
+  }, []);
 
   const performReloadFromServer = useCallback(() => {
     if (!serverMap) return;
@@ -381,8 +392,8 @@ export function SharedMapPage() {
               selection={selection}
               tool={tool}
               onToolChange={setTool}
-              onBoxesChange={setLocalBoxes}
-              onTextsChange={setLocalTexts}
+              onBoxesChange={(updater) => setLocalBoxes(updater)}
+              onTextsChange={(updater) => setLocalTexts(updater)}
               onSelectionChange={setSelection}
               onSelectedColorChange={handleSelectedColorChange}
               onDeleteSelected={handleDeleteSelected}

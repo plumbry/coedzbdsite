@@ -107,6 +107,11 @@ export function hitTestMapObjects(
   return null;
 }
 
+/** Append a box without dropping any existing boxes. */
+export function appendBox(boxes: MapBox[], nextBox: MapBox): MapBox[] {
+  return [...boxes, nextBox];
+}
+
 /** Move only the selected box; leave every other box untouched. */
 export function applyMoveToSelectedBox(
   boxes: MapBox[],
@@ -115,6 +120,15 @@ export function applyMoveToSelectedBox(
 ): MapBox[] {
   if (!selection || selection.type !== "box") return boxes;
   return boxes.map((box) => (box.id === selection.id ? nextBox : box));
+}
+
+/** Update one box by id; never drops siblings. */
+export function updateBoxById(
+  boxes: MapBox[],
+  boxId: string,
+  updater: (box: MapBox) => MapBox,
+): MapBox[] {
+  return boxes.map((box) => (box.id === boxId ? updater(box) : box));
 }
 
 /** Resize only the selected box; leave every other box untouched. */

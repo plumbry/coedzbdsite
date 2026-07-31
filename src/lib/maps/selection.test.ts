@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MapBox, MapText, SelectedObject } from "./types";
 import {
+  appendBox,
   applyColorToSelection,
   applyMoveToSelectedBox,
   findTopBoxAtPoint,
@@ -9,6 +10,7 @@ import {
   pointInBox,
   selectBox,
   selectText,
+  updateBoxById,
 } from "./selection";
 
 const boxes: MapBox[] = [
@@ -124,5 +126,38 @@ describe("applyColorToSelection", () => {
     expect(result.boxes[0]?.color).toBe("#FAE904");
     expect(result.boxes[1]?.color).toBe("#FF0000");
     expect(result.texts[0]?.color).toBe("#FAE904");
+  });
+});
+
+describe("appendBox / updateBoxById", () => {
+  it("keeps every existing box when appending a new one", () => {
+    const next = {
+      id: "box-d",
+      x: 0.8,
+      y: 0.8,
+      width: 0.1,
+      height: 0.1,
+      label: "",
+      color: "#FAE904",
+    };
+    const result = appendBox(boxes, next);
+    expect(result).toHaveLength(4);
+    expect(result.map((box) => box.id)).toEqual([
+      "box-a",
+      "box-b",
+      "box-c",
+      "box-d",
+    ]);
+  });
+
+  it("updating one box never drops siblings (select-original regression)", () => {
+    const result = updateBoxById(boxes, "box-a", (box) => ({
+      ...box,
+      x: 0.12,
+    }));
+    expect(result).toHaveLength(3);
+    expect(result.map((box) => box.id)).toEqual(["box-a", "box-b", "box-c"]);
+    expect(result[0]?.x).toBe(0.12);
+    expect(result[1]).toEqual(boxes[1]);
   });
 });
