@@ -83,6 +83,7 @@ import type * as helpers_playerImportLookup from "../helpers/playerImportLookup.
 import type * as helpers_playerResults from "../helpers/playerResults.js";
 import type * as helpers_publicMemberDirectory from "../helpers/publicMemberDirectory.js";
 import type * as helpers_tierSort from "../helpers/tierSort.js";
+import type * as helpers_yuniteTeammates from "../helpers/yuniteTeammates.js";
 import type * as http from "../http.js";
 import type * as importProcessing from "../importProcessing.js";
 import type * as importProcessingActions from "../importProcessingActions.js";
@@ -310,6 +311,7 @@ declare const fullApi: ApiFromModules<{
   "helpers/playerResults": typeof helpers_playerResults;
   "helpers/publicMemberDirectory": typeof helpers_publicMemberDirectory;
   "helpers/tierSort": typeof helpers_tierSort;
+  "helpers/yuniteTeammates": typeof helpers_yuniteTeammates;
   http: typeof http;
   importProcessing: typeof importProcessing;
   importProcessingActions: typeof importProcessingActions;

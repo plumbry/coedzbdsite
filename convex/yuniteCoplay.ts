@@ -1,136 +1,13 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import type { QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 import { requireAdmin } from "./auth_helpers";
+import { fetchThirdPartyResultsForPlayer } from "./helpers/playerResults";
 import {
-  collectDiscordIdsForPlayer,
-  fetchThirdPartyResultsForPlayer,
-} from "./helpers/playerResults";
+  playedTogetherOnResults,
+  sharedTeamRoster,
+} from "./helpers/yuniteTeammates";
 import { filterThirdPartyResultsToYunite } from "./lib/stats/filterYuniteResults";
-import { normalizeDiscordId } from "./lib/playerIdentity";
-
-type TeammateCaches = {
-  epicToDiscord: Map<string, string | null>;
-  teamByImportTeamId: Map<string, string[]>;
-};
-
-async function resolveEpicToDiscordId(
-  ctx: QueryCtx,
-  epicUsername: string,
-  cache: Map<string, string | null>,
-): Promise<string | null> {
-  const key = epicUsername.trim().toLowerCase();
-  if (!key) return null;
-  if (cache.has(key)) return cache.get(key) ?? null;
-  const player = await ctx.db
-    .query("players")
-    .withIndex("by_epic_username", (q) => q.eq("epicUsername", epicUsername))
-    .first();
-  const discordId = player?.discordUserId ?? null;
-  cache.set(key, discordId);
-  if (player?.epicUsername) {
-    cache.set(player.epicUsername.trim().toLowerCase(), discordId);
-  }
-  return discordId;
-}
-
-async function loadTeammateDiscordIds(
-  ctx: QueryCtx,
-  result: Doc<"thirdPartyResults">,
-  self: { discordId: string | null; epicUsername: string | null },
-  caches: TeammateCaches,
-): Promise<string[]> {
-  if (result.teamMembers && result.teamMembers.length > 0) {
-    const ids: string[] = [];
-    for (const epic of result.teamMembers) {
-      if (
-        self.epicUsername &&
-        epic.trim().toLowerCase() === self.epicUsername.trim().toLowerCase()
-      ) {
-        continue;
-      }
-      const discordId = await resolveEpicToDiscordId(ctx, epic, caches.epicToDiscord);
-      if (discordId && discordId !== self.discordId) ids.push(discordId);
-    }
-    return [...new Set(ids)];
-  }
-
-  if (!result.teamId) return [];
-
-  const cacheKey = `${result.importId}:${result.teamId}`;
-  let teamDiscordIds = caches.teamByImportTeamId.get(cacheKey);
-  if (!teamDiscordIds) {
-    const importResults = await ctx.db
-      .query("thirdPartyResults")
-      .withIndex("by_import", (q) => q.eq("importId", result.importId))
-      .collect();
-    teamDiscordIds = importResults
-      .filter((row) => row.teamId === result.teamId && row.discordId)
-      .map((row) => row.discordId!);
-    caches.teamByImportTeamId.set(cacheKey, teamDiscordIds);
-  }
-  return [...new Set(teamDiscordIds.filter((id) => id !== self.discordId))];
-}
-
-function epicInTeamMembers(
-  teamMembers: string[] | undefined,
-  epicUsername: string | undefined,
-): boolean {
-  if (!teamMembers?.length || !epicUsername?.trim()) return false;
-  const needle = epicUsername.trim().toLowerCase();
-  return teamMembers.some((member) => member.trim().toLowerCase() === needle);
-}
-
-function playerDiscordIdsInclude(
-  playerDiscordIds: Set<string>,
-  teammateDiscordIds: string[],
-): boolean {
-  return teammateDiscordIds.some((id) => playerDiscordIds.has(normalizeDiscordId(id)));
-}
-
-function playedTogetherOnImport(
-  player1Result: Doc<"thirdPartyResults">,
-  player2Results: Doc<"thirdPartyResults">[],
-  player1: Doc<"players">,
-  player2: Doc<"players">,
-  player2DiscordIds: Set<string>,
-  teammateDiscordIds: string[],
-): boolean {
-  if (
-    player1Result.teamId &&
-    player2Results.some((result) => result.teamId === player1Result.teamId)
-  ) {
-    return true;
-  }
-
-  if (epicInTeamMembers(player1Result.teamMembers, player2.epicUsername)) {
-    return true;
-  }
-
-  if (
-    player2Results.some((result) =>
-      epicInTeamMembers(result.teamMembers, player1.epicUsername),
-    )
-  ) {
-    return true;
-  }
-
-  return playerDiscordIdsInclude(player2DiscordIds, teammateDiscordIds);
-}
-
-function pickPlayer2Result(
-  player1Result: Doc<"thirdPartyResults">,
-  player2Results: Doc<"thirdPartyResults">[],
-): Doc<"thirdPartyResults"> {
-  if (player1Result.teamId) {
-    const sameTeam = player2Results.find(
-      (result) => result.teamId === player1Result.teamId,
-    );
-    if (sameTeam) return sameTeam;
-  }
-  return player2Results[0]!;
-}
 
 function formatImportDate(importRecord: Doc<"thirdPartyImports">): string | null {
   if (importRecord.eventDate) return importRecord.eventDate;
@@ -190,22 +67,13 @@ export const getSharedYuniteResults = query({
       player2ByImport.set(result.importId, existing);
     }
 
-    const player2DiscordIds = new Set(
-      collectDiscordIdsForPlayer(player2).map((id) => normalizeDiscordId(id)),
-    );
-
-    const caches: TeammateCaches = {
-      epicToDiscord: new Map(),
-      teamByImportTeamId: new Map(),
-    };
-
     const sharedResults: Array<{
       importId: Id<"thirdPartyImports">;
       eventName: string;
       eventDate: string | null;
       leaderboardUrl: string | null;
       teamId: string | null;
-      teamName: string | null;
+      teamRoster: string[];
       player1Placement: number | null;
       player2Placement: number | null;
       player1Points: number | null;
@@ -222,35 +90,15 @@ export const getSharedYuniteResults = query({
       const player2OnImport = player2ByImport.get(player1Result.importId);
       if (!player2OnImport?.length) continue;
 
-      const teammateDiscordIds = await loadTeammateDiscordIds(
-        ctx,
-        player1Result,
-        {
-          discordId: player1.discordUserId,
-          epicUsername: player1.epicUsername,
-        },
-        caches,
+      const player2Result = player2OnImport.find((result) =>
+        playedTogetherOnResults(player1Result, result, player1, player2),
       );
-
-      if (
-        !playedTogetherOnImport(
-          player1Result,
-          player2OnImport,
-          player1,
-          player2,
-          player2DiscordIds,
-          teammateDiscordIds,
-        )
-      ) {
-        continue;
-      }
+      if (!player2Result) continue;
 
       seenImports.add(importKey);
 
       const importRecord = await ctx.db.get(player1Result.importId);
       if (!importRecord) continue;
-
-      const player2Result = pickPlayer2Result(player1Result, player2OnImport);
 
       sharedResults.push({
         importId: player1Result.importId,
@@ -258,7 +106,7 @@ export const getSharedYuniteResults = query({
         eventDate: formatImportDate(importRecord),
         leaderboardUrl: importRecord.leaderboardUrl ?? null,
         teamId: player1Result.teamId ?? player2Result.teamId ?? null,
-        teamName: player1Result.teamName ?? player2Result.teamName ?? null,
+        teamRoster: sharedTeamRoster(player1Result, player2Result),
         player1Placement: player1Result.placement ?? null,
         player2Placement: player2Result.placement ?? null,
         player1Points: player1Result.points ?? null,

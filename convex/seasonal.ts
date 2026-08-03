@@ -9,6 +9,7 @@ import {
   getDiscordUserIdFromIdentity,
 } from "./auth_discord";
 import { findPlayerByDiscordUserId } from "./helpers/playerDiscordAliases";
+import { loadTeammateDiscordIdsForResult } from "./helpers/yuniteTeammates";
 import { provisionViewerUser } from "./userProvisioning";
 
 const DEFAULT_CAMPAIGN_SLUG = "summer-slam";
@@ -710,27 +711,6 @@ type PlayerCoplayContext = {
   leaderboardCountByDiscordId: Map<string, number>;
 };
 
-async function resolveEpicToDiscordId(
-  ctx: QueryCtx | MutationCtx,
-  epicUsername: string,
-  cache: Map<string, string | null>,
-): Promise<string | null> {
-  const key = epicUsername.trim().toLowerCase();
-  if (!key) return null;
-  if (cache.has(key)) return cache.get(key) ?? null;
-  const player = await ctx.db
-    .query("players")
-    .withIndex("by_epic_username", (q) => q.eq("epicUsername", epicUsername))
-    .first();
-  const discordId = player?.discordUserId ?? null;
-  cache.set(key, discordId);
-  // Also cache lowercase variant of stored epic if casing differs
-  if (player?.epicUsername) {
-    cache.set(player.epicUsername.trim().toLowerCase(), discordId);
-  }
-  return discordId;
-}
-
 async function countLeaderboardsForDiscordId(
   ctx: QueryCtx | MutationCtx,
   discordId: string,
@@ -763,42 +743,13 @@ async function countLeaderboardsForDiscordId(
 async function loadTeammateDiscordIds(
   ctx: QueryCtx | MutationCtx,
   result: Doc<"thirdPartyResults">,
-  self: { discordId: string | null; epicUsername: string | null },
+  player: Pick<Doc<"players">, "discordUserId" | "epicUsername">,
   caches: {
     epicToDiscord: Map<string, string | null>;
     teamByImportTeamId: Map<string, string[]>;
   },
 ): Promise<string[]> {
-  if (result.teamMembers && result.teamMembers.length > 0) {
-    const ids: string[] = [];
-    for (const epic of result.teamMembers) {
-      if (
-        self.epicUsername &&
-        epic.trim().toLowerCase() === self.epicUsername.trim().toLowerCase()
-      ) {
-        continue;
-      }
-      const discordId = await resolveEpicToDiscordId(ctx, epic, caches.epicToDiscord);
-      if (discordId && discordId !== self.discordId) ids.push(discordId);
-    }
-    return [...new Set(ids)];
-  }
-
-  if (!result.teamId) return [];
-
-  const cacheKey = `${result.importId}:${result.teamId}`;
-  let teamDiscordIds = caches.teamByImportTeamId.get(cacheKey);
-  if (!teamDiscordIds) {
-    const importResults = await ctx.db
-      .query("thirdPartyResults")
-      .withIndex("by_import", (q) => q.eq("importId", result.importId))
-      .collect();
-    teamDiscordIds = importResults
-      .filter((row) => row.teamId === result.teamId && row.discordId)
-      .map((row) => row.discordId!);
-    caches.teamByImportTeamId.set(cacheKey, teamDiscordIds);
-  }
-  return [...new Set(teamDiscordIds.filter((id) => id !== self.discordId))];
+  return loadTeammateDiscordIdsForResult(ctx, result, player, caches);
 }
 
 async function loadPlayerCoplayContext(
@@ -816,10 +767,9 @@ async function loadPlayerCoplayContext(
   },
 ): Promise<PlayerCoplayContext> {
   const player = await ctx.db.get(playerId);
-  const self = {
-    discordId: player?.discordUserId ?? null,
-    epicUsername: player?.epicUsername ?? null,
-  };
+  if (!player) {
+    return { teammatesByImport: new Map(), leaderboardCountByDiscordId: new Map() };
+  }
   const allResults = await ctx.db
     .query("thirdPartyResults")
     .withIndex("by_player", (q) => q.eq("playerId", playerId))
@@ -840,7 +790,7 @@ async function loadPlayerCoplayContext(
   const neededDiscordIds = new Set<string>();
 
   for (const result of scopedResults) {
-    const teammates = await loadTeammateDiscordIds(ctx, result, self, caches);
+    const teammates = await loadTeammateDiscordIds(ctx, result, player, caches);
     const existing = teammatesByImport.get(result.importId) ?? [];
     const merged = [...new Set([...existing, ...teammates])];
     teammatesByImport.set(result.importId, merged);

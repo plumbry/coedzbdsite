@@ -138,7 +138,8 @@ export default function YuniteCoplayLookup() {
           Yunite Coplay Lookup
         </CardTitle>
         <CardDescription>
-          Find every Yunite leaderboard where two players appeared on the same team.
+          Matches only when both players have the same Yunite team ID on that import. Older
+          imports without team IDs must have identical teamMembers rosters instead.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -219,7 +220,8 @@ export default function YuniteCoplayLookup() {
                     <TableRow>
                       <TableHead>Event</TableHead>
                       <TableHead>Date</TableHead>
-                      <TableHead>Team</TableHead>
+                      <TableHead>Team ID</TableHead>
+                      <TableHead>Roster</TableHead>
                       <TableHead>P1</TableHead>
                       <TableHead>P2</TableHead>
                       <TableHead></TableHead>
@@ -241,8 +243,17 @@ export default function YuniteCoplayLookup() {
                         <TableCell className="text-sm text-muted-foreground">
                           {formatEventDate(result.eventDate)}
                         </TableCell>
-                        <TableCell className="text-sm">
-                          {result.teamName ?? result.teamId ?? "—"}
+                        <TableCell className="max-w-[180px] font-mono text-xs">
+                          {result.teamId ?? "—"}
+                        </TableCell>
+                        <TableCell className="max-w-[220px] text-sm">
+                          {result.teamRoster.length > 0 ? (
+                            <span className="line-clamp-2" title={result.teamRoster.join(", ")}>
+                              {result.teamRoster.join(", ")}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm">
                           {result.player1Placement != null ? `#${result.player1Placement}` : "—"}
