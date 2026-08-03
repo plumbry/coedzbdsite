@@ -1000,6 +1000,8 @@ async function evaluateRule(
       const prior = new Set<string>();
       for (const [importId, ids] of context.teammatesByImport) {
         if (importId === result.importId || excludedImports.has(importId)) continue;
+        // Only coplay before this campaign counts — teammates met in other Summer Slam scrims still qualify.
+        if (scrimsPlayed.has(importId)) continue;
         for (const id of ids) prior.add(id);
       }
       for (const id of teammates) {
