@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.t
 import AdminPageLayout from "@/components/admin-page-layout.tsx";
 import ImportThirdParty from "./_components/import-third-party.tsx";
 import YuniteDashboard from "./_components/yunite-dashboard.tsx";
+import YuniteCoplayLookup from "./_components/yunite-coplay-lookup.tsx";
 import { YuniteDebugContent } from "./yunite-debug.tsx";
 
 const VALID_TABS = ["imports", "yunite", "debug"] as const;
@@ -35,6 +36,7 @@ export default function UploadsPage() {
         </TabsContent>
 
         <TabsContent value="yunite" className="space-y-4 mt-4">
+          <YuniteCoplayLookup />
           <YuniteDashboard showBulkSync={true} showOverview={true} />
         </TabsContent>
 

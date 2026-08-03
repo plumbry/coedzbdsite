@@ -202,6 +202,7 @@ import type * as userProvisioning from "../userProvisioning.js";
 import type * as users from "../users.js";
 import type * as validation_phase3b from "../validation/phase3b.js";
 import type * as yunite from "../yunite.js";
+import type * as yuniteCoplay from "../yuniteCoplay.js";
 import type * as yuniteExport from "../yuniteExport.js";
 import type * as yuniteQueries from "../yuniteQueries.js";
 import type * as yunite_backfillTournamentStartedAt from "../yunite/backfillTournamentStartedAt.js";
@@ -428,6 +429,7 @@ declare const fullApi: ApiFromModules<{
   users: typeof users;
   "validation/phase3b": typeof validation_phase3b;
   yunite: typeof yunite;
+  yuniteCoplay: typeof yuniteCoplay;
   yuniteExport: typeof yuniteExport;
   yuniteQueries: typeof yuniteQueries;
   "yunite/backfillTournamentStartedAt": typeof yunite_backfillTournamentStartedAt;
