@@ -118,6 +118,7 @@ import type * as lib_playerJoinedAt from "../lib/playerJoinedAt.js";
 import type * as lib_resolveImportPipelineStep from "../lib/resolveImportPipelineStep.js";
 import type * as lib_scrimLeaderboard from "../lib/scrimLeaderboard.js";
 import type * as lib_scrimSeriesEventLink from "../lib/scrimSeriesEventLink.js";
+import type * as lib_seasonalAutoProgress from "../lib/seasonalAutoProgress.js";
 import type * as lib_stats_computeContributionScore from "../lib/stats/computeContributionScore.js";
 import type * as lib_stats_computeInternalPlayerStats from "../lib/stats/computeInternalPlayerStats.js";
 import type * as lib_stats_evaluationStatus from "../lib/stats/evaluationStatus.js";
@@ -346,6 +347,7 @@ declare const fullApi: ApiFromModules<{
   "lib/resolveImportPipelineStep": typeof lib_resolveImportPipelineStep;
   "lib/scrimLeaderboard": typeof lib_scrimLeaderboard;
   "lib/scrimSeriesEventLink": typeof lib_scrimSeriesEventLink;
+  "lib/seasonalAutoProgress": typeof lib_seasonalAutoProgress;
   "lib/stats/computeContributionScore": typeof lib_stats_computeContributionScore;
   "lib/stats/computeInternalPlayerStats": typeof lib_stats_computeInternalPlayerStats;
   "lib/stats/evaluationStatus": typeof lib_stats_evaluationStatus;

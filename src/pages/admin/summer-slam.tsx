@@ -291,6 +291,10 @@ export default function SummerSlamAdminPage() {
     "approved",
     "desc",
   );
+  const inProgressAutoSort = useColumnSort<"player" | "quest" | "category" | "progress" | "updated">(
+    "updated",
+    "desc",
+  );
   const { isAdmin } = useUserRole();
 
   const ensureCampaign = useMutation(api.seasonal.ensureSummerSlamCampaign);
@@ -304,6 +308,10 @@ export default function SummerSlamAdminPage() {
   const reviewQueue = useQuery(api.seasonal.getReviewQueue, isAdmin ? { slug: CAMPAIGN_SLUG, status: reviewStatus } : "skip");
   const passports = useQuery(api.seasonal.getAdminPassports, isAdmin ? { slug: CAMPAIGN_SLUG } : "skip");
   const autoAwards = useQuery(api.seasonal.getAutoApprovedProgress, isAdmin ? { slug: CAMPAIGN_SLUG } : "skip");
+  const inProgressAutoAwards = useQuery(
+    api.seasonal.getInProgressAutoProgress,
+    isAdmin ? { slug: CAMPAIGN_SLUG } : "skip",
+  );
   const exportData = useQuery(api.seasonal.getProgressExport, isAdmin ? { slug: CAMPAIGN_SLUG } : "skip");
 
   useEffect(() => {
@@ -508,6 +516,59 @@ export default function SummerSlamAdminPage() {
     });
     return rows;
   }, [filteredAutoAwards, autoAwardSort.sortColumn, autoAwardSort.sortDirection]);
+
+  const filteredInProgressAutoAwards = useMemo(() => {
+    const term = autoAwardFilterText.trim().toLowerCase();
+    if (!term) return inProgressAutoAwards ?? [];
+    return (inProgressAutoAwards ?? []).filter((row) => {
+      const player = row.player;
+      const quest = row.quest;
+      return (
+        player?.discordUsername.toLowerCase().includes(term) ||
+        player?.epicUsername.toLowerCase().includes(term) ||
+        quest?.title.toLowerCase().includes(term) ||
+        quest?.category.toLowerCase().includes(term) ||
+        (quest ? categoryLabels[quest.category].toLowerCase().includes(term) : false) ||
+        row.criteria.toLowerCase().includes(term) ||
+        row.progressSummary.toLowerCase().includes(term)
+      );
+    });
+  }, [autoAwardFilterText, inProgressAutoAwards]);
+
+  const sortedInProgressAutoAwards = useMemo(() => {
+    const rows = [...filteredInProgressAutoAwards];
+    const direction = inProgressAutoSort.sortDirection === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      let comparison = 0;
+      switch (inProgressAutoSort.sortColumn) {
+        case "player":
+          comparison = compareOptionalString(a.player?.discordUsername, b.player?.discordUsername);
+          break;
+        case "quest":
+          comparison = compareOptionalString(a.quest?.title, b.quest?.title);
+          break;
+        case "category":
+          comparison =
+            TAGLINE_EDIT_ORDER.indexOf(a.quest?.category ?? "traveller") -
+            TAGLINE_EDIT_ORDER.indexOf(b.quest?.category ?? "traveller");
+          break;
+        case "progress":
+          comparison =
+            (a.progress.progressCurrent ?? 0) / Math.max(a.progress.progressTarget ?? 1, 1) -
+            (b.progress.progressCurrent ?? 0) / Math.max(b.progress.progressTarget ?? 1, 1);
+          break;
+        case "updated":
+          comparison = a.progress.updatedAt - b.progress.updatedAt;
+          break;
+      }
+      return comparison * direction;
+    });
+    return rows;
+  }, [
+    filteredInProgressAutoAwards,
+    inProgressAutoSort.sortColumn,
+    inProgressAutoSort.sortDirection,
+  ]);
 
   const isPreLaunchPreview = useMemo(() => {
     const campaign = dashboard?.campaign;
@@ -908,6 +969,11 @@ export default function SummerSlamAdminPage() {
           >
             <p className="text-xs text-muted-foreground">Auto Awards</p>
             <p className="text-xl font-bold">{dashboard?.counts.autoApproved ?? 0}</p>
+            {(dashboard?.counts.inProgressAuto ?? 0) > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {dashboard?.counts.inProgressAuto} in progress
+              </p>
+            ) : null}
           </button>
           <div className="rounded-lg border bg-card p-3">
             <p className="text-xs text-muted-foreground">Approved Points</p>
@@ -1498,10 +1564,32 @@ export default function SummerSlamAdminPage() {
             <div className="flex flex-wrap items-center gap-3">
               <Input
                 className={cn("max-w-sm", fieldClass)}
-                placeholder="Filter by player, quest, category, reason..."
+                placeholder="Filter by player, quest, category, criteria..."
                 value={autoAwardFilterText}
                 onChange={(event) => setAutoAwardFilterText(event.target.value)}
               />
+              <Button
+                variant="outline"
+                className="shrink-0"
+                onClick={() =>
+                  downloadCsv(
+                    "summer-slam-in-progress-auto-awards.csv",
+                    sortedInProgressAutoAwards.map((row) => ({
+                      discordUsername: row.player?.discordUsername ?? "",
+                      epicUsername: row.player?.epicUsername ?? "",
+                      questTitle: row.quest?.title ?? "",
+                      category: row.quest ? categoryLabels[row.quest.category] : "",
+                      criteria: row.criteria,
+                      progressCurrent: row.progress.progressCurrent ?? "",
+                      progressTarget: row.progress.progressTarget ?? "",
+                      progressSummary: row.progressSummary,
+                      updatedAt: new Date(row.progress.updatedAt).toISOString(),
+                    })),
+                  )
+                }
+              >
+                <Download className="mr-2 h-4 w-4" /> Export In Progress
+              </Button>
               <Button
                 variant="outline"
                 className="shrink-0"
@@ -1524,9 +1612,112 @@ export default function SummerSlamAdminPage() {
                   )
                 }
               >
-                <Download className="mr-2 h-4 w-4" /> Export
+                <Download className="mr-2 h-4 w-4" /> Export Completed
               </Button>
             </div>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>In Progress Auto Quests</CardTitle>
+                <CardDescription>
+                  Partial progress toward auto-complete rules after the last recalculation. Shows what
+                  criteria each player has met so far.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <SortableHead
+                        label="Player"
+                        column="player"
+                        sortColumn={inProgressAutoSort.sortColumn}
+                        sortDirection={inProgressAutoSort.sortDirection}
+                        onSort={inProgressAutoSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Quest"
+                        column="quest"
+                        sortColumn={inProgressAutoSort.sortColumn}
+                        sortDirection={inProgressAutoSort.sortDirection}
+                        onSort={inProgressAutoSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Category"
+                        column="category"
+                        sortColumn={inProgressAutoSort.sortColumn}
+                        sortDirection={inProgressAutoSort.sortDirection}
+                        onSort={inProgressAutoSort.handleSort}
+                      />
+                      <TableHead>Criteria</TableHead>
+                      <SortableHead
+                        label="Progress"
+                        column="progress"
+                        sortColumn={inProgressAutoSort.sortColumn}
+                        sortDirection={inProgressAutoSort.sortDirection}
+                        onSort={inProgressAutoSort.handleSort}
+                      />
+                      <SortableHead
+                        label="Updated"
+                        column="updated"
+                        sortColumn={inProgressAutoSort.sortColumn}
+                        sortDirection={inProgressAutoSort.sortDirection}
+                        onSort={inProgressAutoSort.handleSort}
+                      />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {inProgressAutoAwards === undefined ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                          Loading in-progress auto quests…
+                        </TableCell>
+                      </TableRow>
+                    ) : sortedInProgressAutoAwards.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                          {autoAwardFilterText.trim()
+                            ? "No in-progress auto quests match this filter."
+                            : "No partial auto quest progress yet. Tag events and recalculate progress first."}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedInProgressAutoAwards.map((row) => (
+                        <TableRow key={row.progress._id}>
+                          <TableCell>
+                            <div className="font-medium">{row.player?.discordUsername ?? "Unknown"}</div>
+                            <div className="text-xs text-muted-foreground">{row.player?.epicUsername}</div>
+                          </TableCell>
+                          <TableCell>{row.quest?.title ?? "Unknown quest"}</TableCell>
+                          <TableCell>
+                            {row.quest ? categoryLabels[row.quest.category] : "—"}
+                          </TableCell>
+                          <TableCell className="max-w-[280px] text-sm text-muted-foreground">
+                            {row.criteria}
+                          </TableCell>
+                          <TableCell>
+                            {row.progress.progressCurrent != null && row.progress.progressTarget != null ? (
+                              <div className="font-medium">
+                                {row.progress.progressCurrent}/{row.progress.progressTarget}
+                              </div>
+                            ) : null}
+                            <div className="text-sm text-muted-foreground">{row.progressSummary}</div>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {new Date(row.progress.updatedAt).toLocaleString("en-GB", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle>Auto-claimed Quests</CardTitle>

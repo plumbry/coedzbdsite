@@ -10,6 +10,10 @@ import {
 } from "./auth_discord";
 import { findPlayerByDiscordUserId } from "./helpers/playerDiscordAliases";
 import { loadTeammateDiscordIdsForResult } from "./helpers/yuniteTeammates";
+import {
+  formatAutoProgressSummary,
+  formatQualificationRule,
+} from "./lib/seasonalAutoProgress";
 import { provisionViewerUser } from "./userProvisioning";
 
 const DEFAULT_CAMPAIGN_SLUG = "summer-slam";
@@ -877,10 +881,12 @@ async function evaluateRule(
 
   if (rule.type === "play_all_team_formats") {
     const formats = new Set(data.results.map((result) => result.teamFormat));
+    const formatsPlayed = [...formats] as TeamFormat[];
     return {
       qualifies: formats.has("duos") && formats.has("trios") && formats.has("squads"),
       current: formats.size,
       target: 3,
+      formatsPlayed,
       log: formats.size >= 3 ? "Auto-approved: Played Duos, Trios and Squads during the campaign." : undefined,
     };
   }
@@ -1921,6 +1927,11 @@ export const getAdminDashboard = query({
         autoApproved: progress.filter(
           (row) => row.status === "approved" && row.awardSource === "auto",
         ).length,
+        inProgressAuto: progress.filter(
+          (row) =>
+            row.status === "in_progress" &&
+            quests.find((quest) => quest._id === row.questId)?.completionMethod === "auto",
+        ).length,
       },
     };
   },
@@ -1959,6 +1970,56 @@ export const getAutoApprovedProgress = query({
         quest: quests.get(progress.questId) ?? null,
       }))
       .sort((a, b) => (b.progress.approvedAt ?? 0) - (a.progress.approvedAt ?? 0));
+  },
+});
+
+/** Admin list of in-progress auto quest progress (partial criteria met). */
+export const getInProgressAutoProgress = query({
+  args: { slug: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
+    const progressRows = await ctx.db
+      .query("seasonalQuestProgress")
+      .withIndex("by_campaign_and_status", (q) =>
+        q.eq("campaignId", campaign._id).eq("status", "in_progress"),
+      )
+      .collect();
+
+    const playerIds = [...new Set(progressRows.map((row) => row.playerId))];
+    const questIds = [...new Set(progressRows.map((row) => row.questId))];
+    const players = new Map<Id<"players">, Doc<"players"> | null>();
+    const quests = new Map<Id<"seasonalQuests">, Doc<"seasonalQuests"> | null>();
+    for (const playerId of playerIds) {
+      players.set(playerId, await ctx.db.get(playerId));
+    }
+    for (const questId of questIds) {
+      quests.set(questId, await ctx.db.get(questId));
+    }
+
+    return progressRows
+      .map((progress) => {
+        const quest = quests.get(progress.questId) ?? null;
+        if (!quest || quest.completionMethod !== "auto" || !quest.qualificationRule) {
+          return null;
+        }
+        const current = progress.progressCurrent ?? 0;
+        const target = progress.progressTarget ?? 1;
+        const criteria = formatQualificationRule(quest.qualificationRule);
+        const progressSummary =
+          progress.awardLog ??
+          formatAutoProgressSummary(quest.qualificationRule, current, target) ??
+          `${current} of ${target}`;
+        return {
+          progress,
+          player: players.get(progress.playerId) ?? null,
+          quest,
+          criteria,
+          progressSummary,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row != null)
+      .sort((a, b) => b.progress.updatedAt - a.progress.updatedAt);
   },
 });
 
@@ -2335,6 +2396,16 @@ export const recalculateCampaignInternal = internalMutation({
           : evaluation.current > 0
             ? "in_progress"
             : "not_started";
+        const progressLog =
+          evaluation.log ??
+          (quest.qualificationRule
+            ? formatAutoProgressSummary(
+                quest.qualificationRule,
+                evaluation.current,
+                evaluation.target,
+                { formatsPlayed: "formatsPlayed" in evaluation ? evaluation.formatsPlayed : undefined },
+              )
+            : undefined);
         await setProgress(ctx, {
           campaignId: args.campaignId,
           quest,
@@ -2343,7 +2414,7 @@ export const recalculateCampaignInternal = internalMutation({
           progressCurrent: evaluation.current,
           progressTarget: evaluation.target,
           awardSource: evaluation.qualifies ? "auto" : undefined,
-          awardLog: evaluation.log,
+          awardLog: progressLog,
         });
         if (evaluation.qualifies && evaluation.log) {
           approvedInBatch += 1;
