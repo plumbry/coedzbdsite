@@ -1985,6 +1985,9 @@ export const getReviewQueue = query({
       )
       .collect();
 
+    const { player: reviewerPlayer } = await resolveCurrentPlayer(ctx);
+    const allowSelfReview = isAdminCampaignPreview(campaign);
+
     const rows = [];
     for (const submission of submissions) {
       const [quest, player, images] = await Promise.all([
@@ -2002,7 +2005,18 @@ export const getReviewQueue = query({
           url: await ctx.storage.getUrl(image.storageId),
         });
       }
-      rows.push({ submission, quest, player, images: imageUrls });
+      const isOwnSubmission = reviewerPlayer?._id === submission.playerId;
+      const canReview = !isOwnSubmission || allowSelfReview;
+      rows.push({
+        submission,
+        quest,
+        player,
+        images: imageUrls,
+        canReview,
+        reviewBlockedReason: canReview
+          ? undefined
+          : "Admins cannot review their own submissions. Ask another admin to review this entry.",
+      });
     }
 
     return rows.sort((a, b) => b.submission.submittedAt - a.submission.submittedAt);

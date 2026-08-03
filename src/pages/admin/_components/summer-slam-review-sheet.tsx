@@ -71,6 +71,8 @@ type ReviewQueueRow = {
     discordUsername: string;
     epicUsername: string;
   } | null;
+  canReview: boolean;
+  reviewBlockedReason?: string;
   images: Array<{
     _id: Id<"seasonalSubmissionImages">;
     url: string | null;
@@ -160,6 +162,7 @@ export function SummerSlamReviewSheet({
   if (!row) return null;
 
   const isPending = row.submission.status === "pending_review";
+  const canReview = row.canReview;
   const quest = row.quest;
   const playerMessage = buildReviewMessage(templateId || undefined, extraNote);
 
@@ -288,7 +291,13 @@ export function SummerSlamReviewSheet({
             </section>
           ) : null}
 
-          {isPending ? (
+          {isPending && !canReview && row.reviewBlockedReason ? (
+            <section className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              {row.reviewBlockedReason}
+            </section>
+          ) : null}
+
+          {isPending && canReview ? (
             <section className="space-y-3 rounded-lg border p-3">
               <h3 className="text-sm font-semibold">Review note for player</h3>
               <div className="space-y-1.5">
@@ -329,7 +338,7 @@ export function SummerSlamReviewSheet({
           ) : null}
         </div>
 
-        {isPending ? (
+        {isPending && canReview ? (
           <SheetFooter className="flex-col gap-2 sm:flex-col">
             <Button onClick={() => handleReview("approved")} disabled={isReviewing}>
               {isReviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
