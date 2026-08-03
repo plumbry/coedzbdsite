@@ -245,14 +245,6 @@ function assertSubmissionsOpen(
   }
 }
 
-/** Admins can test passport flows before the season start date. */
-function isAdminCampaignPreview(
-  campaign: Doc<"seasonalCampaigns">,
-  now = Date.now(),
-): boolean {
-  return campaign.isActive && !!campaign.startsAt && now < campaign.startsAt;
-}
-
 async function resolveCurrentAdmin(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
@@ -1985,9 +1977,6 @@ export const getReviewQueue = query({
       )
       .collect();
 
-    const { player: reviewerPlayer } = await resolveCurrentPlayer(ctx);
-    const allowSelfReview = isAdminCampaignPreview(campaign);
-
     const rows = [];
     for (const submission of submissions) {
       const [quest, player, images] = await Promise.all([
@@ -2005,18 +1994,7 @@ export const getReviewQueue = query({
           url: await ctx.storage.getUrl(image.storageId),
         });
       }
-      const isOwnSubmission = reviewerPlayer?._id === submission.playerId;
-      const canReview = !isOwnSubmission || allowSelfReview;
-      rows.push({
-        submission,
-        quest,
-        player,
-        images: imageUrls,
-        canReview,
-        reviewBlockedReason: canReview
-          ? undefined
-          : "Admins cannot review their own submissions. Ask another admin to review this entry.",
-      });
+      rows.push({ submission, quest, player, images: imageUrls });
     }
 
     return rows.sort((a, b) => b.submission.submittedAt - a.submission.submittedAt);
@@ -2083,12 +2061,6 @@ export const reviewSubmission = mutation({
     if (!campaign) {
       throw new ConvexError({ message: "Campaign not found", code: "NOT_FOUND" });
     }
-    const { player: reviewerPlayer } = await resolveCurrentPlayer(ctx);
-    const allowSelfReviewForTesting = isAdminCampaignPreview(campaign);
-    if (reviewerPlayer?._id === submission.playerId && !allowSelfReviewForTesting) {
-      throw new ConvexError({ message: "Admins cannot review their own submissions", code: "FORBIDDEN" });
-    }
-
     const status = args.status;
     const staffFeedback = sanitizeText(args.rejectionReason ?? args.reviewNote, 1000);
     let progressAwardLog: string | undefined;

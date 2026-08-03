@@ -1406,11 +1406,6 @@ export default function SummerSlamAdminPage() {
                         <TableCell>
                           <div className="font-medium">{row.player?.discordUsername ?? "Unknown"}</div>
                           <div className="text-xs text-muted-foreground">{row.player?.epicUsername}</div>
-                          {!row.canReview && row.submission.status === "pending_review" ? (
-                            <Badge variant="outline" className="mt-1 text-[10px]">
-                              Your submission
-                            </Badge>
-                          ) : null}
                         </TableCell>
                         <TableCell>
                           <div>{row.quest?.title ?? "Unknown quest"}</div>
@@ -1471,17 +1466,13 @@ export default function SummerSlamAdminPage() {
                             Review
                           </Button>
                           {row.submission.status === "pending_review" ? (
-                            row.canReview ? (
-                              <Button
-                                size="sm"
-                                onClick={() => handleReview(row.submission._id, "approved")}
-                                disabled={isReviewing}
-                              >
-                                Approve
-                              </Button>
-                            ) : (
-                              <Badge variant="secondary">Needs another admin</Badge>
-                            )
+                            <Button
+                              size="sm"
+                              onClick={() => handleReview(row.submission._id, "approved")}
+                              disabled={isReviewing}
+                            >
+                              Approve
+                            </Button>
                           ) : (
                             <Badge variant="secondary">{row.submission.status.replace(/_/g, " ")}</Badge>
                           )}
