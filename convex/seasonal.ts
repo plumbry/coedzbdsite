@@ -987,10 +987,9 @@ async function evaluateRule(
       };
     }
 
-    // new_teammates: teammates with no prior Yunite coplay outside this import
+    // new_teammates: unique teammates with no prior Yunite coplay, counted across all campaign events
     const target = requirePositiveInteger(rule.count, "New teammate count");
-    let bestCurrent = 0;
-    let bestResult: CampaignPlayerResult | null = null;
+    const freshTeammates = new Set<string>();
     for (const result of data.results) {
       const teammates = context.teammatesByImport.get(result.importId) ?? [];
       const prior = new Set<string>();
@@ -998,19 +997,18 @@ async function evaluateRule(
         if (importId === result.importId) continue;
         for (const id of ids) prior.add(id);
       }
-      const fresh = teammates.filter((id) => !prior.has(id));
-      if (fresh.length > bestCurrent) {
-        bestCurrent = fresh.length;
-        bestResult = result;
+      for (const id of teammates) {
+        if (!prior.has(id)) freshTeammates.add(id);
       }
     }
+    const current = freshTeammates.size;
     return {
-      qualifies: bestCurrent >= target,
-      current: Math.min(bestCurrent, target),
+      qualifies: current >= target,
+      current: Math.min(current, target),
       target,
       log:
-        bestCurrent >= target && bestResult
-          ? `Auto-approved: Teamed with ${bestCurrent} player${bestCurrent === 1 ? "" : "s"} with no prior Yunite coplay on ${formatEventDate(bestResult.event)}.`
+        current >= target
+          ? `Auto-approved: Teamed with ${current} player${current === 1 ? "" : "s"} with no prior Yunite coplay across Summer Slam events.`
           : undefined,
     };
   }

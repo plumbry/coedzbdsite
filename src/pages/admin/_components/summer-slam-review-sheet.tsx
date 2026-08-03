@@ -108,7 +108,7 @@ function formatQualificationRule(rule: QualificationRule): string {
     case "new_member_teammate":
       return `Play with a teammate who has fewer than ${rule.maxEvents} Yunite events`;
     case "new_teammates":
-      return `Team with ${rule.count} player${rule.count === 1 ? "" : "s"} with no prior Yunite coplay`;
+      return `Team with ${rule.count} unique player${rule.count === 1 ? "" : "s"} with no prior Yunite coplay across Summer Slam events`;
     case "play_team_format":
       return `Play a ${rule.teamFormat} event (legacy)`;
     case "reach_top":

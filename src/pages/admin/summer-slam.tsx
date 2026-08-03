@@ -1105,8 +1105,8 @@ export default function SummerSlamAdminPage() {
                         <Label>Never-played-with teammates required</Label>
                         <Input className={fieldClass} type="number" min={1} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} />
                         <p className="text-xs text-muted-foreground">
-                          Completes when one Summer Slam team includes this many players with no prior
-                          Yunite coplay on record.
+                          Counts unique teammates with no prior Yunite coplay across all Summer Slam
+                          events (can be met across multiple scrims).
                         </p>
                       </div>
                     )}

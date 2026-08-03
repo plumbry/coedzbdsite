@@ -769,7 +769,7 @@ export default defineSchema({
         }),
         v.object({
           type: v.literal("new_teammates"),
-          /** Number of teammates with no prior Yunite coplay on record. */
+          /** Unique teammates with no prior Yunite coplay, counted across all campaign events. */
           count: v.number(),
         }),
         // Legacy rules for quests saved before rule simplification.
