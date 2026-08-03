@@ -678,6 +678,56 @@ function formatEventDate(event: CampaignEventMeta): string {
   return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 }
 
+/** Random/shuffle formats don't count toward never-played-with teammate quests. */
+const NEW_TEAMMATE_EXCLUDED_EVENT_SUBSTRINGS = [
+  "squad shuffle",
+  "random squads",
+  "random trios",
+] as const;
+
+function isExcludedNewTeammateEventName(eventName: string): boolean {
+  const normalized = eventName.toLowerCase();
+  return NEW_TEAMMATE_EXCLUDED_EVENT_SUBSTRINGS.some((pattern) =>
+    normalized.includes(pattern),
+  );
+}
+
+async function buildExcludedNewTeammateImportIds(
+  ctx: QueryCtx | MutationCtx,
+  results: CampaignPlayerResult[],
+  teammateImportIds: Iterable<Id<"thirdPartyImports">>,
+): Promise<Set<Id<"thirdPartyImports">>> {
+  const eventNameByImport = new Map<Id<"thirdPartyImports">, string>();
+  for (const result of results) {
+    eventNameByImport.set(result.importId, result.event.name);
+  }
+
+  const excluded = new Set<Id<"thirdPartyImports">>();
+  const checked = new Set<Id<"thirdPartyImports">>();
+
+  const consider = async (importId: Id<"thirdPartyImports">) => {
+    if (checked.has(importId)) return;
+    checked.add(importId);
+    let name = eventNameByImport.get(importId);
+    if (name === undefined) {
+      const importRecord = await ctx.db.get(importId);
+      name = importRecord?.eventName ?? "";
+    }
+    if (isExcludedNewTeammateEventName(name)) {
+      excluded.add(importId);
+    }
+  };
+
+  for (const result of results) {
+    await consider(result.importId);
+  }
+  for (const importId of teammateImportIds) {
+    await consider(importId);
+  }
+
+  return excluded;
+}
+
 function evaluateReachTop(
   maxPlacement: number,
   data: Awaited<ReturnType<typeof loadPlayerCampaignResults>>,
@@ -939,12 +989,19 @@ async function evaluateRule(
 
     // new_teammates: unique teammates with no prior Yunite coplay, counted across all campaign events
     const target = requirePositiveInteger(rule.count, "New teammate count");
+    const excludedImports = await buildExcludedNewTeammateImportIds(
+      ctx,
+      data.results,
+      context.teammatesByImport.keys(),
+    );
     const freshTeammates = new Set<string>();
     for (const result of data.results) {
+      if (excludedImports.has(result.importId)) continue;
+
       const teammates = context.teammatesByImport.get(result.importId) ?? [];
       const prior = new Set<string>();
       for (const [importId, ids] of context.teammatesByImport) {
-        if (importId === result.importId) continue;
+        if (importId === result.importId || excludedImports.has(importId)) continue;
         for (const id of ids) prior.add(id);
       }
       for (const id of teammates) {
