@@ -218,7 +218,9 @@ export function SummerSlamManualAwards() {
             <CardDescription>
               {playerProgress === undefined
                 ? "Loading quest progress…"
-                : `${awardableCount} quest${awardableCount === 1 ? "" : "s"} can be awarded manually.`}
+                : playerProgress === null
+                  ? "Player could not be found."
+                  : `${awardableCount} quest${awardableCount === 1 ? "" : "s"} can be awarded manually.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -238,6 +240,12 @@ export function SummerSlamManualAwards() {
                   <TableRow>
                     <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                       Loading…
+                    </TableCell>
+                  </TableRow>
+                ) : playerProgress === null ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                      Player could not be found.
                     </TableCell>
                   </TableRow>
                 ) : playerProgress.quests.length === 0 ? (
