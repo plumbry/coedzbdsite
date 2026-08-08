@@ -13,6 +13,7 @@ import { loadTeammateDiscordIdsForResult } from "./helpers/yuniteTeammates";
 import {
   formatAutoProgressSummary,
   formatQualificationRule,
+  questProgressTarget,
 } from "./lib/seasonalAutoProgress";
 import { provisionViewerUser } from "./userProvisioning";
 
@@ -2100,6 +2101,61 @@ export const getAdminPassports = query({
   },
 });
 
+/** Admin view of one player's quest progress (for manual awards). */
+export const getAdminPlayerQuestProgress = query({
+  args: {
+    slug: v.optional(v.string()),
+    playerId: v.id("players"),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const campaign = await requireCampaign(ctx, normalizeSlug(args.slug));
+    const player = await ctx.db.get(args.playerId);
+    if (!player) {
+      return null;
+    }
+
+    const quests = await ctx.db
+      .query("seasonalQuests")
+      .withIndex("by_campaign", (q) => q.eq("campaignId", campaign._id))
+      .collect();
+    const progressRows = await ctx.db
+      .query("seasonalQuestProgress")
+      .withIndex("by_campaign_and_player", (q) =>
+        q.eq("campaignId", campaign._id).eq("playerId", args.playerId),
+      )
+      .collect();
+    const progressByQuest = new Map(progressRows.map((row) => [row.questId, row]));
+
+    return {
+      player: {
+        _id: player._id,
+        discordUsername: player.discordUsername,
+        epicUsername: player.epicUsername,
+      },
+      quests: quests
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title))
+        .map((quest) => {
+          const progress = progressByQuest.get(quest._id) ?? null;
+          const target = questProgressTarget(quest.qualificationRule ?? undefined);
+          const canAward =
+            quest.isActive &&
+            (progress?.status !== "approved" || quest.repeatable) &&
+            progress?.status !== "pending_review";
+          return {
+            quest,
+            progress,
+            target,
+            criteria: quest.qualificationRule
+              ? formatQualificationRule(quest.qualificationRule)
+              : undefined,
+            canAward,
+          };
+        }),
+    };
+  },
+});
+
 export const reviewSubmission = mutation({
   args: {
     submissionId: v.id("seasonalQuestSubmissions"),
@@ -2185,15 +2241,44 @@ export const awardQuestManually = mutation({
     if (!quest || quest.campaignId !== campaign._id) {
       throw new ConvexError({ message: "Quest not found", code: "NOT_FOUND" });
     }
+    if (!quest.isActive) {
+      throw new ConvexError({ message: "Quest is not active", code: "BAD_REQUEST" });
+    }
+    const player = await ctx.db.get(args.playerId);
+    if (!player) {
+      throw new ConvexError({ message: "Player not found", code: "NOT_FOUND" });
+    }
+
+    const existing = await ctx.db
+      .query("seasonalQuestProgress")
+      .withIndex("by_quest_and_player", (q) =>
+        q.eq("questId", quest._id).eq("playerId", args.playerId),
+      )
+      .first();
+    if (existing?.status === "approved" && !quest.repeatable) {
+      throw new ConvexError({ message: "Quest already approved for this player", code: "CONFLICT" });
+    }
+    if (existing?.status === "pending_review") {
+      throw new ConvexError({
+        message: "Quest has a pending submission — review it in the queue instead",
+        code: "CONFLICT",
+      });
+    }
+
+    const target = questProgressTarget(quest.qualificationRule ?? undefined);
+    const awardLog =
+      sanitizeText(args.note, 1000) ??
+      `Manually awarded by ${getDisplayName(admin)} (auto-track unavailable or verified by staff).`;
+
     await setProgress(ctx, {
       campaignId: campaign._id,
       quest,
       playerId: args.playerId,
       status: "approved",
-      progressCurrent: 1,
-      progressTarget: 1,
+      progressCurrent: target,
+      progressTarget: target,
       awardSource: "admin",
-      awardLog: sanitizeText(args.note, 1000) ?? `Approved by ${getDisplayName(admin)}.`,
+      awardLog,
     });
     await logSeasonalAudit(ctx, {
       campaignId: campaign._id,
@@ -2201,7 +2286,7 @@ export const awardQuestManually = mutation({
       playerId: args.playerId,
       adminId: admin._id,
       action: "quest_admin_awarded",
-      note: args.note,
+      note: args.note ?? awardLog,
     });
     return { success: true };
   },

@@ -40,6 +40,23 @@ export function formatQualificationRule(rule: QualificationRule): string {
   }
 }
 
+/** Target progress count for an auto quest rule (defaults to 1). */
+export function questProgressTarget(rule: QualificationRule | undefined): number {
+  if (!rule) return 1;
+  switch (rule.type) {
+    case "play_events":
+    case "distinct_teammates":
+    case "new_teammates":
+      return rule.count;
+    case "play_all_team_formats":
+      return 3;
+    case "reach_top":
+      return rule.eventCount ?? 1;
+    default:
+      return 1;
+  }
+}
+
 export function formatAutoProgressSummary(
   rule: QualificationRule,
   current: number,

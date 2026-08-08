@@ -52,6 +52,7 @@ import {
   type ReviewQueueRow,
   type ReviewStatus,
 } from "@/pages/admin/_components/summer-slam-review-sheet.tsx";
+import { SummerSlamManualAwards } from "@/pages/admin/_components/summer-slam-manual-awards.tsx";
 import { getCampaignPhase } from "@/pages/summer-slam/_components/campaign-phase.ts";
 
 const CAMPAIGN_SLUG = "summer-slam";
@@ -987,6 +988,7 @@ export default function SummerSlamAdminPage() {
             <TabsTrigger value="tagged-events">Tagged Events</TabsTrigger>
             <TabsTrigger value="review">Review Queue</TabsTrigger>
             <TabsTrigger value="auto-awards">Auto Awards</TabsTrigger>
+            <TabsTrigger value="manual-awards">Manual Awards</TabsTrigger>
             <TabsTrigger value="passports">Passports</TabsTrigger>
             <TabsTrigger value="exports">Recalculate & Exports</TabsTrigger>
           </TabsList>
@@ -1823,6 +1825,10 @@ export default function SummerSlamAdminPage() {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="manual-awards" className="mt-0">
+            <SummerSlamManualAwards />
           </TabsContent>
 
           <TabsContent value="passports" className="mt-0">
