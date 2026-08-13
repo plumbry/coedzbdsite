@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest";
 import type { Doc } from "../_generated/dataModel";
 import {
+  isRecentDiscordJoin,
   normalizeJoinedAt,
   pickEarliestJoinedAt,
+  RECENT_DISCORD_JOIN_MS,
+  resolvePlayerJoinedAtIso,
   validateJoinedAtContractValue,
 } from "./playerJoinedAt";
 import { mapPlayer } from "./zbdRaw/mappers";
@@ -78,5 +81,32 @@ describe("zbd.raw player mapper joinedAt", () => {
     expect(
       mapPlayer(playerDoc({ joinedAt: "2026-04-18" })).joinedAt,
     ).toBeNull();
+  });
+});
+
+describe("directory Discord join helpers", () => {
+  test("prefers canonical joinedAt over serverJoinDate", () => {
+    expect(
+      resolvePlayerJoinedAtIso(
+        "2026-04-18T13:42:10.000Z",
+        "2026-01-01T00:00:00.000Z",
+      ),
+    ).toBe("2026-04-18T13:42:10.000Z");
+  });
+
+  test("falls back to a date-only serverJoinDate", () => {
+    expect(resolvePlayerJoinedAtIso(undefined, "2026-04-18")).toBe(
+      "2026-04-18T00:00:00.000Z",
+    );
+  });
+
+  test("treats Discord joins within 6 weeks as recent", () => {
+    const now = Date.parse("2026-08-13T12:00:00.000Z");
+    const recent = new Date(now - RECENT_DISCORD_JOIN_MS + 24 * 60 * 60 * 1000).toISOString();
+    const stale = new Date(now - RECENT_DISCORD_JOIN_MS - 24 * 60 * 60 * 1000).toISOString();
+
+    expect(isRecentDiscordJoin(recent, now)).toBe(true);
+    expect(isRecentDiscordJoin(stale, now)).toBe(false);
+    expect(isRecentDiscordJoin(undefined, now)).toBe(false);
   });
 });

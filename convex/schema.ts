@@ -1253,6 +1253,8 @@ export default defineSchema({
         isActive: v.boolean(),
         /** Optional while cache rebuilds after schema add; builders always write a number. */
         eventsPlayedCount: v.optional(v.number()),
+        /** Optional while cache rebuilds after schema add; Discord join ISO timestamp. */
+        joinedAt: v.optional(v.string()),
       }),
     ),
     lastUpdated: v.number(),

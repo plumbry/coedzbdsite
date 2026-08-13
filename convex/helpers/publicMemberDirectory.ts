@@ -5,6 +5,7 @@ import {
   loadFemaleVerificationLookup,
   enrichPlayerWithFemaleVerification,
 } from "./femaleVerification";
+import { resolvePlayerJoinedAtIso } from "../lib/playerJoinedAt";
 import { filterVisibleMembers, isVisibleInMemberLists } from "./playerAlt";
 import { sortByTier } from "./tierSort";
 
@@ -44,6 +45,8 @@ export type PublicMemberDirectoryEntry = {
   isActive: boolean;
   /** Unique Yunite event count (denormalized from players.eventsPlayedCount). */
   eventsPlayedCount: number;
+  /** Discord join timestamp (ISO); omitted when unknown. */
+  joinedAt?: string;
 };
 
 export async function buildPublicMemberDirectory(
@@ -63,6 +66,7 @@ export async function buildPublicMemberDirectory(
 
   const directory = players.map((player) => {
     const verification = enrichPlayerWithFemaleVerification(player, verificationLookup);
+    const joinedAt = resolvePlayerJoinedAtIso(player.joinedAt, player.serverJoinDate);
 
     return {
       _id: player._id,
@@ -76,6 +80,7 @@ export async function buildPublicMemberDirectory(
       femaleVerified: verification.femaleVerified,
       isActive: player.isRecentlyActive ?? false,
       eventsPlayedCount: player.eventsPlayedCount ?? 0,
+      ...(joinedAt ? { joinedAt } : {}),
     };
   });
 

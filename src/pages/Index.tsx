@@ -21,6 +21,7 @@ import { useUserRole } from "@/hooks/use-user-role.ts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible.tsx";
 import { compareTierField, DEFAULT_PLAYER_LIST_SORT } from "@/lib/tier-sort.ts";
+import { isRecentDiscordJoin } from "@/convex/lib/playerJoinedAt.ts";
 
 export default function Index() {
   const { isAdmin, isModeratorOrAdmin } = useUserRole();
@@ -29,6 +30,7 @@ export default function Index() {
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [eventsFilter, setEventsFilter] = useState<string>("all");
+  const [joinFilter, setJoinFilter] = useState<string>("all");
   const [sort, setSort] = useState<{ field: string; direction: "asc" | "desc" }>(
     DEFAULT_PLAYER_LIST_SORT,
   );
@@ -57,11 +59,20 @@ export default function Index() {
     const eventsPlayed = member.eventsPlayedCount ?? 0;
     const matchesEvents = eventsFilter === "all"
       || (eventsFilter === "lt5" && eventsPlayed < 5);
+
+    const matchesJoin = joinFilter === "all"
+      || (joinFilter === "new" && isRecentDiscordJoin(member.joinedAt));
     
-    return matchesSearch && matchesGender && matchesTier && matchesStatus && matchesEvents;
+    return matchesSearch && matchesGender && matchesTier && matchesStatus && matchesEvents && matchesJoin;
   });
   
   const sortedMembers = filteredMembers?.sort((a, b) => {
+    if (joinFilter === "new" && sort.field === DEFAULT_PLAYER_LIST_SORT.field) {
+      const aJoined = Date.parse(a.joinedAt ?? "") || 0;
+      const bJoined = Date.parse(b.joinedAt ?? "") || 0;
+      return bJoined - aJoined;
+    }
+
     let aVal: string | number = "";
     let bVal: string | number = "";
     
@@ -104,7 +115,7 @@ export default function Index() {
   };
 
   const membersPagination = useClientPagination(sortedMembers, {
-    resetDeps: [search, genderFilter, tierFilter, statusFilter, eventsFilter, sort],
+    resetDeps: [search, genderFilter, tierFilter, statusFilter, eventsFilter, joinFilter, sort],
   });
   const displayedMembers = membersPagination.pageItems ?? [];
 
@@ -113,6 +124,7 @@ export default function Index() {
     tierFilter !== "all",
     statusFilter !== "all",
     eventsFilter !== "all",
+    joinFilter !== "all",
     search.length > 0,
   ].filter(Boolean).length;
 
@@ -157,6 +169,15 @@ export default function Index() {
         <SelectContent>
           <SelectItem value="all">All Events</SelectItem>
           <SelectItem value="lt5">Fewer than 5</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={joinFilter} onValueChange={setJoinFilter}>
+        <SelectTrigger size="sm" className="w-full px-2 text-xs md:w-36 md:text-sm">
+          <SelectValue placeholder="Joined" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Joined</SelectItem>
+          <SelectItem value="new">Newly joined</SelectItem>
         </SelectContent>
       </Select>
       <SearchInput
@@ -207,7 +228,7 @@ export default function Index() {
       <PageHeader
         title="Members"
         icon={Users}
-        description="All ZBD competitive players. Active = played in the last 6 weeks."
+        description="All ZBD competitive players. Active = played in the last 6 weeks. Newly joined = Discord join within 6 weeks."
       />
 
       {isAdmin && directory.available && (
@@ -440,7 +461,7 @@ export default function Index() {
                   </EmptyMedia>
                   <EmptyTitle>No members found</EmptyTitle>
                   <EmptyDescription>
-                    {search || genderFilter !== "all" || tierFilter !== "all" || statusFilter !== "all" || eventsFilter !== "all"
+                    {search || genderFilter !== "all" || tierFilter !== "all" || statusFilter !== "all" || eventsFilter !== "all" || joinFilter !== "all"
                       ? "Try adjusting your filters" 
                       : "No active members yet"}
                   </EmptyDescription>
