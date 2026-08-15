@@ -14,6 +14,9 @@ import { isValidDiscordSnowflake } from "../auth_discord";
 function isUsableDirectoryDiscordId(
   discordUserId: string | undefined,
 ): discordUserId is string {
+  if (!discordUserId) {
+    return false;
+  }
   return (
     isIndexableDiscordUserId(discordUserId) &&
     isValidDiscordSnowflake(discordUserId)
