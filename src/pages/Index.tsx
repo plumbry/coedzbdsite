@@ -17,6 +17,7 @@ import PageToolbar from "@/components/page-toolbar.tsx";
 import FemaleVerifiedBadge from "@/components/female-verified-badge.tsx";
 import SearchInput from "@/components/search-input.tsx";
 import StatCard from "@/components/stat-card.tsx";
+import MemberDiscordLink from "@/pages/_components/member-discord-link.tsx";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible.tsx";
@@ -330,6 +331,9 @@ export default function Index() {
                         </div>
                       </TableHead>
                     )}
+                    <TableHead className="w-10">
+                      <span className="sr-only">Message</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -382,6 +386,12 @@ export default function Index() {
                           {member.totalScore?.toFixed(2) || "0.00"}
                         </TableCell>
                       )}
+                      <TableCell className="w-10 px-1 text-right">
+                        <MemberDiscordLink
+                          discordUserId={member.discordUserId}
+                          displayName={member.nickname || member.discordUsername}
+                        />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -437,6 +447,10 @@ export default function Index() {
                       )}
                     </div>
                   </div>
+                  <MemberDiscordLink
+                    discordUserId={member.discordUserId}
+                    displayName={member.nickname || member.discordUsername}
+                  />
                 </div>
               ))}
             </div>

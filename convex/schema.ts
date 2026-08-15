@@ -1255,6 +1255,8 @@ export default defineSchema({
         eventsPlayedCount: v.optional(v.number()),
         /** Optional while cache rebuilds after schema add; Discord join ISO timestamp. */
         joinedAt: v.optional(v.string()),
+        /** Canonical Discord snowflake; omitted when the member has no usable ID. */
+        discordUserId: v.optional(v.string()),
       }),
     ),
     lastUpdated: v.number(),

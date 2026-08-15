@@ -7,7 +7,18 @@ import {
 } from "./femaleVerification";
 import { resolvePlayerJoinedAtIso } from "../lib/playerJoinedAt";
 import { filterVisibleMembers, isVisibleInMemberLists } from "./playerAlt";
+import { isIndexableDiscordUserId } from "./playerDiscordAliases";
 import { sortByTier } from "./tierSort";
+import { isValidDiscordSnowflake } from "../auth_discord";
+
+function isUsableDirectoryDiscordId(
+  discordUserId: string | undefined,
+): discordUserId is string {
+  return (
+    isIndexableDiscordUserId(discordUserId) &&
+    isValidDiscordSnowflake(discordUserId)
+  );
+}
 
 /** Rebuild the public home directory snapshot (async, full accepted-member scan). */
 export async function schedulePublicMemberDirectoryRebuild(ctx: MutationCtx) {
@@ -47,6 +58,8 @@ export type PublicMemberDirectoryEntry = {
   eventsPlayedCount: number;
   /** Discord join timestamp (ISO); omitted when unknown. */
   joinedAt?: string;
+  /** Canonical Discord snowflake; omitted when the member has no usable ID. */
+  discordUserId?: string;
 };
 
 export async function buildPublicMemberDirectory(
@@ -81,6 +94,9 @@ export async function buildPublicMemberDirectory(
       isActive: player.isRecentlyActive ?? false,
       eventsPlayedCount: player.eventsPlayedCount ?? 0,
       ...(joinedAt ? { joinedAt } : {}),
+      ...(isUsableDirectoryDiscordId(player.discordUserId)
+        ? { discordUserId: player.discordUserId }
+        : {}),
     };
   });
 
