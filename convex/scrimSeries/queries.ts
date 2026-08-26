@@ -1,6 +1,10 @@
 import { query } from "../_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel.d.ts";
+import {
+  buildScrimSeriesScoreGrid,
+  computeScrimSeriesBestN,
+} from "../lib/scrimSeriesBestN";
 
 // ─── Public Queries ───────────────────────────────────────────────────────────
 
@@ -233,27 +237,12 @@ export const getLeaderboard = query({
       const playerScores = scoresByPlayer.get(player._id) ?? [];
       const playerPenalties = penaltiesByPlayer.get(player._id) ?? [];
 
-      // Build session scores grid using variable games per session
-      const sessionScores: (number | null)[][] = series.gamesPerSession.map(
-        (gamesInSession: number) => Array(gamesInSession).fill(null) as (number | null)[],
+      // Best N uses unique in-grid game cells (same scores the UI displays)
+      const { sessionScores, cells } = buildScrimSeriesScoreGrid(
+        playerScores,
+        series.gamesPerSession,
       );
-      for (const s of playerScores) {
-        if (
-          s.sessionIndex >= 0 &&
-          s.sessionIndex < sessionScores.length &&
-          s.gameIndex >= 0 &&
-          s.gameIndex < sessionScores[s.sessionIndex].length
-        ) {
-          sessionScores[s.sessionIndex][s.gameIndex] = s.score;
-        }
-      }
-
-      // Count games played (non-null)
-      const gamesPlayed = playerScores.length;
-
-      // Calculate Best N: sum of top N individual game scores
-      const allScoreValues = playerScores.map((s) => s.score).sort((a, b) => b - a);
-      const bestNTotal = allScoreValues.slice(0, series.bestN).reduce((sum: number, val: number) => sum + val, 0);
+      const { gamesPlayed, bestNTotal } = computeScrimSeriesBestN(cells, series.bestN);
 
       // Participation check
       const participationPct = totalGames > 0 ? (gamesPlayed / totalGames) * 100 : 0;

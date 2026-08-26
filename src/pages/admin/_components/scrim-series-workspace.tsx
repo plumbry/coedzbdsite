@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils.ts";
 import { eventPublicPath } from "@/lib/event-path.ts";
 import { Link } from "react-router-dom";
 import ScrimSeriesLeaderboardExportButton from "@/components/scrim-series-leaderboard-export-button.tsx";
+import ScrimSeriesLeaderboardTable from "@/components/scrim-series-leaderboard-table.tsx";
 import {
   parseScrimSeriesGameCsv,
   scrimSeriesGameCsvTemplate,
@@ -510,7 +511,8 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
           </div>
         </div>
         <CardDescription className="text-xs">
-          Ranked by Best {series.bestN} score minus penalties. Amber = below min games, red = below participation %.
+          Ranked by Best {series.bestN} score minus penalties. Highlighted game scores are the ones counted.
+          Amber games = below min games, red = below participation %.
         </CardDescription>
         <div className="flex flex-wrap items-center gap-4 pt-1">
           <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
@@ -535,61 +537,18 @@ function LeaderboardPanel({ seriesId }: { seriesId: Id<"scrimSeries"> }) {
             {(minGamesOnly || minParticipationOnly) ? emptyFilterMessage : "No players to display."}
           </p>
         ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-2 pr-2 font-medium text-muted-foreground w-8">#</th>
-                <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Player</th>
-                <th className="text-center py-2 px-2 font-medium text-muted-foreground">Games</th>
-                <th className="text-center py-2 px-2 font-medium text-muted-foreground">Best {series.bestN}</th>
-                <th className="text-center py-2 px-2 font-medium text-muted-foreground">Penalties</th>
-                <th className="text-center py-2 px-2 font-medium">Final</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedLeaderboard.map((entry, idx) => (
-                <tr
-                  key={entry.playerId}
-                  className="border-b border-muted/30 hover:bg-muted/20"
-                >
-                  <td className="py-1.5 pr-2 text-muted-foreground">{idx + 1}</td>
-                  <td className="py-1.5 pr-4">
-                    <div className="font-medium truncate max-w-[160px]">{entry.playerName}</div>
-                    <div className="text-xs text-muted-foreground truncate max-w-[160px]">{entry.epicId}</div>
-                  </td>
-                  <td className="py-1.5 px-2 text-center">
-                    <span
-                      className={
-                        !entry.meetsMinGames
-                          ? "text-amber-600 dark:text-amber-500"
-                          : entry.isValid
-                            ? "text-foreground"
-                            : "text-destructive"
-                      }
-                    >
-                      {entry.gamesPlayed}/{entry.totalGames}
-                    </span>
-                    <div className="text-xs text-muted-foreground">
-                      {entry.totalGames > 0 ? Math.round((entry.gamesPlayed / entry.totalGames) * 100) : 0}%
-                    </div>
-                  </td>
-                  <td className="py-1.5 px-2 text-center font-medium">{entry.bestNTotal}</td>
-                  <td className="py-1.5 px-2 text-center">
-                    {entry.penaltyCount > 0 ? (
-                      <span className="text-destructive">-{entry.penaltyTotal} ({entry.penaltyCount})</span>
-                    ) : (
-                      <span className="text-muted-foreground">0</span>
-                    )}
-                  </td>
-                  <td className="py-1.5 px-2 text-center font-bold">
-                    {entry.finalTotal}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          <ScrimSeriesLeaderboardTable
+            entries={displayedLeaderboard}
+            bestN={series.bestN}
+            participationThreshold={series.participationThreshold}
+            penaltyAmount={series.penaltyAmount}
+            gamesPerSession={series.gamesPerSession}
+            defaultShowDetails
+            showEpicId
+            hideFilters
+            hidePlayerCount
+            embedded
+          />
         )}
       </CardContent>
     </Card>

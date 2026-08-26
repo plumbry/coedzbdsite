@@ -2,6 +2,11 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Columns3, EyeOff } from "lucide-react";
+import { cn } from "@/lib/utils.ts";
+import {
+  bestNCellKey,
+  countedBestNCellKeySet,
+} from "@/convex/lib/scrimSeriesBestN.ts";
 
 export type ScrimSeriesLeaderboardEntry = {
   playerId: string;
@@ -33,20 +38,33 @@ export default function ScrimSeriesLeaderboardTable({
   bestN,
   participationThreshold,
   gamesPerSession,
+  defaultShowDetails = false,
+  showEpicId = false,
+  hideFilters = false,
+  hidePlayerCount = false,
+  embedded = false,
 }: {
   entries: ScrimSeriesLeaderboardEntry[];
   bestN: number;
   participationThreshold: number;
   penaltyAmount: number;
   gamesPerSession: number[];
+  defaultShowDetails?: boolean;
+  showEpicId?: boolean;
+  hideFilters?: boolean;
+  hidePlayerCount?: boolean;
+  embedded?: boolean;
 }) {
-  const [showDetails, setShowDetails] = useState(false);
-  const [minGamesOnly, setMinGamesOnly] = useState(true);
+  const [showDetails, setShowDetails] = useState(defaultShowDetails);
+  const [minGamesOnly, setMinGamesOnly] = useState(!hideFilters);
   const [minParticipationOnly, setMinParticipationOnly] = useState(false);
 
   const displayedEntries = useMemo(
-    () => filterLeaderboardEntries(entries, { minGamesOnly, minParticipationOnly }),
-    [entries, minGamesOnly, minParticipationOnly],
+    () =>
+      hideFilters
+        ? entries
+        : filterLeaderboardEntries(entries, { minGamesOnly, minParticipationOnly }),
+    [entries, hideFilters, minGamesOnly, minParticipationOnly],
   );
 
   const emptyFilterMessage = minGamesOnly && minParticipationOnly
@@ -111,25 +129,36 @@ export default function ScrimSeriesLeaderboardTable({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-            <Checkbox
-              checked={minGamesOnly}
-              onCheckedChange={(checked) => setMinGamesOnly(checked === true)}
-            />
-            Min {bestN} games only
-          </label>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-            <Checkbox
-              checked={minParticipationOnly}
-              onCheckedChange={(checked) => setMinParticipationOnly(checked === true)}
-            />
-            Min {participationThreshold}% participation only
-          </label>
+          {!hideFilters && (
+            <>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                <Checkbox
+                  checked={minGamesOnly}
+                  onCheckedChange={(checked) => setMinGamesOnly(checked === true)}
+                />
+                Min {bestN} games only
+              </label>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                <Checkbox
+                  checked={minParticipationOnly}
+                  onCheckedChange={(checked) => setMinParticipationOnly(checked === true)}
+                />
+                Min {participationThreshold}% participation only
+              </label>
+            </>
+          )}
+          {showDetails && (
+            <p className="text-xs text-muted-foreground">
+              Highlighted scores count toward Best {bestN}. Faded scores are dropped.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-            {displayedEntries.length} of {entries.length} players
-          </span>
+          {!hidePlayerCount && (
+            <span className="text-xs text-muted-foreground">
+              {displayedEntries.length} of {entries.length} players
+            </span>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -156,7 +185,7 @@ export default function ScrimSeriesLeaderboardTable({
           {emptyFilterMessage}
         </div>
       ) : (
-      <div className="rounded-lg border bg-card overflow-hidden">
+      <div className={cn("overflow-hidden", !embedded && "rounded-lg border bg-card")}>
         <div
           ref={topScrollRef}
           onScroll={handleTopScroll}
@@ -209,6 +238,7 @@ export default function ScrimSeriesLeaderboardTable({
               {displayedEntries.map((entry, rank) => {
                 const isTopThree = rank < 3;
                 const rankDisplay = rank + 1;
+                const countedKeys = countedBestNCellKeySet(entry.sessionScores, bestN);
 
                 return (
                   <tr
@@ -229,17 +259,37 @@ export default function ScrimSeriesLeaderboardTable({
 
                     <td className="sticky left-[40px] z-10 bg-card px-3 py-2.5">
                       <div className="font-medium text-foreground">{entry.playerName}</div>
+                      {showEpicId && (
+                        <div className="text-xs text-muted-foreground truncate max-w-[180px]">
+                          {entry.epicId}
+                        </div>
+                      )}
                     </td>
 
                     {showDetails && gameColumns.map((col) => {
                       const score = entry.sessionScores[col.session]?.[col.game];
+                      const counted = countedKeys.has(bestNCellKey(col.session, col.game));
                       return (
                         <td
                           key={col.label}
                           className="px-2 py-2.5 text-center font-mono text-xs"
                         >
                           {score !== null && score !== undefined ? (
-                            <span className="text-foreground">{score}</span>
+                            <span
+                              className={cn(
+                                "inline-flex min-w-[1.75rem] justify-center rounded px-1 py-0.5",
+                                counted
+                                  ? "bg-primary/15 font-semibold text-foreground"
+                                  : "text-muted-foreground/50",
+                              )}
+                              title={
+                                counted
+                                  ? `Counts toward Best ${bestN}`
+                                  : `Dropped from Best ${bestN}`
+                              }
+                            >
+                              {score}
+                            </span>
                           ) : (
                             <span className="text-muted-foreground/30">-</span>
                           )}
