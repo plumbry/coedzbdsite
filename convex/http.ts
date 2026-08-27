@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { MAX_YUNITE_PLAYED_DISCORD_IDS } from "./discord/yunitePlayed";
 import {
   clerkUserToProvisionArgs,
   ensureClerkPublicDiscordMetadata,
@@ -413,6 +414,70 @@ http.route({
           message: error instanceof Error ? error.message : "Unknown error",
         }),
         { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }),
+});
+
+// Discord bot inactive prune: which members appear in website Yunite scrim data
+http.route({
+  path: "/api/discord/yunite-played",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = process.env.DISCORD_SYNC_API_KEY || process.env.API_KEY;
+    const authHeader = request.headers.get("Authorization");
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: API key not set" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid API key" }),
+        { status: 401, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    try {
+      const body = await request.json();
+      const discordIds = Array.isArray(body?.discordIds) ? body.discordIds : null;
+
+      if (!discordIds || !discordIds.every((id: unknown) => typeof id === "string")) {
+        return new Response(
+          JSON.stringify({ error: "Missing required field: discordIds (string[])" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (discordIds.length > MAX_YUNITE_PLAYED_DISCORD_IDS) {
+        return new Response(
+          JSON.stringify({
+            error: `discordIds cannot exceed ${MAX_YUNITE_PLAYED_DISCORD_IDS} per request`,
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      const result = await ctx.runQuery(
+        internal.discord.yunitePlayed.getYunitePlayedByDiscordIds,
+        { discordIds },
+      );
+
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Error fetching Yunite played members:", error);
+      return new Response(
+        JSON.stringify({
+          error: "Internal server error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
   }),

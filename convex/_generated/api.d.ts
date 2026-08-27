@@ -41,6 +41,7 @@ import type * as discord_removeAllTierRoles from "../discord/removeAllTierRoles.
 import type * as discord_roles from "../discord/roles.js";
 import type * as discord_sync from "../discord/sync.js";
 import type * as discord_tierMismatches from "../discord/tierMismatches.js";
+import type * as discord_yunitePlayed from "../discord/yunitePlayed.js";
 import type * as eventBans_mutations from "../eventBans/mutations.js";
 import type * as eventBans_queries from "../eventBans/queries.js";
 import type * as eventBans_roleSync from "../eventBans/roleSync.js";
@@ -117,6 +118,7 @@ import type * as lib_playerIdentity from "../lib/playerIdentity.js";
 import type * as lib_playerJoinedAt from "../lib/playerJoinedAt.js";
 import type * as lib_resolveImportPipelineStep from "../lib/resolveImportPipelineStep.js";
 import type * as lib_scrimLeaderboard from "../lib/scrimLeaderboard.js";
+import type * as lib_scrimSeriesBestN from "../lib/scrimSeriesBestN.js";
 import type * as lib_scrimSeriesEventLink from "../lib/scrimSeriesEventLink.js";
 import type * as lib_seasonalAutoProgress from "../lib/seasonalAutoProgress.js";
 import type * as lib_stats_computeContributionScore from "../lib/stats/computeContributionScore.js";
@@ -270,6 +272,7 @@ declare const fullApi: ApiFromModules<{
   "discord/roles": typeof discord_roles;
   "discord/sync": typeof discord_sync;
   "discord/tierMismatches": typeof discord_tierMismatches;
+  "discord/yunitePlayed": typeof discord_yunitePlayed;
   "eventBans/mutations": typeof eventBans_mutations;
   "eventBans/queries": typeof eventBans_queries;
   "eventBans/roleSync": typeof eventBans_roleSync;
@@ -346,6 +349,7 @@ declare const fullApi: ApiFromModules<{
   "lib/playerJoinedAt": typeof lib_playerJoinedAt;
   "lib/resolveImportPipelineStep": typeof lib_resolveImportPipelineStep;
   "lib/scrimLeaderboard": typeof lib_scrimLeaderboard;
+  "lib/scrimSeriesBestN": typeof lib_scrimSeriesBestN;
   "lib/scrimSeriesEventLink": typeof lib_scrimSeriesEventLink;
   "lib/seasonalAutoProgress": typeof lib_seasonalAutoProgress;
   "lib/stats/computeContributionScore": typeof lib_stats_computeContributionScore;
