@@ -98,7 +98,10 @@ function mapSourceMethod(
   return null;
 }
 
-export function mapPlayer(player: Doc<"players">): ZbdRawPlayer {
+export function mapPlayer(
+  player: Doc<"players">,
+  extras?: { officialTierChangedAt?: string | null },
+): ZbdRawPlayer {
   return {
     id: player._id,
     discordIds: collectDiscordIds(player),
@@ -115,6 +118,7 @@ export function mapPlayer(player: Doc<"players">): ZbdRawPlayer {
     recordStatus: player.status ?? null,
     membershipStatus: player.currentMembershipStatus ?? null,
     officialTier: player.tier ?? null,
+    officialTierChangedAt: extras?.officialTierChangedAt ?? null,
     evaluationTotalScore: player.totalScore ?? null,
     joinedAt: normalizeJoinedAt(player.joinedAt),
     serverJoinDate: player.serverJoinDate || null,
@@ -153,6 +157,19 @@ export function mapTierChange(row: Doc<"tierHistory">): ZbdRawTierChange {
     changedAt: isoFromMillis(row._creationTime) ?? new Date(0).toISOString(),
     changedByUserId: row.changedBy ?? null,
   };
+}
+
+/** Newest tierHistory._creationTime for a player, ISO-8601 UTC. */
+export function officialTierChangedAtFromHistory(
+  history: ReadonlyArray<Pick<Doc<"tierHistory">, "_creationTime">>,
+): string | null {
+  let latest = Number.NEGATIVE_INFINITY;
+  for (const row of history) {
+    if (row._creationTime > latest) {
+      latest = row._creationTime;
+    }
+  }
+  return latest === Number.NEGATIVE_INFINITY ? null : isoFromMillis(latest);
 }
 
 export function mapEvaluation(score: Doc<"manualScores">): ZbdRawEvaluation {

@@ -43,6 +43,12 @@ export type ZbdRawPlayer = {
   recordStatus: "active" | "archived" | "rejected" | "discord_member" | null;
   membershipStatus: "accepted" | "rejected" | "former" | null;
   officialTier: string | null;
+  /**
+   * Latest official-tier change timestamp.
+   * Source: newest tierHistory._creationTime for this player.
+   * Null when the player has no tierHistory row.
+   */
+  officialTierChangedAt: string | null;
   evaluationTotalScore: number | null;
   /**
    * Canonical Discord/community join timestamp.

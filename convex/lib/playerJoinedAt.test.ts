@@ -70,6 +70,7 @@ describe("zbd.raw player mapper joinedAt", () => {
       recordStatus: "active",
       membershipStatus: "accepted",
       officialTier: "A",
+      officialTierChangedAt: null,
       evaluationTotalScore: 940,
       serverJoinDate: "2026-04-18",
       joinedAt: "2026-04-18T13:42:10.000Z",

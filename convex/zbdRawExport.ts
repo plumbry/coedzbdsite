@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireAdmin } from "./auth_helpers";
 import {
+  isoFromMillis,
   mapCompetitionEvent,
   mapEvaluation,
   mapEventPenalty,
@@ -126,8 +127,21 @@ export const pagePlayers = query({
       numItems: PAGE_SIZE,
       cursor: args.cursor,
     });
+    const records = [];
+    for (const player of page.page) {
+      const latestChange = await ctx.db
+        .query("tierHistory")
+        .withIndex("by_player", (q) => q.eq("playerId", player._id))
+        .order("desc")
+        .first();
+      records.push(
+        mapPlayer(player, {
+          officialTierChangedAt: isoFromMillis(latestChange?._creationTime),
+        }),
+      );
+    }
     return {
-      records: page.page.map(mapPlayer),
+      records,
       continueCursor: page.continueCursor,
       isDone: page.isDone,
     };
@@ -476,7 +490,7 @@ export const getValidationReport = query({
         sourceTable: "players",
         recordCount: -1,
         notes:
-          "Includes canonical joinedAt when populated from Discord joined_at. Analytics caches (TC/DCA/topFive) excluded. Denorm activity fields excluded. Live count after produce.",
+          "Includes canonical joinedAt when populated from Discord joined_at. officialTierChangedAt is the newest tierHistory._creationTime for that player (null when no history row). Analytics caches (TC/DCA/topFive) excluded. Denorm activity fields excluded. Live count after produce.",
       },
       {
         collection: "identityAliases",
@@ -620,6 +634,7 @@ export const getValidationReport = query({
       "resultBatches.sourceSystem is normalized from thirdPartyImports.source / isManualImport labels.",
       "players.evaluationTotalScore / officialTier are committed snapshots on the player record, not live recalculations.",
       "players.joinedAt is the canonical ZBD Discord/community join timestamp and is only populated from trusted Discord membership sync data; unknown values export as null.",
+      "players.officialTierChangedAt is the newest tierHistory._creationTime for that player; unknown when no history row exists.",
       "No contributionScore, dcaCache, topFiveCache, holistic, evaluationStatus, or aggregate caches are exported.",
       "Historical evaluation revisions are limited to whatever manualScores documents exist (usually current upsert).",
       "Live record counts are filled by the producer UI after assembling a document (validation query avoids full-table scans).",
@@ -629,7 +644,7 @@ export const getValidationReport = query({
       "If matchParticipations count is 0 while eventResultEntries > 0 after produce, match-grain sync is incomplete for historical imports.",
       "Players without manualScores are expected for discord_member / unevaluated records.",
       "Players created by manual/admin/import paths may have legacy serverJoinDate but no canonical joinedAt until Discord sync confirms joined_at.",
-      "Early players may have officialTier on players.tier without corresponding tierHistory rows.",
+      "Early players may have officialTier on players.tier without corresponding tierHistory rows, so officialTierChangedAt is null for those records.",
     ];
 
     const summary = {
