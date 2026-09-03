@@ -46,6 +46,7 @@ import {
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { useAuth } from "@/hooks/use-auth.ts";
 import { cn } from "@/lib/utils.ts";
+import { SUMMER_SLAM_ENABLED } from "@/lib/summer-slam.ts";
 
 const STORAGE_KEY = "admin-sidebar-collapsed";
 const SECTIONS_STORAGE_KEY = "admin-sidebar-open-sections";
@@ -369,7 +370,7 @@ export default function AdminSidebar({ inSheet = false, onNavigate }: AdminSideb
           icon: Trophy,
         });
       }
-      if (isAdmin) {
+      if (isAdmin && SUMMER_SLAM_ENABLED) {
         modsItems.push({ path: "/admin/summer-slam", label: "Summer Slam", icon: Trophy });
       }
       result.push({ id: "mods", label: "Mods", items: modsItems });

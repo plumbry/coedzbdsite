@@ -69,8 +69,8 @@ export function LinkDiscordDialog({
         <DialogHeader>
           <DialogTitle>Link Discord</DialogTitle>
           <DialogDescription>
-            Attach a Discord snowflake to {userLabel} so they can claim a Summer Slam
-            passport. Use the Discord ID from Member Management.
+            Attach a Discord snowflake to {userLabel}. Use the Discord ID from Member
+            Management.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

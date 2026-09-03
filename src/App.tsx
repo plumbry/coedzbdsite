@@ -51,6 +51,7 @@ import ScrimSeriesAdminPage from "./pages/admin/scrim-series.tsx";
 import SpinModerationPage from "./pages/admin/spin-moderation.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import { useServiceWorker } from "@/hooks/use-service-worker.ts";
+import { SUMMER_SLAM_ENABLED } from "@/lib/summer-slam.ts";
 
 export default function App() {
   useServiceWorker();
@@ -80,7 +81,10 @@ export default function App() {
             <Route path="yunite/:importId" element={<YuniteTournamentDetails />} />
             <Route path="yunite-debug" element={<Navigate to="/admin/uploads?tab=debug" replace />} />
             <Route path="events-manager" element={<EventsManagerPage />} />
-            <Route path="summer-slam" element={<SummerSlamAdminPage />} />
+            <Route
+              path="summer-slam"
+              element={SUMMER_SLAM_ENABLED ? <SummerSlamAdminPage /> : <Navigate to="/admin" replace />}
+            />
             <Route path="event-results" element={<EventResultsPage />} />
             <Route path="uploads" element={<UploadsPage />} />
             <Route path="support" element={<SupportAdminPage />} />
@@ -113,9 +117,18 @@ export default function App() {
           <Route path="/spin" element={<ScrimsLandingPage />} />
           <Route path="/scrim-series" element={<ScrimSeriesLandingPage />} />
           <Route path="/scrim-series/:slug" element={<ScrimSeriesLeaderboardPage />} />
-          <Route path="/summer-slam" element={<SummerSlamLandingPage />} />
-          <Route path="/summer-slam/passport" element={<SummerSlamPassportPage />} />
-          <Route path="/summer-slam/how-to" element={<SummerSlamHowToPage />} />
+          <Route
+            path="/summer-slam"
+            element={SUMMER_SLAM_ENABLED ? <SummerSlamLandingPage /> : <NotFound />}
+          />
+          <Route
+            path="/summer-slam/passport"
+            element={SUMMER_SLAM_ENABLED ? <SummerSlamPassportPage /> : <NotFound />}
+          />
+          <Route
+            path="/summer-slam/how-to"
+            element={SUMMER_SLAM_ENABLED ? <SummerSlamHowToPage /> : <NotFound />}
+          />
           <Route path="/spin/:eventId" element={<ScrimEventPage />} />
           <Route path="/tier-restrictions" element={<TierRestrictionsPage />} />
           <Route path="/maps/:mapId" element={<SharedMapPage />} />

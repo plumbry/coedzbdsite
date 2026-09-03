@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth.ts";
 import { Link, useLocation } from "react-router-dom";
 import EditUsernameDialog from "@/components/edit-username-dialog.tsx";
 import { cn } from "@/lib/utils.ts";
+import { SUMMER_SLAM_ENABLED } from "@/lib/summer-slam.ts";
 
 const navLinkClass =
   "inline-flex min-h-8 items-center font-semibold text-foreground hover:text-primary transition-colors whitespace-nowrap text-sm px-1 py-1.5 touch-manipulation sm:min-h-0 sm:px-0 sm:py-0";
@@ -21,7 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Home" },
   { to: "/members", label: "Members" },
   { to: "/events", label: "Events" },
-  { to: "/summer-slam", label: "Summer Slam" },
+  ...(SUMMER_SLAM_ENABLED ? [{ to: "/summer-slam", label: "Summer Slam" }] : []),
   { to: "/tier-restrictions", label: "Tier Restrictions", shortLabel: "Tiers" },
   { to: "/support", label: "Support" },
 ];

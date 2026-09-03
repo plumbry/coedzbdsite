@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import { SUMMER_SLAM_ENABLED } from "@/lib/summer-slam.ts";
 
 type HubLink = {
   title: string;
@@ -247,7 +248,7 @@ export default function AdminHubPage() {
               },
             ]
           : []),
-        ...(isAdmin
+        ...(isAdmin && SUMMER_SLAM_ENABLED
           ? [
               {
                 title: "Summer Slam Passport",

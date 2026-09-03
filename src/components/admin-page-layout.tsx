@@ -30,7 +30,7 @@ function SwitchAccountButton() {
   return (
     <Button
       onClick={() => {
-        void signOut({ redirectUrl: "/admin/summer-slam" });
+        void signOut({ redirectUrl: "/admin" });
       }}
     >
       Sign out / switch account

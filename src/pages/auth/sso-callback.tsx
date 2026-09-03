@@ -24,19 +24,19 @@ export default function SsoCallbackPage() {
       <Loader2 className="size-8 animate-spin text-muted-foreground" />
       <p className="text-sm text-muted-foreground">Completing sign in…</p>
       <AuthenticateWithRedirectCallback
-        signInFallbackRedirectUrl="/summer-slam"
-        signUpFallbackRedirectUrl="/summer-slam"
+        signInFallbackRedirectUrl="/"
+        signUpFallbackRedirectUrl="/"
       />
       {/* Required when Discord OAuth transfers into a new Clerk sign-up (bot protection). */}
       <div id="clerk-captcha" />
       {isStuck ? (
         <div className="mt-2 flex max-w-sm flex-col items-center gap-3 text-center">
           <p className="text-sm text-muted-foreground">
-            Sign-in is taking longer than expected. Try again from Summer Slam, or open the site in a
+            Sign-in is taking longer than expected. Try again from the home page, or open the site in a
             fresh browser tab.
           </p>
           <Button asChild variant="outline">
-            <Link to="/summer-slam">Back to Summer Slam</Link>
+            <Link to="/">Back to Home</Link>
           </Button>
         </div>
       ) : null}

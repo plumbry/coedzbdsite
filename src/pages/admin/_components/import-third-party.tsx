@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { importPipelineStatusVariant } from "@/lib/import-pipeline-display.ts";
+import { SUMMER_SLAM_ENABLED } from "@/lib/summer-slam.ts";
 import type { ConvexReactClient } from "convex/react";
 
 const PROCESS_IMPORT_POLL_MS = 2000;
@@ -951,8 +952,12 @@ export default function ImportThirdParty() {
         eventDate: editEventDate.trim() || undefined,
         organizer: editOrganizer.trim() || undefined,
         leaderboardUrl: editLeaderboardUrl.trim() || undefined,
-        summerSlamEnabled: editSummerSlam,
-        summerSlamTeamFormat: editSummerSlam ? editSummerSlamFormat : null,
+        summerSlamEnabled: SUMMER_SLAM_ENABLED ? editSummerSlam : undefined,
+        summerSlamTeamFormat: SUMMER_SLAM_ENABLED
+          ? editSummerSlam
+            ? editSummerSlamFormat
+            : null
+          : undefined,
       });
       
       // Update event link separately
@@ -1849,7 +1854,7 @@ export default function ImportThirdParty() {
                               <Badge variant="outline" className="h-4 px-1 text-[10px] font-normal">
                                 {imp.source}
                               </Badge>
-                              {imp.seasonalCampaignSlug === "summer-slam" ? (
+                              {SUMMER_SLAM_ENABLED && imp.seasonalCampaignSlug === "summer-slam" ? (
                                 <Badge variant="secondary" className="h-4 px-1 text-[10px] font-normal">
                                   Summer Slam{imp.seasonalTeamFormat ? ` · ${imp.seasonalTeamFormat}` : ""}
                                 </Badge>
@@ -2182,6 +2187,7 @@ export default function ImportThirdParty() {
               </Select>
             </div>
 
+            {SUMMER_SLAM_ENABLED ? (
             <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
@@ -2223,6 +2229,7 @@ export default function ImportThirdParty() {
                 </div>
               ) : null}
             </div>
+            ) : null}
             
             <div className="space-y-2 border-t pt-4">
               <Label>Replace CSV Data</Label>

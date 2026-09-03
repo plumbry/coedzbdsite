@@ -70,6 +70,7 @@ import {
   isScrimLikeEventType,
   toAdminFormEventType,
 } from "@/lib/event-types.ts";
+import { SUMMER_SLAM_ENABLED } from "@/lib/summer-slam.ts";
 
 const EVENT_TYPE_META: Record<
   string,
@@ -333,7 +334,7 @@ export default function EventManager() {
   });
   const summerSlamTags = useQuery(
     api.seasonal.getEventTags,
-    isAdmin ? { slug: "summer-slam" } : "skip",
+    isAdmin && SUMMER_SLAM_ENABLED ? { slug: "summer-slam" } : "skip",
   );
   const scrimSeriesOptions = useQuery(api.scrimSeries.queries.listSeries);
   const createEvent = useMutation(api.events.management.createEvent);
@@ -351,7 +352,7 @@ export default function EventManager() {
   const [markingCompleteId, setMarkingCompleteId] = useState<Id<"events"> | null>(null);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin || !SUMMER_SLAM_ENABLED) return;
     void ensureSummerSlamCampaign().catch(() => {
       // Non-blocking; event tagging controls will show errors on save if setup fails.
     });
@@ -639,7 +640,7 @@ export default function EventManager() {
         toast.success("Event created successfully.", { id: savingToastId });
       }
 
-      if (isAdmin) {
+      if (isAdmin && SUMMER_SLAM_ENABLED) {
         await setCampaignEvent({
           slug: "summer-slam",
           eventId: savedEventId,
@@ -876,7 +877,7 @@ export default function EventManager() {
                             label="Earnings tracking enabled"
                           />
                         )}
-                        {summerSlamTag && (
+                        {SUMMER_SLAM_ENABLED && summerSlamTag && (
                           <Badge variant="secondary" className="shrink-0 text-[10px] uppercase">
                             Summer Slam · {summerSlamTag.teamFormat}
                           </Badge>
@@ -1254,7 +1255,7 @@ export default function EventManager() {
               </div>
             </div>
 
-            {isAdmin && (
+            {isAdmin && SUMMER_SLAM_ENABLED && (
               <div className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-start gap-3">
                   <Checkbox
