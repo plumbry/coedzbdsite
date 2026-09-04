@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PanelLeft } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import SiteHeader from "@/components/site-header.tsx";
+import SiteFooter from "@/components/site-footer.tsx";
 import AdminSidebar from "@/pages/admin/_components/admin-sidebar.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet.tsx";
@@ -43,6 +44,7 @@ export default function PageShell({
           {children}
         </div>
       </main>
+      <SiteFooter />
     </div>
   );
 }
