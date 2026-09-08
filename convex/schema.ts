@@ -2189,6 +2189,26 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_date_received", ["dateReceived"]),
 
+  opsHubPayouts: defineTable({
+    payeeName: v.string(),
+    amount: v.number(),
+    event: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    status: v.union(v.literal("unpaid"), v.literal("paid")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
+    createdAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+    updatedAccessMethod: v.optional(
+      v.union(v.literal("admin"), v.literal("password")),
+    ),
+  })
+    .index("by_status", ["status"])
+    .index("by_event", ["event"]),
+
   opsHubEventRules: defineTable({
     name: v.string(),
     ruleType: v.union(

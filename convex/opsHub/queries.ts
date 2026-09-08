@@ -12,6 +12,14 @@ export const listSponsorLogs = query({
   },
 });
 
+export const listPayouts = query({
+  args: { viewerToken: viewerTokenArg },
+  handler: async (ctx, args) => {
+    await requireOpsHubReadAccess(ctx, args.viewerToken);
+    return await ctx.db.query("opsHubPayouts").order("desc").collect();
+  },
+});
+
 export const listEventRules = query({
   args: { viewerToken: viewerTokenArg },
   handler: async (ctx, args) => {

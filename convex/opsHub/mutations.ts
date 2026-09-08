@@ -126,6 +126,56 @@ export const deleteSponsorLog = mutation({
   },
 });
 
+const payoutStatusValidator = v.union(v.literal("unpaid"), v.literal("paid"));
+
+export const createPayout = mutation({
+  args: {
+    viewerToken: viewerTokenArg,
+    payeeName: v.string(),
+    amount: v.number(),
+    event: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    status: payoutStatusValidator,
+  },
+  handler: async (ctx, args) => {
+    const access = await requireOpsHubWriteAccess(ctx);
+    const now = Date.now();
+    const { viewerToken: _, ...fields } = args;
+    return await ctx.db.insert("opsHubPayouts", {
+      ...fields,
+      ...auditFields(access, now),
+    });
+  },
+});
+
+export const updatePayout = mutation({
+  args: {
+    viewerToken: viewerTokenArg,
+    id: v.id("opsHubPayouts"),
+    payeeName: v.string(),
+    amount: v.number(),
+    event: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    status: payoutStatusValidator,
+  },
+  handler: async (ctx, args) => {
+    const access = await requireOpsHubWriteAccess(ctx);
+    const { id, viewerToken: _, ...fields } = args;
+    await ctx.db.patch(id, {
+      ...fields,
+      ...updateAuditFields(access, Date.now()),
+    });
+  },
+});
+
+export const deletePayout = mutation({
+  args: { viewerToken: viewerTokenArg, id: v.id("opsHubPayouts") },
+  handler: async (ctx, args) => {
+    await requireOpsHubWriteAccess(ctx);
+    await ctx.db.delete(args.id);
+  },
+});
+
 // ─── Event Rules ────────────────────────────────────────────────────────────
 
 export const createEventRule = mutation({

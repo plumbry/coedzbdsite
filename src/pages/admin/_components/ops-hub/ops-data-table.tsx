@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import {
@@ -24,7 +24,7 @@ import {
 export type OpsTableColumn<T> = {
   key: string;
   header: string;
-  render: (row: T) => React.ReactNode;
+  render: (row: T) => ReactNode;
   searchValue?: (row: T) => string;
   /** Used for sorting; falls back to searchValue when omitted. */
   sortValue?: (row: T) => string | number | null | undefined;
@@ -50,8 +50,10 @@ type OpsDataTableProps<T extends { _id: string }> = {
   onDelete?: (row: T) => void;
   addLabel?: string;
   emptyMessage?: string;
+  /** Extra controls rendered beside the search field (filters, etc.). */
+  toolbar?: ReactNode;
   /** Footer cells keyed by column key; computed from the currently filtered rows. */
-  footer?: (rows: T[]) => Partial<Record<string, React.ReactNode>>;
+  footer?: (rows: T[]) => Partial<Record<string, ReactNode>>;
 };
 
 function compareSortValues(
@@ -88,6 +90,7 @@ export function OpsDataTable<T extends { _id: string }>({
   onDelete,
   addLabel = "Add",
   emptyMessage = "No entries yet.",
+  toolbar,
   footer,
 }: OpsDataTableProps<T>) {
   const [search, setSearch] = useState("");
@@ -158,14 +161,17 @@ export function OpsDataTable<T extends { _id: string }>({
         )}
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={searchPlaceholder}
-          className="h-9 pl-8 text-sm"
-        />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={searchPlaceholder}
+            className="h-9 pl-8 text-sm"
+          />
+        </div>
+        {toolbar}
       </div>
 
       {filtered === undefined ? (

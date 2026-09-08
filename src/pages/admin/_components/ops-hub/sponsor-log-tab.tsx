@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.js";
@@ -10,14 +10,13 @@ import {
   type OpsFormField,
 } from "./ops-form-dialog.tsx";
 import { opsMutationArgs, opsQueryArgs, type OpsHubTabProps } from "./types.ts";
-import { Badge } from "@/components/ui/badge.tsx";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select.tsx";
+  ALL_EVENTS,
+  EventFilterSelect,
+  UNASSIGNED_EVENT,
+  formatUsd,
+  matchesEventFilter,
+} from "./event-filter.tsx";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -33,30 +32,24 @@ import {
 const FIELDS: OpsFormField[] = [
   { key: "sponsorName", label: "Sponsor name", type: "text", required: true },
   { key: "amount", label: "Amount", type: "number", required: true },
-  { key: "dateReceived", label: "Date received", type: "date" },
-  { key: "intendedEvent", label: "Intended event", type: "text" },
+  { key: "intendedEvent", label: "Event", type: "text" },
   { key: "paymentSource", label: "Payment source / PayPal", type: "text" },
   { key: "notes", label: "Notes", type: "textarea" },
-  {
-    key: "status",
-    label: "Status",
-    type: "select",
-    required: true,
-    options: [
-      { value: "unused", label: "Unused" },
-      { value: "assigned", label: "Assigned" },
-      { value: "paid_out", label: "Paid out" },
-    ],
-  },
 ];
 
-const STATUS_LABELS: Record<string, string> = {
-  unused: "Unused",
-  assigned: "Assigned",
-  paid_out: "Paid out",
+type SponsorLogTabProps = OpsHubTabProps & {
+  eventFilter: string;
+  eventNames: string[];
+  onEventFilterChange: (value: string) => void;
 };
 
-export default function SponsorLogTab({ viewerToken, canEdit = false }: OpsHubTabProps) {
+export default function SponsorLogTab({
+  viewerToken,
+  canEdit = false,
+  eventFilter,
+  eventNames,
+  onEventFilterChange,
+}: SponsorLogTabProps) {
   const data = useQuery(api.opsHub.queries.listSponsorLogs, opsQueryArgs(viewerToken));
   const create = useMutation(api.opsHub.mutations.createSponsorLog);
   const update = useMutation(api.opsHub.mutations.updateSponsorLog);
@@ -68,9 +61,18 @@ export default function SponsorLogTab({ viewerToken, canEdit = false }: OpsHubTa
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Doc<"opsHubSponsorLogs"> | null>(null);
 
+  const filtered = useMemo(
+    () => data?.filter((row) => matchesEventFilter(row.intendedEvent, eventFilter)),
+    [data, eventFilter],
+  );
+
   const openCreate = () => {
     setEditing(null);
-    setValues({ ...emptyFormValues(FIELDS), status: "unused" });
+    const next = emptyFormValues(FIELDS);
+    if (eventFilter !== ALL_EVENTS && eventFilter !== UNASSIGNED_EVENT) {
+      next.intendedEvent = eventFilter;
+    }
+    setValues(next);
     setDialogOpen(true);
   };
 
@@ -90,20 +92,20 @@ export default function SponsorLogTab({ viewerToken, canEdit = false }: OpsHubTa
       const payload = {
         sponsorName: values.sponsorName.trim(),
         amount: Number(values.amount) || 0,
-        dateReceived: values.dateReceived.trim() || undefined,
         intendedEvent: values.intendedEvent.trim() || undefined,
         paymentSource: values.paymentSource.trim() || undefined,
         notes: values.notes.trim() || undefined,
-        status: values.status as "unused" | "assigned" | "paid_out",
+        status: editing?.status ?? ("unused" as const),
+        ...(editing?.dateReceived ? { dateReceived: editing.dateReceived } : {}),
       };
       if (editing) {
         await update(
           opsMutationArgs(viewerToken, { id: editing._id, ...payload }),
         );
-        toast.success("Sponsor log updated");
+        toast.success("Sponsor updated");
       } else {
         await create(opsMutationArgs(viewerToken, payload));
-        toast.success("Sponsor log added");
+        toast.success("Sponsor added");
       }
       setDialogOpen(false);
     } catch {
@@ -127,64 +129,49 @@ export default function SponsorLogTab({ viewerToken, canEdit = false }: OpsHubTa
     }
   };
 
-  const handleQuickStatus = async (
-    row: Doc<"opsHubSponsorLogs">,
-    status: Doc<"opsHubSponsorLogs">["status"],
-  ) => {
-    try {
-      await update(
-        opsMutationArgs(viewerToken, {
-          id: row._id,
-          sponsorName: row.sponsorName,
-          amount: row.amount,
-          dateReceived: row.dateReceived,
-          intendedEvent: row.intendedEvent,
-          paymentSource: row.paymentSource,
-          notes: row.notes,
-          status,
-        }),
-      );
-    } catch {
-      toast.error("Failed to update status");
-    }
-  };
-
   return (
     <>
       <OpsDataTable
-        title="Sponsor Log"
-        description="Track sponsor funds, intended events, and payout status."
-        data={data}
+        title="Sponsors"
+        description="Incoming funds, intended events, and payment sources."
+        data={filtered}
         searchPlaceholder="Search sponsors, events, notes…"
+        emptyMessage={
+          eventFilter === ALL_EVENTS
+            ? "No sponsor entries yet."
+            : "No sponsors for this event."
+        }
         onAdd={canEdit ? openCreate : undefined}
         onEdit={canEdit ? openEdit : undefined}
         onDelete={canEdit ? setDeleteTarget : undefined}
+        toolbar={
+          <EventFilterSelect
+            value={eventFilter}
+            events={eventNames}
+            onChange={onEventFilterChange}
+          />
+        }
         footer={(rows) => {
           const total = rows.reduce((sum, r) => sum + r.amount, 0);
           return {
             sponsor: "Total",
-            amount: `$${total.toFixed(2)}`,
+            amount: formatUsd(total),
           };
         }}
         columns={[
           {
             key: "sponsor",
             header: "Sponsor",
-            searchValue: (r) => r.sponsorName,
+            searchValue: (r) => `${r.sponsorName} ${r.notes ?? ""}`,
             sortValue: (r) => r.sponsorName,
             render: (r) => <span className="font-medium">{r.sponsorName}</span>,
           },
           {
             key: "amount",
             header: "Amount",
+            className: "tabular-nums",
             sortValue: (r) => r.amount,
-            render: (r) => `$${r.amount.toFixed(2)}`,
-          },
-          {
-            key: "date",
-            header: "Received",
-            sortValue: (r) => r.dateReceived ?? null,
-            render: (r) => r.dateReceived ?? "—",
+            render: (r) => formatUsd(r.amount),
           },
           {
             key: "event",
@@ -200,42 +187,13 @@ export default function SponsorLogTab({ viewerToken, canEdit = false }: OpsHubTa
             sortValue: (r) => r.paymentSource ?? null,
             render: (r) => r.paymentSource ?? "—",
           },
-          {
-            key: "status",
-            header: "Status",
-            sortValue: (r) => r.status,
-            render: (r) =>
-              canEdit ? (
-                <Select
-                  value={r.status}
-                  onValueChange={(v) =>
-                    handleQuickStatus(r, v as Doc<"opsHubSponsorLogs">["status"])
-                  }
-                >
-                  <SelectTrigger className="h-8 w-[120px] text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Badge variant="outline" className="text-xs">
-                  {STATUS_LABELS[r.status] ?? r.status}
-                </Badge>
-              ),
-          },
         ]}
       />
 
       <OpsFormDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        title={editing ? "Edit sponsor log" : "Add sponsor log"}
+        title={editing ? "Edit sponsor" : "Add sponsor"}
         fields={FIELDS}
         values={values}
         onChange={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
@@ -246,7 +204,7 @@ export default function SponsorLogTab({ viewerToken, canEdit = false }: OpsHubTa
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete sponsor log?</AlertDialogTitle>
+            <AlertDialogTitle>Delete sponsor?</AlertDialogTitle>
             <AlertDialogDescription>
               This removes the entry for {deleteTarget?.sponsorName}.
             </AlertDialogDescription>

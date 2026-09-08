@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Lock } from "lucide-react";
 import PunishmentMatrixContent from "./punishment-matrix-content.tsx";
 import BotCommandsReference from "./bot-commands-reference.tsx";
-import SponsorLogTab from "./ops-hub/sponsor-log-tab.tsx";
+import SponsorsPayoutsTab from "./ops-hub/sponsors-payouts-tab.tsx";
 import RulesKillCapsTab from "./ops-hub/rules-kill-caps-tab.tsx";
 import TextAndLinksTab from "./ops-hub/text-and-links-tab.tsx";
 import ResponsibilitiesTab from "./ops-hub/responsibilities-tab.tsx";
@@ -62,7 +62,13 @@ export default function ResourcesHubTabs({
   const activeTab = resolveTab(tabParam);
 
   const handleTabChange = (value: string) => {
-    setSearchParams(value === DEFAULT_TAB ? {} : { tab: value }, { replace: true });
+    const next = new URLSearchParams();
+    if (value !== DEFAULT_TAB) next.set("tab", value);
+    if (value === "sponsors") {
+      const section = searchParams.get("section");
+      if (section === "payouts") next.set("section", "payouts");
+    }
+    setSearchParams(next, { replace: true });
   };
 
   return (
@@ -113,7 +119,7 @@ export default function ResourcesHubTabs({
               To-Do
             </TabsTrigger>
             <TabsTrigger value="sponsors" className="cursor-pointer">
-              Sponsor Log
+              Sponsors & Payouts
             </TabsTrigger>
             <TabsTrigger value="rules-kill-caps" className="cursor-pointer">
               Rules & Point Systems
@@ -140,7 +146,7 @@ export default function ResourcesHubTabs({
           <TodosTab viewerToken={viewerToken} canEdit={canEdit} />
         </TabsContent>
         <TabsContent value="sponsors" className="mt-4">
-          <SponsorLogTab viewerToken={viewerToken} canEdit={canEdit} />
+          <SponsorsPayoutsTab viewerToken={viewerToken} canEdit={canEdit} />
         </TabsContent>
         <TabsContent value="rules-kill-caps" className="mt-4">
           <RulesKillCapsTab
